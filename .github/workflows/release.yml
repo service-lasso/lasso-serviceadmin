@@ -1,0 +1,103 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive: tar.gz
+            artifact_name: lasso-serviceadmin-web
+          - os: windows-latest
+            archive: zip
+            artifact_name: lasso-serviceadmin-web
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint the code
+        run: npm run lint
+
+      - name: Run Prettier check
+        run: npm run format:check
+
+      - name: Build the project
+        run: npm run build
+
+      - name: Stage release files
+        shell: pwsh
+        run: |
+          $distRoot = Join-Path $PWD 'release-dist'
+          $stageDir = Join-Path $distRoot 'lasso-serviceadmin-web'
+          if (Test-Path $distRoot) { Remove-Item $distRoot -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+
+          Copy-Item dist\* $stageDir -Recurse
+          Copy-Item README.md $stageDir
+          Copy-Item LICENSE $stageDir
+          if (Test-Path docs) {
+            Copy-Item docs $stageDir\docs -Recurse
+          }
+
+          if ('${{ matrix.archive }}' -eq 'zip') {
+            $archivePath = Join-Path $distRoot '${{ matrix.artifact_name }}-${{ matrix.os }}.zip'
+            Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $archivePath -CompressionLevel Optimal
+          } else {
+            $archivePath = Join-Path $distRoot '${{ matrix.artifact_name }}-${{ matrix.os }}.tar.gz'
+            tar -czf $archivePath -C $distRoot 'lasso-serviceadmin-web'
+          }
+
+          "archive_path=$archivePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "archive_name=$(Split-Path $archivePath -Leaf)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        id: stage
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stage.outputs.archive_name }}
+          path: ${{ steps.stage.outputs.archive_path }}
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download built archives
+        uses: actions/download-artifact@v4
+        with:
+          path: release-dist
+          merge-multiple: true
+
+      - name: Publish GitHub release assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" release-dist/* --repo "$GITHUB_REPOSITORY" --clobber
