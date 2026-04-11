@@ -307,6 +307,8 @@ function buildGraph(
   services: DashboardService[],
   selectedService: DashboardService | null,
   showSurrounding: boolean,
+  showDependencyEdges: boolean,
+  showApiUsageEdges: boolean,
   favoritesEnabled: boolean,
   onToggleFavorite?: (serviceId: string) => void
 ) {
@@ -381,26 +383,49 @@ function buildGraph(
         continue
       }
 
+      const dependencyService = byId.get(dependency.id)
       const isSelectedConnection =
         service.id === selectedService.id ||
         dependency.id === selectedService.id
 
-      edgeMap.set(`${dependency.id}->${service.id}`, {
-        id: `${dependency.id}->${service.id}`,
-        source: dependency.id,
-        target: service.id,
-        animated:
-          dependency.status === 'degraded' || service.status === 'degraded',
-        type: 'straight',
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: {
-          stroke: statusColor(dependency.status),
-          strokeWidth: isSelectedConnection ? 2.75 : 1.75,
-          opacity: isSelectedConnection ? 1 : 0.55,
-        },
-        label: isSelectedConnection ? 'depends on' : undefined,
-        labelStyle: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' },
-      })
+      if (showDependencyEdges) {
+        edgeMap.set(`${dependency.id}->${service.id}`, {
+          id: `${dependency.id}->${service.id}`,
+          source: dependency.id,
+          target: service.id,
+          animated:
+            dependency.status === 'degraded' || service.status === 'degraded',
+          type: 'straight',
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: {
+            stroke: statusColor(dependency.status),
+            strokeWidth: isSelectedConnection ? 2.75 : 1.75,
+            opacity: isSelectedConnection ? 1 : 0.55,
+          },
+          label: isSelectedConnection ? 'depends on' : undefined,
+          labelStyle: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' },
+        })
+      }
+
+      const exposesEndpoint = (dependencyService?.endpoints.length ?? 0) > 0
+
+      if (showApiUsageEdges && exposesEndpoint) {
+        edgeMap.set(`api:${dependency.id}->${service.id}`, {
+          id: `api:${dependency.id}->${service.id}`,
+          source: dependency.id,
+          target: service.id,
+          type: 'smoothstep',
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: {
+            stroke: '#38bdf8',
+            strokeWidth: isSelectedConnection ? 2.4 : 1.6,
+            strokeDasharray: '8 6',
+            opacity: isSelectedConnection ? 0.95 : 0.5,
+          },
+          label: isSelectedConnection ? 'api' : undefined,
+          labelStyle: { fontSize: 11, fill: '#38bdf8' },
+        })
+      }
     }
   }
 
@@ -444,6 +469,8 @@ export function Dependencies() {
   )
   const [hideUtility, setHideUtility] = useState(false)
   const [showSurrounding, setShowSurrounding] = useState(true)
+  const [showDependencyEdges, setShowDependencyEdges] = useState(true)
+  const [showApiUsageEdges, setShowApiUsageEdges] = useState(true)
   const [graphVersion, setGraphVersion] = useState(0)
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
@@ -487,12 +514,26 @@ export function Dependencies() {
     0
   )
 
+  const inferredApiUsageEdges = services.reduce(
+    (count, service) =>
+      count +
+      service.dependencies.filter((dependency) => {
+        const dependencyService = services.find(
+          (item) => item.id === dependency.id
+        )
+        return (dependencyService?.endpoints.length ?? 0) > 0
+      }).length,
+    0
+  )
+
   const { nodes, edges } = useMemo(
     () =>
       buildGraph(
         filteredServices,
         selectedService,
         showSurrounding,
+        showDependencyEdges,
+        showApiUsageEdges,
         favoriteFeature.enabled,
         (serviceId) => {
           void toggleFavorite.mutateAsync(serviceId)
@@ -502,6 +543,8 @@ export function Dependencies() {
       favoriteFeature.enabled,
       filteredServices,
       selectedService,
+      showApiUsageEdges,
+      showDependencyEdges,
       showSurrounding,
       toggleFavorite,
     ]
@@ -560,7 +603,7 @@ export function Dependencies() {
           <DependenciesLoading />
         ) : (
           <>
-            <div className='grid gap-4 md:grid-cols-3'>
+            <div className='grid gap-4 md:grid-cols-4'>
               <Card>
                 <CardHeader className='pb-2'>
                   <CardTitle className='flex items-center gap-2 text-sm font-medium'>
@@ -585,7 +628,23 @@ export function Dependencies() {
                 <CardContent>
                   <div className='text-2xl font-bold'>{relationshipEdges}</div>
                   <p className='text-xs text-muted-foreground'>
-                    Total dependency links declared in the graph data.
+                    Structural dependency links declared in the graph data.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className='pb-2'>
+                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
+                    <Link2 className='size-4' /> API usage edges
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className='text-2xl font-bold'>
+                    {inferredApiUsageEdges}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Inferred where a dependency exposes endpoints another
+                    service likely uses.
                   </p>
                 </CardContent>
               </Card>
@@ -660,6 +719,24 @@ export function Dependencies() {
                   ))}
                 </div>
                 <div className='flex flex-wrap gap-2'>
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant={showDependencyEdges ? 'default' : 'outline'}
+                    onClick={() => setShowDependencyEdges((value) => !value)}
+                  >
+                    {showDependencyEdges
+                      ? 'dependencies shown'
+                      : 'show dependencies'}
+                  </Button>
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant={showApiUsageEdges ? 'default' : 'outline'}
+                    onClick={() => setShowApiUsageEdges((value) => !value)}
+                  >
+                    {showApiUsageEdges ? 'api usage shown' : 'show api usage'}
+                  </Button>
                   <Button
                     type='button'
                     size='sm'
