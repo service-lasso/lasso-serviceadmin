@@ -102,4 +102,7 @@ export type DashboardSummary = {
   problemServices: DashboardService[]
 }
 
-export type DashboardAction = 'reload-runtime' | 'start-services'
+export type DashboardAction =
+  | 'reload-runtime'
+  | 'start-services'
+  | { kind: 'toggle-favorite'; serviceId: string }

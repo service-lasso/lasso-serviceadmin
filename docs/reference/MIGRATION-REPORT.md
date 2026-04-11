@@ -5,6 +5,32 @@ Date: 2026-04-10
 Branch: `develop`
 Current mode: **template baseline first**
 
+## Runtime API endpoint contract
+
+The Service Admin UI should not guess the Service Lasso runtime/API location.
+
+It should receive the runtime endpoint through env/config, with the current frontend contract:
+
+- `VITE_SERVICE_LASSO_API_BASE_URL`
+- `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
+
+Current intended use:
+
+- service metadata reads, including favorite state
+- service metadata updates, including favorite toggles
+- future service-detail, logs, and runtime actions should follow the same endpoint source instead of introducing page-local hardcoded URLs
+
+Current first endpoints expected by the UI:
+
+- `GET /api/services/meta`
+- `PATCH /api/services/:serviceId/meta`
+
+Current gating rule:
+
+- favorite editing should remain disabled unless both the runtime endpoint is provided and `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
+
+This keeps the admin UI portable across local dev, demo, and real runtime deployments.
+
 ## Current baseline status
 
 The repo has been reset back to the chosen `shadcn-admin` template baseline so the app now reflects the template look and feel first.
@@ -262,6 +288,7 @@ Execution shape:
 - dedicated dependencies page owns the full graph
 - service details page shows the local dependency slice and links into the graph
 - first version can use deterministic stub topology, but should still behave like a graph surface, not a placeholder card
+- React Flow graph design is now specified in `docs/reference/DEPENDENCY-GRAPH-SPEC.md`
 
 Goal: relationship data becomes visible and navigable.
 
@@ -272,6 +299,7 @@ Execution shape:
 - dedicated Logs page owns the live stream surface
 - Services table and Service Details page should both be able to open the selected service log stream
 - Service Details may show a small recent-log preview, but not the full stream surface
+- frontend log viewer design is now specified in `docs/reference/LOG-STREAMING-SPEC.md`
 
 Recommended first backend contract:
 - history/backfill endpoint

@@ -2,6 +2,28 @@
 
 Admin Dashboard UI crafted with Shadcn and Vite. Built with responsiveness and accessibility in mind.
 
+## Service Lasso runtime API endpoint
+
+This admin UI should discover the Service Lasso runtime/API endpoint from env, not from hardcoded localhost assumptions.
+
+Current env contract:
+
+- `VITE_SERVICE_LASSO_API_BASE_URL`
+- `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
+
+Example:
+
+- `VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001`
+- `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
+
+Current UI runtime behavior:
+
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, the dashboard stub layer can call the Service Lasso API for service metadata
+- favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
+- favorites are expected to load from `GET /api/services/meta`
+- favorites are expected to update through `PATCH /api/services/:serviceId/meta`
+- if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
+
 ![alt text](public/images/shadcn-admin.png)
 
 [![Sponsored by Clerk](https://img.shields.io/badge/Sponsored%20by-Clerk-5b6ee1?logo=clerk)](https://go.clerk.com/GttUAaK)

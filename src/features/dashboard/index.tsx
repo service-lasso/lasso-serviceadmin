@@ -6,10 +6,13 @@ import {
   PackageOpen,
   Play,
   RefreshCcw,
+  Star,
 } from 'lucide-react'
 import {
   useDashboardAction,
   useDashboardSummary,
+  useFavoriteFeatureState,
+  useToggleFavorite,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type {
   DashboardService,
@@ -77,6 +80,9 @@ function SummaryCard({
 }
 
 function ServiceCard({ service }: { service: DashboardService }) {
+  const toggleFavorite = useToggleFavorite()
+  const favoriteFeature = useFavoriteFeatureState()
+
   const openDetail = () => {
     window.location.href = `/services/${service.id}`
   }
@@ -99,7 +105,31 @@ function ServiceCard({ service }: { service: DashboardService }) {
           <div className='min-w-0'>
             <div className='truncate text-sm font-medium'>{service.name}</div>
           </div>
-          <StatusBadge status={service.status} />
+          <div className='flex items-center gap-2'>
+            <button
+              type='button'
+              aria-label={service.favorite ? 'Remove favorite' : 'Add favorite'}
+              title={
+                favoriteFeature.enabled
+                  ? service.favorite
+                    ? 'Remove favorite'
+                    : 'Add favorite'
+                  : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
+              }
+              disabled={!favoriteFeature.enabled}
+              className='inline-flex items-center rounded-md border p-1.5 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
+              onClick={(event) => {
+                event.stopPropagation()
+                if (!favoriteFeature.enabled) return
+                void toggleFavorite.mutateAsync(service.id)
+              }}
+            >
+              <Star
+                className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
+              />
+            </button>
+            <StatusBadge status={service.status} />
+          </div>
         </div>
         <div className='flex flex-wrap gap-2'>
           {service.links.slice(0, 2).map((link) => (

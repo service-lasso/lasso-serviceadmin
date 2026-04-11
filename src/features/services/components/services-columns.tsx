@@ -1,6 +1,11 @@
+/* eslint-disable react-refresh/only-export-components */
 import { Link } from '@tanstack/react-router'
 import { type ColumnDef } from '@tanstack/react-table'
 import { ExternalLink, Search, Star } from 'lucide-react'
+import {
+  useFavoriteFeatureState,
+  useToggleFavorite,
+} from '@/lib/service-lasso-dashboard/hooks'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,6 +25,36 @@ function renderStatusBadge(status: DashboardService['status']) {
   }
 
   return <Badge variant='outline'>Stopped</Badge>
+}
+
+function FavoriteCell({ service }: { service: DashboardService }) {
+  const toggleFavorite = useToggleFavorite()
+  const favoriteFeature = useFavoriteFeatureState()
+
+  return (
+    <button
+      type='button'
+      aria-label={service.favorite ? 'Remove favorite' : 'Add favorite'}
+      title={
+        favoriteFeature.enabled
+          ? service.favorite
+            ? 'Remove favorite'
+            : 'Add favorite'
+          : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
+      }
+      disabled={!favoriteFeature.enabled}
+      className='inline-flex items-center rounded-md border p-2 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
+      onClick={(event) => {
+        event.stopPropagation()
+        if (!favoriteFeature.enabled) return
+        void toggleFavorite.mutateAsync(service.id)
+      }}
+    >
+      <Star
+        className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
+      />
+    </button>
+  )
 }
 
 const statusSortRank: Record<DashboardService['status'], number> = {
@@ -72,17 +107,9 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
     id: 'favorite',
     accessorFn: (row) => (row.favorite ? 'favorite' : 'standard'),
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Dashboard' />
+      <DataTableColumnHeader column={column} title='Favorite' />
     ),
-    cell: ({ row }) =>
-      row.original.favorite ? (
-        <div className='flex items-center gap-2 text-sm'>
-          <Star className='size-4 fill-current text-amber-500' />
-          Favorite
-        </div>
-      ) : (
-        <span className='text-sm text-muted-foreground'>Standard</span>
-      ),
+    cell: ({ row }) => <FavoriteCell service={row.original} />,
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
     enableSorting: false,
   },

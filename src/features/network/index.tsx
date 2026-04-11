@@ -1,5 +1,12 @@
+import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Globe, Link2, Network as NetworkIcon } from 'lucide-react'
+import {
+  Copy,
+  Globe,
+  Link2,
+  Network as NetworkIcon,
+  Search,
+} from 'lucide-react'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,12 +16,20 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
-import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function NetworkLoading() {
@@ -33,12 +48,44 @@ function NetworkLoading() {
 
 export function Network() {
   const servicesQuery = useServices()
-  const services = servicesQuery.data ?? []
+  const [query, setQuery] = useState('')
+
+  const endpointRows = useMemo(() => {
+    const raw = (servicesQuery.data ?? []).flatMap((service) =>
+      service.endpoints.map((endpoint) => ({ service, endpoint }))
+    )
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return raw
+
+    return raw.filter(({ service, endpoint }) =>
+      [
+        service.name,
+        service.id,
+        endpoint.label,
+        endpoint.url,
+        endpoint.bind,
+        endpoint.protocol,
+        endpoint.exposure,
+        String(endpoint.port),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalized)
+    )
+  }, [query, servicesQuery.data])
 
   return (
     <>
       <Header fixed>
-        <Search />
+        <div className='relative w-full max-w-sm'>
+          <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder='Search services, URLs, binds, ports, or exposure...'
+            className='pl-9'
+          />
+        </div>
         <div className='ms-auto flex items-center space-x-4'>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -51,8 +98,8 @@ export function Network() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Network</h2>
             <p className='text-muted-foreground'>
-              Review bind addresses, exposed URLs, ports, and route surfaces in
-              one operator-facing network view.
+              Search service endpoints, copy URLs quickly, and inspect
+              bind/exposure facts in one table.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -74,62 +121,93 @@ export function Network() {
                 <NetworkIcon className='size-4' /> Service endpoints
               </CardTitle>
               <CardDescription>
-                Clickable local/LAN/remote endpoints with exposure facts.
+                Searchable operator table with copy/open actions for every
+                service URL.
               </CardDescription>
             </CardHeader>
-            <CardContent className='space-y-3'>
-              {services.map((service) => (
-                <div key={service.id} className='rounded-lg border p-4'>
-                  <div className='mb-4 flex flex-wrap items-start justify-between gap-3'>
-                    <div>
-                      <div className='font-medium'>{service.name}</div>
-                      <div className='text-xs text-muted-foreground'>
-                        {service.id}
-                      </div>
-                    </div>
-                    <Button variant='outline' size='sm' asChild>
-                      <Link
-                        to='/services/$serviceId'
-                        params={{ serviceId: service.id }}
-                      >
-                        Open service details
-                      </Link>
-                    </Button>
-                  </div>
-                  <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
-                    {service.endpoints.map((endpoint) => (
-                      <div
-                        key={`${service.id}-${endpoint.url}`}
-                        className='rounded-lg border bg-muted/20 p-3'
-                      >
-                        <div className='mb-2 flex items-center gap-2 font-medium'>
-                          <Globe className='size-4' /> {endpoint.label}
-                        </div>
-                        <div className='space-y-1 text-sm text-muted-foreground'>
-                          <div className='break-all'>{endpoint.url}</div>
-                          <div>
-                            {endpoint.protocol.toUpperCase()} · {endpoint.bind}:
-                            {endpoint.port}
-                          </div>
-                          <div>Exposure: {endpoint.exposure}</div>
-                        </div>
-                        <div className='mt-3'>
-                          <Button variant='outline' size='sm' asChild>
-                            <a
-                              href={endpoint.url}
-                              target='_blank'
-                              rel='noreferrer'
-                            >
-                              Open endpoint
-                              <Link2 className='ml-2 size-3.5' />
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <CardContent>
+              <div className='overflow-x-auto rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Service</TableHead>
+                      <TableHead>Endpoint</TableHead>
+                      <TableHead>URL</TableHead>
+                      <TableHead>Bind</TableHead>
+                      <TableHead>Port</TableHead>
+                      <TableHead>Exposure</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {endpointRows.length ? (
+                      endpointRows.map(({ service, endpoint }) => (
+                        <TableRow key={`${service.id}-${endpoint.url}`}>
+                          <TableCell>
+                            <div className='space-y-1'>
+                              <div className='font-medium'>{service.name}</div>
+                              <div className='text-xs text-muted-foreground'>
+                                {service.id}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className='flex items-center gap-2'>
+                              <Globe className='size-4 text-muted-foreground' />
+                              {endpoint.label}
+                            </div>
+                          </TableCell>
+                          <TableCell className='max-w-[280px] text-sm break-all text-muted-foreground'>
+                            {endpoint.url}
+                          </TableCell>
+                          <TableCell>{endpoint.bind}</TableCell>
+                          <TableCell>{endpoint.port}</TableCell>
+                          <TableCell>{endpoint.exposure}</TableCell>
+                          <TableCell>
+                            <div className='flex flex-wrap gap-2'>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                onClick={() =>
+                                  void navigator.clipboard.writeText(
+                                    endpoint.url
+                                  )
+                                }
+                              >
+                                <Copy className='mr-2 size-3.5' /> Copy URL
+                              </Button>
+                              <Button variant='outline' size='sm' asChild>
+                                <a
+                                  href={endpoint.url}
+                                  target='_blank'
+                                  rel='noreferrer'
+                                >
+                                  <Link2 className='mr-2 size-3.5' /> Open
+                                </a>
+                              </Button>
+                              <Button variant='outline' size='sm' asChild>
+                                <Link
+                                  to='/services/$serviceId'
+                                  params={{ serviceId: service.id }}
+                                >
+                                  Details
+                                </Link>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className='h-24 text-center'>
+                          No endpoints match the current search.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         )}

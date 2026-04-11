@@ -6,6 +6,62 @@ import type {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+export const serviceLassoApiBaseUrl =
+  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
+
+export const favoritesFeatureEnabled =
+  import.meta.env.VITE_SERVICE_LASSO_FAVORITES_ENABLED === 'true'
+
+export const favoritesMutationEnabled =
+  favoritesFeatureEnabled && Boolean(serviceLassoApiBaseUrl)
+
+type RemoteServiceMeta = {
+  id: string
+  name?: string
+  favorite?: boolean
+}
+
+async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
+  if (!serviceLassoApiBaseUrl) return null
+
+  try {
+    const response = await fetch(`${serviceLassoApiBaseUrl}/api/services/meta`)
+    if (!response.ok) return null
+
+    const payload = (await response.json()) as {
+      services?: RemoteServiceMeta[]
+    }
+
+    return payload.services ?? []
+  } catch {
+    return null
+  }
+}
+
+function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
+  if (serviceMeta.length === 0) return
+
+  const favoriteById = new Map(
+    serviceMeta.map((service) => [service.id, Boolean(service.favorite)])
+  )
+
+  services = services.map((service) =>
+    favoriteById.has(service.id)
+      ? {
+          ...service,
+          favorite: favoriteById.get(service.id) ?? service.favorite,
+        }
+      : service
+  )
+}
+
+async function syncFavoriteStateFromApi() {
+  const remoteServiceMeta = await fetchRemoteServiceMeta()
+  if (remoteServiceMeta) {
+    applyRemoteServiceMeta(remoteServiceMeta)
+  }
+}
+
 let services: DashboardService[] = [
   {
     id: 'traefik',
@@ -454,18 +510,56 @@ function buildSummary(): DashboardSummary {
   }
 }
 
+function syncFavoriteState(serviceId: string, favorite?: boolean) {
+  services = services.map((service) =>
+    service.id === serviceId
+      ? {
+          ...service,
+          favorite: favorite ?? !service.favorite,
+        }
+      : service
+  )
+}
+
+async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
+  if (!favoritesMutationEnabled || !serviceLassoApiBaseUrl) return false
+
+  try {
+    const response = await fetch(
+      `${serviceLassoApiBaseUrl}/api/services/${serviceId}/meta`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ favorite }),
+      }
+    )
+
+    if (!response.ok) return false
+
+    syncFavoriteState(serviceId, favorite)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function fetchDashboardSummary() {
   await wait(120)
+  await syncFavoriteStateFromApi()
   return structuredClone(buildSummary())
 }
 
 export async function fetchServices() {
   await wait(120)
+  await syncFavoriteStateFromApi()
   return structuredClone(services)
 }
 
 export async function fetchDashboardService(serviceId: string) {
   await wait(120)
+  await syncFavoriteStateFromApi()
   return (
     structuredClone(services.find((service) => service.id === serviceId)) ??
     null
@@ -480,9 +574,7 @@ export async function runDashboardAction(action: DashboardAction) {
       ...runtime,
       lastReloadedAt: new Date().toISOString(),
     }
-  }
-
-  if (action === 'start-services') {
+  } else if (action === 'start-services') {
     services = services.map((service) => {
       if (service.status === 'stopped') {
         return {
@@ -512,6 +604,14 @@ export async function runDashboardAction(action: DashboardAction) {
 
       return service
     })
+  } else {
+    const service = services.find((item) => item.id === action.serviceId)
+    const nextFavorite = service ? !service.favorite : true
+    const updated = await updateFavoriteViaApi(action.serviceId, nextFavorite)
+
+    if (!updated) {
+      syncFavoriteState(action.serviceId, nextFavorite)
+    }
   }
 
   return structuredClone(buildSummary())

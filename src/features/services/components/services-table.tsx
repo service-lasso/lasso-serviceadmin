@@ -102,7 +102,7 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
           },
           {
             columnId: 'favorite',
-            title: 'Dashboard',
+            title: 'Favorite',
             options: [
               { label: 'Favorite', value: 'favorite' },
               { label: 'Standard', value: 'standard' },

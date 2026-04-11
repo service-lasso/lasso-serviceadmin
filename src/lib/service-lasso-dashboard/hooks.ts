@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  favoritesMutationEnabled,
   fetchDashboardService,
   fetchDashboardSummary,
   fetchServices,
@@ -49,4 +50,24 @@ export function useDashboardAction() {
       }
     },
   })
+}
+
+export function useToggleFavorite() {
+  const dashboardAction = useDashboardAction()
+
+  return useMutation({
+    mutationFn: async (serviceId: string) => {
+      if (!favoritesMutationEnabled) {
+        return null
+      }
+
+      return dashboardAction.mutateAsync({ kind: 'toggle-favorite', serviceId })
+    },
+  })
+}
+
+export function useFavoriteFeatureState() {
+  return {
+    enabled: favoritesMutationEnabled,
+  }
 }
