@@ -372,30 +372,39 @@ function buildGraph(
     ),
   ]
 
-  const edges: Edge[] = [
-    ...dependencyServices.map((service) => ({
-      id: `${service.id}->${selectedService.id}`,
-      source: service.id,
-      target: selectedService.id,
-      animated: service.status === 'degraded',
-      type: 'straight',
-      markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: statusColor(service.status), strokeWidth: 2.25 },
-      label: 'depends on',
-      labelStyle: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' },
-    })),
-    ...dependentServices.map((service) => ({
-      id: `${selectedService.id}->${service.id}`,
-      source: selectedService.id,
-      target: service.id,
-      animated: service.status === 'degraded',
-      type: 'straight',
-      markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: statusColor(service.status), strokeWidth: 2.25 },
-      label: 'feeds',
-      labelStyle: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' },
-    })),
-  ]
+  const visibleIds = new Set(nodes.map((node) => node.id))
+  const edgeMap = new Map<string, Edge>()
+
+  for (const service of services) {
+    for (const dependency of service.dependencies) {
+      if (!visibleIds.has(service.id) || !visibleIds.has(dependency.id)) {
+        continue
+      }
+
+      const isSelectedConnection =
+        service.id === selectedService.id ||
+        dependency.id === selectedService.id
+
+      edgeMap.set(`${dependency.id}->${service.id}`, {
+        id: `${dependency.id}->${service.id}`,
+        source: dependency.id,
+        target: service.id,
+        animated:
+          dependency.status === 'degraded' || service.status === 'degraded',
+        type: 'straight',
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: {
+          stroke: statusColor(dependency.status),
+          strokeWidth: isSelectedConnection ? 2.75 : 1.75,
+          opacity: isSelectedConnection ? 1 : 0.55,
+        },
+        label: isSelectedConnection ? 'depends on' : undefined,
+        labelStyle: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' },
+      })
+    }
+  }
+
+  const edges: Edge[] = Array.from(edgeMap.values())
 
   return { nodes, edges }
 }
