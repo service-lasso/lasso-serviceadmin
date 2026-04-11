@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   Background,
@@ -8,6 +8,8 @@ import {
   Panel,
   Position,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
   useReactFlow,
   type Edge,
   type Node,
@@ -581,7 +583,7 @@ export function Dependencies() {
     0
   )
 
-  const { nodes, edges } = useMemo(
+  const { nodes: computedNodes, edges: computedEdges } = useMemo(
     () =>
       buildGraph(
         filteredServices,
@@ -604,6 +606,14 @@ export function Dependencies() {
       toggleFavorite,
     ]
   )
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges)
+
+  useEffect(() => {
+    setNodes(computedNodes)
+    setEdges(computedEdges)
+  }, [computedEdges, computedNodes, setEdges, setNodes])
 
   const selectService = (serviceId: string) => {
     navigate({
@@ -840,6 +850,8 @@ export function Dependencies() {
                       nodeTypes={nodeTypes}
                       fitView
                       fitViewOptions={{ padding: 0.18 }}
+                      onNodesChange={onNodesChange}
+                      onEdgesChange={onEdgesChange}
                       nodesDraggable
                       panOnDrag={[1, 2]}
                       proOptions={{ hideAttribution: true }}
