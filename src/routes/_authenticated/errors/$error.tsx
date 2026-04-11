@@ -1,45 +1,45 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { createFileRoute } from '@tanstack/react-router'
+import { ConfigDrawer } from '@/components/config-drawer'
+import { Header } from '@/components/layout/header'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { ForbiddenError } from '@/features/errors/forbidden'
+import { GeneralError } from '@/features/errors/general-error'
+import { MaintenanceError } from '@/features/errors/maintenance-error'
+import { NotFoundError } from '@/features/errors/not-found-error'
+import { UnauthorisedError } from '@/features/errors/unauthorized-error'
 
 export const Route = createFileRoute('/_authenticated/errors/$error')({
   component: RouteComponent,
 })
 
+// eslint-disable-next-line react-refresh/only-export-components
 function RouteComponent() {
   const { error } = Route.useParams()
-  const navigate = useNavigate()
+
+  const errorMap: Record<string, React.ComponentType> = {
+    unauthorized: UnauthorisedError,
+    forbidden: ForbiddenError,
+    'not-found': NotFoundError,
+    'internal-server-error': GeneralError,
+    'maintenance-error': MaintenanceError,
+  }
+  const ErrorComponent = errorMap[error] || NotFoundError
 
   return (
-    <div className='flex min-h-[70svh] items-center justify-center p-6'>
-      <Card className='w-full max-w-xl'>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2'>
-            <AlertTriangle className='size-5' />
-            Service Lasso UI error surface
-          </CardTitle>
-        </CardHeader>
-        <CardContent className='space-y-4'>
-          <p className='text-sm text-muted-foreground'>
-            The requested error route is <code>{error}</code>. This cleaned repo
-            keeps a minimal operator-facing error surface instead of the starter
-            demo shell.
-          </p>
-          <div className='flex gap-2'>
-            <Button onClick={() => navigate({ to: '/' })}>
-              Back to dashboard
-            </Button>
-            <Button
-              variant='outline'
-              onClick={() => navigate({ to: '/services' })}
-            >
-              Open services
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <>
+      <Header fixed className='border-b'>
+        <Search />
+        <div className='ms-auto flex items-center space-x-4'>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </div>
+      </Header>
+      <div className='flex-1 [&>div]:h-full'>
+        <ErrorComponent />
+      </div>
+    </>
   )
 }

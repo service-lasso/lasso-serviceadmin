@@ -1,99 +1,134 @@
-# lasso-@serviceadmin
+# Shadcn Admin Dashboard
 
-Optional operator UI for Service Lasso.
+Admin Dashboard UI crafted with Shadcn and Vite. Built with responsiveness and accessibility in mind.
 
-This repo now carries a cleaned Service Lasso-focused admin shell, local UI docs/OpenSpec drafts, and explicit harness-backed API stubs for the first control-plane slice.
+![alt text](public/images/shadcn-admin.png)
 
-## Current scope
+[![Sponsored by Clerk](https://img.shields.io/badge/Sponsored%20by-Clerk-5b6ee1?logo=clerk)](https://go.clerk.com/GttUAaK)
 
-Implemented now:
+I've been creating dashboard UIs at work and for my personal projects. I always wanted to make a reusable collection of dashboard UI for future projects; and here it is now. While I've created a few custom components, some of the code is directly adapted from ShadcnUI examples.
 
-- dashboard
-- services list
-- service detail
-- dependencies
-- runtime
-- logs
-- network
-- installed state
-- operator settings
+> This is not a starter project (template) though. I'll probably make one in the future.
 
-Included supporting material:
+## Features
 
-- `docs/openspec-drafts/OPENSPEC-TRACKER.md`
-- `docs/openspec-drafts/SPEC-UI-ADMIN-SERVICE.md`
-- `docs/reference/DECISION-CONTEXT.md`
-- `docs/reference/SERVICEADMIN-NAV-AND-API.md`
-- `docs/reference/UI-STATE-REVIEW.md`
-- `docs/reference/SHADCN-ADMIN-REVIEW.md`
-- `docs/reference/SHADCN-ADMIN-MAP.md`
-- `docs/reference/SHADCN-ADMIN-REMOVAL-TARGETS.md`
+- Light/dark mode
+- Responsive
+- Accessible
+- With built-in Sidebar component
+- Global search command
+- 10+ pages
+- Extra custom components
+- RTL support
 
-## Stub status
+<details>
+<summary>Customized Components (click to expand)</summary>
 
-The UI is now backed by a real served local stub API for testing.
+This project uses Shadcn UI components, but some have been slightly modified for better RTL (Right-to-Left) support and other improvements. These customized components differ from the original Shadcn UI versions.
 
-The stub contract lives under `src/lib/service-lasso-api/` and is exposed at `/api/*` during `npm run dev` and `npm run preview`.
+If you want to update components using the Shadcn CLI (e.g., `npx shadcn@latest add <component>`), it's generally safe for non-customized components. For the listed customized ones, you may need to manually merge changes to preserve the project's modifications and avoid overwriting RTL support or other updates.
 
-Implemented stub endpoints:
+> If you don't require RTL support, you can safely update the 'RTL Updated Components' via the Shadcn CLI, as these changes are primarily for RTL compatibility. The 'Modified Components' may have other customizations to consider.
 
-- `GET /api/health`
-- `GET /api/runtime/status`
-- `POST /api/runtime/actions/:action`
-- `GET /api/services`
-- `GET /api/services/:serviceId`
-- `POST /api/services/:serviceId/actions/:action`
-- `GET /api/dependencies`
-- `GET /api/network`
-- `GET /api/installed`
-- `GET /api/settings`
+### Modified Components
 
-That means the UI is no longer reading fake in-memory client returns directly. It now exercises a real HTTP API shape that can later be swapped to the actual Service Lasso backend.
+- scroll-area
+- sonner
+- separator
 
-## Dev
+### RTL Updated Components
+
+- alert-dialog
+- calendar
+- command
+- dialog
+- dropdown-menu
+- select
+- table
+- sheet
+- sidebar
+- switch
+
+**Notes:**
+
+- **Modified Components**: These have general updates, potentially including RTL adjustments.
+- **RTL Updated Components**: These have specific changes for RTL language support (e.g., layout, positioning).
+- For implementation details, check the source files in `src/components/ui/`.
+- All other Shadcn UI components in the project are standard and can be safely updated via the CLI.
+
+</details>
+
+## Tech Stack
+
+**UI:** [ShadcnUI](https://ui.shadcn.com) (TailwindCSS + RadixUI)
+
+**Build Tool:** [Vite](https://vitejs.dev/)
+
+**Routing:** [TanStack Router](https://tanstack.com/router/latest)
+
+**Type Checking:** [TypeScript](https://www.typescriptlang.org/)
+
+**Linting/Formatting:** [ESLint](https://eslint.org/) & [Prettier](https://prettier.io/)
+
+**Icons:** [Lucide Icons](https://lucide.dev/icons/), [Tabler Icons](https://tabler.io/icons) (Brand icons only)
+
+**Auth (partial):** [Clerk](https://go.clerk.com/GttUAaK)
+
+## Service Lasso migration rule
+
+For this repo, the `shadcn-admin` page shape is a hard invariant, not just inspiration.
+
+Every Service Lasso page must keep the shared template structure:
+
+- template `Header`
+- template `Main` content container
+- consistent content spacing and section rhythm
+- template-native patterns for cards, tables, forms, dialogs, drawers, and empty/loading/error states
+
+Do not cut a route down to a bare card or ad-hoc layout just because the feature slice is small. If a page exists, it must fit the same proper template content space as the other pages.
+
+See `docs/reference/MIGRATION-REPORT.md` for the stricter migration rules.
+
+## Run Locally
+
+Clone the project
 
 ```bash
-npm install --legacy-peer-deps
-npm run lint
-npm run format:check
-npm run build
-npm run dev
+  git clone https://github.com/satnaing/shadcn-admin.git
 ```
 
-Dev server:
-- listens on `0.0.0.0:17700`
-- serves the stub API from the same origin at `/api/*`
-
-Preview / long-running local serve:
+Go to the project directory
 
 ```bash
-npm run serve:e2e
+  cd shadcn-admin
 ```
 
-That preview server also binds to `0.0.0.0:17700`.
-
-## Cypress
+Install dependencies
 
 ```bash
-npm run cy:open
-npm run cy:run
-npm run test:e2e
+  pnpm install
 ```
 
-Current Cypress files:
-- `cypress/e2e/api-contract.cy.js`
-- `cypress/e2e/ui-routes.cy.js`
-- `cypress/e2e/ui-actions.cy.js`
-- `cypress/e2e/ui-spec-traceability.cy.js`
+Start the server
 
-Traceability reference:
-- `docs/reference/CYPRESS-TRACEABILITY.md`
+```bash
+  pnpm run dev
+```
 
-## Direction
+## Sponsoring this project ❤️
 
-The UI stays:
+If you find this project helpful or use this in your own work, consider [sponsoring me](https://github.com/sponsors/satnaing) to support development and maintenance. You can [buy me a coffee](https://buymeacoffee.com/satnaing) as well. Don’t worry, every penny helps. Thank you! 🙏
 
-- optional
-- API-driven
-- operator-focused
-- separate from privileged runtime/bootstrap internals
+For questions or sponsorship inquiries, feel free to reach out at [satnaingdev@gmail.com](mailto:satnaingdev@gmail.com).
+
+### Current Sponsor
+
+- [Clerk](https://go.clerk.com/GttUAaK) - authentication and user management for the modern web
+
+## Author
+
+Crafted with 🤍 by [@satnaing](https://github.com/satnaing)
+
+## License
+
+Licensed under the [MIT License](https://choosealicense.com/licenses/mit/)

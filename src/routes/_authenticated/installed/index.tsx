@@ -1,6 +1,12 @@
+import z from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
-import { InstalledPage } from '@/features/installed'
+import { Installed } from '@/features/installed'
+
+const installedSearchSchema = z.object({
+  filter: z.string().optional().catch(''),
+})
 
 export const Route = createFileRoute('/_authenticated/installed/')({
-  component: InstalledPage,
+  validateSearch: installedSearchSchema,
+  component: Installed,
 })

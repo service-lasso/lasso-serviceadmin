@@ -1,33 +1,36 @@
 import {
+  Bell,
   Boxes,
-  Cable,
   Command,
+  GitBranch,
   Globe,
+  HardDrive,
+  HelpCircle,
   LayoutDashboard,
-  Logs,
-  PackageOpen,
-  ServerCog,
+  Monitor,
+  Palette,
+  ScrollText,
   Settings,
-  Shield,
+  TimerReset,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
 
 export const sidebarData: SidebarData = {
   user: {
     name: 'Service Lasso',
-    email: 'operator@servicelasso.local',
-    avatar: '/images/favicon.png',
+    email: 'local-dev@service-lasso.local',
+    avatar: '/avatars/shadcn.jpg',
   },
   teams: [
     {
-      name: 'Service Admin UI',
+      name: 'Service Lasso',
       logo: Command,
-      plan: 'Operator shell',
+      plan: 'Service Admin',
     },
   ],
   navGroups: [
     {
-      title: 'Operator',
+      title: 'Operations',
       items: [
         {
           title: 'Dashboard',
@@ -42,42 +45,58 @@ export const sidebarData: SidebarData = {
         {
           title: 'Dependencies',
           url: '/dependencies',
-          icon: Cable,
-        },
-        {
-          title: 'Runtime',
-          url: '/runtime',
-          icon: ServerCog,
+          icon: GitBranch,
         },
         {
           title: 'Logs',
           url: '/logs',
-          icon: Logs,
+          icon: ScrollText,
+        },
+        {
+          title: 'Runtime',
+          url: '/runtime',
+          icon: TimerReset,
+        },
+        {
+          title: 'Installed',
+          url: '/installed',
+          icon: HardDrive,
         },
         {
           title: 'Network',
           url: '/network',
           icon: Globe,
         },
-        {
-          title: 'Installed',
-          url: '/installed',
-          icon: PackageOpen,
-        },
       ],
     },
     {
-      title: 'Admin UI',
+      title: 'Configuration',
       items: [
         {
           title: 'Settings',
-          url: '/settings',
           icon: Settings,
+          items: [
+            {
+              title: 'Appearance',
+              url: '/settings/appearance',
+              icon: Palette,
+            },
+            {
+              title: 'Notifications',
+              url: '/settings/notifications',
+              icon: Bell,
+            },
+            {
+              title: 'Display',
+              url: '/settings/display',
+              icon: Monitor,
+            },
+          ],
         },
         {
-          title: 'OpenSpec tracker',
-          url: '/settings',
-          icon: Shield,
+          title: 'Help Center',
+          url: '/help-center',
+          icon: HelpCircle,
         },
       ],
     },
