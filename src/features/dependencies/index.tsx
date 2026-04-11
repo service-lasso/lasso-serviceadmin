@@ -730,106 +730,6 @@ export function Dependencies() {
               </Card>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Graph controls</CardTitle>
-                <CardDescription>
-                  Use these filters to simplify the graph before drilling into a
-                  selected service.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className='space-y-4'>
-                <div className='flex flex-wrap gap-2'>
-                  <span className='self-center text-sm text-muted-foreground'>
-                    Status:
-                  </span>
-                  {(['all', 'running', 'degraded', 'stopped'] as const).map(
-                    (value) => (
-                      <Button
-                        key={value}
-                        type='button'
-                        size='sm'
-                        variant={statusFilter === value ? 'default' : 'outline'}
-                        onClick={() => setStatusFilter(value)}
-                      >
-                        {value}
-                      </Button>
-                    )
-                  )}
-                </div>
-                <div className='flex flex-wrap gap-2'>
-                  <span className='self-center text-sm text-muted-foreground'>
-                    Category:
-                  </span>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={categoryFilter === 'all' ? 'default' : 'outline'}
-                    onClick={() => setCategoryFilter('all')}
-                  >
-                    all
-                  </Button>
-                  {availableCategories.map((category) => (
-                    <Button
-                      key={category}
-                      type='button'
-                      size='sm'
-                      variant={
-                        categoryFilter === category ? 'default' : 'outline'
-                      }
-                      onClick={() => setCategoryFilter(category)}
-                    >
-                      {category}
-                    </Button>
-                  ))}
-                </div>
-                <div className='flex flex-wrap gap-2'>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={showDependencyEdges ? 'default' : 'outline'}
-                    onClick={() => setShowDependencyEdges((value) => !value)}
-                  >
-                    {showDependencyEdges
-                      ? 'dependencies shown'
-                      : 'show dependencies'}
-                  </Button>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={showApiUsageEdges ? 'default' : 'outline'}
-                    onClick={() => setShowApiUsageEdges((value) => !value)}
-                  >
-                    {showApiUsageEdges ? 'api usage shown' : 'show api usage'}
-                  </Button>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={hideUtility ? 'default' : 'outline'}
-                    onClick={() => setHideUtility((value) => !value)}
-                  >
-                    {hideUtility ? 'utility hidden' : 'hide utility'}
-                  </Button>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={showSurrounding ? 'default' : 'outline'}
-                    onClick={() => setShowSurrounding((value) => !value)}
-                  >
-                    {showSurrounding ? 'surrounding shown' : 'show surrounding'}
-                  </Button>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant='outline'
-                    onClick={resetGraphView}
-                  >
-                    reset view
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
             <div className='grid gap-4 lg:grid-cols-3'>
               <Card className='lg:col-span-2'>
                 <CardHeader>
@@ -841,7 +741,7 @@ export function Dependencies() {
                     overlays.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className='space-y-4'>
                   <div className='h-[640px] overflow-hidden rounded-md border bg-background'>
                     <ReactFlow
                       key={graphVersion}
@@ -887,6 +787,120 @@ export function Dependencies() {
                       <GraphControlPanel />
                       <Background gap={16} />
                     </ReactFlow>
+                  </div>
+
+                  <div className='rounded-md border p-4'>
+                    <div className='mb-3'>
+                      <div className='text-sm font-medium'>Graph controls</div>
+                      <div className='text-xs text-muted-foreground'>
+                        Filters and overlays for the dependency graph live below
+                        the graph.
+                      </div>
+                    </div>
+                    <div className='space-y-4'>
+                      <div className='flex flex-wrap gap-2'>
+                        <span className='self-center text-sm text-muted-foreground'>
+                          Status:
+                        </span>
+                        {(
+                          ['all', 'running', 'degraded', 'stopped'] as const
+                        ).map((value) => (
+                          <Button
+                            key={value}
+                            type='button'
+                            size='sm'
+                            variant={
+                              statusFilter === value ? 'default' : 'outline'
+                            }
+                            onClick={() => setStatusFilter(value)}
+                          >
+                            {value}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className='flex flex-wrap gap-2'>
+                        <span className='self-center text-sm text-muted-foreground'>
+                          Category:
+                        </span>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant={
+                            categoryFilter === 'all' ? 'default' : 'outline'
+                          }
+                          onClick={() => setCategoryFilter('all')}
+                        >
+                          all
+                        </Button>
+                        {availableCategories.map((category) => (
+                          <Button
+                            key={category}
+                            type='button'
+                            size='sm'
+                            variant={
+                              categoryFilter === category
+                                ? 'default'
+                                : 'outline'
+                            }
+                            onClick={() => setCategoryFilter(category)}
+                          >
+                            {category}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className='flex flex-wrap gap-2'>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant={showDependencyEdges ? 'default' : 'outline'}
+                          onClick={() =>
+                            setShowDependencyEdges((value) => !value)
+                          }
+                        >
+                          {showDependencyEdges
+                            ? 'dependencies shown'
+                            : 'show dependencies'}
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant={showApiUsageEdges ? 'default' : 'outline'}
+                          onClick={() =>
+                            setShowApiUsageEdges((value) => !value)
+                          }
+                        >
+                          {showApiUsageEdges
+                            ? 'api usage shown'
+                            : 'show api usage'}
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant={hideUtility ? 'default' : 'outline'}
+                          onClick={() => setHideUtility((value) => !value)}
+                        >
+                          {hideUtility ? 'utility hidden' : 'hide utility'}
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant={showSurrounding ? 'default' : 'outline'}
+                          onClick={() => setShowSurrounding((value) => !value)}
+                        >
+                          {showSurrounding
+                            ? 'surrounding shown'
+                            : 'show surrounding'}
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='outline'
+                          onClick={resetGraphView}
+                        >
+                          reset view
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
