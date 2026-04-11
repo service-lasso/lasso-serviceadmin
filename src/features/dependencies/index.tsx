@@ -22,10 +22,10 @@ import {
   Network,
   Plus,
   Search,
-  Sparkles,
   Star,
   Workflow,
 } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
   useServices,
@@ -176,11 +176,11 @@ function GraphControlPanel() {
   )
 }
 
-const GraphServiceNode = memo(({ data, selected }: NodeProps) => {
+const GraphServiceNode = memo(({ data }: NodeProps) => {
   const graphData = data as GraphNodeData
   const emphasisTone =
     graphData.emphasis === 'selected'
-      ? 'border-primary bg-accent/40 shadow-lg ring-2 ring-primary/30'
+      ? 'border-emerald-500 bg-emerald-500/10 shadow-lg ring-2 ring-emerald-500/25'
       : graphData.emphasis === 'related'
         ? 'border-border bg-background'
         : 'border-dashed border-muted-foreground/30 bg-muted/15'
@@ -238,11 +238,6 @@ const GraphServiceNode = memo(({ data, selected }: NodeProps) => {
             </div>
           </div>
           <div className='flex items-center gap-2'>
-            {selected ? (
-              <span className='inline-flex size-6 items-center justify-center rounded-full bg-primary/15 text-primary'>
-                <Sparkles className='size-3.5' />
-              </span>
-            ) : null}
             <Badge
               className={statusTone(graphData.status)}
               variant={
@@ -422,6 +417,12 @@ function DependenciesLoading() {
 }
 
 export function Dependencies() {
+  usePageMetadata({
+    title: 'Service Admin - Dependencies',
+    description:
+      'Service Admin dependency graph for Service Lasso services and relationships.',
+  })
+
   const searchState = route.useSearch()
   const navigate = route.useNavigate()
   const servicesQuery = useServices()
