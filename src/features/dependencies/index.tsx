@@ -284,8 +284,8 @@ function buildNode(
     id: service.id,
     type: 'service',
     position,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
+    sourcePosition: Position.Bottom,
+    targetPosition: Position.Top,
     dragHandle: '.graph-node-drag',
     data: {
       serviceId: service.id,
@@ -301,6 +301,85 @@ function buildNode(
       onToggleFavorite,
     },
   }
+}
+
+function buildVerticalTreeLayout(services: DashboardService[]) {
+  const visibleIds = new Set(services.map((service) => service.id))
+  const indegree = new Map<string, number>()
+  const children = new Map<string, string[]>()
+  const levels = new Map<string, number>()
+
+  for (const service of services) {
+    indegree.set(service.id, 0)
+    children.set(service.id, [])
+  }
+
+  for (const service of services) {
+    for (const dependency of service.dependencies) {
+      if (!visibleIds.has(dependency.id)) continue
+      indegree.set(service.id, (indegree.get(service.id) ?? 0) + 1)
+      children.set(dependency.id, [
+        ...(children.get(dependency.id) ?? []),
+        service.id,
+      ])
+    }
+  }
+
+  const queue = services
+    .filter((service) => (indegree.get(service.id) ?? 0) === 0)
+    .map((service) => service.id)
+
+  for (const serviceId of queue) {
+    levels.set(serviceId, 0)
+  }
+
+  while (queue.length > 0) {
+    const currentId = queue.shift() as string
+    const currentLevel = levels.get(currentId) ?? 0
+
+    for (const childId of children.get(currentId) ?? []) {
+      levels.set(childId, Math.max(levels.get(childId) ?? 0, currentLevel + 1))
+      indegree.set(childId, (indegree.get(childId) ?? 1) - 1)
+      if ((indegree.get(childId) ?? 0) === 0) {
+        queue.push(childId)
+      }
+    }
+  }
+
+  for (const service of services) {
+    if (!levels.has(service.id)) {
+      levels.set(service.id, 0)
+    }
+  }
+
+  const grouped = new Map<number, DashboardService[]>()
+  for (const service of services) {
+    const level = levels.get(service.id) ?? 0
+    grouped.set(level, [...(grouped.get(level) ?? []), service])
+  }
+
+  const horizontalGap = 320
+  const verticalGap = 220
+  const positions = new Map<string, { x: number; y: number }>()
+
+  for (const [level, levelServices] of Array.from(grouped.entries()).sort(
+    (a, b) => a[0] - b[0]
+  )) {
+    const sortedServices = [...levelServices].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )
+    const rowWidth = (sortedServices.length - 1) * horizontalGap
+    const startX = 520 - rowWidth / 2
+
+    for (const [index, service] of sortedServices.entries()) {
+      positions.set(service.id, {
+        x: startX + index * horizontalGap,
+        y: 40 + level * verticalGap,
+      })
+    }
+  }
+
+  return positions
 }
 
 function buildGraph(
@@ -330,49 +409,25 @@ function buildGraph(
     ...dependentServices.map((service) => service.id),
   ])
 
-  const surroundingServices = showSurrounding
-    ? services.filter((service) => !relatedIds.has(service.id))
-    : []
+  const visibleServices = showSurrounding
+    ? services
+    : services.filter((service) => relatedIds.has(service.id))
 
-  const nodes: Node<GraphNodeData>[] = [
+  const positions = buildVerticalTreeLayout(visibleServices)
+
+  const nodes: Node<GraphNodeData>[] = visibleServices.map((service) =>
     buildNode(
-      selectedService,
-      { x: 420, y: 180 },
-      'selected',
+      service,
+      positions.get(service.id) ?? { x: 520, y: 40 },
+      service.id === selectedService.id
+        ? 'selected'
+        : relatedIds.has(service.id)
+          ? 'related'
+          : 'surrounding',
       favoritesEnabled,
       onToggleFavorite
-    ),
-    ...dependencyServices.map((service, index) =>
-      buildNode(
-        service,
-        { x: 60, y: 40 + index * 150 },
-        'related',
-        favoritesEnabled,
-        onToggleFavorite
-      )
-    ),
-    ...dependentServices.map((service, index) =>
-      buildNode(
-        service,
-        { x: 780, y: 40 + index * 150 },
-        'related',
-        favoritesEnabled,
-        onToggleFavorite
-      )
-    ),
-    ...surroundingServices.map((service, index) =>
-      buildNode(
-        service,
-        {
-          x: 60 + (index % 4) * 250,
-          y: 470 + Math.floor(index / 4) * 150,
-        },
-        'surrounding',
-        favoritesEnabled,
-        onToggleFavorite
-      )
-    ),
-  ]
+    )
+  )
 
   const visibleIds = new Set(nodes.map((node) => node.id))
   const edgeMap = new Map<string, Edge>()
@@ -470,7 +525,7 @@ export function Dependencies() {
   const [hideUtility, setHideUtility] = useState(false)
   const [showSurrounding, setShowSurrounding] = useState(true)
   const [showDependencyEdges, setShowDependencyEdges] = useState(true)
-  const [showApiUsageEdges, setShowApiUsageEdges] = useState(true)
+  const [showApiUsageEdges, setShowApiUsageEdges] = useState(false)
   const [graphVersion, setGraphVersion] = useState(0)
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
@@ -772,8 +827,8 @@ export function Dependencies() {
                     <Link2 className='size-4' /> Dependency graph
                   </CardTitle>
                   <CardDescription>
-                    Selected service centered, dependencies to the left,
-                    dependents to the right.
+                    Vertical dependency tree by default, with optional API usage
+                    overlays.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
