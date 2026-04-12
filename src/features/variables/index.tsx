@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, Search, SlidersHorizontal } from 'lucide-react'
+import { ArrowUpDown, Copy, Search, SlidersHorizontal } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +43,9 @@ type VariableRow = {
   services: { id: string; name: string }[]
 }
 
+type VariablesSortKey = 'key' | 'value' | 'scope' | 'source' | 'services'
+type SortDirection = 'asc' | 'desc'
+
 function VariablesLoading() {
   return (
     <Card>
@@ -57,6 +60,40 @@ function VariablesLoading() {
   )
 }
 
+function SortableHead({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  direction: SortDirection
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type='button'
+      variant='ghost'
+      size='sm'
+      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
+      onClick={onClick}
+    >
+      {label}
+      <ArrowUpDown
+        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+      />
+      <span className='sr-only'>
+        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
+      </span>
+    </Button>
+  )
+}
+
+function compareText(a: string, b: string, direction: SortDirection) {
+  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+}
+
 export function Variables({ service, keyFilter }: VariablesProps) {
   usePageMetadata({
     title: 'Service Admin - Variables',
@@ -65,6 +102,8 @@ export function Variables({ service, keyFilter }: VariablesProps) {
 
   const servicesQuery = useServices()
   const [query, setQuery] = useState(keyFilter ?? '')
+  const [sortKey, setSortKey] = useState<VariablesSortKey>('key')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   const rows = useMemo(() => {
     const sourceServices = (servicesQuery.data ?? []).filter(
@@ -100,24 +139,53 @@ export function Variables({ service, keyFilter }: VariablesProps) {
     }
 
     const normalized = query.trim().toLowerCase()
-    return Array.from(map.values())
-      .filter((row) => {
-        if (!normalized) return true
-        return [
-          row.key,
-          row.value,
-          row.scope,
-          row.source ?? '',
-          row.services.map((item) => item.name + ' ' + item.id).join(' '),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(normalized)
-      })
-      .sort(
-        (a, b) => a.key.localeCompare(b.key) || a.scope.localeCompare(b.scope)
+    const filtered = Array.from(map.values()).filter((row) => {
+      if (!normalized) return true
+      return [
+        row.key,
+        row.value,
+        row.scope,
+        row.source ?? '',
+        row.services.map((item) => item.name + ' ' + item.id).join(' '),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalized)
+    })
+
+    return filtered.sort((a, b) => {
+      if (sortKey === 'key') return compareText(a.key, b.key, sortDirection)
+      if (sortKey === 'value') {
+        return compareText(a.value, b.value, sortDirection)
+      }
+      if (sortKey === 'scope') {
+        return compareText(a.scope, b.scope, sortDirection)
+      }
+      if (sortKey === 'source') {
+        return compareText(
+          a.source ?? 'Not recorded',
+          b.source ?? 'Not recorded',
+          sortDirection
+        )
+      }
+
+      return compareText(
+        a.services.map((item) => item.name).join(', '),
+        b.services.map((item) => item.name).join(', '),
+        sortDirection
       )
-  }, [query, service, servicesQuery.data])
+    })
+  }, [query, service, servicesQuery.data, sortDirection, sortKey])
+
+  const toggleSort = (key: VariablesSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection('asc')
+  }
 
   return (
     <>
@@ -165,8 +233,8 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                 <SlidersHorizontal className='size-4' /> Environment variables
               </CardTitle>
               <CardDescription>
-                Aggregated variable view with copy actions and jumps back to the
-                owning service detail page.
+                Aggregated variable view with copy actions, sort controls, and
+                jumps back to the owning service detail page.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -174,11 +242,46 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Key</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Scope</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Services</TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Key'
+                          active={sortKey === 'key'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('key')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Value'
+                          active={sortKey === 'value'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('value')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Scope'
+                          active={sortKey === 'scope'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('scope')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Source'
+                          active={sortKey === 'source'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('source')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Services'
+                          active={sortKey === 'services'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('services')}
+                        />
+                      </TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>

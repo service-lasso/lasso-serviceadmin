@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
+  ArrowUpDown,
   Copy,
   Globe,
   Link2,
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -33,6 +35,20 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 
+type NetworkSortKey =
+  | 'service'
+  | 'endpoint'
+  | 'url'
+  | 'bind'
+  | 'port'
+  | 'exposure'
+type SortDirection = 'asc' | 'desc'
+
+type NetworkRow = {
+  service: DashboardService
+  endpoint: DashboardService['endpoints'][number]
+}
+
 function NetworkLoading() {
   return (
     <Card>
@@ -47,6 +63,40 @@ function NetworkLoading() {
   )
 }
 
+function SortableHead({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  direction: SortDirection
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type='button'
+      variant='ghost'
+      size='sm'
+      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
+      onClick={onClick}
+    >
+      {label}
+      <ArrowUpDown
+        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+      />
+      <span className='sr-only'>
+        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
+      </span>
+    </Button>
+  )
+}
+
+function compareText(a: string, b: string, direction: SortDirection) {
+  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+}
+
 export function Network() {
   usePageMetadata({
     title: 'Service Admin - Network',
@@ -55,30 +105,69 @@ export function Network() {
 
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
+  const [sortKey, setSortKey] = useState<NetworkSortKey>('service')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   const endpointRows = useMemo(() => {
-    const raw = (servicesQuery.data ?? []).flatMap((service) =>
+    const raw: NetworkRow[] = (servicesQuery.data ?? []).flatMap((service) =>
       service.endpoints.map((endpoint) => ({ service, endpoint }))
     )
     const normalized = query.trim().toLowerCase()
-    if (!normalized) return raw
 
-    return raw.filter(({ service, endpoint }) =>
-      [
-        service.name,
-        service.id,
-        endpoint.label,
-        endpoint.url,
-        endpoint.bind,
-        endpoint.protocol,
-        endpoint.exposure,
-        String(endpoint.port),
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalized)
-    )
-  }, [query, servicesQuery.data])
+    const filtered = !normalized
+      ? raw
+      : raw.filter(({ service, endpoint }) =>
+          [
+            service.name,
+            service.id,
+            endpoint.label,
+            endpoint.url,
+            endpoint.bind,
+            endpoint.protocol,
+            endpoint.exposure,
+            String(endpoint.port),
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalized)
+        )
+
+    return filtered.sort((a, b) => {
+      if (sortKey === 'service') {
+        return compareText(a.service.name, b.service.name, sortDirection)
+      }
+      if (sortKey === 'endpoint') {
+        return compareText(a.endpoint.label, b.endpoint.label, sortDirection)
+      }
+      if (sortKey === 'url') {
+        return compareText(a.endpoint.url, b.endpoint.url, sortDirection)
+      }
+      if (sortKey === 'bind') {
+        return compareText(a.endpoint.bind, b.endpoint.bind, sortDirection)
+      }
+      if (sortKey === 'port') {
+        return sortDirection === 'asc'
+          ? a.endpoint.port - b.endpoint.port
+          : b.endpoint.port - a.endpoint.port
+      }
+
+      return compareText(
+        a.endpoint.exposure,
+        b.endpoint.exposure,
+        sortDirection
+      )
+    })
+  }, [query, servicesQuery.data, sortDirection, sortKey])
+
+  const toggleSort = (key: NetworkSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection('asc')
+  }
 
   return (
     <>
@@ -104,8 +193,8 @@ export function Network() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Network</h2>
             <p className='text-muted-foreground'>
-              Search service endpoints, copy URLs quickly, and inspect
-              bind/exposure facts in one table.
+              Search service endpoints, sort the columns, copy URLs quickly, and
+              inspect bind/exposure facts in one table.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -127,8 +216,8 @@ export function Network() {
                 <NetworkIcon className='size-4' /> Service endpoints
               </CardTitle>
               <CardDescription>
-                Searchable operator table with copy/open actions for every
-                service URL.
+                Searchable operator table with sortable columns and copy/open
+                actions for every service URL.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -136,12 +225,54 @@ export function Network() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Endpoint</TableHead>
-                      <TableHead>URL</TableHead>
-                      <TableHead>Bind</TableHead>
-                      <TableHead>Port</TableHead>
-                      <TableHead>Exposure</TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Service'
+                          active={sortKey === 'service'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('service')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Endpoint'
+                          active={sortKey === 'endpoint'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('endpoint')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='URL'
+                          active={sortKey === 'url'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('url')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Bind'
+                          active={sortKey === 'bind'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('bind')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Port'
+                          active={sortKey === 'port'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('port')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Exposure'
+                          active={sortKey === 'exposure'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('exposure')}
+                        />
+                      </TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
