@@ -3,6 +3,7 @@ import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   Background,
   Controls,
+  MarkerType,
   MiniMap,
   ReactFlow,
   useEdgesState,
@@ -258,6 +259,19 @@ export function Dependencies() {
             id: `${dependency.id}->${service.id}`,
             source: dependency.id,
             target: service.id,
+            label: 'depends_on',
+            labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 600 },
+            labelBgStyle: {
+              fill: '#0f172a',
+              fillOpacity: 0.9,
+            },
+            labelBgPadding: [4, 2] as [number, number],
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: selectedEdge ? '#22c55e' : '#64748b',
+              width: 18,
+              height: 18,
+            },
             animated: selectedEdge,
             style: {
               stroke: selectedEdge ? '#22c55e' : '#64748b',
@@ -282,6 +296,19 @@ export function Dependencies() {
             id: `${dependency.id}->${service.id}:api`,
             source: dependency.id,
             target: service.id,
+            label: 'api_usage',
+            labelStyle: { fill: '#7dd3fc', fontSize: 10, fontWeight: 600 },
+            labelBgStyle: {
+              fill: '#0f172a',
+              fillOpacity: 0.9,
+            },
+            labelBgPadding: [4, 2] as [number, number],
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#38bdf8',
+              width: 18,
+              height: 18,
+            },
             animated: selectedEdge,
             style: {
               stroke: '#38bdf8',

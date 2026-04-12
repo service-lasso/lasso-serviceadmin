@@ -1,5 +1,11 @@
 import { Link } from '@tanstack/react-router'
-import { Background, ReactFlow, type Edge, type Node } from '@xyflow/react'
+import {
+  Background,
+  MarkerType,
+  ReactFlow,
+  type Edge,
+  type Node,
+} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
   ArrowLeft,
@@ -244,6 +250,16 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
       id: `dep-${dependency.id}->svc-${service.id}`,
       source: `dep-${dependency.id}`,
       target: `svc-${service.id}`,
+      label: 'depends_on',
+      labelStyle: { fill: '#86efac', fontSize: 10, fontWeight: 600 },
+      labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9, rx: 4 },
+      labelBgPadding: [4, 2] as [number, number],
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: '#22c55e',
+        width: 18,
+        height: 18,
+      },
       animated: true,
       style: { stroke: '#22c55e', strokeWidth: 2.25 },
     })),
@@ -251,6 +267,16 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
       id: `svc-${service.id}->dnt-${dependent.id}`,
       source: `svc-${service.id}`,
       target: `dnt-${dependent.id}`,
+      label: 'child_of',
+      labelStyle: { fill: '#7dd3fc', fontSize: 10, fontWeight: 600 },
+      labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9, rx: 4 },
+      labelBgPadding: [4, 2] as [number, number],
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: '#0ea5e9',
+        width: 18,
+        height: 18,
+      },
       animated: true,
       style: {
         stroke: '#0ea5e9',
