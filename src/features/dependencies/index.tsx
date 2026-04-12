@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
-  ArrowRight,
-  GitBranch,
-  Link2,
-  Network,
-  Search,
-  Star,
-  Workflow,
-} from 'lucide-react'
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  type Edge,
+  type Node,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import { GitBranch, Link2, Network, Search, Star, Workflow } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
@@ -63,108 +64,33 @@ function getCategory(service: DashboardService): GraphCategory {
   return 'other'
 }
 
-function categoryTone(category: GraphCategory) {
+function categoryNodeColor(category: GraphCategory) {
   switch (category) {
     case 'app':
-      return 'bg-sky-500/15 text-sky-700 border-sky-500/30'
+      return '#0ea5e9'
     case 'runtime':
-      return 'bg-violet-500/15 text-violet-700 border-violet-500/30'
+      return '#8b5cf6'
     case 'infrastructure':
-      return 'bg-slate-500/15 text-slate-700 border-slate-500/30'
+      return '#64748b'
     case 'utility':
-      return 'bg-zinc-500/15 text-zinc-700 border-zinc-500/30'
+      return '#71717a'
     case 'security':
-      return 'bg-amber-500/15 text-amber-700 border-amber-500/30'
+      return '#d97706'
     case 'workflow':
-      return 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
+      return '#10b981'
     default:
-      return 'bg-muted text-muted-foreground border-border'
+      return '#6b7280'
   }
 }
 
-function statusTone(status: DashboardService['status']) {
-  if (status === 'running') return 'bg-emerald-600 hover:bg-emerald-600'
-  if (status === 'degraded') return undefined
-  return undefined
-}
-
-function ServiceBadgeRow({ service }: { service: DashboardService }) {
-  return (
-    <div className='mt-3 flex flex-wrap gap-2'>
-      <Badge
-        className={statusTone(service.status)}
-        variant={
-          service.status === 'degraded'
-            ? 'secondary'
-            : service.status === 'stopped'
-              ? 'outline'
-              : undefined
-        }
-      >
-        {service.status}
-      </Badge>
-      <span
-        className={`rounded-md border px-2 py-0.5 text-xs ${categoryTone(getCategory(service))}`}
-      >
-        {getCategory(service)}
-      </span>
-      <span className='rounded-md border px-2 py-0.5 text-xs text-muted-foreground'>
-        {service.metadata.runtime}
-      </span>
-    </div>
-  )
-}
-
-function RelationshipList({
-  title,
-  items,
-  onSelect,
-}: {
-  title: string
-  items: DashboardService[]
-  onSelect: (serviceId: string) => void
-}) {
-  return (
-    <div className='space-y-3'>
-      <div className='text-sm font-medium'>{title}</div>
-      {items.length ? (
-        items.map((item) => (
-          <button
-            key={item.id}
-            type='button'
-            onClick={() => onSelect(item.id)}
-            className='w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent'
-          >
-            <div className='flex items-start justify-between gap-3'>
-              <div>
-                <div className='font-medium'>{item.name}</div>
-                <div className='text-xs text-muted-foreground'>
-                  {item.id} · {item.role}
-                </div>
-              </div>
-              <Badge
-                className={statusTone(item.status)}
-                variant={
-                  item.status === 'degraded'
-                    ? 'secondary'
-                    : item.status === 'stopped'
-                      ? 'outline'
-                      : undefined
-                }
-              >
-                {item.status}
-              </Badge>
-            </div>
-            <p className='mt-2 text-sm text-muted-foreground'>{item.note}</p>
-          </button>
-        ))
-      ) : (
-        <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-          None recorded in the current stub.
-        </div>
-      )}
-    </div>
-  )
+function StatusBadge({ status }: { status: DashboardService['status'] }) {
+  if (status === 'running') {
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
+    )
+  }
+  if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
+  return <Badge variant='outline'>Stopped</Badge>
 }
 
 function DependenciesLoading() {
@@ -187,13 +113,13 @@ function DependenciesLoading() {
 export function Dependencies() {
   usePageMetadata({
     title: 'Service Admin - Dependencies',
-    description:
-      'Service Admin dependency relationships for Service Lasso services.',
+    description: 'Service Admin dependency graph and relationship table.',
   })
 
   const searchState = route.useSearch()
   const navigate = route.useNavigate()
   const servicesQuery = useServices()
+
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<
     'all' | DashboardService['status']
@@ -202,33 +128,35 @@ export function Dependencies() {
     'all'
   )
   const [hideUtility, setHideUtility] = useState(false)
+
   const toggleFavorite = useToggleFavorite()
   const favoriteFeature = useFavoriteFeatureState()
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
 
-  const availableCategories = useMemo(() => {
-    return Array.from(new Set(services.map((service) => getCategory(service))))
-  }, [services])
+  const availableCategories = useMemo(
+    () => Array.from(new Set(services.map((service) => getCategory(service)))),
+    [services]
+  )
 
   const filteredServices = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return services.filter((service) => {
       if (normalized) {
-        const matchesSearch = [service.name, service.id, service.role]
+        const matches = [service.name, service.id, service.role]
           .join(' ')
           .toLowerCase()
           .includes(normalized)
-        if (!matchesSearch) return false
+        if (!matches) return false
       }
 
-      if (statusFilter !== 'all' && service.status !== statusFilter) {
+      if (statusFilter !== 'all' && service.status !== statusFilter)
         return false
-      }
 
       const category = getCategory(service)
       if (categoryFilter !== 'all' && category !== categoryFilter) return false
       if (hideUtility && category === 'utility') return false
+
       return true
     })
   }, [categoryFilter, hideUtility, query, services, statusFilter])
@@ -277,6 +205,69 @@ export function Dependencies() {
     0
   )
 
+  const graph = useMemo(() => {
+    const rowSize = 4
+    const xStep = 260
+    const yStep = 130
+
+    const nodes: Node[] = filteredServices.map((service, index) => {
+      const col = index % rowSize
+      const row = Math.floor(index / rowSize)
+      const selected = selectedService?.id === service.id
+      const category = getCategory(service)
+
+      return {
+        id: service.id,
+        position: { x: col * xStep, y: row * yStep },
+        data: {
+          label: (
+            <div className='min-w-[170px]'>
+              <div className='truncate text-sm font-semibold'>
+                {service.name}
+              </div>
+              <div className='truncate text-xs text-muted-foreground'>
+                {service.id}
+              </div>
+            </div>
+          ),
+        },
+        style: {
+          border: selected ? '2px solid #22c55e' : '1px solid #334155',
+          borderRadius: 10,
+          background: selected ? '#052e16' : '#0f172a',
+          color: '#e2e8f0',
+          boxShadow: selected ? '0 0 0 2px rgba(34,197,94,0.25)' : 'none',
+        },
+        draggable: true,
+        connectable: false,
+        className: `category-${category}`,
+      }
+    })
+
+    const edges: Edge[] = filteredServices.flatMap((service) =>
+      service.dependencies
+        .filter((dependency) => byId.has(dependency.id))
+        .map((dependency) => {
+          const selectedEdge =
+            selectedService?.id === service.id ||
+            selectedService?.id === dependency.id
+
+          return {
+            id: `${dependency.id}->${service.id}`,
+            source: dependency.id,
+            target: service.id,
+            animated: selectedEdge,
+            style: {
+              stroke: selectedEdge ? '#22c55e' : '#64748b',
+              strokeWidth: selectedEdge ? 2.5 : 1.25,
+            },
+          }
+        })
+    )
+
+    return { nodes, edges }
+  }, [byId, filteredServices, selectedService?.id])
+
   const selectService = (serviceId: string) => {
     navigate({
       search: (prev) => ({
@@ -284,6 +275,11 @@ export function Dependencies() {
         service: serviceId,
       }),
     })
+  }
+
+  const onToggleFavorite = (serviceId: string) => {
+    if (!favoriteFeature.enabled) return
+    void toggleFavorite.mutateAsync(serviceId)
   }
 
   return (
@@ -310,8 +306,8 @@ export function Dependencies() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Dependencies</h2>
             <p className='text-muted-foreground'>
-              Stable dependency surface for selecting a service, reviewing what
-              it depends on, and seeing what depends on it.
+              Graph rendering is back: inspect dependency topology, then drill
+              into selected service relationships.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -332,7 +328,7 @@ export function Dependencies() {
               <Card>
                 <CardHeader className='pb-2'>
                   <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Network className='size-4' /> Services in view
+                    <Network className='size-4' /> Services in graph
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -340,7 +336,7 @@ export function Dependencies() {
                     {filteredServices.length}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Visible services after current filters.
+                    Visible services after filters.
                   </p>
                 </CardContent>
               </Card>
@@ -353,7 +349,7 @@ export function Dependencies() {
                 <CardContent>
                   <div className='text-2xl font-bold'>{relationshipEdges}</div>
                   <p className='text-xs text-muted-foreground'>
-                    Structural dependency links declared in the stub data.
+                    Structural dependency links.
                   </p>
                 </CardContent>
               </Card>
@@ -368,7 +364,7 @@ export function Dependencies() {
                     {inferredApiUsageEdges}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Inferred where an exposing dependency is likely used.
+                    Inferred from endpoint-exposing dependencies.
                   </p>
                 </CardContent>
               </Card>
@@ -383,154 +379,111 @@ export function Dependencies() {
                     {selectedService ? selectedService.name : 'None'}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Pick a service from the list below to inspect its dependency
-                    slice.
+                    Click a node in the graph to focus.
                   </p>
                 </CardContent>
               </Card>
             </div>
 
+            <Card>
+              <CardHeader>
+                <CardTitle className='flex items-center gap-2'>
+                  <GitBranch className='size-4' /> Graph controls
+                </CardTitle>
+                <CardDescription>
+                  Filter graph nodes before selecting a service.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='space-y-4'>
+                <div className='flex flex-wrap gap-2'>
+                  <span className='self-center text-sm text-muted-foreground'>
+                    Status:
+                  </span>
+                  {(['all', 'running', 'degraded', 'stopped'] as const).map(
+                    (value) => (
+                      <Button
+                        key={value}
+                        type='button'
+                        size='sm'
+                        variant={statusFilter === value ? 'default' : 'outline'}
+                        onClick={() => setStatusFilter(value)}
+                      >
+                        {value}
+                      </Button>
+                    )
+                  )}
+                </div>
+
+                <div className='flex flex-wrap gap-2'>
+                  <span className='self-center text-sm text-muted-foreground'>
+                    Category:
+                  </span>
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant={categoryFilter === 'all' ? 'default' : 'outline'}
+                    onClick={() => setCategoryFilter('all')}
+                  >
+                    all
+                  </Button>
+                  {availableCategories.map((category) => (
+                    <Button
+                      key={category}
+                      type='button'
+                      size='sm'
+                      variant={
+                        categoryFilter === category ? 'default' : 'outline'
+                      }
+                      onClick={() => setCategoryFilter(category)}
+                    >
+                      {category}
+                    </Button>
+                  ))}
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant={hideUtility ? 'default' : 'outline'}
+                    onClick={() => setHideUtility((value) => !value)}
+                  >
+                    {hideUtility ? 'utility hidden' : 'hide utility'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className='grid gap-4 lg:grid-cols-3'>
               <Card className='lg:col-span-2'>
                 <CardHeader>
-                  <CardTitle className='flex items-center gap-2'>
-                    <GitBranch className='size-4' /> Service dependency map
-                  </CardTitle>
+                  <CardTitle>Dependency graph</CardTitle>
                   <CardDescription>
-                    Select a service and review its local dependency and
-                    dependent relationships without the unstable graph runtime.
+                    React Flow topology of the currently visible services.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className='space-y-4'>
-                  <div className='flex flex-wrap gap-2'>
-                    <span className='self-center text-sm text-muted-foreground'>
-                      Status:
-                    </span>
-                    {(['all', 'running', 'degraded', 'stopped'] as const).map(
-                      (value) => (
-                        <Button
-                          key={value}
-                          type='button'
-                          size='sm'
-                          variant={
-                            statusFilter === value ? 'default' : 'outline'
-                          }
-                          onClick={() => setStatusFilter(value)}
-                        >
-                          {value}
-                        </Button>
-                      )
-                    )}
-                  </div>
-
-                  <div className='flex flex-wrap gap-2'>
-                    <span className='self-center text-sm text-muted-foreground'>
-                      Category:
-                    </span>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant={categoryFilter === 'all' ? 'default' : 'outline'}
-                      onClick={() => setCategoryFilter('all')}
+                <CardContent>
+                  <div className='h-[520px] rounded-lg border bg-slate-950'>
+                    <ReactFlow
+                      nodes={graph.nodes}
+                      edges={graph.edges}
+                      fitView
+                      minZoom={0.35}
+                      maxZoom={1.6}
+                      onNodeClick={(_, node) => selectService(node.id)}
                     >
-                      all
-                    </Button>
-                    {availableCategories.map((category) => (
-                      <Button
-                        key={category}
-                        type='button'
-                        size='sm'
-                        variant={
-                          categoryFilter === category ? 'default' : 'outline'
-                        }
-                        onClick={() => setCategoryFilter(category)}
-                      >
-                        {category}
-                      </Button>
-                    ))}
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant={hideUtility ? 'default' : 'outline'}
-                      onClick={() => setHideUtility((value) => !value)}
-                    >
-                      {hideUtility ? 'utility hidden' : 'hide utility'}
-                    </Button>
-                  </div>
-
-                  <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
-                    {filteredServices.length ? (
-                      filteredServices.map((service) => (
-                        <div
-                          key={service.id}
-                          role='button'
-                          tabIndex={0}
-                          onClick={() => selectService(service.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              selectService(service.id)
-                            }
-                          }}
-                          className={`rounded-xl border p-4 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
-                            selectedService?.id === service.id
-                              ? 'border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/20'
-                              : ''
-                          }`}
-                        >
-                          <div className='flex items-start justify-between gap-3'>
-                            <div className='min-w-0'>
-                              <div className='truncate font-semibold'>
-                                {service.name}
-                              </div>
-                              <div className='truncate text-xs text-muted-foreground'>
-                                {service.id} · {service.role}
-                              </div>
-                            </div>
-                            <button
-                              type='button'
-                              aria-label={
-                                service.favorite
-                                  ? `Remove ${service.name} from favorites`
-                                  : `Add ${service.name} to favorites`
-                              }
-                              title={
-                                favoriteFeature.enabled
-                                  ? service.favorite
-                                    ? `Remove ${service.name} from favorites`
-                                    : `Add ${service.name} to favorites`
-                                  : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-                              }
-                              disabled={!favoriteFeature.enabled}
-                              className='rounded-sm text-muted-foreground transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50'
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                if (!favoriteFeature.enabled) return
-                                void toggleFavorite.mutateAsync(service.id)
-                              }}
-                            >
-                              <Star
-                                className={`size-4 ${service.favorite ? 'fill-amber-400 text-amber-400' : ''}`}
-                              />
-                            </button>
-                          </div>
-
-                          <ServiceBadgeRow service={service} />
-
-                          <div className='mt-3 flex items-center gap-2 text-sm text-muted-foreground'>
-                            <span>
-                              {service.dependencies.length} dependency
-                            </span>
-                            <ArrowRight className='size-4' />
-                            <span>{service.dependents.length} dependent</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className='col-span-full rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>
-                        No services match the current dependency filters.
-                      </div>
-                    )}
+                      <Background gap={20} size={1} color='#1f2937' />
+                      <Controls />
+                      <MiniMap
+                        pannable
+                        zoomable
+                        nodeColor={(node) => {
+                          const service = byId.get(node.id)
+                          return service
+                            ? categoryNodeColor(getCategory(service))
+                            : '#6b7280'
+                        }}
+                        maskColor='rgba(2, 6, 23, 0.5)'
+                        className='!border !border-slate-700 !bg-slate-900'
+                      />
+                    </ReactFlow>
                   </div>
                 </CardContent>
               </Card>
@@ -539,7 +492,7 @@ export function Dependencies() {
                 <CardHeader>
                   <CardTitle>Selected service details</CardTitle>
                   <CardDescription>
-                    Relationship context and next jumps for the focused service.
+                    Relationship context and quick actions.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-4'>
@@ -566,17 +519,12 @@ export function Dependencies() {
                               favoriteFeature.enabled
                                 ? selectedService.favorite
                                   ? `Remove ${selectedService.name} from favorites`
-                                  : `Add ${selectedService.name} from favorites`
+                                  : `Add ${selectedService.name} to favorites`
                                 : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
                             }
                             disabled={!favoriteFeature.enabled}
                             className='rounded-sm text-muted-foreground transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50'
-                            onClick={() => {
-                              if (!favoriteFeature.enabled) return
-                              void toggleFavorite.mutateAsync(
-                                selectedService.id
-                              )
-                            }}
+                            onClick={() => onToggleFavorite(selectedService.id)}
                           >
                             <Star
                               className={`size-4 ${selectedService.favorite ? 'fill-amber-400 text-amber-400' : ''}`}
@@ -584,36 +532,62 @@ export function Dependencies() {
                           </button>
                         </div>
 
-                        <ServiceBadgeRow service={selectedService} />
-                      </div>
-
-                      <div className='space-y-2 text-sm text-muted-foreground'>
-                        <p>{selectedService.note}</p>
-                        <p>{selectedService.runtimeHealth.summary}</p>
-                      </div>
-
-                      <div className='rounded-lg border p-3'>
-                        <div className='mb-2 text-sm font-medium'>
-                          Relationship summary
-                        </div>
-                        <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-                          <span>{selectedDependencies.length} dependency</span>
-                          <ArrowRight className='size-4' />
-                          <span>{selectedDependents.length} dependent</span>
+                        <div className='mt-3 flex flex-wrap gap-2'>
+                          <StatusBadge status={selectedService.status} />
+                          <Badge variant='outline'>
+                            {selectedService.dependencies.length} deps
+                          </Badge>
+                          <Badge variant='outline'>
+                            {selectedService.dependents.length} dependents
+                          </Badge>
                         </div>
                       </div>
 
-                      <RelationshipList
-                        title='Depends on'
-                        items={selectedDependencies}
-                        onSelect={selectService}
-                      />
+                      <div className='space-y-3'>
+                        <div className='text-sm font-medium'>Depends on</div>
+                        {selectedDependencies.length ? (
+                          selectedDependencies.map((service) => (
+                            <button
+                              key={service.id}
+                              type='button'
+                              className='w-full rounded-lg border p-3 text-left hover:bg-accent'
+                              onClick={() => selectService(service.id)}
+                            >
+                              <div className='font-medium'>{service.name}</div>
+                              <div className='text-xs text-muted-foreground'>
+                                {service.id}
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+                            No dependencies in current graph scope.
+                          </div>
+                        )}
+                      </div>
 
-                      <RelationshipList
-                        title='Dependents'
-                        items={selectedDependents}
-                        onSelect={selectService}
-                      />
+                      <div className='space-y-3'>
+                        <div className='text-sm font-medium'>Dependents</div>
+                        {selectedDependents.length ? (
+                          selectedDependents.map((service) => (
+                            <button
+                              key={service.id}
+                              type='button'
+                              className='w-full rounded-lg border p-3 text-left hover:bg-accent'
+                              onClick={() => selectService(service.id)}
+                            >
+                              <div className='font-medium'>{service.name}</div>
+                              <div className='text-xs text-muted-foreground'>
+                                {service.id}
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+                            No dependents in current graph scope.
+                          </div>
+                        )}
+                      </div>
 
                       <div className='flex flex-wrap gap-2'>
                         <Button variant='outline' size='sm' asChild>

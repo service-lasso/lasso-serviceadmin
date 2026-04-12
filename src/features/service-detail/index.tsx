@@ -1,4 +1,6 @@
 import { Link } from '@tanstack/react-router'
+import { Background, ReactFlow, type Edge, type Node } from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import {
   ArrowLeft,
   Copy,
@@ -155,6 +157,120 @@ function RelationshipList({
           None recorded in the current stub.
         </div>
       )}
+    </div>
+  )
+}
+
+function LocalDependencyGraph({ service }: { service: DashboardService }) {
+  const xStep = 250
+  const yStep = 110
+
+  const dependencyNodes: Node[] = service.dependencies.map(
+    (dependency, index) => ({
+      id: `dep-${dependency.id}`,
+      position: { x: 0, y: index * yStep + 30 },
+      data: {
+        label: (
+          <div className='min-w-[150px]'>
+            <div className='truncate text-sm font-medium'>
+              {dependency.name}
+            </div>
+            <div className='truncate text-xs text-muted-foreground'>
+              {dependency.id}
+            </div>
+          </div>
+        ),
+      },
+      style: {
+        border: '1px solid #334155',
+        borderRadius: 10,
+        background: '#0f172a',
+        color: '#e2e8f0',
+      },
+    })
+  )
+
+  const dependentNodes: Node[] = service.dependents.map((dependent, index) => ({
+    id: `dnt-${dependent.id}`,
+    position: { x: xStep * 2, y: index * yStep + 30 },
+    data: {
+      label: (
+        <div className='min-w-[150px]'>
+          <div className='truncate text-sm font-medium'>{dependent.name}</div>
+          <div className='truncate text-xs text-muted-foreground'>
+            {dependent.id}
+          </div>
+        </div>
+      ),
+    },
+    style: {
+      border: '1px solid #334155',
+      borderRadius: 10,
+      background: '#0f172a',
+      color: '#e2e8f0',
+    },
+  }))
+
+  const centerY =
+    Math.max(dependencyNodes.length, dependentNodes.length) * yStep * 0.5 + 30
+
+  const centerNode: Node = {
+    id: `svc-${service.id}`,
+    position: { x: xStep, y: centerY },
+    data: {
+      label: (
+        <div className='min-w-[170px]'>
+          <div className='truncate text-sm font-semibold'>{service.name}</div>
+          <div className='truncate text-xs text-muted-foreground'>
+            {service.id}
+          </div>
+        </div>
+      ),
+    },
+    style: {
+      border: '2px solid #22c55e',
+      borderRadius: 10,
+      background: '#052e16',
+      color: '#e2e8f0',
+      boxShadow: '0 0 0 2px rgba(34,197,94,0.25)',
+    },
+  }
+
+  const edges: Edge[] = [
+    ...service.dependencies.map((dependency) => ({
+      id: `dep-${dependency.id}->svc-${service.id}`,
+      source: `dep-${dependency.id}`,
+      target: `svc-${service.id}`,
+      animated: true,
+      style: { stroke: '#22c55e', strokeWidth: 2.25 },
+    })),
+    ...service.dependents.map((dependent) => ({
+      id: `svc-${service.id}->dnt-${dependent.id}`,
+      source: `svc-${service.id}`,
+      target: `dnt-${dependent.id}`,
+      animated: true,
+      style: { stroke: '#0ea5e9', strokeWidth: 2.25 },
+    })),
+  ]
+
+  const nodes = [...dependencyNodes, centerNode, ...dependentNodes]
+
+  return (
+    <div className='h-[320px] rounded-lg border bg-slate-950'>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        fitView
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+      >
+        <Background gap={20} size={1} color='#1f2937' />
+      </ReactFlow>
     </div>
   )
 }
@@ -571,6 +687,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className='space-y-5'>
+                      <LocalDependencyGraph service={service} />
                       <RelationshipList
                         title='Depends on'
                         items={service.dependencies}
