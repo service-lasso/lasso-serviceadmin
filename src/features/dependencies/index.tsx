@@ -39,6 +39,54 @@ import { ThemeSwitch } from '@/components/theme-switch'
 
 const route = getRouteApi('/_authenticated/dependencies/')
 
+const GRAPH_LAYOUT_STORAGE_KEY = 'service-admin:dependencies:graph-layout'
+const serviceLassoApiBaseUrl =
+  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
+
+type GraphLayoutMap = Record<string, { x: number; y: number }>
+
+function loadGraphLayout(): GraphLayoutMap {
+  try {
+    const raw = localStorage.getItem(GRAPH_LAYOUT_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as GraphLayoutMap
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed
+  } catch {
+    return {}
+  }
+}
+
+function saveGraphLayout(layout: GraphLayoutMap) {
+  try {
+    localStorage.setItem(GRAPH_LAYOUT_STORAGE_KEY, JSON.stringify(layout))
+  } catch {
+    // best-effort local save
+  }
+}
+
+async function persistNodeLayoutToMeta(
+  serviceId: string,
+  x: number,
+  y: number
+) {
+  if (!serviceLassoApiBaseUrl) return
+
+  try {
+    await fetch(`${serviceLassoApiBaseUrl}/api/services/${serviceId}/meta`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        dependencyGraphPosition: { x, y },
+      }),
+    })
+  } catch {
+    // best-effort remote save
+  }
+}
+
 type GraphCategory =
   | 'app'
   | 'runtime'
@@ -124,6 +172,9 @@ export function Dependencies() {
   const servicesQuery = useServices()
 
   const [query, setQuery] = useState('')
+  const [layoutMap, setLayoutMap] = useState<GraphLayoutMap>(() =>
+    loadGraphLayout()
+  )
   const [statusFilter, setStatusFilter] = useState<
     'all' | DashboardService['status']
   >('all')
@@ -221,7 +272,7 @@ export function Dependencies() {
 
       return {
         id: service.id,
-        position: { x: col * xStep, y: row * yStep },
+        position: layoutMap[service.id] ?? { x: col * xStep, y: row * yStep },
         data: {
           label: (
             <div className='min-w-[170px]'>
@@ -320,7 +371,7 @@ export function Dependencies() {
     )
 
     return { nodes, edges: [...structuralEdges, ...inferredApiEdges] }
-  }, [byId, filteredServices, selectedService?.id])
+  }, [byId, filteredServices, layoutMap, selectedService?.id])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges)
@@ -352,6 +403,17 @@ export function Dependencies() {
   const onToggleFavorite = (serviceId: string) => {
     if (!favoriteFeature.enabled) return
     void toggleFavorite.mutateAsync(serviceId)
+  }
+
+  const onNodeDragStop = (_: unknown, node: Node) => {
+    const next = {
+      ...layoutMap,
+      [node.id]: { x: node.position.x, y: node.position.y },
+    }
+
+    setLayoutMap(next)
+    saveGraphLayout(next)
+    void persistNodeLayoutToMeta(node.id, node.position.x, node.position.y)
   }
 
   return (
@@ -553,6 +615,8 @@ export function Dependencies() {
                       edges={edges}
                       onNodesChange={onNodesChange}
                       onEdgesChange={onEdgesChange}
+                      onNodeDragStop={onNodeDragStop}
+                      proOptions={{ hideAttribution: true }}
                       fitView
                       minZoom={0.35}
                       maxZoom={1.6}
