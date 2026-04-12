@@ -252,28 +252,45 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
       source: `svc-${service.id}`,
       target: `dnt-${dependent.id}`,
       animated: true,
-      style: { stroke: '#0ea5e9', strokeWidth: 2.25 },
+      style: {
+        stroke: '#0ea5e9',
+        strokeWidth: 2.25,
+        strokeDasharray: '6 4',
+      },
     })),
   ]
 
   const nodes = [...dependencyNodes, centerNode, ...dependentNodes]
 
   return (
-    <div className='h-[320px] rounded-lg border bg-slate-950'>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        fitView
-        panOnDrag={false}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
-        zoomOnDoubleClick={false}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-      >
-        <Background gap={20} size={1} color='#1f2937' />
-      </ReactFlow>
+    <div className='space-y-3'>
+      <div className='h-[320px] rounded-lg border bg-slate-950'>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          fitView
+          panOnDrag={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+        >
+          <Background gap={20} size={1} color='#1f2937' />
+        </ReactFlow>
+      </div>
+
+      <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground'>
+        <div className='flex items-center gap-2'>
+          <span className='inline-block h-[2px] w-8 rounded bg-emerald-500' />
+          Dependency to selected service
+        </div>
+        <div className='flex items-center gap-2'>
+          <span className='inline-block h-[2px] w-8 border-t-2 border-dashed border-sky-400' />
+          Selected service to dependent
+        </div>
+      </div>
     </div>
   )
 }

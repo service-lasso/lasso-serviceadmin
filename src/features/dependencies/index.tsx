@@ -246,7 +246,7 @@ export function Dependencies() {
       }
     })
 
-    const edges: Edge[] = filteredServices.flatMap((service) =>
+    const structuralEdges: Edge[] = filteredServices.flatMap((service) =>
       service.dependencies
         .filter((dependency) => byId.has(dependency.id))
         .map((dependency) => {
@@ -267,7 +267,32 @@ export function Dependencies() {
         })
     )
 
-    return { nodes, edges }
+    const inferredApiEdges: Edge[] = filteredServices.flatMap((service) =>
+      service.dependencies
+        .filter((dependency) => {
+          const dependencyService = byId.get(dependency.id)
+          return (dependencyService?.endpoints.length ?? 0) > 0
+        })
+        .map((dependency) => {
+          const selectedEdge =
+            selectedService?.id === service.id ||
+            selectedService?.id === dependency.id
+
+          return {
+            id: `${dependency.id}->${service.id}:api`,
+            source: dependency.id,
+            target: service.id,
+            animated: selectedEdge,
+            style: {
+              stroke: '#38bdf8',
+              strokeWidth: selectedEdge ? 2.25 : 1.5,
+              strokeDasharray: '6 4',
+            },
+          }
+        })
+    )
+
+    return { nodes, edges: [...structuralEdges, ...inferredApiEdges] }
   }, [byId, filteredServices, selectedService?.id])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
@@ -479,7 +504,7 @@ export function Dependencies() {
                     React Flow topology of the currently visible services.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className='space-y-3'>
                   <div className='h-[520px] rounded-lg border bg-slate-950'>
                     <ReactFlow
                       nodes={nodes}
@@ -506,6 +531,21 @@ export function Dependencies() {
                         className='!border !border-slate-700 !bg-slate-900'
                       />
                     </ReactFlow>
+                  </div>
+
+                  <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground'>
+                    <div className='flex items-center gap-2'>
+                      <span className='inline-block h-[2px] w-8 rounded bg-slate-500' />
+                      Structural dependency
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <span className='inline-block h-[2px] w-8 rounded bg-emerald-500' />
+                      Selected-path dependency
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <span className='inline-block h-[2px] w-8 border-t-2 border-dashed border-sky-400' />
+                      Inferred API usage
+                    </div>
                   </div>
                 </CardContent>
               </Card>
