@@ -8,6 +8,7 @@ import {
   Network as NetworkIcon,
   Search,
 } from 'lucide-react'
+import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
@@ -334,26 +335,29 @@ export function Network() {
                               {endpoint.label}
                             </div>
                           </TableCell>
-                          <TableCell className='max-w-[280px] text-sm break-all text-muted-foreground'>
-                            {endpoint.url}
+                          <TableCell className='max-w-[280px]'>
+                            <div className='flex items-center gap-2'>
+                              <span className='text-sm break-all text-muted-foreground'>
+                                {endpoint.url}
+                              </span>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='icon'
+                                className='size-7 shrink-0'
+                                title='Copy URL'
+                                onClick={() => void copyText(endpoint.url)}
+                              >
+                                <Copy className='size-3.5' />
+                                <span className='sr-only'>Copy URL</span>
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell>{endpoint.bind}</TableCell>
                           <TableCell>{endpoint.port}</TableCell>
                           <TableCell>{endpoint.exposure}</TableCell>
                           <TableCell>
                             <div className='flex flex-wrap gap-2'>
-                              <Button
-                                type='button'
-                                variant='outline'
-                                size='sm'
-                                onClick={() =>
-                                  void navigator.clipboard.writeText(
-                                    endpoint.url
-                                  )
-                                }
-                              >
-                                <Copy className='mr-2 size-3.5' /> Copy URL
-                              </Button>
                               <Button variant='outline' size='sm' asChild>
                                 <a
                                   href={endpoint.url}

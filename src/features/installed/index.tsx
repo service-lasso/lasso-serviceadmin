@@ -8,6 +8,7 @@ import {
   ScanSearch,
   Search,
 } from 'lucide-react'
+import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
@@ -50,23 +51,24 @@ function PathCell({ icon, value }: { icon: ElementType; value?: string }) {
   const Icon = icon
 
   return (
-    <div className='space-y-2'>
-      <div className='flex items-center gap-2'>
-        <Icon className='size-4 text-muted-foreground' />
-        <span className='text-sm break-all text-muted-foreground'>
-          {value ?? 'Not recorded'}
-        </span>
-      </div>
+    <div className='flex items-start gap-2'>
+      <Icon className='mt-1 size-4 text-muted-foreground' />
+      <span className='text-sm break-all text-muted-foreground'>
+        {value ?? 'Not recorded'}
+      </span>
       <Button
         type='button'
         variant='outline'
-        size='sm'
+        size='icon'
+        className='size-7 shrink-0'
+        title='Copy value'
         disabled={!value}
         onClick={() => {
-          if (value) void navigator.clipboard.writeText(value)
+          if (value) void copyText(value)
         }}
       >
-        <Copy className='mr-2 size-3.5' /> Copy
+        <Copy className='size-3.5' />
+        <span className='sr-only'>Copy value</span>
       </Button>
     </div>
   )

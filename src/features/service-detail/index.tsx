@@ -11,6 +11,7 @@ import {
   ScanSearch,
   Wrench,
 } from 'lucide-react'
+import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useDashboardService } from '@/lib/service-lasso-dashboard/hooks'
 import type {
@@ -81,7 +82,7 @@ function HealthBadge({
 
 function CopyValueButton({
   value,
-  label = 'Copy',
+  label = 'Copy value',
 }: {
   value?: string
   label?: string
@@ -90,14 +91,16 @@ function CopyValueButton({
     <Button
       type='button'
       variant='outline'
-      size='sm'
+      size='icon'
+      className='size-7 shrink-0'
+      title={label}
       disabled={!value}
       onClick={() => {
-        if (value) void navigator.clipboard.writeText(value)
+        if (value) void copyText(value)
       }}
     >
-      <Copy className='mr-2 size-3.5' />
-      {label}
+      <Copy className='size-3.5' />
+      <span className='sr-only'>{label}</span>
     </Button>
   )
 }
