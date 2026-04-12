@@ -280,3 +280,29 @@ The graph should feel:
 - consistent with the rest of the shadcn-admin visual language
 
 If it looks like a generic graph playground instead of a service dependency surface, it is not done.
+
+## Service meta fields (graph persistence)
+
+To persist graph layout via service meta (same style of metadata persistence as favorites), service meta should include:
+
+- `favorite: boolean` (existing parity reference)
+- `dependencyGraphPosition.x: number`
+- `dependencyGraphPosition.y: number`
+
+Expected write path:
+
+- `PATCH /api/services/:serviceId/meta`
+- payload fragment:
+
+```json
+{
+  "dependencyGraphPosition": { "x": 120, "y": -80 }
+}
+```
+
+UI behavior contract:
+
+- Save/Discard controls exist on Dependencies graph.
+- Save always attempts service-meta writes via API (`PATCH /api/services/:serviceId/meta`).
+- Save shows toast feedback for success/failure.
+- If API base URL is missing or API persistence is unavailable, Save still shows a toast that reload will revert.

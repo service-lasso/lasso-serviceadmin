@@ -17,6 +17,7 @@ import {
   Undo2,
   Workflow,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
@@ -44,43 +45,23 @@ import { ThemeSwitch } from '@/components/theme-switch'
 
 const route = getRouteApi('/_authenticated/dependencies/')
 
-const GRAPH_LAYOUT_STORAGE_KEY = 'service-admin:dependencies:graph-layout'
 const serviceLassoApiBaseUrl =
   import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
-const enableServiceMetaLayoutSave =
-  import.meta.env.VITE_SERVICE_LASSO_ENABLE_META_LAYOUT_SAVE === 'true'
 
 type GraphLayoutMap = Record<string, { x: number; y: number }>
-
-function loadGraphLayout(): GraphLayoutMap {
-  try {
-    const raw = localStorage.getItem(GRAPH_LAYOUT_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as GraphLayoutMap
-    if (!parsed || typeof parsed !== 'object') return {}
-    return parsed
-  } catch {
-    return {}
-  }
-}
-
-function saveGraphLayout(layout: GraphLayoutMap) {
-  try {
-    localStorage.setItem(GRAPH_LAYOUT_STORAGE_KEY, JSON.stringify(layout))
-  } catch {
-    // best-effort local save
-  }
-}
 
 async function persistNodeLayoutToMeta(
   serviceId: string,
   x: number,
   y: number
 ) {
-  if (!enableServiceMetaLayoutSave || !serviceLassoApiBaseUrl) return
+  if (!serviceLassoApiBaseUrl) {
+    throw new Error('Service Lasso API base URL is not configured')
+  }
 
-  try {
-    await fetch(`${serviceLassoApiBaseUrl}/api/services/${serviceId}/meta`, {
+  const response = await fetch(
+    `${serviceLassoApiBaseUrl}/api/services/${serviceId}/meta`,
+    {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -88,9 +69,11 @@ async function persistNodeLayoutToMeta(
       body: JSON.stringify({
         dependencyGraphPosition: { x, y },
       }),
-    })
-  } catch {
-    // best-effort remote save
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to persist layout for ${serviceId}`)
   }
 }
 
@@ -179,12 +162,8 @@ export function Dependencies() {
   const servicesQuery = useServices()
 
   const [query, setQuery] = useState('')
-  const [savedLayoutMap, setSavedLayoutMap] = useState<GraphLayoutMap>(() =>
-    loadGraphLayout()
-  )
-  const [layoutMap, setLayoutMap] = useState<GraphLayoutMap>(() =>
-    loadGraphLayout()
-  )
+  const [savedLayoutMap, setSavedLayoutMap] = useState<GraphLayoutMap>({})
+  const [layoutMap, setLayoutMap] = useState<GraphLayoutMap>({})
   const [statusFilter, setStatusFilter] = useState<
     'all' | DashboardService['status']
   >('all')
@@ -528,17 +507,29 @@ export function Dependencies() {
 
   const saveLayoutToMeta = async () => {
     setSavedLayoutMap(layoutMap)
-    saveGraphLayout(layoutMap)
 
-    await Promise.all(
-      Object.entries(layoutMap).map(([serviceId, position]) =>
-        persistNodeLayoutToMeta(serviceId, position.x, position.y)
+    if (!serviceLassoApiBaseUrl) {
+      toast.error(
+        'Layout save triggered, but API base URL is not configured, so this will reset after reload.'
       )
-    )
+      return
+    }
+
+    try {
+      await Promise.all(
+        Object.entries(layoutMap).map(([serviceId, position]) =>
+          persistNodeLayoutToMeta(serviceId, position.x, position.y)
+        )
+      )
+      toast.success('Graph layout saved to service meta.')
+    } catch {
+      toast.error('Could not save graph layout to service meta.')
+    }
   }
 
   const discardLayoutChanges = () => {
     setLayoutMap(savedLayoutMap)
+    toast.message('Discarded unsaved graph layout changes.')
   }
 
   return (
