@@ -307,7 +307,7 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
         </ReactFlow>
       </div>
 
-      <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground'>
+      <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs text-slate-200'>
         <div className='flex items-center gap-2'>
           <span className='inline-block h-[2px] w-8 rounded bg-emerald-500' />
           Dependency to selected service
