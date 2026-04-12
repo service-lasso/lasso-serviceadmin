@@ -242,6 +242,16 @@ export function Variables({ service, keyFilter }: VariablesProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
+              <div className='relative w-full max-w-md'>
+                <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder='Search variable keys, values, sources, or services...'
+                  className='pl-9'
+                />
+              </div>
+
               <div className='flex flex-wrap gap-2'>
                 <Button
                   type='button'

@@ -268,6 +268,16 @@ export function Runtime() {
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-3'>
+            <div className='relative w-full max-w-md'>
+              <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder='Search runtime status, health, summaries, or checks...'
+                className='pl-9'
+              />
+            </div>
+
             <div className='flex flex-wrap gap-2'>
               <span className='self-center text-sm text-muted-foreground'>
                 Status:
