@@ -111,27 +111,52 @@ function CopyValueButton({
   )
 }
 
-function EndpointCard({ endpoint }: { endpoint: ServiceEndpoint }) {
+function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
   return (
-    <div className='rounded-lg border p-4'>
-      <div className='flex items-start justify-between gap-2'>
-        <div>
-          <div className='font-medium'>{endpoint.label}</div>
-          <div className='text-xs text-muted-foreground'>
-            {endpoint.protocol.toUpperCase()} · {endpoint.bind}:{endpoint.port}{' '}
-            · {endpoint.exposure}
-          </div>
-        </div>
-        <Button asChild size='sm' variant='outline'>
-          <a href={endpoint.url} target='_blank' rel='noreferrer'>
-            Open
-            <ExternalLink className='ml-2 size-3.5' />
-          </a>
-        </Button>
-      </div>
-      <p className='mt-3 text-xs break-all text-muted-foreground'>
-        {endpoint.url}
-      </p>
+    <div className='overflow-x-auto rounded-md border'>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Label</TableHead>
+            <TableHead>Protocol</TableHead>
+            <TableHead>Bind</TableHead>
+            <TableHead>Port</TableHead>
+            <TableHead>Exposure</TableHead>
+            <TableHead>URL</TableHead>
+            <TableHead>Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {endpoints.length ? (
+            endpoints.map((endpoint) => (
+              <TableRow key={`${endpoint.label}-${endpoint.url}`}>
+                <TableCell className='font-medium'>{endpoint.label}</TableCell>
+                <TableCell>{endpoint.protocol.toUpperCase()}</TableCell>
+                <TableCell>{endpoint.bind}</TableCell>
+                <TableCell>{endpoint.port}</TableCell>
+                <TableCell>{endpoint.exposure}</TableCell>
+                <TableCell className='max-w-[280px] text-sm break-all text-muted-foreground'>
+                  {endpoint.url}
+                </TableCell>
+                <TableCell>
+                  <Button asChild size='sm' variant='outline'>
+                    <a href={endpoint.url} target='_blank' rel='noreferrer'>
+                      Open
+                      <ExternalLink className='ml-2 size-3.5' />
+                    </a>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={7} className='h-20 text-center'>
+                No endpoints are recorded for this service.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </div>
   )
 }
@@ -635,24 +660,81 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                   </Card>
                 </div>
 
+                <div className='grid gap-4 lg:grid-cols-2'>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Dependencies + relationships</CardTitle>
+                      <CardDescription>
+                        Local dependency slice for this service, with the
+                        broader graph intended to live on the Dependencies page.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className='space-y-5'>
+                      <LocalDependencyGraph service={service} />
+                      <RelationshipList
+                        title='Depends on'
+                        items={service.dependencies}
+                      />
+                      <RelationshipList
+                        title='Dependents'
+                        items={service.dependents}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Diagnostics + recent logs</CardTitle>
+                      <CardDescription>
+                        Recent activity preview plus the next operator jump
+                        points.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className='space-y-4'>
+                      <MetadataRow
+                        label='Current log file'
+                        value={service.metadata.logPath}
+                      />
+                      <LogPreview entries={service.recentLogs} />
+                      <div className='grid gap-2 sm:grid-cols-2'>
+                        <Button variant='outline' asChild>
+                          <Link to='/logs' search={{ service: service.id }}>
+                            Open live logs
+                          </Link>
+                        </Button>
+                        <Button variant='outline' asChild>
+                          <Link
+                            to='/dependencies'
+                            search={{ service: service.id }}
+                          >
+                            Open dependencies
+                          </Link>
+                        </Button>
+                        <Button variant='outline' asChild>
+                          <Link to='/network'>Open network view</Link>
+                        </Button>
+                        <Button variant='outline' asChild>
+                          <Link to='/runtime' search={{ service: service.id }}>
+                            Open runtime view
+                          </Link>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
                 <div className='grid gap-4 lg:grid-cols-3'>
                   <Card className='lg:col-span-2'>
                     <CardHeader>
                       <CardTitle className='flex items-center gap-2'>
-                        <Link2 className='size-4' /> Endpoints + exposure
+                        <Link2 className='size-4' /> Endpoints
                       </CardTitle>
                       <CardDescription>
-                        Operator-facing entry points and bind/exposure facts for
-                        this service.
+                        Operator-facing endpoint table for this service.
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className='grid gap-3 sm:grid-cols-2'>
-                      {service.endpoints.map((endpoint) => (
-                        <EndpointCard
-                          key={`${endpoint.label}-${endpoint.url}`}
-                          endpoint={endpoint}
-                        />
-                      ))}
+                    <CardContent>
+                      <EndpointsTable endpoints={service.endpoints} />
                     </CardContent>
                   </Card>
 
@@ -722,69 +804,6 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     </div>
                   </CardContent>
                 </Card>
-
-                <div className='grid gap-4 lg:grid-cols-2'>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Dependencies + relationships</CardTitle>
-                      <CardDescription>
-                        Local dependency slice for this service, with the
-                        broader graph intended to live on the Dependencies page.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className='space-y-5'>
-                      <LocalDependencyGraph service={service} />
-                      <RelationshipList
-                        title='Depends on'
-                        items={service.dependencies}
-                      />
-                      <RelationshipList
-                        title='Dependents'
-                        items={service.dependents}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Diagnostics + recent logs</CardTitle>
-                      <CardDescription>
-                        Recent activity preview plus the next operator jump
-                        points.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className='space-y-4'>
-                      <MetadataRow
-                        label='Current log file'
-                        value={service.metadata.logPath}
-                      />
-                      <LogPreview entries={service.recentLogs} />
-                      <div className='grid gap-2 sm:grid-cols-2'>
-                        <Button variant='outline' asChild>
-                          <Link to='/logs' search={{ service: service.id }}>
-                            Open live logs
-                          </Link>
-                        </Button>
-                        <Button variant='outline' asChild>
-                          <Link
-                            to='/dependencies'
-                            search={{ service: service.id }}
-                          >
-                            Open dependencies
-                          </Link>
-                        </Button>
-                        <Button variant='outline' asChild>
-                          <Link to='/network'>Open network view</Link>
-                        </Button>
-                        <Button variant='outline' asChild>
-                          <Link to='/runtime' search={{ service: service.id }}>
-                            Open runtime view
-                          </Link>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
               </>
             )
           })()
