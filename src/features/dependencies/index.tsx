@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
-  Background,
-  Controls,
   MarkerType,
-  MiniMap,
-  ReactFlow,
   useEdgesState,
   useNodesState,
   type Edge,
   type Node,
 } from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
-import { GitBranch, Link2, Network, Search, Star, Workflow } from 'lucide-react'
+import {
+  GitBranch,
+  Link2,
+  Network,
+  Save,
+  Search,
+  Star,
+  Undo2,
+  Workflow,
+} from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
@@ -32,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
+import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -172,6 +177,9 @@ export function Dependencies() {
   const servicesQuery = useServices()
 
   const [query, setQuery] = useState('')
+  const [savedLayoutMap, setSavedLayoutMap] = useState<GraphLayoutMap>(() =>
+    loadGraphLayout()
+  )
   const [layoutMap, setLayoutMap] = useState<GraphLayoutMap>(() =>
     loadGraphLayout()
   )
@@ -259,20 +267,64 @@ export function Dependencies() {
     0
   )
 
-  const graph = useMemo(() => {
-    const rowSize = 4
-    const xStep = 260
-    const yStep = 130
+  const autoLayoutMap = useMemo(() => {
+    const map: GraphLayoutMap = {}
+    if (!filteredServices.length) return map
 
-    const nodes: Node[] = filteredServices.map((service, index) => {
-      const col = index % rowSize
-      const row = Math.floor(index / rowSize)
+    const center = selectedService ?? filteredServices[0]
+    map[center.id] = { x: 0, y: 0 }
+
+    const dependencyIds = new Set(center.dependencies.map((item) => item.id))
+    const dependentIds = new Set(center.dependents.map((item) => item.id))
+
+    const topNodes = filteredServices.filter((service) =>
+      dependencyIds.has(service.id)
+    )
+    const bottomNodes = filteredServices.filter((service) =>
+      dependentIds.has(service.id)
+    )
+
+    topNodes.forEach((service, index) => {
+      const x = (index - (topNodes.length - 1) / 2) * 260
+      map[service.id] = { x, y: -220 }
+    })
+
+    bottomNodes.forEach((service, index) => {
+      const x = (index - (bottomNodes.length - 1) / 2) * 260
+      map[service.id] = { x, y: 220 }
+    })
+
+    const remaining = filteredServices
+      .filter(
+        (service) =>
+          service.id !== center.id &&
+          !dependencyIds.has(service.id) &&
+          !dependentIds.has(service.id)
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))
+
+    remaining.forEach((service, index) => {
+      const angle =
+        -Math.PI / 2 + (2 * Math.PI * index) / Math.max(remaining.length, 1)
+      const radius = 430
+      map[service.id] = {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+      }
+    })
+
+    return map
+  }, [filteredServices, selectedService])
+
+  const graph = useMemo(() => {
+    const nodes: Node[] = filteredServices.map((service) => {
       const selected = selectedService?.id === service.id
       const category = getCategory(service)
 
       return {
         id: service.id,
-        position: layoutMap[service.id] ?? { x: col * xStep, y: row * yStep },
+        position: layoutMap[service.id] ??
+          autoLayoutMap[service.id] ?? { x: 0, y: 0 },
         data: {
           label: (
             <div className='min-w-[170px]'>
@@ -371,7 +423,7 @@ export function Dependencies() {
     )
 
     return { nodes, edges: [...structuralEdges, ...inferredApiEdges] }
-  }, [byId, filteredServices, layoutMap, selectedService?.id])
+  }, [autoLayoutMap, byId, filteredServices, layoutMap, selectedService?.id])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges)
@@ -384,12 +436,13 @@ export function Dependencies() {
 
       return graph.nodes.map((node) => ({
         ...node,
-        position: previousPositions.get(node.id) ?? node.position,
+        position:
+          layoutMap[node.id] ?? previousPositions.get(node.id) ?? node.position,
       }))
     })
 
     setEdges(graph.edges)
-  }, [graph.edges, graph.nodes, setEdges, setNodes])
+  }, [graph.edges, graph.nodes, layoutMap, setEdges, setNodes])
 
   const selectService = (serviceId: string) => {
     navigate({
@@ -406,14 +459,43 @@ export function Dependencies() {
   }
 
   const onNodeDragStop = (_: unknown, node: Node) => {
-    const next = {
-      ...layoutMap,
+    setLayoutMap((previous) => ({
+      ...previous,
       [node.id]: { x: node.position.x, y: node.position.y },
-    }
+    }))
+  }
 
-    setLayoutMap(next)
-    saveGraphLayout(next)
-    void persistNodeLayoutToMeta(node.id, node.position.x, node.position.y)
+  const autoArrangeVisibleNodes = () => {
+    setLayoutMap((previous) => {
+      const next = { ...previous }
+      filteredServices.forEach((service) => {
+        const fallback = autoLayoutMap[service.id]
+        if (!fallback) return
+        next[service.id] = fallback
+      })
+      return next
+    })
+  }
+
+  const isLayoutDirty = useMemo(() => {
+    const current = JSON.stringify(layoutMap)
+    const saved = JSON.stringify(savedLayoutMap)
+    return current !== saved
+  }, [layoutMap, savedLayoutMap])
+
+  const saveLayoutToMeta = async () => {
+    setSavedLayoutMap(layoutMap)
+    saveGraphLayout(layoutMap)
+
+    await Promise.all(
+      Object.entries(layoutMap).map(([serviceId, position]) =>
+        persistNodeLayoutToMeta(serviceId, position.x, position.y)
+      )
+    )
+  }
+
+  const discardLayoutChanges = () => {
+    setLayoutMap(savedLayoutMap)
   }
 
   return (
@@ -596,6 +678,20 @@ export function Dependencies() {
                       <option value='hidden'>hidden</option>
                     </select>
                   </div>
+
+                  <div className='min-w-[140px]'>
+                    <label className='mb-1 block text-xs text-muted-foreground'>
+                      Layout
+                    </label>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      className='h-9 w-full'
+                      onClick={autoArrangeVisibleNodes}
+                    >
+                      Auto arrange
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -603,56 +699,71 @@ export function Dependencies() {
             <div className='grid gap-4 lg:grid-cols-3'>
               <Card className='lg:col-span-2'>
                 <CardHeader>
-                  <CardTitle>Dependency graph</CardTitle>
-                  <CardDescription>
-                    React Flow topology of the currently visible services.
-                  </CardDescription>
+                  <div className='flex flex-wrap items-start justify-between gap-2'>
+                    <div>
+                      <CardTitle>Dependency graph</CardTitle>
+                      <CardDescription>
+                        React Flow topology of the currently visible services.
+                      </CardDescription>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        type='button'
+                        size='icon'
+                        variant='outline'
+                        className='size-8'
+                        title='Discard unsaved graph layout changes'
+                        disabled={!isLayoutDirty}
+                        onClick={discardLayoutChanges}
+                      >
+                        <Undo2 className='size-4' />
+                        <span className='sr-only'>Discard layout changes</span>
+                      </Button>
+                      <Button
+                        type='button'
+                        size='icon'
+                        variant='outline'
+                        className='size-8'
+                        title='Save graph layout to service meta'
+                        disabled={!isLayoutDirty}
+                        onClick={() => void saveLayoutToMeta()}
+                      >
+                        <Save className='size-4' />
+                        <span className='sr-only'>Save layout changes</span>
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className='space-y-3'>
-                  <div className='h-[520px] rounded-lg border bg-slate-950'>
-                    <ReactFlow
-                      nodes={nodes}
-                      edges={edges}
-                      onNodesChange={onNodesChange}
-                      onEdgesChange={onEdgesChange}
-                      onNodeDragStop={onNodeDragStop}
-                      proOptions={{ hideAttribution: true }}
-                      fitView
-                      minZoom={0.35}
-                      maxZoom={1.6}
-                      onNodeClick={(_, node) => selectService(node.id)}
-                    >
-                      <Background gap={20} size={1} color='#1f2937' />
-                      <Controls />
-                      <MiniMap
-                        pannable
-                        zoomable
-                        nodeColor={(node) => {
-                          const service = byId.get(node.id)
-                          return service
-                            ? categoryNodeColor(getCategory(service))
-                            : '#6b7280'
-                        }}
-                        maskColor='rgba(2, 6, 23, 0.5)'
-                        className='!border !border-slate-700 !bg-slate-900'
-                      />
-                    </ReactFlow>
-                  </div>
-
-                  <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs text-slate-200'>
-                    <div className='flex items-center gap-2'>
-                      <span className='inline-block h-[2px] w-8 rounded bg-slate-300' />
-                      Structural dependency
-                    </div>
-                    <div className='flex items-center gap-2'>
-                      <span className='inline-block h-[2px] w-8 rounded bg-emerald-500' />
-                      Selected-path dependency
-                    </div>
-                    <div className='flex items-center gap-2'>
-                      <span className='inline-block h-[2px] w-8 border-t-2 border-dashed border-sky-400' />
-                      Inferred API usage
-                    </div>
-                  </div>
+                  <DependencyGraphCanvas
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onNodeDragStop={onNodeDragStop}
+                    onNodeClick={selectService}
+                    legendItems={[
+                      {
+                        label: 'Structural dependency',
+                        color: '#cbd5e1',
+                      },
+                      {
+                        label: 'Selected-path dependency',
+                        color: '#22c55e',
+                      },
+                      {
+                        label: 'Inferred API usage',
+                        color: '#38bdf8',
+                        dashed: true,
+                      },
+                    ]}
+                    miniMapNodeColor={(node) => {
+                      const service = byId.get(node.id)
+                      return service
+                        ? categoryNodeColor(getCategory(service))
+                        : '#6b7280'
+                    }}
+                  />
                 </CardContent>
               </Card>
 

@@ -1,13 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
-import {
-  Background,
-  MarkerType,
-  ReactFlow,
-  type Edge,
-  type Node,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import {
   ArrowLeft,
   Copy,
@@ -49,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { ConfigDrawer } from '@/components/config-drawer'
+import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -315,35 +309,23 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
   const nodes = [...dependencyNodes, centerNode, ...dependentNodes]
 
   return (
-    <div className='space-y-3'>
-      <div className='h-[320px] rounded-lg border bg-slate-950'>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          fitView
-          panOnDrag={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          zoomOnDoubleClick={false}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-        >
-          <Background gap={20} size={1} color='#1f2937' />
-        </ReactFlow>
-      </div>
-
-      <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs text-slate-200'>
-        <div className='flex items-center gap-2'>
-          <span className='inline-block h-[2px] w-8 rounded bg-emerald-500' />
-          Dependency to selected service
-        </div>
-        <div className='flex items-center gap-2'>
-          <span className='inline-block h-[2px] w-8 border-t-2 border-dashed border-sky-400' />
-          Selected service to dependent
-        </div>
-      </div>
-    </div>
+    <DependencyGraphCanvas
+      nodes={nodes}
+      edges={edges}
+      height={320}
+      draggable={false}
+      selectable={false}
+      showControls={false}
+      showMiniMap={false}
+      legendItems={[
+        { label: 'Dependency to selected service', color: '#22c55e' },
+        {
+          label: 'Selected service to dependent',
+          color: '#0ea5e9',
+          dashed: true,
+        },
+      ]}
+    />
   )
 }
 
