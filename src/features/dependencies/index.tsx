@@ -273,47 +273,88 @@ export function Dependencies() {
     const map: GraphLayoutMap = {}
     if (!filteredServices.length) return map
 
-    const center = selectedService ?? filteredServices[0]
-    map[center.id] = { x: 0, y: 0 }
-
-    const dependencyIds = new Set(center.dependencies.map((item) => item.id))
-    const dependentIds = new Set(center.dependents.map((item) => item.id))
-
-    const topNodes = filteredServices.filter((service) =>
-      dependencyIds.has(service.id)
-    )
-    const bottomNodes = filteredServices.filter((service) =>
-      dependentIds.has(service.id)
+    const byId = new Map(
+      filteredServices.map((service) => [service.id, service])
     )
 
-    topNodes.forEach((service, index) => {
-      const x = (index - (topNodes.length - 1) / 2) * 260
-      map[service.id] = { x, y: -220 }
+    const outgoing = new Map<string, string[]>()
+    const incomingCount = new Map<string, number>()
+
+    filteredServices.forEach((service) => {
+      outgoing.set(service.id, [])
+      incomingCount.set(service.id, 0)
     })
 
-    bottomNodes.forEach((service, index) => {
-      const x = (index - (bottomNodes.length - 1) / 2) * 260
-      map[service.id] = { x, y: 220 }
+    filteredServices.forEach((service) => {
+      service.dependencies.forEach((dependency) => {
+        if (!byId.has(dependency.id)) return
+
+        outgoing.get(dependency.id)?.push(service.id)
+        incomingCount.set(service.id, (incomingCount.get(service.id) ?? 0) + 1)
+      })
     })
 
-    const remaining = filteredServices
-      .filter(
-        (service) =>
-          service.id !== center.id &&
-          !dependencyIds.has(service.id) &&
-          !dependentIds.has(service.id)
-      )
-      .sort((a, b) => a.id.localeCompare(b.id))
+    const queue = filteredServices
+      .map((service) => service.id)
+      .filter((id) => (incomingCount.get(id) ?? 0) === 0)
 
-    remaining.forEach((service, index) => {
-      const angle =
-        -Math.PI / 2 + (2 * Math.PI * index) / Math.max(remaining.length, 1)
-      const radius = 430
-      map[service.id] = {
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-      }
+    const depth = new Map<string, number>()
+    filteredServices.forEach((service) => depth.set(service.id, 0))
+
+    while (queue.length) {
+      const current = queue.shift()
+      if (!current) continue
+
+      const currentDepth = depth.get(current) ?? 0
+      const nextNodes = outgoing.get(current) ?? []
+
+      nextNodes.forEach((nextId) => {
+        depth.set(nextId, Math.max(depth.get(nextId) ?? 0, currentDepth + 1))
+        incomingCount.set(nextId, (incomingCount.get(nextId) ?? 1) - 1)
+        if ((incomingCount.get(nextId) ?? 0) <= 0) queue.push(nextId)
+      })
+    }
+
+    // Any cyclic/unresolved nodes get pushed to the rightmost layer.
+    const maxDepth = Math.max(...Array.from(depth.values()))
+    filteredServices.forEach((service) => {
+      if ((incomingCount.get(service.id) ?? 0) > 0)
+        depth.set(service.id, maxDepth + 1)
     })
+
+    const layers = new Map<number, string[]>()
+    filteredServices.forEach((service) => {
+      const layer = depth.get(service.id) ?? 0
+      layers.set(layer, [...(layers.get(layer) ?? []), service.id])
+    })
+
+    const layerSpacingX = 310
+    const nodeSpacingY = 130
+
+    Array.from(layers.entries())
+      .sort((a, b) => a[0] - b[0])
+      .forEach(([layer, ids]) => {
+        const sortedIds = ids.sort((a, b) => a.localeCompare(b))
+        const centerOffset = (sortedIds.length - 1) / 2
+
+        sortedIds.forEach((id, index) => {
+          map[id] = {
+            x: layer * layerSpacingX,
+            y: (index - centerOffset) * nodeSpacingY,
+          }
+        })
+      })
+
+    // If a selected node exists, shift the layout so that selected stays closer to center.
+    if (selectedService && map[selectedService.id]) {
+      const selectedPos = map[selectedService.id]
+      const shiftX = selectedPos.x
+      const shiftY = selectedPos.y
+
+      Object.keys(map).forEach((id) => {
+        map[id] = { x: map[id].x - shiftX, y: map[id].y - shiftY }
+      })
+    }
 
     return map
   }, [filteredServices, selectedService])
