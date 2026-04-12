@@ -102,6 +102,9 @@ export function Variables({ service, keyFilter }: VariablesProps) {
 
   const servicesQuery = useServices()
   const [query, setQuery] = useState(keyFilter ?? '')
+  const [scopeFilter, setScopeFilter] = useState<'all' | VariableRow['scope']>(
+    'all'
+  )
   const [sortKey, setSortKey] = useState<VariablesSortKey>('key')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
@@ -140,6 +143,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
 
     const normalized = query.trim().toLowerCase()
     const filtered = Array.from(map.values()).filter((row) => {
+      if (scopeFilter !== 'all' && row.scope !== scopeFilter) return false
       if (!normalized) return true
       return [
         row.key,
@@ -175,7 +179,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
         sortDirection
       )
     })
-  }, [query, service, servicesQuery.data, sortDirection, sortKey])
+  }, [query, scopeFilter, service, servicesQuery.data, sortDirection, sortKey])
 
   const toggleSort = (key: VariablesSortKey) => {
     if (sortKey === key) {
@@ -237,7 +241,34 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                 jumps back to the owning service detail page.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className='space-y-4'>
+              <div className='flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant={scopeFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setScopeFilter('all')}
+                >
+                  all scopes
+                </Button>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant={scopeFilter === 'global' ? 'default' : 'outline'}
+                  onClick={() => setScopeFilter('global')}
+                >
+                  global
+                </Button>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant={scopeFilter === 'service' ? 'default' : 'outline'}
+                  onClick={() => setScopeFilter('service')}
+                >
+                  service
+                </Button>
+              </div>
+
               <div className='overflow-x-auto rounded-md border'>
                 <Table>
                   <TableHeader>

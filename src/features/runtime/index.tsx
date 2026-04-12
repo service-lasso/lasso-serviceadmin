@@ -1,8 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Activity, Clock3, HeartPulse, RotateCcw, Search } from 'lucide-react'
+import {
+  Activity,
+  ArrowUpDown,
+  Clock3,
+  HeartPulse,
+  RotateCcw,
+  Search,
+} from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,18 +36,86 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 
+type RuntimeSortKey =
+  | 'service'
+  | 'status'
+  | 'health'
+  | 'uptime'
+  | 'lastCheck'
+  | 'lastRestart'
+  | 'runtime'
+type SortDirection = 'asc' | 'desc'
+
 function RuntimeLoading() {
   return (
     <Card>
       <CardHeader>
-        <Skeleton className='h-6 w-40' />
-        <Skeleton className='h-4 w-80' />
+        <Skeleton className='h-6 w-44' />
+        <Skeleton className='h-4 w-96' />
       </CardHeader>
       <CardContent>
         <Skeleton className='h-[420px] w-full' />
       </CardContent>
     </Card>
   )
+}
+
+function SortableHead({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  direction: SortDirection
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type='button'
+      variant='ghost'
+      size='sm'
+      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
+      onClick={onClick}
+    >
+      {label}
+      <ArrowUpDown
+        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+      />
+      <span className='sr-only'>
+        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
+      </span>
+    </Button>
+  )
+}
+
+function compareText(a: string, b: string, direction: SortDirection) {
+  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+}
+
+function StatusBadge({ status }: { status: DashboardService['status'] }) {
+  if (status === 'running') {
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
+    )
+  }
+  if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
+  return <Badge variant='outline'>Stopped</Badge>
+}
+
+function HealthBadge({
+  health,
+}: {
+  health: DashboardService['runtimeHealth']['health']
+}) {
+  if (health === 'healthy') {
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Healthy</Badge>
+    )
+  }
+  if (health === 'warning') return <Badge variant='secondary'>Warning</Badge>
+  return <Badge variant='destructive'>Critical</Badge>
 }
 
 export function Runtime() {
@@ -50,26 +126,99 @@ export function Runtime() {
 
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | DashboardService['status']
+  >('all')
+  const [healthFilter, setHealthFilter] = useState<
+    'all' | DashboardService['runtimeHealth']['health']
+  >('all')
+  const [sortKey, setSortKey] = useState<RuntimeSortKey>('service')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-  const services = useMemo(() => {
-    const raw = servicesQuery.data ?? []
+  const rows = useMemo(() => {
     const normalized = query.trim().toLowerCase()
-    if (!normalized) return raw
+    const filtered = (servicesQuery.data ?? []).filter((service) => {
+      if (statusFilter !== 'all' && service.status !== statusFilter)
+        return false
+      if (
+        healthFilter !== 'all' &&
+        service.runtimeHealth.health !== healthFilter
+      ) {
+        return false
+      }
 
-    return raw.filter((service) =>
-      [
+      if (!normalized) return true
+      return [
         service.name,
         service.id,
         service.status,
         service.runtimeHealth.health,
         service.runtimeHealth.summary,
         service.runtimeHealth.uptime,
+        service.runtimeHealth.lastCheckAt,
+        service.runtimeHealth.lastRestartAt ?? '',
+        service.metadata.runtime,
       ]
         .join(' ')
         .toLowerCase()
         .includes(normalized)
-    )
-  }, [query, servicesQuery.data])
+    })
+
+    return filtered.sort((a, b) => {
+      if (sortKey === 'service') {
+        return compareText(a.name, b.name, sortDirection)
+      }
+      if (sortKey === 'status') {
+        return compareText(a.status, b.status, sortDirection)
+      }
+      if (sortKey === 'health') {
+        return compareText(
+          a.runtimeHealth.health,
+          b.runtimeHealth.health,
+          sortDirection
+        )
+      }
+      if (sortKey === 'uptime') {
+        return compareText(
+          a.runtimeHealth.uptime,
+          b.runtimeHealth.uptime,
+          sortDirection
+        )
+      }
+      if (sortKey === 'lastCheck') {
+        return compareText(
+          a.runtimeHealth.lastCheckAt,
+          b.runtimeHealth.lastCheckAt,
+          sortDirection
+        )
+      }
+      if (sortKey === 'lastRestart') {
+        return compareText(
+          a.runtimeHealth.lastRestartAt ?? '',
+          b.runtimeHealth.lastRestartAt ?? '',
+          sortDirection
+        )
+      }
+
+      return compareText(a.metadata.runtime, b.metadata.runtime, sortDirection)
+    })
+  }, [
+    healthFilter,
+    query,
+    servicesQuery.data,
+    sortDirection,
+    sortKey,
+    statusFilter,
+  ])
+
+  const toggleSort = (key: RuntimeSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDirection('asc')
+  }
 
   return (
     <>
@@ -79,7 +228,7 @@ export function Runtime() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search services, status, health, or runtime summary...'
+            placeholder='Search runtime status, health, summaries, or checks...'
             className='pl-9'
           />
         </div>
@@ -95,8 +244,8 @@ export function Runtime() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Runtime</h2>
             <p className='text-muted-foreground'>
-              Search runtime state, health timing, and restart context in one
-              compact operator table.
+              Search, filter, and sort runtime state, health, and check history
+              for every service.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -104,10 +253,59 @@ export function Runtime() {
               <Link to='/services'>Services</Link>
             </Button>
             <Button variant='outline' size='sm' asChild>
-              <Link to='/network'>Network</Link>
+              <Link to='/logs'>Logs</Link>
             </Button>
           </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <Activity className='size-4' /> Runtime filters
+            </CardTitle>
+            <CardDescription>
+              Narrow runtime rows before sorting and drilling into details.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-3'>
+            <div className='flex flex-wrap gap-2'>
+              <span className='self-center text-sm text-muted-foreground'>
+                Status:
+              </span>
+              {(['all', 'running', 'degraded', 'stopped'] as const).map(
+                (value) => (
+                  <Button
+                    key={value}
+                    type='button'
+                    size='sm'
+                    variant={statusFilter === value ? 'default' : 'outline'}
+                    onClick={() => setStatusFilter(value)}
+                  >
+                    {value}
+                  </Button>
+                )
+              )}
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              <span className='self-center text-sm text-muted-foreground'>
+                Health:
+              </span>
+              {(['all', 'healthy', 'warning', 'critical'] as const).map(
+                (value) => (
+                  <Button
+                    key={value}
+                    type='button'
+                    size='sm'
+                    variant={healthFilter === value ? 'default' : 'outline'}
+                    onClick={() => setHealthFilter(value)}
+                  >
+                    {value}
+                  </Button>
+                )
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {servicesQuery.isLoading ? (
           <RuntimeLoading />
@@ -115,10 +313,11 @@ export function Runtime() {
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
-                <Activity className='size-4' /> Runtime state table
+                <HeartPulse className='size-4' /> Service runtime table
               </CardTitle>
               <CardDescription>
-                Searchable runtime/health table for large service sets.
+                Proper operator table with search, filters, and sortable
+                columns.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -126,19 +325,68 @@ export function Runtime() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Health</TableHead>
-                      <TableHead>Uptime</TableHead>
-                      <TableHead>Last check</TableHead>
-                      <TableHead>Last restart</TableHead>
-                      <TableHead>Summary</TableHead>
-                      <TableHead>Open</TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Service'
+                          active={sortKey === 'service'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('service')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Status'
+                          active={sortKey === 'status'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('status')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Health'
+                          active={sortKey === 'health'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('health')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Uptime'
+                          active={sortKey === 'uptime'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('uptime')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Last check'
+                          active={sortKey === 'lastCheck'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('lastCheck')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Last restart'
+                          active={sortKey === 'lastRestart'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('lastRestart')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Runtime'
+                          active={sortKey === 'runtime'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('runtime')}
+                        />
+                      </TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {services.length ? (
-                      services.map((service) => (
+                    {rows.length ? (
+                      rows.map((service) => (
                         <TableRow key={service.id}>
                           <TableCell>
                             <div className='space-y-1'>
@@ -149,41 +397,31 @@ export function Runtime() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant='outline'>{service.status}</Badge>
+                            <StatusBadge status={service.status} />
                           </TableCell>
                           <TableCell>
-                            <div className='flex items-center gap-2'>
-                              <HeartPulse className='size-4 text-muted-foreground' />
-                              {service.runtimeHealth.health}
-                            </div>
+                            <HealthBadge
+                              health={service.runtimeHealth.health}
+                            />
                           </TableCell>
-                          <TableCell>
-                            <div className='flex items-center gap-2'>
-                              <RotateCcw className='size-4 text-muted-foreground' />
-                              {service.runtimeHealth.uptime}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-                              <Clock3 className='size-4' />
-                              {service.runtimeHealth.lastCheckAt}
-                            </div>
+                          <TableCell>{service.runtimeHealth.uptime}</TableCell>
+                          <TableCell className='text-sm text-muted-foreground'>
+                            {service.runtimeHealth.lastCheckAt}
                           </TableCell>
                           <TableCell className='text-sm text-muted-foreground'>
                             {service.runtimeHealth.lastRestartAt ??
                               'Not recorded'}
                           </TableCell>
-                          <TableCell className='max-w-[280px] text-sm text-muted-foreground'>
-                            {service.runtimeHealth.summary}
-                          </TableCell>
+                          <TableCell>{service.metadata.runtime}</TableCell>
                           <TableCell>
                             <div className='flex flex-wrap gap-2'>
                               <Button variant='outline' size='sm' asChild>
                                 <Link
-                                  to='/services/$serviceId'
-                                  params={{ serviceId: service.id }}
+                                  to='/runtime'
+                                  search={{ service: service.id }}
                                 >
-                                  Details
+                                  <RotateCcw className='mr-2 size-3.5' />
+                                  Focus
                                 </Link>
                               </Button>
                               <Button variant='outline' size='sm' asChild>
@@ -191,7 +429,16 @@ export function Runtime() {
                                   to='/logs'
                                   search={{ service: service.id }}
                                 >
+                                  <Clock3 className='mr-2 size-3.5' />
                                   Logs
+                                </Link>
+                              </Button>
+                              <Button variant='outline' size='sm' asChild>
+                                <Link
+                                  to='/services/$serviceId'
+                                  params={{ serviceId: service.id }}
+                                >
+                                  Details
                                 </Link>
                               </Button>
                             </div>
@@ -201,7 +448,7 @@ export function Runtime() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={8} className='h-24 text-center'>
-                          No services match the current runtime search.
+                          No runtime rows match the current search/filters.
                         </TableCell>
                       </TableRow>
                     )}

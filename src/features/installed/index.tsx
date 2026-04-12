@@ -1,6 +1,13 @@
 import { type ElementType, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, FolderCog, PackageCheck, ScanSearch, Search } from 'lucide-react'
+import {
+  ArrowUpDown,
+  Copy,
+  FolderCog,
+  PackageCheck,
+  ScanSearch,
+  Search,
+} from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +34,17 @@ import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
+
+type InstalledSortKey =
+  | 'service'
+  | 'installed'
+  | 'version'
+  | 'runtime'
+  | 'package'
+  | 'installPath'
+  | 'configPath'
+  | 'dataPath'
+type SortDirection = 'asc' | 'desc'
 
 function PathCell({ icon, value }: { icon: ElementType; value?: string }) {
   const Icon = icon
@@ -68,6 +86,40 @@ function InstalledLoading() {
   )
 }
 
+function SortableHead({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  direction: SortDirection
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type='button'
+      variant='ghost'
+      size='sm'
+      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
+      onClick={onClick}
+    >
+      {label}
+      <ArrowUpDown
+        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+      />
+      <span className='sr-only'>
+        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
+      </span>
+    </Button>
+  )
+}
+
+function compareText(a: string, b: string, direction: SortDirection) {
+  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+}
+
 export function Installed() {
   usePageMetadata({
     title: 'Service Admin - Installed',
@@ -76,14 +128,21 @@ export function Installed() {
 
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
+  const [installedFilter, setInstalledFilter] = useState<'all' | 'yes' | 'no'>(
+    'all'
+  )
+  const [sortKey, setSortKey] = useState<InstalledSortKey>('service')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-  const services = useMemo(() => {
-    const raw = servicesQuery.data ?? []
+  const rows = useMemo(() => {
     const normalized = query.trim().toLowerCase()
-    if (!normalized) return raw
 
-    return raw.filter((service) =>
-      [
+    const filtered = (servicesQuery.data ?? []).filter((service) => {
+      if (installedFilter === 'yes' && !service.installed) return false
+      if (installedFilter === 'no' && service.installed) return false
+
+      if (!normalized) return true
+      return [
         service.name,
         service.id,
         service.metadata.version,
@@ -96,8 +155,69 @@ export function Installed() {
         .join(' ')
         .toLowerCase()
         .includes(normalized)
-    )
-  }, [query, servicesQuery.data])
+    })
+
+    return filtered.sort((a, b) => {
+      if (sortKey === 'service')
+        return compareText(a.name, b.name, sortDirection)
+      if (sortKey === 'installed') {
+        return sortDirection === 'asc'
+          ? Number(a.installed) - Number(b.installed)
+          : Number(b.installed) - Number(a.installed)
+      }
+      if (sortKey === 'version') {
+        return compareText(
+          a.metadata.version,
+          b.metadata.version,
+          sortDirection
+        )
+      }
+      if (sortKey === 'runtime') {
+        return compareText(
+          a.metadata.runtime,
+          b.metadata.runtime,
+          sortDirection
+        )
+      }
+      if (sortKey === 'package') {
+        return compareText(
+          a.metadata.packageId ?? '',
+          b.metadata.packageId ?? '',
+          sortDirection
+        )
+      }
+      if (sortKey === 'installPath') {
+        return compareText(
+          a.metadata.installPath ?? '',
+          b.metadata.installPath ?? '',
+          sortDirection
+        )
+      }
+      if (sortKey === 'configPath') {
+        return compareText(
+          a.metadata.configPath ?? '',
+          b.metadata.configPath ?? '',
+          sortDirection
+        )
+      }
+
+      return compareText(
+        a.metadata.dataPath ?? '',
+        b.metadata.dataPath ?? '',
+        sortDirection
+      )
+    })
+  }, [installedFilter, query, servicesQuery.data, sortDirection, sortKey])
+
+  const toggleSort = (key: InstalledSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection('asc')
+  }
 
   return (
     <>
@@ -123,8 +243,8 @@ export function Installed() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Installed</h2>
             <p className='text-muted-foreground'>
-              Search installed services and copy the exact install, config, and
-              data paths from one table view.
+              Search, filter, and sort installed services with path copy
+              actions.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -137,17 +257,55 @@ export function Installed() {
           </div>
         </div>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <PackageCheck className='size-4' /> Installed filters
+            </CardTitle>
+            <CardDescription>
+              Narrow installed state before sorting rows.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className='flex flex-wrap gap-2'>
+              <Button
+                type='button'
+                size='sm'
+                variant={installedFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setInstalledFilter('all')}
+              >
+                all
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                variant={installedFilter === 'yes' ? 'default' : 'outline'}
+                onClick={() => setInstalledFilter('yes')}
+              >
+                installed
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                variant={installedFilter === 'no' ? 'default' : 'outline'}
+                onClick={() => setInstalledFilter('no')}
+              >
+                missing
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {servicesQuery.isLoading ? (
           <InstalledLoading />
         ) : (
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
-                <PackageCheck className='size-4' /> Installed services
+                <PackageCheck className='size-4' /> Installed services table
               </CardTitle>
               <CardDescription>
-                Searchable operator table for install state, version/build
-                facts, and path copy actions.
+                Proper table with search, filters, and sortable columns.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -155,20 +313,76 @@ export function Installed() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Installed</TableHead>
-                      <TableHead>Version</TableHead>
-                      <TableHead>Runtime</TableHead>
-                      <TableHead>Package</TableHead>
-                      <TableHead>Install path</TableHead>
-                      <TableHead>Config path</TableHead>
-                      <TableHead>Data path</TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Service'
+                          active={sortKey === 'service'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('service')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Installed'
+                          active={sortKey === 'installed'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('installed')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Version'
+                          active={sortKey === 'version'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('version')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Runtime'
+                          active={sortKey === 'runtime'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('runtime')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Package'
+                          active={sortKey === 'package'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('package')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Install path'
+                          active={sortKey === 'installPath'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('installPath')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Config path'
+                          active={sortKey === 'configPath'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('configPath')}
+                        />
+                      </TableHead>
+                      <TableHead>
+                        <SortableHead
+                          label='Data path'
+                          active={sortKey === 'dataPath'}
+                          direction={sortDirection}
+                          onClick={() => toggleSort('dataPath')}
+                        />
+                      </TableHead>
                       <TableHead>Open</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {services.length ? (
-                      services.map((service) => (
+                    {rows.length ? (
+                      rows.map((service) => (
                         <TableRow key={service.id}>
                           <TableCell>
                             <div className='space-y-1'>
@@ -225,7 +439,8 @@ export function Installed() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={9} className='h-24 text-center'>
-                          No installed services match the current search.
+                          No installed services match the current
+                          search/filters.
                         </TableCell>
                       </TableRow>
                     )}

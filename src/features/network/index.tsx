@@ -105,6 +105,9 @@ export function Network() {
 
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
+  const [exposureFilter, setExposureFilter] = useState<
+    'all' | 'local' | 'lan' | 'public'
+  >('all')
   const [sortKey, setSortKey] = useState<NetworkSortKey>('service')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
@@ -114,9 +117,14 @@ export function Network() {
     )
     const normalized = query.trim().toLowerCase()
 
+    const scoped =
+      exposureFilter === 'all'
+        ? raw
+        : raw.filter(({ endpoint }) => endpoint.exposure === exposureFilter)
+
     const filtered = !normalized
-      ? raw
-      : raw.filter(({ service, endpoint }) =>
+      ? scoped
+      : scoped.filter(({ service, endpoint }) =>
           [
             service.name,
             service.id,
@@ -157,7 +165,7 @@ export function Network() {
         sortDirection
       )
     })
-  }, [query, servicesQuery.data, sortDirection, sortKey])
+  }, [exposureFilter, query, servicesQuery.data, sortDirection, sortKey])
 
   const toggleSort = (key: NetworkSortKey) => {
     if (sortKey === key) {
@@ -220,7 +228,29 @@ export function Network() {
                 actions for every service URL.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className='space-y-4'>
+              <div className='flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant={exposureFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setExposureFilter('all')}
+                >
+                  all exposure
+                </Button>
+                {(['local', 'lan', 'public'] as const).map((value) => (
+                  <Button
+                    key={value}
+                    type='button'
+                    size='sm'
+                    variant={exposureFilter === value ? 'default' : 'outline'}
+                    onClick={() => setExposureFilter(value)}
+                  >
+                    {value}
+                  </Button>
+                ))}
+              </div>
+
               <div className='overflow-x-auto rounded-md border'>
                 <Table>
                   <TableHeader>
