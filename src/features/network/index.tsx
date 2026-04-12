@@ -7,6 +7,7 @@ import {
   Network as NetworkIcon,
   Search,
 } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Button } from '@/components/ui/button'
 import {
@@ -47,6 +48,11 @@ function NetworkLoading() {
 }
 
 export function Network() {
+  usePageMetadata({
+    title: 'Service Admin - Network',
+    description: 'Service Admin network endpoints and exposure view.',
+  })
+
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
 

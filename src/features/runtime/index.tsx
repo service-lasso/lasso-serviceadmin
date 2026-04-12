@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Activity, Clock3, HeartPulse, RotateCcw, Search } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,11 @@ function RuntimeLoading() {
 }
 
 export function Runtime() {
+  usePageMetadata({
+    title: 'Service Admin - Runtime',
+    description: 'Service Admin runtime status and health view.',
+  })
+
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
 

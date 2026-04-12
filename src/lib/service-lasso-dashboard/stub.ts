@@ -110,6 +110,8 @@ let services: DashboardService[] = [
       installPath: 'C:\\service-lasso\\traefik',
       configPath: 'C:\\service-lasso\\traefik\\traefik.yml',
       dataPath: 'C:\\service-lasso\\traefik\\data',
+      logPath: 'C:\\service-lasso\\traefik\\logs\\traefik.log',
+      workPath: 'C:\\service-lasso\\traefik',
       profile: 'default',
     },
     dependencies: [
@@ -130,6 +132,26 @@ let services: DashboardService[] = [
         note: 'Admin UI is published through Traefik.',
       },
     ],
+    environmentVariables: [
+      {
+        key: 'TRAEFIK_ENTRYPOINTS_WEB_ADDRESS',
+        value: ':80',
+        scope: 'service',
+        source: 'service.json',
+      },
+      {
+        key: 'TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS',
+        value: ':443',
+        scope: 'service',
+        source: 'service.json',
+      },
+      {
+        key: 'SERVICE_LASSO_ROOT',
+        value: 'C:\\service-lasso',
+        scope: 'global',
+        source: '.env',
+      },
+    ],
     recentLogs: [
       {
         timestamp: '2026-04-11T10:17:44+10:00',
@@ -145,7 +167,10 @@ let services: DashboardService[] = [
       },
     ],
     actions: [
+      { id: 'start', label: 'Start service', kind: 'start' },
+      { id: 'stop', label: 'Stop service', kind: 'stop' },
       { id: 'restart', label: 'Restart router', kind: 'restart' },
+      { id: 'install', label: 'Install service', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open dashboard', kind: 'open_admin' },
     ],
@@ -199,6 +224,9 @@ let services: DashboardService[] = [
       configPath:
         'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts',
       dataPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin\\dist',
+      logPath:
+        'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\service-admin.log',
+      workPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin',
       profile: 'develop',
     },
     dependencies: [
@@ -218,6 +246,26 @@ let services: DashboardService[] = [
       },
     ],
     dependents: [],
+    environmentVariables: [
+      {
+        key: 'VITE_SERVICE_LASSO_API_BASE_URL',
+        value: 'http://127.0.0.1:3001',
+        scope: 'service',
+        source: '.env.local',
+      },
+      {
+        key: 'VITE_SERVICE_LASSO_FAVORITES_ENABLED',
+        value: 'true',
+        scope: 'service',
+        source: '.env.local',
+      },
+      {
+        key: 'SERVICE_LASSO_ROOT',
+        value: 'C:\\service-lasso',
+        scope: 'global',
+        source: '.env',
+      },
+    ],
     recentLogs: [
       {
         timestamp: '2026-04-11T10:18:11+10:00',
@@ -233,7 +281,10 @@ let services: DashboardService[] = [
       },
     ],
     actions: [
+      { id: 'start', label: 'Start service', kind: 'start' },
+      { id: 'stop', label: 'Stop service', kind: 'stop' },
       { id: 'reload', label: 'Reload UI', kind: 'reload' },
+      { id: 'install', label: 'Install service', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_config', label: 'Open config', kind: 'open_config' },
     ],
@@ -275,6 +326,8 @@ let services: DashboardService[] = [
       installPath: 'C:\\service-lasso\\zitadel',
       configPath: 'C:\\service-lasso\\zitadel\\zitadel.env',
       dataPath: 'C:\\service-lasso\\zitadel\\data',
+      logPath: 'C:\\service-lasso\\zitadel\\logs\\zitadel.log',
+      workPath: 'C:\\service-lasso\\zitadel',
       profile: 'default',
     },
     dependencies: [
@@ -294,6 +347,26 @@ let services: DashboardService[] = [
         note: 'UI auth features eventually depend on Zitadel.',
       },
     ],
+    environmentVariables: [
+      {
+        key: 'ZITADEL_EXTERNALDOMAIN',
+        value: 'localhost',
+        scope: 'service',
+        source: 'zitadel.env',
+      },
+      {
+        key: 'ZITADEL_EXTERNALPORT',
+        value: '8081',
+        scope: 'service',
+        source: 'zitadel.env',
+      },
+      {
+        key: 'SERVICE_LASSO_ROOT',
+        value: 'C:\\service-lasso',
+        scope: 'global',
+        source: '.env',
+      },
+    ],
     recentLogs: [
       {
         timestamp: '2026-04-11T10:17:01+10:00',
@@ -309,6 +382,8 @@ let services: DashboardService[] = [
       },
     ],
     actions: [
+      { id: 'start', label: 'Start identity service', kind: 'start' },
+      { id: 'stop', label: 'Stop identity service', kind: 'stop' },
       { id: 'restart', label: 'Restart identity service', kind: 'restart' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open auth UI', kind: 'open_admin' },
@@ -350,6 +425,8 @@ let services: DashboardService[] = [
       installPath: 'C:\\service-lasso\\dagu',
       configPath: 'C:\\service-lasso\\dagu\\config.yaml',
       dataPath: 'C:\\service-lasso\\dagu\\data',
+      logPath: 'C:\\service-lasso\\dagu\\logs\\dagu.log',
+      workPath: 'C:\\service-lasso\\dagu',
       profile: 'default',
     },
     dependencies: [
@@ -361,6 +438,26 @@ let services: DashboardService[] = [
       },
     ],
     dependents: [],
+    environmentVariables: [
+      {
+        key: 'DAGU_PORT',
+        value: '8082',
+        scope: 'service',
+        source: 'config.yaml',
+      },
+      {
+        key: 'DAGU_HOME',
+        value: 'C:\\service-lasso\\dagu',
+        scope: 'service',
+        source: 'service.json',
+      },
+      {
+        key: 'SERVICE_LASSO_ROOT',
+        value: 'C:\\service-lasso',
+        scope: 'global',
+        source: '.env',
+      },
+    ],
     recentLogs: [
       {
         timestamp: '2026-04-11T09:51:05+10:00',
@@ -370,8 +467,11 @@ let services: DashboardService[] = [
       },
     ],
     actions: [
+      { id: 'stop', label: 'Stop workflow engine', kind: 'stop' },
       { id: 'start', label: 'Start workflow engine', kind: 'start' },
+      { id: 'install', label: 'Install workflow engine', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
+      { id: 'open_admin', label: 'Open workflow UI', kind: 'open_admin' },
     ],
   },
   {
@@ -410,6 +510,8 @@ let services: DashboardService[] = [
       installPath: 'C:\\service-lasso\\secrets-broker',
       configPath: 'C:\\service-lasso\\secrets-broker\\config.json',
       dataPath: 'C:\\service-lasso\\secrets-broker\\vault',
+      logPath: 'C:\\service-lasso\\secrets-broker\\logs\\broker.log',
+      workPath: 'C:\\service-lasso\\secrets-broker',
       profile: 'default',
     },
     dependencies: [],
@@ -433,6 +535,26 @@ let services: DashboardService[] = [
         relation: 'dependent',
       },
     ],
+    environmentVariables: [
+      {
+        key: 'SECRETS_BROKER_PORT',
+        value: '8083',
+        scope: 'service',
+        source: 'config.json',
+      },
+      {
+        key: 'SECRETS_BROKER_VAULT_PATH',
+        value: 'C:\\service-lasso\\secrets-broker\\vault',
+        scope: 'service',
+        source: 'config.json',
+      },
+      {
+        key: 'SERVICE_LASSO_ROOT',
+        value: 'C:\\service-lasso',
+        scope: 'global',
+        source: '.env',
+      },
+    ],
     recentLogs: [
       {
         timestamp: '2026-04-11T10:18:52+10:00',
@@ -448,8 +570,10 @@ let services: DashboardService[] = [
       },
     ],
     actions: [
+      { id: 'restart', label: 'Restart broker', kind: 'restart' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_config', label: 'Open config', kind: 'open_config' },
+      { id: 'uninstall', label: 'Uninstall service', kind: 'uninstall' },
     ],
   },
 ]

@@ -24,6 +24,14 @@ export type ServiceEndpoint = {
   exposure: 'local' | 'lan' | 'public'
 }
 
+export type ServiceEnvironmentVariable = {
+  key: string
+  value: string
+  scope: 'global' | 'service'
+  secret?: boolean
+  source?: string
+}
+
 export type ServiceMetadata = {
   serviceType: string
   runtime: string
@@ -33,6 +41,8 @@ export type ServiceMetadata = {
   installPath?: string
   configPath?: string
   dataPath?: string
+  logPath?: string
+  workPath?: string
   profile?: string
 }
 
@@ -59,6 +69,8 @@ export type ServiceAction = {
     | 'stop'
     | 'restart'
     | 'reload'
+    | 'install'
+    | 'uninstall'
     | 'open_logs'
     | 'open_config'
     | 'open_admin'
@@ -78,6 +90,7 @@ export type DashboardService = {
   metadata: ServiceMetadata
   dependencies: ServiceDependency[]
   dependents: ServiceDependency[]
+  environmentVariables: ServiceEnvironmentVariable[]
   recentLogs: ServiceLogPreviewEntry[]
   actions: ServiceAction[]
 }

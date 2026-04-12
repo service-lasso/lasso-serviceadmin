@@ -1,6 +1,7 @@
 import { type ElementType, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, FolderCog, PackageCheck, ScanSearch, Search } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -68,6 +69,11 @@ function InstalledLoading() {
 }
 
 export function Installed() {
+  usePageMetadata({
+    title: 'Service Admin - Installed',
+    description: 'Service Admin installed services and paths view.',
+  })
+
   const servicesQuery = useServices()
   const [query, setQuery] = useState('')
 

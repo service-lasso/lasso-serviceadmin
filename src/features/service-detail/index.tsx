@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
+  Copy,
   ExternalLink,
   HeartPulse,
   Link2,
@@ -8,11 +9,14 @@ import {
   ScanSearch,
   Wrench,
 } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import { useDashboardService } from '@/lib/service-lasso-dashboard/hooks'
 import type {
   DashboardService,
+  ServiceAction,
   ServiceDependency,
   ServiceEndpoint,
+  ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
   ServiceStatus,
 } from '@/lib/service-lasso-dashboard/types'
@@ -26,6 +30,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -63,6 +75,29 @@ function HealthBadge({
   }
 
   return <Badge variant='destructive'>Critical</Badge>
+}
+
+function CopyValueButton({
+  value,
+  label = 'Copy',
+}: {
+  value?: string
+  label?: string
+}) {
+  return (
+    <Button
+      type='button'
+      variant='outline'
+      size='sm'
+      disabled={!value}
+      onClick={() => {
+        if (value) void navigator.clipboard.writeText(value)
+      }}
+    >
+      <Copy className='mr-2 size-3.5' />
+      {label}
+    </Button>
+  )
 }
 
 function EndpointCard({ endpoint }: { endpoint: ServiceEndpoint }) {
@@ -150,6 +185,138 @@ function LogPreview({ entries }: { entries: ServiceLogPreviewEntry[] }) {
   )
 }
 
+function MetadataRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className='rounded-lg border p-3'>
+      <div className='flex items-center justify-between gap-3'>
+        <div className='min-w-0'>
+          <div className='font-medium'>{label}</div>
+          <div className='text-sm break-all text-muted-foreground'>
+            {value ?? 'Not recorded'}
+          </div>
+        </div>
+        <CopyValueButton value={value} />
+      </div>
+    </div>
+  )
+}
+
+function EnvironmentTable({
+  serviceId,
+  variables,
+}: {
+  serviceId: string
+  variables: ServiceEnvironmentVariable[]
+}) {
+  return (
+    <div className='overflow-x-auto rounded-md border'>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Key</TableHead>
+            <TableHead>Value</TableHead>
+            <TableHead>Scope</TableHead>
+            <TableHead>Source</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {variables.length ? (
+            variables.map((variable) => (
+              <TableRow key={variable.key}>
+                <TableCell className='font-medium'>{variable.key}</TableCell>
+                <TableCell className='max-w-[360px] text-sm break-all text-muted-foreground'>
+                  {variable.secret ? '••••••••' : variable.value}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={
+                      variable.scope === 'global' ? 'secondary' : 'outline'
+                    }
+                  >
+                    {variable.scope}
+                  </Badge>
+                </TableCell>
+                <TableCell>{variable.source ?? 'Not recorded'}</TableCell>
+                <TableCell>
+                  <div className='flex flex-wrap gap-2'>
+                    <CopyValueButton value={variable.value} />
+                    <Button variant='outline' size='sm' asChild>
+                      <Link
+                        to='/variables'
+                        search={{ service: serviceId, key: variable.key }}
+                      >
+                        Open variables
+                      </Link>
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={5} className='h-20 text-center'>
+                No environment variables are recorded for this service yet.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function renderActionButton(action: ServiceAction, service: DashboardService) {
+  const key = action.id
+
+  if (action.kind === 'open_logs') {
+    return (
+      <Button key={key} variant='outline' size='sm' asChild>
+        <Link to='/logs' search={{ service: service.id }}>
+          {action.label}
+        </Link>
+      </Button>
+    )
+  }
+
+  if (action.kind === 'open_config') {
+    return (
+      <CopyValueButton
+        key={key}
+        value={service.metadata.configPath}
+        label={action.label}
+      />
+    )
+  }
+
+  if (action.kind === 'open_admin') {
+    const adminTarget =
+      service.links.find(
+        (link) => link.kind === 'admin' || link.kind === 'remote'
+      )?.url ?? service.endpoints[0]?.url
+
+    return (
+      <Button key={key} variant='outline' size='sm' asChild>
+        <a href={adminTarget ?? '#'} target='_blank' rel='noreferrer'>
+          {action.label}
+        </a>
+      </Button>
+    )
+  }
+
+  return (
+    <Button
+      key={key}
+      variant='outline'
+      size='sm'
+      disabled
+      title='Runtime action wiring is the next backend slice'
+    >
+      {action.label}
+    </Button>
+  )
+}
+
 function ServiceDetailLoading() {
   return (
     <div className='space-y-4'>
@@ -172,6 +339,12 @@ function ServiceDetailLoading() {
 
 export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const serviceQuery = useDashboardService(serviceId)
+  const serviceName = serviceQuery.data?.name ?? serviceId
+
+  usePageMetadata({
+    title: `Service Admin - Service - ${serviceName}`,
+    description: `Service Admin operator view for service ${serviceName}.`,
+  })
 
   return (
     <>
@@ -234,6 +407,16 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       </p>
                     </div>
                   </div>
+                  <div className='flex flex-wrap gap-2'>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/variables' search={{ service: service.id }}>
+                        Variables
+                      </Link>
+                    </Button>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/network'>Network</Link>
+                    </Button>
+                  </div>
                 </div>
 
                 <div className='grid gap-4 md:grid-cols-3'>
@@ -282,16 +465,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         <Wrench className='size-4' /> Actions
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className='space-y-2'>
-                      {service.actions.map((action) => (
-                        <div
-                          key={action.id}
-                          className='flex items-center justify-between rounded-lg border px-3 py-2 text-sm'
-                        >
-                          <span>{action.label}</span>
-                          <Badge variant='outline'>{action.kind}</Badge>
-                        </div>
-                      ))}
+                    <CardContent className='flex flex-wrap gap-2'>
+                      {service.actions.map((action) =>
+                        renderActionButton(action, service)
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -327,39 +504,62 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className='space-y-3 text-sm'>
-                      <div>
-                        <div className='font-medium'>Package</div>
-                        <div className='break-all text-muted-foreground'>
-                          {service.metadata.packageId ?? 'Not recorded'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className='font-medium'>Install path</div>
-                        <div className='break-all text-muted-foreground'>
-                          {service.metadata.installPath ?? 'Not recorded'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className='font-medium'>Config path</div>
-                        <div className='break-all text-muted-foreground'>
-                          {service.metadata.configPath ?? 'Not recorded'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className='font-medium'>Data path</div>
-                        <div className='break-all text-muted-foreground'>
-                          {service.metadata.dataPath ?? 'Not recorded'}
-                        </div>
-                      </div>
-                      <div>
+                      <MetadataRow
+                        label='Package'
+                        value={service.metadata.packageId}
+                      />
+                      <MetadataRow
+                        label='Install path'
+                        value={service.metadata.installPath}
+                      />
+                      <MetadataRow
+                        label='Config path'
+                        value={service.metadata.configPath}
+                      />
+                      <MetadataRow
+                        label='Data path'
+                        value={service.metadata.dataPath}
+                      />
+                      <MetadataRow
+                        label='Log path'
+                        value={service.metadata.logPath}
+                      />
+                      <MetadataRow
+                        label='Work path'
+                        value={service.metadata.workPath}
+                      />
+                      <div className='rounded-lg border p-3'>
                         <div className='font-medium'>Profile</div>
-                        <div className='text-muted-foreground'>
+                        <div className='text-sm text-muted-foreground'>
                           {service.metadata.profile ?? 'Not recorded'}
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Environment variables</CardTitle>
+                    <CardDescription>
+                      Service-local and shared environment values surfaced in a
+                      searchable top-level Variables page as well.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className='space-y-4'>
+                    <EnvironmentTable
+                      serviceId={service.id}
+                      variables={service.environmentVariables}
+                    />
+                    <div className='flex justify-end'>
+                      <Button variant='outline' size='sm' asChild>
+                        <Link to='/variables' search={{ service: service.id }}>
+                          Open all variables
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <div className='grid gap-4 lg:grid-cols-2'>
                   <Card>
@@ -391,6 +591,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className='space-y-4'>
+                      <MetadataRow
+                        label='Current log file'
+                        value={service.metadata.logPath}
+                      />
                       <LogPreview entries={service.recentLogs} />
                       <div className='grid gap-2 sm:grid-cols-2'>
                         <Button variant='outline' asChild>

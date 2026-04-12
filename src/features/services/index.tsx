@@ -1,4 +1,5 @@
 import { getRouteApi } from '@tanstack/react-router'
+import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,6 +28,11 @@ function ServicesLoading() {
 }
 
 export function Services() {
+  usePageMetadata({
+    title: 'Service Admin - Services',
+    description: 'Service Admin services list for Service Lasso operators.',
+  })
+
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const servicesQuery = useServices()

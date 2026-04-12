@@ -8,6 +8,7 @@ import {
   RefreshCcw,
   Star,
 } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useDashboardAction,
   useDashboardSummary,
@@ -219,6 +220,12 @@ function DashboardLoading() {
 }
 
 export function Dashboard() {
+  usePageMetadata({
+    title: 'Service Admin - Dashboard',
+    description:
+      'Service Admin dashboard for Service Lasso operator status and quick actions.',
+  })
+
   const summaryQuery = useDashboardSummary()
   const actionMutation = useDashboardAction()
 

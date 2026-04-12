@@ -1,5 +1,6 @@
 import { Link, Outlet } from '@tanstack/react-router'
 import { Monitor, Bell, Palette } from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -29,6 +30,11 @@ const sidebarNavItems = [
 ]
 
 export function Settings() {
+  usePageMetadata({
+    title: 'Service Admin - Settings',
+    description: 'Service Admin settings and operator preferences.',
+  })
+
   return (
     <>
       {/* ===== Top Heading ===== */}

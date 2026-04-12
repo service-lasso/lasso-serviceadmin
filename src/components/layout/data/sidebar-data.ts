@@ -4,6 +4,7 @@ import {
   Command,
   GitBranch,
   Globe,
+  SlidersHorizontal,
   HardDrive,
   HelpCircle,
   LayoutDashboard,
@@ -61,6 +62,11 @@ export const sidebarData: SidebarData = {
           title: 'Installed',
           url: '/installed',
           icon: HardDrive,
+        },
+        {
+          title: 'Variables',
+          url: '/variables',
+          icon: SlidersHorizontal,
         },
         {
           title: 'Network',
