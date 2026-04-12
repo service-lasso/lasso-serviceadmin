@@ -23,7 +23,7 @@ import { ThemeSwitch } from '@/components/theme-switch'
 
 const route = getRouteApi('/_authenticated/help-center/')
 
-const docsModules = import.meta.glob('../../../docs/**/*.md', {
+const docsModules = import.meta.glob('../../../docs/help/**/*.md', {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -227,7 +227,7 @@ export function HelpCenter() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Help Center</h2>
             <p className='text-muted-foreground'>
-              Markdown docs loaded directly from the repo `docs/` folder.
+              Help docs loaded from `docs/help/`.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -246,9 +246,7 @@ export function HelpCenter() {
               <CardTitle className='flex items-center gap-2'>
                 <FolderOpen className='size-4' /> Docs
               </CardTitle>
-              <CardDescription>
-                Available markdown files discovered under `docs/`.
-              </CardDescription>
+              <CardDescription>Help documents.</CardDescription>
             </CardHeader>
             <CardContent>
               <ScrollArea className='h-[70vh] pr-3'>
@@ -322,7 +320,7 @@ export function HelpCenter() {
                 </ScrollArea>
               ) : (
                 <div className='rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>
-                  No markdown docs are available yet under `docs/`.
+                  No markdown docs are available yet under `docs/help/`.
                 </div>
               )}
             </CardContent>
