@@ -47,6 +47,8 @@ const route = getRouteApi('/_authenticated/dependencies/')
 const GRAPH_LAYOUT_STORAGE_KEY = 'service-admin:dependencies:graph-layout'
 const serviceLassoApiBaseUrl =
   import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
+const enableServiceMetaLayoutSave =
+  import.meta.env.VITE_SERVICE_LASSO_ENABLE_META_LAYOUT_SAVE === 'true'
 
 type GraphLayoutMap = Record<string, { x: number; y: number }>
 
@@ -75,7 +77,7 @@ async function persistNodeLayoutToMeta(
   x: number,
   y: number
 ) {
-  if (!serviceLassoApiBaseUrl) return
+  if (!enableServiceMetaLayoutSave || !serviceLassoApiBaseUrl) return
 
   try {
     await fetch(`${serviceLassoApiBaseUrl}/api/services/${serviceId}/meta`, {
