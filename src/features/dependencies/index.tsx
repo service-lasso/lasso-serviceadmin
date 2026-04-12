@@ -357,15 +357,7 @@ export function Dependencies() {
   return (
     <>
       <Header fixed>
-        <div className='relative w-full max-w-sm'>
-          <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search services in dependencies...'
-            className='pl-9'
-          />
-        </div>
+        <div />
         <div className='ms-auto flex items-center space-x-4'>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -466,59 +458,82 @@ export function Dependencies() {
                   Filter graph nodes before selecting a service.
                 </CardDescription>
               </CardHeader>
-              <CardContent className='space-y-4'>
-                <div className='flex flex-wrap gap-2'>
-                  <span className='self-center text-sm text-muted-foreground'>
-                    Status:
-                  </span>
-                  {(['all', 'running', 'degraded', 'stopped'] as const).map(
-                    (value) => (
-                      <Button
-                        key={value}
-                        type='button'
-                        size='sm'
-                        variant={statusFilter === value ? 'default' : 'outline'}
-                        onClick={() => setStatusFilter(value)}
-                      >
-                        {value}
-                      </Button>
-                    )
-                  )}
-                </div>
+              <CardContent>
+                <div className='flex flex-wrap items-end gap-3'>
+                  <div className='min-w-[280px] flex-1'>
+                    <label className='mb-1 block text-xs text-muted-foreground'>
+                      Search
+                    </label>
+                    <div className='relative'>
+                      <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
+                      <Input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder='Search services in dependencies...'
+                        className='pl-9'
+                      />
+                    </div>
+                  </div>
 
-                <div className='flex flex-wrap gap-2'>
-                  <span className='self-center text-sm text-muted-foreground'>
-                    Category:
-                  </span>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={categoryFilter === 'all' ? 'default' : 'outline'}
-                    onClick={() => setCategoryFilter('all')}
-                  >
-                    all
-                  </Button>
-                  {availableCategories.map((category) => (
-                    <Button
-                      key={category}
-                      type='button'
-                      size='sm'
-                      variant={
-                        categoryFilter === category ? 'default' : 'outline'
+                  <div className='min-w-[150px]'>
+                    <label className='mb-1 block text-xs text-muted-foreground'>
+                      Status
+                    </label>
+                    <select
+                      className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                      value={statusFilter}
+                      onChange={(event) =>
+                        setStatusFilter(
+                          event.target.value as
+                            | 'all'
+                            | DashboardService['status']
+                        )
                       }
-                      onClick={() => setCategoryFilter(category)}
                     >
-                      {category}
-                    </Button>
-                  ))}
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={hideUtility ? 'default' : 'outline'}
-                    onClick={() => setHideUtility((value) => !value)}
-                  >
-                    {hideUtility ? 'utility hidden' : 'hide utility'}
-                  </Button>
+                      <option value='all'>all</option>
+                      <option value='running'>running</option>
+                      <option value='degraded'>degraded</option>
+                      <option value='stopped'>stopped</option>
+                    </select>
+                  </div>
+
+                  <div className='min-w-[170px]'>
+                    <label className='mb-1 block text-xs text-muted-foreground'>
+                      Category
+                    </label>
+                    <select
+                      className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                      value={categoryFilter}
+                      onChange={(event) =>
+                        setCategoryFilter(
+                          event.target.value as GraphCategory | 'all'
+                        )
+                      }
+                    >
+                      <option value='all'>all</option>
+                      {availableCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className='min-w-[170px]'>
+                    <label className='mb-1 block text-xs text-muted-foreground'>
+                      Utility nodes
+                    </label>
+                    <select
+                      className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                      value={hideUtility ? 'hidden' : 'shown'}
+                      onChange={(event) =>
+                        setHideUtility(event.target.value === 'hidden')
+                      }
+                    >
+                      <option value='shown'>shown</option>
+                      <option value='hidden'>hidden</option>
+                    </select>
+                  </div>
                 </div>
               </CardContent>
             </Card>
