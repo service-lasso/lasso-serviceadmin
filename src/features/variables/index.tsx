@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ArrowUpDown, Copy, Search, SlidersHorizontal } from 'lucide-react'
+import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
@@ -333,8 +334,23 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                           <TableCell className='font-medium'>
                             {row.key}
                           </TableCell>
-                          <TableCell className='max-w-[320px] text-sm break-all text-muted-foreground'>
-                            {row.secret ? '••••••••' : row.value}
+                          <TableCell className='max-w-[320px]'>
+                            <div className='flex items-center gap-2'>
+                              <span className='text-sm break-all text-muted-foreground'>
+                                {row.secret ? '••••••••' : row.value}
+                              </span>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='icon'
+                                className='size-7 shrink-0'
+                                title='Copy value'
+                                onClick={() => void copyText(row.value)}
+                              >
+                                <Copy className='size-3.5' />
+                                <span className='sr-only'>Copy value</span>
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -356,28 +372,16 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className='flex flex-wrap gap-2'>
-                              <Button
-                                type='button'
-                                variant='outline'
-                                size='sm'
-                                onClick={() =>
-                                  void navigator.clipboard.writeText(row.value)
-                                }
-                              >
-                                <Copy className='mr-2 size-3.5' /> Copy value
+                            {row.services.length === 1 ? (
+                              <Button variant='outline' size='sm' asChild>
+                                <Link
+                                  to='/services/$serviceId'
+                                  params={{ serviceId: row.services[0].id }}
+                                >
+                                  Details
+                                </Link>
                               </Button>
-                              {row.services.length === 1 ? (
-                                <Button variant='outline' size='sm' asChild>
-                                  <Link
-                                    to='/services/$serviceId'
-                                    params={{ serviceId: row.services[0].id }}
-                                  >
-                                    Details
-                                  </Link>
-                                </Button>
-                              ) : null}
-                            </div>
+                            ) : null}
                           </TableCell>
                         </TableRow>
                       ))
