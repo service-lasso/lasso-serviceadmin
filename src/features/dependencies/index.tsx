@@ -1,28 +1,10 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
-import {
-  Background,
-  Handle,
-  MarkerType,
-  MiniMap,
-  Panel,
-  Position,
-  ReactFlow,
-  useEdgesState,
-  useNodesState,
-  useReactFlow,
-  type Edge,
-  type Node,
-  type NodeProps,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import {
   ArrowRight,
   GitBranch,
   Link2,
-  Minus,
   Network,
-  Plus,
   Search,
   Star,
   Workflow,
@@ -62,33 +44,21 @@ type GraphCategory =
   | 'workflow'
   | 'other'
 
-type GraphNodeData = {
-  serviceId: string
-  label: string
-  subtitle: string
-  status: DashboardService['status']
-  category: GraphCategory
-  version: string
-  runtime: string
-  favorite: boolean
-  favoritesEnabled: boolean
-  emphasis: 'selected' | 'related' | 'surrounding'
-  onToggleFavorite?: (serviceId: string) => void
-}
-
 function getCategory(service: DashboardService): GraphCategory {
   const type = service.metadata.serviceType.toLowerCase()
   if (type.includes('ui') || type.includes('app')) return 'app'
   if (type.includes('runtime')) return 'runtime'
-  if (type.includes('infra') || type.includes('core-platform'))
+  if (type.includes('infra') || type.includes('core-platform')) {
     return 'infrastructure'
+  }
   if (type.includes('utility')) return 'utility'
   if (
     type.includes('identity') ||
     type.includes('security') ||
     type.includes('auth')
-  )
+  ) {
     return 'security'
+  }
   if (type.includes('workflow')) return 'workflow'
   return 'other'
 }
@@ -118,383 +88,90 @@ function statusTone(status: DashboardService['status']) {
   return undefined
 }
 
-function statusColor(status: DashboardService['status']) {
-  if (status === 'running') return '#16a34a'
-  if (status === 'degraded') return '#f59e0b'
-  return '#6b7280'
-}
-
-function categoryColor(category: GraphCategory) {
-  switch (category) {
-    case 'app':
-      return '#0ea5e9'
-    case 'runtime':
-      return '#8b5cf6'
-    case 'infrastructure':
-      return '#64748b'
-    case 'utility':
-      return '#71717a'
-    case 'security':
-      return '#f59e0b'
-    case 'workflow':
-      return '#10b981'
-    default:
-      return '#6b7280'
-  }
-}
-
-function GraphControlPanel() {
-  const reactFlow = useReactFlow()
-
+function ServiceBadgeRow({ service }: { service: DashboardService }) {
   return (
-    <Panel position='bottom-left'>
-      <div className='flex flex-col overflow-hidden rounded-md border border-border bg-card shadow-sm'>
-        <button
-          type='button'
-          className='flex h-10 w-10 items-center justify-center border-b border-border text-foreground transition-colors hover:bg-accent'
-          onClick={() => void reactFlow.zoomIn()}
-          aria-label='Zoom in'
-        >
-          <Plus className='size-4' />
-        </button>
-        <button
-          type='button'
-          className='flex h-10 w-10 items-center justify-center border-b border-border text-foreground transition-colors hover:bg-accent'
-          onClick={() => void reactFlow.zoomOut()}
-          aria-label='Zoom out'
-        >
-          <Minus className='size-4' />
-        </button>
-        <button
-          type='button'
-          className='flex h-10 w-10 items-center justify-center text-[10px] font-medium text-foreground transition-colors hover:bg-accent'
-          onClick={() => void reactFlow.fitView({ padding: 0.18 })}
-          aria-label='Fit graph to view'
-        >
-          FIT
-        </button>
-      </div>
-    </Panel>
-  )
-}
-
-const GraphServiceNode = memo(({ data }: NodeProps) => {
-  const graphData = data as GraphNodeData
-  const emphasisTone =
-    graphData.emphasis === 'selected'
-      ? 'border-emerald-500 bg-emerald-500/10 shadow-lg ring-2 ring-emerald-500/25'
-      : graphData.emphasis === 'related'
-        ? 'border-border bg-background'
-        : 'border-dashed border-muted-foreground/30 bg-muted/15'
-
-  return (
-    <div
-      className={`graph-node-drag relative w-[240px] cursor-grab rounded-xl border p-3 active:cursor-grabbing ${emphasisTone}`}
-    >
-      <Handle
-        type='target'
-        position={Position.Left}
-        className='!size-3 !border-2 !border-background !bg-primary/80'
-      />
-      <Handle
-        type='source'
-        position={Position.Right}
-        className='!size-3 !border-2 !border-background !bg-primary/80'
-      />
-      <div className='space-y-2'>
-        <div className='flex items-start justify-between gap-2'>
-          <div className='flex min-w-0 items-start gap-2'>
-            <button
-              type='button'
-              aria-label={
-                graphData.favorite
-                  ? `Remove ${graphData.label} from favorites`
-                  : `Add ${graphData.label} to favorites`
-              }
-              title={
-                graphData.favoritesEnabled
-                  ? graphData.favorite
-                    ? `Remove ${graphData.label} from favorites`
-                    : `Add ${graphData.label} to favorites`
-                  : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-              }
-              disabled={!graphData.favoritesEnabled}
-              className='mt-0.5 rounded-sm text-muted-foreground transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50'
-              onClick={(event) => {
-                event.stopPropagation()
-                if (!graphData.favoritesEnabled) return
-                graphData.onToggleFavorite?.(graphData.serviceId)
-              }}
-            >
-              <Star
-                className={`size-4 ${graphData.favorite ? 'fill-amber-400 text-amber-400' : ''}`}
-              />
-            </button>
-            <div className='min-w-0'>
-              <div className='truncate text-sm font-semibold'>
-                {graphData.label}
-              </div>
-              <div className='truncate text-xs text-muted-foreground'>
-                {graphData.subtitle}
-              </div>
-            </div>
-          </div>
-          <div className='flex items-center gap-2'>
-            <Badge
-              className={statusTone(graphData.status)}
-              variant={
-                graphData.status === 'degraded'
-                  ? 'secondary'
-                  : graphData.status === 'stopped'
-                    ? 'outline'
-                    : undefined
-              }
-            >
-              {graphData.status}
-            </Badge>
-          </div>
-        </div>
-        <div className='flex flex-wrap gap-2'>
-          <span
-            className={`rounded-md border px-2 py-0.5 text-[11px] ${categoryTone(graphData.category)}`}
-          >
-            {graphData.category}
-          </span>
-          <span className='rounded-md border px-2 py-0.5 text-[11px] text-muted-foreground'>
-            {graphData.runtime}
-          </span>
-        </div>
-        <div className='text-[11px] text-muted-foreground'>
-          {graphData.version}
-        </div>
-      </div>
+    <div className='mt-3 flex flex-wrap gap-2'>
+      <Badge
+        className={statusTone(service.status)}
+        variant={
+          service.status === 'degraded'
+            ? 'secondary'
+            : service.status === 'stopped'
+              ? 'outline'
+              : undefined
+        }
+      >
+        {service.status}
+      </Badge>
+      <span
+        className={`rounded-md border px-2 py-0.5 text-xs ${categoryTone(getCategory(service))}`}
+      >
+        {getCategory(service)}
+      </span>
+      <span className='rounded-md border px-2 py-0.5 text-xs text-muted-foreground'>
+        {service.metadata.runtime}
+      </span>
     </div>
   )
-})
-GraphServiceNode.displayName = 'GraphServiceNode'
-
-const nodeTypes = { service: GraphServiceNode as never }
-
-function buildNode(
-  service: DashboardService,
-  position: { x: number; y: number },
-  emphasis: GraphNodeData['emphasis'],
-  favoritesEnabled: boolean,
-  onToggleFavorite?: (serviceId: string) => void
-): Node<GraphNodeData> {
-  return {
-    id: service.id,
-    type: 'service',
-    position,
-    sourcePosition: Position.Bottom,
-    targetPosition: Position.Top,
-    dragHandle: '.graph-node-drag',
-    data: {
-      serviceId: service.id,
-      label: service.name,
-      subtitle: `${service.id} · ${service.role}`,
-      status: service.status,
-      category: getCategory(service),
-      version: service.metadata.version,
-      runtime: service.metadata.runtime,
-      favorite: service.favorite,
-      favoritesEnabled,
-      emphasis,
-      onToggleFavorite,
-    },
-  }
 }
 
-function buildVerticalTreeLayout(services: DashboardService[]) {
-  const visibleIds = new Set(services.map((service) => service.id))
-  const indegree = new Map<string, number>()
-  const children = new Map<string, string[]>()
-  const levels = new Map<string, number>()
-
-  for (const service of services) {
-    indegree.set(service.id, 0)
-    children.set(service.id, [])
-  }
-
-  for (const service of services) {
-    for (const dependency of service.dependencies) {
-      if (!visibleIds.has(dependency.id)) continue
-      indegree.set(service.id, (indegree.get(service.id) ?? 0) + 1)
-      children.set(dependency.id, [
-        ...(children.get(dependency.id) ?? []),
-        service.id,
-      ])
-    }
-  }
-
-  const queue = services
-    .filter((service) => (indegree.get(service.id) ?? 0) === 0)
-    .map((service) => service.id)
-
-  for (const serviceId of queue) {
-    levels.set(serviceId, 0)
-  }
-
-  while (queue.length > 0) {
-    const currentId = queue.shift() as string
-    const currentLevel = levels.get(currentId) ?? 0
-
-    for (const childId of children.get(currentId) ?? []) {
-      levels.set(childId, Math.max(levels.get(childId) ?? 0, currentLevel + 1))
-      indegree.set(childId, (indegree.get(childId) ?? 1) - 1)
-      if ((indegree.get(childId) ?? 0) === 0) {
-        queue.push(childId)
-      }
-    }
-  }
-
-  for (const service of services) {
-    if (!levels.has(service.id)) {
-      levels.set(service.id, 0)
-    }
-  }
-
-  const grouped = new Map<number, DashboardService[]>()
-  for (const service of services) {
-    const level = levels.get(service.id) ?? 0
-    grouped.set(level, [...(grouped.get(level) ?? []), service])
-  }
-
-  const horizontalGap = 320
-  const verticalGap = 220
-  const positions = new Map<string, { x: number; y: number }>()
-
-  for (const [level, levelServices] of Array.from(grouped.entries()).sort(
-    (a, b) => a[0] - b[0]
-  )) {
-    const sortedServices = [...levelServices].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    )
-    const rowWidth = (sortedServices.length - 1) * horizontalGap
-    const startX = 520 - rowWidth / 2
-
-    for (const [index, service] of sortedServices.entries()) {
-      positions.set(service.id, {
-        x: startX + index * horizontalGap,
-        y: 40 + level * verticalGap,
-      })
-    }
-  }
-
-  return positions
-}
-
-function buildGraph(
-  services: DashboardService[],
-  selectedService: DashboardService | null,
-  showSurrounding: boolean,
-  showDependencyEdges: boolean,
-  showApiUsageEdges: boolean,
-  favoritesEnabled: boolean,
-  onToggleFavorite?: (serviceId: string) => void
-) {
-  if (!selectedService) {
-    return { nodes: [] as Node<GraphNodeData>[], edges: [] as Edge[] }
-  }
-
-  const byId = new Map(services.map((service) => [service.id, service]))
-  const dependencyServices = selectedService.dependencies
-    .map((item) => byId.get(item.id))
-    .filter((service): service is DashboardService => Boolean(service))
-  const dependentServices = selectedService.dependents
-    .map((item) => byId.get(item.id))
-    .filter((service): service is DashboardService => Boolean(service))
-
-  const relatedIds = new Set([
-    selectedService.id,
-    ...dependencyServices.map((service) => service.id),
-    ...dependentServices.map((service) => service.id),
-  ])
-
-  const visibleServices = showSurrounding
-    ? services
-    : services.filter((service) => relatedIds.has(service.id))
-
-  const positions = buildVerticalTreeLayout(visibleServices)
-
-  const nodes: Node<GraphNodeData>[] = visibleServices.map((service) =>
-    buildNode(
-      service,
-      positions.get(service.id) ?? { x: 520, y: 40 },
-      service.id === selectedService.id
-        ? 'selected'
-        : relatedIds.has(service.id)
-          ? 'related'
-          : 'surrounding',
-      favoritesEnabled,
-      onToggleFavorite
-    )
+function RelationshipList({
+  title,
+  items,
+  onSelect,
+}: {
+  title: string
+  items: DashboardService[]
+  onSelect: (serviceId: string) => void
+}) {
+  return (
+    <div className='space-y-3'>
+      <div className='text-sm font-medium'>{title}</div>
+      {items.length ? (
+        items.map((item) => (
+          <button
+            key={item.id}
+            type='button'
+            onClick={() => onSelect(item.id)}
+            className='w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent'
+          >
+            <div className='flex items-start justify-between gap-3'>
+              <div>
+                <div className='font-medium'>{item.name}</div>
+                <div className='text-xs text-muted-foreground'>
+                  {item.id} · {item.role}
+                </div>
+              </div>
+              <Badge
+                className={statusTone(item.status)}
+                variant={
+                  item.status === 'degraded'
+                    ? 'secondary'
+                    : item.status === 'stopped'
+                      ? 'outline'
+                      : undefined
+                }
+              >
+                {item.status}
+              </Badge>
+            </div>
+            <p className='mt-2 text-sm text-muted-foreground'>{item.note}</p>
+          </button>
+        ))
+      ) : (
+        <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+          None recorded in the current stub.
+        </div>
+      )}
+    </div>
   )
-
-  const visibleIds = new Set(nodes.map((node) => node.id))
-  const edgeMap = new Map<string, Edge>()
-
-  for (const service of services) {
-    for (const dependency of service.dependencies) {
-      if (!visibleIds.has(service.id) || !visibleIds.has(dependency.id)) {
-        continue
-      }
-
-      const dependencyService = byId.get(dependency.id)
-      const isSelectedConnection =
-        service.id === selectedService.id ||
-        dependency.id === selectedService.id
-
-      if (showDependencyEdges) {
-        edgeMap.set(`${dependency.id}->${service.id}`, {
-          id: `${dependency.id}->${service.id}`,
-          source: dependency.id,
-          target: service.id,
-          animated:
-            dependency.status === 'degraded' || service.status === 'degraded',
-          type: 'straight',
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: {
-            stroke: statusColor(dependency.status),
-            strokeWidth: isSelectedConnection ? 2.75 : 1.75,
-            opacity: isSelectedConnection ? 1 : 0.55,
-          },
-          label: isSelectedConnection ? 'depends on' : undefined,
-          labelStyle: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' },
-        })
-      }
-
-      const exposesEndpoint = (dependencyService?.endpoints.length ?? 0) > 0
-
-      if (showApiUsageEdges && exposesEndpoint) {
-        edgeMap.set(`api:${dependency.id}->${service.id}`, {
-          id: `api:${dependency.id}->${service.id}`,
-          source: dependency.id,
-          target: service.id,
-          type: 'smoothstep',
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: {
-            stroke: '#38bdf8',
-            strokeWidth: isSelectedConnection ? 2.4 : 1.6,
-            strokeDasharray: '8 6',
-            opacity: isSelectedConnection ? 0.95 : 0.5,
-          },
-          label: isSelectedConnection ? 'api' : undefined,
-          labelStyle: { fontSize: 11, fill: '#38bdf8' },
-        })
-      }
-    }
-  }
-
-  const edges: Edge[] = Array.from(edgeMap.values())
-
-  return { nodes, edges }
 }
 
 function DependenciesLoading() {
   return (
     <div className='space-y-4'>
-      <div className='grid gap-4 md:grid-cols-3'>
+      <div className='grid gap-4 md:grid-cols-4'>
+        <Skeleton className='h-28 w-full' />
         <Skeleton className='h-28 w-full' />
         <Skeleton className='h-28 w-full' />
         <Skeleton className='h-28 w-full' />
@@ -511,7 +188,7 @@ export function Dependencies() {
   usePageMetadata({
     title: 'Service Admin - Dependencies',
     description:
-      'Service Admin dependency graph for Service Lasso services and relationships.',
+      'Service Admin dependency relationships for Service Lasso services.',
   })
 
   const searchState = route.useSearch()
@@ -525,14 +202,10 @@ export function Dependencies() {
     'all'
   )
   const [hideUtility, setHideUtility] = useState(false)
-  const [showSurrounding, setShowSurrounding] = useState(true)
-  const [showDependencyEdges, setShowDependencyEdges] = useState(true)
-  const [showApiUsageEdges, setShowApiUsageEdges] = useState(false)
-  const [graphVersion, setGraphVersion] = useState(0)
-
-  const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
   const toggleFavorite = useToggleFavorite()
   const favoriteFeature = useFavoriteFeatureState()
+
+  const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
 
   const availableCategories = useMemo(() => {
     return Array.from(new Set(services.map((service) => getCategory(service))))
@@ -549,14 +222,21 @@ export function Dependencies() {
         if (!matchesSearch) return false
       }
 
-      if (statusFilter !== 'all' && service.status !== statusFilter)
+      if (statusFilter !== 'all' && service.status !== statusFilter) {
         return false
+      }
+
       const category = getCategory(service)
       if (categoryFilter !== 'all' && category !== categoryFilter) return false
       if (hideUtility && category === 'utility') return false
       return true
     })
   }, [categoryFilter, hideUtility, query, services, statusFilter])
+
+  const byId = useMemo(
+    () => new Map(filteredServices.map((service) => [service.id, service])),
+    [filteredServices]
+  )
 
   const selectedService = useMemo(() => {
     return (
@@ -565,6 +245,20 @@ export function Dependencies() {
       null
     )
   }, [filteredServices, searchState.service])
+
+  const selectedDependencies = useMemo(() => {
+    if (!selectedService) return []
+    return selectedService.dependencies
+      .map((item) => byId.get(item.id))
+      .filter((service): service is DashboardService => Boolean(service))
+  }, [byId, selectedService])
+
+  const selectedDependents = useMemo(() => {
+    if (!selectedService) return []
+    return selectedService.dependents
+      .map((item) => byId.get(item.id))
+      .filter((service): service is DashboardService => Boolean(service))
+  }, [byId, selectedService])
 
   const relationshipEdges = services.reduce(
     (count, service) => count + service.dependencies.length,
@@ -583,38 +277,6 @@ export function Dependencies() {
     0
   )
 
-  const { nodes: computedNodes, edges: computedEdges } = useMemo(
-    () =>
-      buildGraph(
-        filteredServices,
-        selectedService,
-        showSurrounding,
-        showDependencyEdges,
-        showApiUsageEdges,
-        favoriteFeature.enabled,
-        (serviceId) => {
-          void toggleFavorite.mutateAsync(serviceId)
-        }
-      ),
-    [
-      favoriteFeature.enabled,
-      filteredServices,
-      selectedService,
-      showApiUsageEdges,
-      showDependencyEdges,
-      showSurrounding,
-      toggleFavorite,
-    ]
-  )
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges)
-
-  useEffect(() => {
-    setNodes(computedNodes)
-    setEdges(computedEdges)
-  }, [computedEdges, computedNodes, setEdges, setNodes])
-
   const selectService = (serviceId: string) => {
     navigate({
       search: (prev) => ({
@@ -624,8 +286,6 @@ export function Dependencies() {
     })
   }
 
-  const resetGraphView = () => setGraphVersion((value) => value + 1)
-
   return (
     <>
       <Header fixed>
@@ -634,7 +294,7 @@ export function Dependencies() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search services in the dependency graph...'
+            placeholder='Search services in dependencies...'
             className='pl-9'
           />
         </div>
@@ -650,8 +310,8 @@ export function Dependencies() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Dependencies</h2>
             <p className='text-muted-foreground'>
-              React Flow dependency graph with selected-service focus,
-              category/status semantics, and operator filters.
+              Stable dependency surface for selecting a service, reviewing what
+              it depends on, and seeing what depends on it.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -672,7 +332,7 @@ export function Dependencies() {
               <Card>
                 <CardHeader className='pb-2'>
                   <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Network className='size-4' /> Services in graph
+                    <Network className='size-4' /> Services in view
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -680,7 +340,7 @@ export function Dependencies() {
                     {filteredServices.length}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Visible nodes after current filters.
+                    Visible services after current filters.
                   </p>
                 </CardContent>
               </Card>
@@ -693,7 +353,7 @@ export function Dependencies() {
                 <CardContent>
                   <div className='text-2xl font-bold'>{relationshipEdges}</div>
                   <p className='text-xs text-muted-foreground'>
-                    Structural dependency links declared in the graph data.
+                    Structural dependency links declared in the stub data.
                   </p>
                 </CardContent>
               </Card>
@@ -708,15 +368,14 @@ export function Dependencies() {
                     {inferredApiUsageEdges}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Inferred where a dependency exposes endpoints another
-                    service likely uses.
+                    Inferred where an exposing dependency is likely used.
                   </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className='pb-2'>
                   <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Workflow className='size-4' /> Selected node
+                    <Workflow className='size-4' /> Selected service
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -724,7 +383,8 @@ export function Dependencies() {
                     {selectedService ? selectedService.name : 'None'}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Click any node to refocus the graph.
+                    Pick a service from the list below to inspect its dependency
+                    slice.
                   </p>
                 </CardContent>
               </Card>
@@ -734,173 +394,143 @@ export function Dependencies() {
               <Card className='lg:col-span-2'>
                 <CardHeader>
                   <CardTitle className='flex items-center gap-2'>
-                    <Link2 className='size-4' /> Dependency graph
+                    <GitBranch className='size-4' /> Service dependency map
                   </CardTitle>
                   <CardDescription>
-                    Vertical dependency tree by default, with optional API usage
-                    overlays.
+                    Select a service and review its local dependency and
+                    dependent relationships without the unstable graph runtime.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-4'>
-                  <div className='h-[640px] overflow-hidden rounded-md border bg-background'>
-                    <ReactFlow
-                      key={graphVersion}
-                      nodes={nodes}
-                      edges={edges}
-                      nodeTypes={nodeTypes}
-                      fitView
-                      fitViewOptions={{ padding: 0.18 }}
-                      onNodesChange={onNodesChange}
-                      onEdgesChange={onEdgesChange}
-                      nodesDraggable
-                      panOnDrag={[1, 2]}
-                      proOptions={{ hideAttribution: true }}
-                      onNodeClick={(_, node) => selectService(node.id)}
-                    >
-                      <MiniMap
-                        bgColor='#020617'
-                        maskColor='rgba(148, 163, 184, 0.22)'
-                        style={{
-                          backgroundColor: '#020617',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: 12,
-                          width: 200,
-                          height: 132,
-                        }}
-                        nodeBorderRadius={10}
-                        nodeStrokeWidth={3}
-                        nodeColor={(node) =>
-                          categoryColor(
-                            (node.data as GraphNodeData | undefined)
-                              ?.category ?? 'other'
-                          )
-                        }
-                        nodeStrokeColor={(node) =>
-                          statusColor(
-                            (node.data as GraphNodeData | undefined)?.status ??
-                              'stopped'
-                          )
-                        }
-                        pannable
-                        zoomable
-                      />
-                      <GraphControlPanel />
-                      <Background gap={16} />
-                    </ReactFlow>
-                  </div>
-
-                  <div className='rounded-md border p-4'>
-                    <div className='mb-3'>
-                      <div className='text-sm font-medium'>Graph controls</div>
-                      <div className='text-xs text-muted-foreground'>
-                        Filters and overlays for the dependency graph live below
-                        the graph.
-                      </div>
-                    </div>
-                    <div className='space-y-4'>
-                      <div className='flex flex-wrap gap-2'>
-                        <span className='self-center text-sm text-muted-foreground'>
-                          Status:
-                        </span>
-                        {(
-                          ['all', 'running', 'degraded', 'stopped'] as const
-                        ).map((value) => (
-                          <Button
-                            key={value}
-                            type='button'
-                            size='sm'
-                            variant={
-                              statusFilter === value ? 'default' : 'outline'
-                            }
-                            onClick={() => setStatusFilter(value)}
-                          >
-                            {value}
-                          </Button>
-                        ))}
-                      </div>
-                      <div className='flex flex-wrap gap-2'>
-                        <span className='self-center text-sm text-muted-foreground'>
-                          Category:
-                        </span>
+                  <div className='flex flex-wrap gap-2'>
+                    <span className='self-center text-sm text-muted-foreground'>
+                      Status:
+                    </span>
+                    {(['all', 'running', 'degraded', 'stopped'] as const).map(
+                      (value) => (
                         <Button
+                          key={value}
                           type='button'
                           size='sm'
                           variant={
-                            categoryFilter === 'all' ? 'default' : 'outline'
+                            statusFilter === value ? 'default' : 'outline'
                           }
-                          onClick={() => setCategoryFilter('all')}
+                          onClick={() => setStatusFilter(value)}
                         >
-                          all
+                          {value}
                         </Button>
-                        {availableCategories.map((category) => (
-                          <Button
-                            key={category}
-                            type='button'
-                            size='sm'
-                            variant={
-                              categoryFilter === category
-                                ? 'default'
-                                : 'outline'
+                      )
+                    )}
+                  </div>
+
+                  <div className='flex flex-wrap gap-2'>
+                    <span className='self-center text-sm text-muted-foreground'>
+                      Category:
+                    </span>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant={categoryFilter === 'all' ? 'default' : 'outline'}
+                      onClick={() => setCategoryFilter('all')}
+                    >
+                      all
+                    </Button>
+                    {availableCategories.map((category) => (
+                      <Button
+                        key={category}
+                        type='button'
+                        size='sm'
+                        variant={
+                          categoryFilter === category ? 'default' : 'outline'
+                        }
+                        onClick={() => setCategoryFilter(category)}
+                      >
+                        {category}
+                      </Button>
+                    ))}
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant={hideUtility ? 'default' : 'outline'}
+                      onClick={() => setHideUtility((value) => !value)}
+                    >
+                      {hideUtility ? 'utility hidden' : 'hide utility'}
+                    </Button>
+                  </div>
+
+                  <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+                    {filteredServices.length ? (
+                      filteredServices.map((service) => (
+                        <div
+                          key={service.id}
+                          role='button'
+                          tabIndex={0}
+                          onClick={() => selectService(service.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              selectService(service.id)
                             }
-                            onClick={() => setCategoryFilter(category)}
-                          >
-                            {category}
-                          </Button>
-                        ))}
+                          }}
+                          className={`rounded-xl border p-4 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+                            selectedService?.id === service.id
+                              ? 'border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/20'
+                              : ''
+                          }`}
+                        >
+                          <div className='flex items-start justify-between gap-3'>
+                            <div className='min-w-0'>
+                              <div className='truncate font-semibold'>
+                                {service.name}
+                              </div>
+                              <div className='truncate text-xs text-muted-foreground'>
+                                {service.id} · {service.role}
+                              </div>
+                            </div>
+                            <button
+                              type='button'
+                              aria-label={
+                                service.favorite
+                                  ? `Remove ${service.name} from favorites`
+                                  : `Add ${service.name} to favorites`
+                              }
+                              title={
+                                favoriteFeature.enabled
+                                  ? service.favorite
+                                    ? `Remove ${service.name} from favorites`
+                                    : `Add ${service.name} to favorites`
+                                  : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
+                              }
+                              disabled={!favoriteFeature.enabled}
+                              className='rounded-sm text-muted-foreground transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50'
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (!favoriteFeature.enabled) return
+                                void toggleFavorite.mutateAsync(service.id)
+                              }}
+                            >
+                              <Star
+                                className={`size-4 ${service.favorite ? 'fill-amber-400 text-amber-400' : ''}`}
+                              />
+                            </button>
+                          </div>
+
+                          <ServiceBadgeRow service={service} />
+
+                          <div className='mt-3 flex items-center gap-2 text-sm text-muted-foreground'>
+                            <span>
+                              {service.dependencies.length} dependency
+                            </span>
+                            <ArrowRight className='size-4' />
+                            <span>{service.dependents.length} dependent</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className='col-span-full rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>
+                        No services match the current dependency filters.
                       </div>
-                      <div className='flex flex-wrap gap-2'>
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant={showDependencyEdges ? 'default' : 'outline'}
-                          onClick={() =>
-                            setShowDependencyEdges((value) => !value)
-                          }
-                        >
-                          {showDependencyEdges
-                            ? 'dependencies shown'
-                            : 'show dependencies'}
-                        </Button>
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant={showApiUsageEdges ? 'default' : 'outline'}
-                          onClick={() =>
-                            setShowApiUsageEdges((value) => !value)
-                          }
-                        >
-                          {showApiUsageEdges
-                            ? 'api usage shown'
-                            : 'show api usage'}
-                        </Button>
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant={hideUtility ? 'default' : 'outline'}
-                          onClick={() => setHideUtility((value) => !value)}
-                        >
-                          {hideUtility ? 'utility hidden' : 'hide utility'}
-                        </Button>
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant={showSurrounding ? 'default' : 'outline'}
-                          onClick={() => setShowSurrounding((value) => !value)}
-                        >
-                          {showSurrounding
-                            ? 'surrounding shown'
-                            : 'show surrounding'}
-                        </Button>
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant='outline'
-                          onClick={resetGraphView}
-                        >
-                          reset view
-                        </Button>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -909,7 +539,7 @@ export function Dependencies() {
                 <CardHeader>
                   <CardTitle>Selected service details</CardTitle>
                   <CardDescription>
-                    Relationship context and next jumps for the focused node.
+                    Relationship context and next jumps for the focused service.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-4'>
@@ -936,7 +566,7 @@ export function Dependencies() {
                               favoriteFeature.enabled
                                 ? selectedService.favorite
                                   ? `Remove ${selectedService.name} from favorites`
-                                  : `Add ${selectedService.name} to favorites`
+                                  : `Add ${selectedService.name} from favorites`
                                 : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
                             }
                             disabled={!favoriteFeature.enabled}
@@ -953,25 +583,8 @@ export function Dependencies() {
                             />
                           </button>
                         </div>
-                        <div className='mt-3 flex flex-wrap gap-2'>
-                          <Badge
-                            className={statusTone(selectedService.status)}
-                            variant={
-                              selectedService.status === 'degraded'
-                                ? 'secondary'
-                                : selectedService.status === 'stopped'
-                                  ? 'outline'
-                                  : undefined
-                            }
-                          >
-                            {selectedService.status}
-                          </Badge>
-                          <span
-                            className={`rounded-md border px-2 py-0.5 text-xs ${categoryTone(getCategory(selectedService))}`}
-                          >
-                            {getCategory(selectedService)}
-                          </span>
-                        </div>
+
+                        <ServiceBadgeRow service={selectedService} />
                       </div>
 
                       <div className='space-y-2 text-sm text-muted-foreground'>
@@ -984,15 +597,23 @@ export function Dependencies() {
                           Relationship summary
                         </div>
                         <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-                          <span>
-                            {selectedService.dependencies.length} dependency
-                          </span>
+                          <span>{selectedDependencies.length} dependency</span>
                           <ArrowRight className='size-4' />
-                          <span>
-                            {selectedService.dependents.length} dependent
-                          </span>
+                          <span>{selectedDependents.length} dependent</span>
                         </div>
                       </div>
+
+                      <RelationshipList
+                        title='Depends on'
+                        items={selectedDependencies}
+                        onSelect={selectService}
+                      />
+
+                      <RelationshipList
+                        title='Dependents'
+                        items={selectedDependents}
+                        onSelect={selectService}
+                      />
 
                       <div className='flex flex-wrap gap-2'>
                         <Button variant='outline' size='sm' asChild>
@@ -1015,7 +636,7 @@ export function Dependencies() {
                     </>
                   ) : (
                     <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-                      No graph node selected.
+                      No service selected.
                     </div>
                   )}
                 </CardContent>
