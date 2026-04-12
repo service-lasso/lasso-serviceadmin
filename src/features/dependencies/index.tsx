@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   Background,
   Controls,
   MiniMap,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
 } from '@xyflow/react'
@@ -268,6 +270,24 @@ export function Dependencies() {
     return { nodes, edges }
   }, [byId, filteredServices, selectedService?.id])
 
+  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges)
+
+  useEffect(() => {
+    setNodes((previousNodes) => {
+      const previousPositions = new Map(
+        previousNodes.map((node) => [node.id, node.position])
+      )
+
+      return graph.nodes.map((node) => ({
+        ...node,
+        position: previousPositions.get(node.id) ?? node.position,
+      }))
+    })
+
+    setEdges(graph.edges)
+  }, [graph.edges, graph.nodes, setEdges, setNodes])
+
   const selectService = (serviceId: string) => {
     navigate({
       search: (prev) => ({
@@ -462,8 +482,10 @@ export function Dependencies() {
                 <CardContent>
                   <div className='h-[520px] rounded-lg border bg-slate-950'>
                     <ReactFlow
-                      nodes={graph.nodes}
-                      edges={graph.edges}
+                      nodes={nodes}
+                      edges={edges}
+                      onNodesChange={onNodesChange}
+                      onEdgesChange={onEdgesChange}
                       fitView
                       minZoom={0.35}
                       maxZoom={1.6}
