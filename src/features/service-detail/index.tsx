@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
   Background,
   MarkerType,
@@ -346,28 +347,40 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
   )
 }
 
-function LogPreview({ entries }: { entries: ServiceLogPreviewEntry[] }) {
+function ServiceLogViewer({ entries }: { entries: ServiceLogPreviewEntry[] }) {
+  const logText = entries
+    .map(
+      (entry) =>
+        `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.source}] ${entry.message}`
+    )
+    .join('\n')
+
+  if (!entries.length) {
+    return (
+      <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+        No recent log preview entries yet.
+      </div>
+    )
+  }
+
   return (
-    <div className='space-y-3'>
-      {entries.length ? (
-        entries.map((entry, index) => (
-          <div
-            key={`${entry.timestamp}-${index}`}
-            className='rounded-lg border p-3'
-          >
-            <div className='flex flex-wrap items-center gap-2 text-xs text-muted-foreground'>
-              <Badge variant='outline'>{entry.level}</Badge>
-              <span>{entry.source}</span>
-              <span>{entry.timestamp}</span>
-            </div>
-            <p className='mt-2 text-sm'>{entry.message}</p>
-          </div>
-        ))
-      ) : (
-        <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-          No recent log preview entries yet.
-        </div>
-      )}
+    <div className='h-[260px] rounded-md border'>
+      <ScrollFollow
+        startFollowing={true}
+        render={({ follow }) => (
+          <LazyLog
+            text={logText}
+            follow={follow}
+            enableSearch
+            selectableLines
+            style={{
+              height: '260px',
+              width: '100%',
+              background: 'transparent',
+            }}
+          />
+        )}
+      />
     </div>
   )
 }
@@ -695,7 +708,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         label='Current log file'
                         value={service.metadata.logPath}
                       />
-                      <LogPreview entries={service.recentLogs} />
+                      <ServiceLogViewer entries={service.recentLogs} />
                       <div className='grid gap-2 sm:grid-cols-2'>
                         <Button variant='outline' asChild>
                           <Link to='/logs' search={{ service: service.id }}>
