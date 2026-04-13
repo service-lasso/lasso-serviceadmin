@@ -2,22 +2,32 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   MarkerType,
+  Position,
   useEdgesState,
   useNodesState,
   type Edge,
   type Node,
 } from '@xyflow/react'
 import {
+  AppWindow,
+  ArrowDown,
+  ArrowRight,
+  Boxes,
   GitBranch,
   Link2,
+  Lock,
   Network,
   Save,
   Search,
+  ShieldCheck,
   Star,
   Undo2,
+  Wrench,
   Workflow,
+  type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTheme } from '@/context/theme-provider'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
@@ -35,6 +45,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
@@ -49,6 +60,7 @@ const serviceLassoApiBaseUrl =
   import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
 
 type GraphLayoutMap = Record<string, { x: number; y: number }>
+type GraphOrientation = 'horizontal' | 'vertical'
 
 async function persistNodeLayoutToMeta(
   serviceId: string,
@@ -124,6 +136,25 @@ function categoryNodeColor(category: GraphCategory) {
   }
 }
 
+function getServiceNodeIcon(category: GraphCategory): LucideIcon {
+  switch (category) {
+    case 'app':
+      return AppWindow
+    case 'runtime':
+      return ShieldCheck
+    case 'infrastructure':
+      return Boxes
+    case 'utility':
+      return Wrench
+    case 'security':
+      return Lock
+    case 'workflow':
+      return Workflow
+    default:
+      return Network
+  }
+}
+
 function StatusBadge({ status }: { status: DashboardService['status'] }) {
   if (status === 'running') {
     return (
@@ -160,10 +191,14 @@ export function Dependencies() {
   const searchState = route.useSearch()
   const navigate = route.useNavigate()
   const servicesQuery = useServices()
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
 
   const [query, setQuery] = useState('')
   const [savedLayoutMap, setSavedLayoutMap] = useState<GraphLayoutMap>({})
   const [layoutMap, setLayoutMap] = useState<GraphLayoutMap>({})
+  const [graphOrientation, setGraphOrientation] =
+    useState<GraphOrientation>('horizontal')
   const [statusFilter, setStatusFilter] = useState<
     'all' | DashboardService['status']
   >('all')
@@ -308,6 +343,8 @@ export function Dependencies() {
     })
 
     const layerSpacingX = 310
+    const layerSpacingY = 190
+    const nodeSpacingX = 250
     const nodeSpacingY = 130
 
     Array.from(layers.entries())
@@ -317,10 +354,16 @@ export function Dependencies() {
         const centerOffset = (sortedIds.length - 1) / 2
 
         sortedIds.forEach((id, index) => {
-          map[id] = {
-            x: layer * layerSpacingX,
-            y: (index - centerOffset) * nodeSpacingY,
-          }
+          map[id] =
+            graphOrientation === 'horizontal'
+              ? {
+                  x: layer * layerSpacingX,
+                  y: (index - centerOffset) * nodeSpacingY,
+                }
+              : {
+                  x: (index - centerOffset) * nodeSpacingX,
+                  y: layer * layerSpacingY,
+                }
         })
       })
 
@@ -336,35 +379,74 @@ export function Dependencies() {
     }
 
     return map
-  }, [filteredServices, selectedService])
+  }, [filteredServices, graphOrientation, selectedService])
 
   const graph = useMemo(() => {
     const nodes: Node[] = filteredServices.map((service) => {
       const selected = selectedService?.id === service.id
       const category = getCategory(service)
+      const ServiceIcon = getServiceNodeIcon(category)
+      const nodeAccent = categoryNodeColor(category)
 
       return {
         id: service.id,
         position: layoutMap[service.id] ??
           autoLayoutMap[service.id] ?? { x: 0, y: 0 },
+        sourcePosition:
+          graphOrientation === 'horizontal' ? Position.Right : Position.Bottom,
+        targetPosition:
+          graphOrientation === 'horizontal' ? Position.Left : Position.Top,
         data: {
           label: (
-            <div className='min-w-[170px]'>
-              <div className='truncate text-sm font-semibold'>
-                {service.name}
+            <div className='flex min-w-[170px] items-center gap-3'>
+              <div
+                className='flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border'
+                style={{
+                  borderColor: isDark ? '#334155' : '#cbd5e1',
+                  background: isDark ? '#020617' : '#f8fafc',
+                }}
+              >
+                {service.metadata.imageUrl ? (
+                  <img
+                    src={service.metadata.imageUrl}
+                    alt={`${service.name} icon`}
+                    className='size-full object-contain p-1'
+                  />
+                ) : (
+                  <ServiceIcon className='size-5' style={{ color: nodeAccent }} />
+                )}
               </div>
-              <div className='truncate text-xs text-muted-foreground'>
-                {service.id}
+              <div className='min-w-0'>
+                <div className='truncate text-sm font-semibold'>
+                  {service.name}
+                </div>
+                <div className='truncate text-xs text-muted-foreground'>
+                  {service.id}
+                </div>
               </div>
             </div>
           ),
         },
         style: {
-          border: selected ? '2px solid #22c55e' : '1px solid #334155',
+          border: selected
+            ? `2px solid ${isDark ? '#22c55e' : '#16a34a'}`
+            : `1px solid ${isDark ? '#334155' : '#cbd5e1'}`,
           borderRadius: 10,
-          background: selected ? '#052e16' : '#0f172a',
-          color: '#e2e8f0',
-          boxShadow: selected ? '0 0 0 2px rgba(34,197,94,0.25)' : 'none',
+          background: selected
+            ? isDark
+              ? '#052e16'
+              : '#dcfce7'
+            : isDark
+              ? '#0f172a'
+              : '#ffffff',
+          color: isDark ? '#e2e8f0' : '#0f172a',
+          boxShadow: selected
+            ? isDark
+              ? '0 0 0 2px rgba(34,197,94,0.25)'
+              : '0 0 0 2px rgba(34,197,94,0.15)'
+            : isDark
+              ? 'none'
+              : '0 1px 2px rgba(15,23,42,0.08)',
         },
         draggable: true,
         connectable: false,
@@ -384,22 +466,40 @@ export function Dependencies() {
             id: `${dependency.id}->${service.id}`,
             source: dependency.id,
             target: service.id,
+            type: 'straight',
             label: 'depends_on',
-            labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 600 },
-            labelBgStyle: {
-              fill: '#0f172a',
-              fillOpacity: 0.9,
+            labelStyle: {
+              fill: isDark ? '#e2e8f0' : '#0f172a',
+              fontSize: 10,
+              fontWeight: 700,
             },
-            labelBgPadding: [4, 2] as [number, number],
+            labelBgStyle: {
+              fill: isDark ? '#020617' : '#f8fafc',
+              fillOpacity: 0.98,
+            },
+            labelBgPadding: [6, 3] as [number, number],
+            labelBgBorderRadius: 6,
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: selectedEdge ? '#22c55e' : '#64748b',
+              color: selectedEdge
+                ? isDark
+                  ? '#22c55e'
+                  : '#16a34a'
+                : isDark
+                  ? '#64748b'
+                  : '#94a3b8',
               width: 18,
               height: 18,
             },
             animated: selectedEdge,
             style: {
-              stroke: selectedEdge ? '#22c55e' : '#64748b',
+              stroke: selectedEdge
+                ? isDark
+                  ? '#22c55e'
+                  : '#16a34a'
+                : isDark
+                  ? '#64748b'
+                  : '#94a3b8',
               strokeWidth: selectedEdge ? 2.5 : 1.25,
             },
           }
@@ -421,22 +521,28 @@ export function Dependencies() {
             id: `${dependency.id}->${service.id}:api`,
             source: dependency.id,
             target: service.id,
+            type: 'straight',
             label: 'api_usage',
-            labelStyle: { fill: '#7dd3fc', fontSize: 10, fontWeight: 600 },
-            labelBgStyle: {
-              fill: '#0f172a',
-              fillOpacity: 0.9,
+            labelStyle: {
+              fill: isDark ? '#e0f2fe' : '#0c4a6e',
+              fontSize: 10,
+              fontWeight: 700,
             },
-            labelBgPadding: [4, 2] as [number, number],
+            labelBgStyle: {
+              fill: isDark ? '#082f49' : '#e0f2fe',
+              fillOpacity: 0.98,
+            },
+            labelBgPadding: [6, 3] as [number, number],
+            labelBgBorderRadius: 6,
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: '#38bdf8',
+              color: isDark ? '#38bdf8' : '#0ea5e9',
               width: 18,
               height: 18,
             },
             animated: selectedEdge,
             style: {
-              stroke: '#38bdf8',
+              stroke: isDark ? '#38bdf8' : '#0ea5e9',
               strokeWidth: selectedEdge ? 2.25 : 1.5,
               strokeDasharray: '6 4',
             },
@@ -445,26 +551,23 @@ export function Dependencies() {
     )
 
     return { nodes, edges: [...structuralEdges, ...inferredApiEdges] }
-  }, [autoLayoutMap, byId, filteredServices, layoutMap, selectedService?.id])
+  }, [
+    autoLayoutMap,
+    byId,
+    filteredServices,
+    graphOrientation,
+    isDark,
+    layoutMap,
+    selectedService?.id,
+  ])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges)
 
   useEffect(() => {
-    setNodes((previousNodes) => {
-      const previousPositions = new Map(
-        previousNodes.map((node) => [node.id, node.position])
-      )
-
-      return graph.nodes.map((node) => ({
-        ...node,
-        position:
-          layoutMap[node.id] ?? previousPositions.get(node.id) ?? node.position,
-      }))
-    })
-
+    setNodes(graph.nodes)
     setEdges(graph.edges)
-  }, [graph.edges, graph.nodes, layoutMap, setEdges, setNodes])
+  }, [graph.edges, graph.nodes, setEdges, setNodes])
 
   const selectService = (serviceId: string) => {
     navigate({
@@ -487,16 +590,22 @@ export function Dependencies() {
     }))
   }
 
-  const autoArrangeVisibleNodes = () => {
-    setLayoutMap((previous) => {
-      const next = { ...previous }
-      filteredServices.forEach((service) => {
-        const fallback = autoLayoutMap[service.id]
-        if (!fallback) return
-        next[service.id] = fallback
-      })
-      return next
-    })
+  const resetGraphLayout = () => {
+    setLayoutMap({})
+    toast.message('Reset graph layout to the default arrangement.')
+  }
+
+  const toggleGraphOrientation = () => {
+    setGraphOrientation((previous) =>
+      previous === 'horizontal' ? 'vertical' : 'horizontal'
+    )
+    setLayoutMap({})
+    setSavedLayoutMap({})
+    toast.message(
+      `Switched graph to ${
+        graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'
+      } layout.`
+    )
   }
 
   const isLayoutDirty = useMemo(() => {
@@ -721,9 +830,9 @@ export function Dependencies() {
                       type='button'
                       variant='outline'
                       className='h-9 w-full'
-                      onClick={autoArrangeVisibleNodes}
+                      onClick={resetGraphLayout}
                     >
-                      Auto arrange
+                      Reset graph
                     </Button>
                   </div>
                 </div>
@@ -741,6 +850,24 @@ export function Dependencies() {
                       </CardDescription>
                     </div>
                     <div className='flex items-center gap-2'>
+                      <Button
+                        type='button'
+                        size='icon'
+                        variant='outline'
+                        className='size-8'
+                        title={`Switch graph to ${graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+                        onClick={toggleGraphOrientation}
+                      >
+                        {graphOrientation === 'horizontal' ? (
+                          <ArrowDown className='size-4' />
+                        ) : (
+                          <ArrowRight className='size-4' />
+                        )}
+                        <span className='sr-only'>
+                          Switch graph to {graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout
+                        </span>
+                      </Button>
+                      <Separator orientation='vertical' className='h-6' />
                       <Button
                         type='button'
                         size='icon'

@@ -44,6 +44,7 @@ export type ServiceMetadata = {
   logPath?: string
   workPath?: string
   profile?: string
+  imageUrl?: string
 }
 
 export type ServiceDependency = {

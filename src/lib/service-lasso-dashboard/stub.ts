@@ -19,6 +19,7 @@ type RemoteServiceMeta = {
   id: string
   name?: string
   favorite?: boolean
+  imageUrl?: string
 }
 
 async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
@@ -41,18 +42,24 @@ async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
 function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
   if (serviceMeta.length === 0) return
 
-  const favoriteById = new Map(
-    serviceMeta.map((service) => [service.id, Boolean(service.favorite)])
-  )
+  const remoteMetaById = new Map(serviceMeta.map((service) => [service.id, service]))
 
-  services = services.map((service) =>
-    favoriteById.has(service.id)
-      ? {
-          ...service,
-          favorite: favoriteById.get(service.id) ?? service.favorite,
-        }
-      : service
-  )
+  services = services.map((service) => {
+    const remoteMeta = remoteMetaById.get(service.id)
+    if (!remoteMeta) return service
+
+    return {
+      ...service,
+      favorite:
+        remoteMeta.favorite === undefined
+          ? service.favorite
+          : Boolean(remoteMeta.favorite),
+      metadata: {
+        ...service.metadata,
+        imageUrl: remoteMeta.imageUrl ?? service.metadata.imageUrl,
+      },
+    }
+  })
 }
 
 async function syncFavoriteStateFromApi() {
@@ -113,6 +120,7 @@ let services: DashboardService[] = [
       logPath: 'C:\\service-lasso\\traefik\\logs\\traefik.log',
       workPath: 'C:\\service-lasso\\traefik',
       profile: 'default',
+      imageUrl: '/images/traefik.svg',
     },
     dependencies: [
       {

@@ -8,6 +8,7 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from '@xyflow/react'
+import { useTheme } from '@/context/theme-provider'
 import '@xyflow/react/dist/style.css'
 
 type GraphLegendItem = {
@@ -53,9 +54,15 @@ export function DependencyGraphCanvas({
   legendItems = [],
   miniMapNodeColor,
 }: DependencyGraphCanvasProps) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+
   return (
     <div className='space-y-3'>
-      <div className='rounded-lg border bg-slate-950' style={{ height }}>
+      <div
+        className={isDark ? 'rounded-lg border bg-slate-950' : 'rounded-lg border bg-slate-50'}
+        style={{ height }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -73,24 +80,36 @@ export function DependencyGraphCanvas({
           nodesConnectable={false}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={20} size={1} color='#1f2937' />
+          <Background gap={20} size={1} color={isDark ? '#1f2937' : '#cbd5e1'} />
           {showControls ? (
-            <Controls className='!overflow-hidden !rounded-md !border !border-slate-700 !bg-slate-900 [&_button]:!border-slate-700 [&_button]:!bg-slate-900 [&_button]:!text-slate-200 [&_button:hover]:!bg-slate-800' />
+            <Controls
+              className={
+                isDark
+                  ? '!overflow-hidden !rounded-md !border !border-slate-700 !bg-slate-900 [&_button]:!border-slate-700 [&_button]:!bg-slate-900 [&_button]:!text-slate-200 [&_button:hover]:!bg-slate-800'
+                  : '!overflow-hidden !rounded-md !border !border-slate-300 !bg-white [&_button]:!border-slate-300 [&_button]:!bg-white [&_button]:!text-slate-700 [&_button:hover]:!bg-slate-100'
+              }
+            />
           ) : null}
           {showMiniMap ? (
             <MiniMap
               pannable
               zoomable
               nodeColor={miniMapNodeColor}
-              maskColor='rgba(2, 6, 23, 0.5)'
-              className='!border !border-slate-700 !bg-slate-900'
+              maskColor={isDark ? 'rgba(2, 6, 23, 0.5)' : 'rgba(226, 232, 240, 0.65)'}
+              className={isDark ? '!border !border-slate-700 !bg-slate-900' : '!border !border-slate-300 !bg-white'}
             />
           ) : null}
         </ReactFlow>
       </div>
 
       {legendItems.length ? (
-        <div className='flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs text-slate-200'>
+        <div
+          className={
+            isDark
+              ? 'flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs text-slate-200'
+              : 'flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-700'
+          }
+        >
           {legendItems.map((item) => (
             <div key={item.label} className='flex items-center gap-2'>
               <span
