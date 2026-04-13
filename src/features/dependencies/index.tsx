@@ -846,7 +846,7 @@ export function Dependencies() {
                     <div>
                       <CardTitle>Dependency graph</CardTitle>
                       <CardDescription>
-                        React Flow topology of the currently visible services.
+                        Relationship map of the currently visible services.
                       </CardDescription>
                     </div>
                     <div className='flex items-center gap-2'>
