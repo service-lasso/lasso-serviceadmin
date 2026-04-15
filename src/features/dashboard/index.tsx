@@ -331,23 +331,25 @@ export function Dashboard() {
                 Current runtime warnings surfaced from the dashboard stub.
               </CardDescription>
             </CardHeader>
-            <CardContent className='space-y-3'>
-              {summary.warnings.map((warning) => (
-                <div
-                  key={warning}
-                  className='rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm'
-                >
-                  {warning}
-                </div>
-              ))}
-              {summary.problemServices.map((service) => (
-                <div key={service.id} className='rounded-lg border p-3'>
-                  <div className='flex items-center gap-2'>
-                    <div className='font-medium'>{service.name}</div>
-                    <StatusBadge status={service.status} />
+            <CardContent>
+              <div className='max-h-96 space-y-3 overflow-y-auto pr-1'>
+                {summary.warnings.map((warning) => (
+                  <div
+                    key={warning}
+                    className='rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm'
+                  >
+                    {warning}
                   </div>
-                </div>
-              ))}
+                ))}
+                {summary.problemServices.map((service) => (
+                  <div key={service.id} className='rounded-lg border p-3'>
+                    <div className='flex items-center gap-2'>
+                      <div className='font-medium'>{service.name}</div>
+                      <StatusBadge status={service.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </div>

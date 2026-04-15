@@ -1,5 +1,4 @@
 import {
-  Bell,
   Boxes,
   Command,
   GitBranch,
@@ -8,7 +7,6 @@ import {
   HardDrive,
   HelpCircle,
   LayoutDashboard,
-  Monitor,
   Palette,
   ScrollText,
   Settings,
@@ -86,16 +84,6 @@ export const sidebarData: SidebarData = {
               title: 'Appearance',
               url: '/settings/appearance',
               icon: Palette,
-            },
-            {
-              title: 'Notifications',
-              url: '/settings/notifications',
-              icon: Bell,
-            },
-            {
-              title: 'Display',
-              url: '/settings/display',
-              icon: Monitor,
             },
           ],
         },

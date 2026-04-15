@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
-  MarkerType,
   Position,
   useEdgesState,
   useNodesState,
@@ -9,25 +8,28 @@ import {
   type Node,
 } from '@xyflow/react'
 import {
-  AppWindow,
   ArrowDown,
   ArrowRight,
-  Boxes,
   GitBranch,
   Link2,
-  Lock,
   Network,
   Save,
   Search,
-  ShieldCheck,
   Star,
   Undo2,
-  Wrench,
   Workflow,
-  type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTheme } from '@/context/theme-provider'
+import {
+  buildApiUsageEdge,
+  buildDependencyEdge,
+  buildServiceNodeLabel,
+  buildServiceNodeStyle,
+  categoryNodeColor,
+  getGraphCategory,
+  getServiceNodeImage,
+} from '@/lib/service-graph'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
@@ -49,9 +51,11 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
+import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search as GlobalSearch } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 const route = getRouteApi('/_authenticated/dependencies/')
@@ -89,70 +93,10 @@ async function persistNodeLayoutToMeta(
   }
 }
 
-type GraphCategory =
-  | 'app'
-  | 'runtime'
-  | 'infrastructure'
-  | 'utility'
-  | 'security'
-  | 'workflow'
-  | 'other'
+type GraphCategory = ReturnType<typeof getGraphCategory>
 
 function getCategory(service: DashboardService): GraphCategory {
-  const type = service.metadata.serviceType.toLowerCase()
-  if (type.includes('ui') || type.includes('app')) return 'app'
-  if (type.includes('runtime')) return 'runtime'
-  if (type.includes('infra') || type.includes('core-platform')) {
-    return 'infrastructure'
-  }
-  if (type.includes('utility')) return 'utility'
-  if (
-    type.includes('identity') ||
-    type.includes('security') ||
-    type.includes('auth')
-  ) {
-    return 'security'
-  }
-  if (type.includes('workflow')) return 'workflow'
-  return 'other'
-}
-
-function categoryNodeColor(category: GraphCategory) {
-  switch (category) {
-    case 'app':
-      return '#0ea5e9'
-    case 'runtime':
-      return '#8b5cf6'
-    case 'infrastructure':
-      return '#64748b'
-    case 'utility':
-      return '#71717a'
-    case 'security':
-      return '#d97706'
-    case 'workflow':
-      return '#10b981'
-    default:
-      return '#6b7280'
-  }
-}
-
-function getServiceNodeIcon(category: GraphCategory): LucideIcon {
-  switch (category) {
-    case 'app':
-      return AppWindow
-    case 'runtime':
-      return ShieldCheck
-    case 'infrastructure':
-      return Boxes
-    case 'utility':
-      return Wrench
-    case 'security':
-      return Lock
-    case 'workflow':
-      return Workflow
-    default:
-      return Network
-  }
+  return getGraphCategory(service.metadata.serviceType)
 }
 
 function StatusBadge({ status }: { status: DashboardService['status'] }) {
@@ -385,8 +329,6 @@ export function Dependencies() {
     const nodes: Node[] = filteredServices.map((service) => {
       const selected = selectedService?.id === service.id
       const category = getCategory(service)
-      const ServiceIcon = getServiceNodeIcon(category)
-      const nodeAccent = categoryNodeColor(category)
 
       return {
         id: service.id,
@@ -397,57 +339,15 @@ export function Dependencies() {
         targetPosition:
           graphOrientation === 'horizontal' ? Position.Left : Position.Top,
         data: {
-          label: (
-            <div className='flex min-w-[170px] items-center gap-3'>
-              <div
-                className='flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border'
-                style={{
-                  borderColor: isDark ? '#334155' : '#cbd5e1',
-                  background: isDark ? '#020617' : '#f8fafc',
-                }}
-              >
-                {service.metadata.imageUrl ? (
-                  <img
-                    src={service.metadata.imageUrl}
-                    alt={`${service.name} icon`}
-                    className='size-full object-contain p-1'
-                  />
-                ) : (
-                  <ServiceIcon className='size-5' style={{ color: nodeAccent }} />
-                )}
-              </div>
-              <div className='min-w-0'>
-                <div className='truncate text-sm font-semibold'>
-                  {service.name}
-                </div>
-                <div className='truncate text-xs text-muted-foreground'>
-                  {service.id}
-                </div>
-              </div>
-            </div>
-          ),
+          label: buildServiceNodeLabel({
+            name: service.name,
+            id: service.id,
+            serviceType: service.metadata.serviceType,
+            imageUrl: getServiceNodeImage(service, isDark),
+            isDark,
+          }),
         },
-        style: {
-          border: selected
-            ? `2px solid ${isDark ? '#22c55e' : '#16a34a'}`
-            : `1px solid ${isDark ? '#334155' : '#cbd5e1'}`,
-          borderRadius: 10,
-          background: selected
-            ? isDark
-              ? '#052e16'
-              : '#dcfce7'
-            : isDark
-              ? '#0f172a'
-              : '#ffffff',
-          color: isDark ? '#e2e8f0' : '#0f172a',
-          boxShadow: selected
-            ? isDark
-              ? '0 0 0 2px rgba(34,197,94,0.25)'
-              : '0 0 0 2px rgba(34,197,94,0.15)'
-            : isDark
-              ? 'none'
-              : '0 1px 2px rgba(15,23,42,0.08)',
-        },
+        style: buildServiceNodeStyle({ selected, isDark }),
         draggable: true,
         connectable: false,
         className: `category-${category}`,
@@ -462,47 +362,13 @@ export function Dependencies() {
             selectedService?.id === service.id ||
             selectedService?.id === dependency.id
 
-          return {
+          return buildDependencyEdge({
             id: `${dependency.id}->${service.id}`,
             source: dependency.id,
             target: service.id,
-            type: 'straight',
-            label: 'depends_on',
-            labelStyle: {
-              fill: isDark ? '#e2e8f0' : '#0f172a',
-              fontSize: 10,
-              fontWeight: 700,
-            },
-            labelBgStyle: {
-              fill: isDark ? '#020617' : '#f8fafc',
-              fillOpacity: 0.98,
-            },
-            labelBgPadding: [6, 3] as [number, number],
-            labelBgBorderRadius: 6,
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: selectedEdge
-                ? isDark
-                  ? '#22c55e'
-                  : '#16a34a'
-                : isDark
-                  ? '#64748b'
-                  : '#94a3b8',
-              width: 18,
-              height: 18,
-            },
-            animated: selectedEdge,
-            style: {
-              stroke: selectedEdge
-                ? isDark
-                  ? '#22c55e'
-                  : '#16a34a'
-                : isDark
-                  ? '#64748b'
-                  : '#94a3b8',
-              strokeWidth: selectedEdge ? 2.5 : 1.25,
-            },
-          }
+            selected: selectedEdge,
+            isDark,
+          })
         })
     )
 
@@ -517,36 +383,13 @@ export function Dependencies() {
             selectedService?.id === service.id ||
             selectedService?.id === dependency.id
 
-          return {
+          return buildApiUsageEdge({
             id: `${dependency.id}->${service.id}:api`,
             source: dependency.id,
             target: service.id,
-            type: 'straight',
-            label: 'api_usage',
-            labelStyle: {
-              fill: isDark ? '#e0f2fe' : '#0c4a6e',
-              fontSize: 10,
-              fontWeight: 700,
-            },
-            labelBgStyle: {
-              fill: isDark ? '#082f49' : '#e0f2fe',
-              fillOpacity: 0.98,
-            },
-            labelBgPadding: [6, 3] as [number, number],
-            labelBgBorderRadius: 6,
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: isDark ? '#38bdf8' : '#0ea5e9',
-              width: 18,
-              height: 18,
-            },
+            isDark,
             animated: selectedEdge,
-            style: {
-              stroke: isDark ? '#38bdf8' : '#0ea5e9',
-              strokeWidth: selectedEdge ? 2.25 : 1.5,
-              strokeDasharray: '6 4',
-            },
-          }
+          })
         })
     )
 
@@ -644,7 +487,7 @@ export function Dependencies() {
   return (
     <>
       <Header fixed>
-        <div />
+        <GlobalSearch />
         <div className='ms-auto flex items-center space-x-4'>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -840,16 +683,12 @@ export function Dependencies() {
             </Card>
 
             <div className='grid gap-4 lg:grid-cols-3'>
-              <Card className='lg:col-span-2'>
-                <CardHeader>
-                  <div className='flex flex-wrap items-start justify-between gap-2'>
-                    <div>
-                      <CardTitle>Dependency graph</CardTitle>
-                      <CardDescription>
-                        Relationship map of the currently visible services.
-                      </CardDescription>
-                    </div>
-                    <div className='flex items-center gap-2'>
+              <div className='lg:col-span-2'>
+                <DependencyGraphPanel
+                  title='Dependency graph'
+                  description='Relationship map of the currently visible services.'
+                  actions={
+                    <>
                       <Button
                         type='button'
                         size='icon'
@@ -892,41 +731,41 @@ export function Dependencies() {
                         <Save className='size-4' />
                         <span className='sr-only'>Save layout changes</span>
                       </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className='space-y-3'>
-                  <DependencyGraphCanvas
-                    nodes={nodes}
-                    edges={edges}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    onNodeDragStop={onNodeDragStop}
-                    onNodeClick={selectService}
-                    legendItems={[
-                      {
-                        label: 'Structural dependency',
-                        color: '#cbd5e1',
-                      },
-                      {
-                        label: 'Selected-path dependency',
-                        color: '#22c55e',
-                      },
-                      {
-                        label: 'Inferred API usage',
-                        color: '#38bdf8',
-                        dashed: true,
-                      },
-                    ]}
-                    miniMapNodeColor={(node) => {
-                      const service = byId.get(node.id)
-                      return service
-                        ? categoryNodeColor(getCategory(service))
-                        : '#6b7280'
-                    }}
-                  />
-                </CardContent>
-              </Card>
+                    </>
+                  }
+                  graph={
+                    <DependencyGraphCanvas
+                      nodes={nodes}
+                      edges={edges}
+                      onNodesChange={onNodesChange}
+                      onEdgesChange={onEdgesChange}
+                      onNodeDragStop={onNodeDragStop}
+                      onNodeClick={selectService}
+                      legendItems={[
+                        {
+                          label: 'Structural dependency',
+                          color: '#cbd5e1',
+                        },
+                        {
+                          label: 'Selected-path dependency',
+                          color: '#22c55e',
+                        },
+                        {
+                          label: 'Inferred API usage',
+                          color: '#38bdf8',
+                          dashed: true,
+                        },
+                      ]}
+                      miniMapNodeColor={(node) => {
+                        const service = byId.get(node.id)
+                        return service
+                          ? categoryNodeColor(getCategory(service))
+                          : '#6b7280'
+                      }}
+                    />
+                  }
+                />
+              </div>
 
               <Card>
                 <CardHeader>

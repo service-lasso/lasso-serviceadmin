@@ -111,21 +111,8 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
     ),
     cell: ({ row }) => <FavoriteCell service={row.original} />,
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
-    enableSorting: false,
-  },
-  {
-    id: 'installed',
-    accessorFn: (row) => (row.installed ? 'installed' : 'missing'),
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Installed' />
-    ),
-    cell: ({ row }) => (
-      <Badge variant={row.original.installed ? 'default' : 'outline'}>
-        {row.original.installed ? 'Installed' : 'Missing'}
-      </Badge>
-    ),
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-    enableSorting: false,
+    sortingFn: (rowA, rowB) =>
+      Number(rowA.original.favorite) - Number(rowB.original.favorite),
   },
   {
     id: 'links',

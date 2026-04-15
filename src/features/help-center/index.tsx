@@ -32,6 +32,7 @@ const docsModules = import.meta.glob('../../../docs/help/**/*.md', {
 type DocEntry = {
   id: string
   path: string
+  fileName: string
   section: string
   title: string
   body: string
@@ -47,7 +48,7 @@ function toTitleCase(input: string) {
 function buildDocEntries(): DocEntry[] {
   return Object.entries(docsModules)
     .map(([path, body]) => {
-      const relative = path.replace(/^\.\.\.\/\.\.\/\.\.\/docs\//, '')
+      const relative = path.replace(/^((\.\.\/)+)?docs\//, '')
       const parts = relative.split('/')
       const fileName = parts[parts.length - 1]
       const section =
@@ -57,6 +58,7 @@ function buildDocEntries(): DocEntry[] {
       return {
         id: relative.toLowerCase(),
         path: relative,
+        fileName,
         section,
         title: firstHeading || toTitleCase(fileName),
         body,
@@ -222,63 +224,60 @@ export function HelpCenter() {
         </div>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fluid className='flex h-full flex-1 flex-col gap-4 sm:gap-6'>
         <div className='flex flex-wrap items-end justify-between gap-2'>
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Help Center</h2>
             <p className='text-muted-foreground'>
-              Help docs loaded from `docs/help/`.
+              Help docs loaded from the local docs set.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
             <Button variant='outline' size='sm' asChild>
               <Link to='/services'>Services</Link>
             </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/settings/display'>Display settings</Link>
-            </Button>
           </div>
         </div>
 
-        <div className='grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]'>
-          <Card>
+        <div className='grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]'>
+          <Card className='min-h-0'>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
                 <FolderOpen className='size-4' /> Docs
               </CardTitle>
               <CardDescription>Help documents.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className='h-[70vh] pr-3'>
-                <div className='space-y-5'>
+            <CardContent className='min-h-0'>
+              <ScrollArea className='h-[calc(100vh-18rem)] pr-3'>
+                <div className='space-y-4'>
                   {Object.entries(groupedDocs).map(([section, entries]) => (
-                    <div key={section} className='space-y-2'>
-                      <div className='flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
+                    <div key={section} className='space-y-1.5'>
+                      <div className='flex items-center gap-2 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase'>
                         <BookOpenText className='size-3.5' />
                         {section}
                       </div>
-                      <div className='space-y-2'>
+                      <div className='space-y-1'>
                         {entries.map((doc) => (
                           <button
                             key={doc.id}
                             type='button'
                             onClick={() => openDoc(doc.id)}
-                            className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
+                            className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-accent ${
                               selectedDoc?.id === doc.id
                                 ? 'border-primary bg-primary/5'
                                 : ''
                             }`}
                           >
-                            <div className='flex items-start justify-between gap-3'>
+                            <div className='flex items-start justify-between gap-2'>
                               <div className='min-w-0'>
-                                <div className='truncate font-medium'>
+                                <div className='truncate text-sm font-medium leading-5'>
                                   {doc.title}
                                 </div>
-                                <div className='truncate text-xs text-muted-foreground'>
-                                  {doc.path}
+                                <div className='truncate text-[11px] text-muted-foreground'>
+                                  {doc.fileName}
                                 </div>
                               </div>
-                              <FileText className='mt-0.5 size-4 shrink-0 text-muted-foreground' />
+                              <FileText className='mt-0.5 size-3.5 shrink-0 text-muted-foreground' />
                             </div>
                           </button>
                         ))}
@@ -296,7 +295,7 @@ export function HelpCenter() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className='min-h-0'>
             <CardHeader>
               <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div>
@@ -304,8 +303,9 @@ export function HelpCenter() {
                     {selectedDoc?.title ?? 'No doc selected'}
                   </CardTitle>
                   <CardDescription>
-                    {selectedDoc?.path ??
-                      'Pick a markdown file from the docs list.'}
+                    {selectedDoc
+                      ? `${selectedDoc.section} · ${selectedDoc.fileName}`
+                      : 'Pick a markdown file from the docs list.'}
                   </CardDescription>
                 </div>
                 {selectedDoc ? (
@@ -313,9 +313,9 @@ export function HelpCenter() {
                 ) : null}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className='min-h-0'>
               {selectedDoc ? (
-                <ScrollArea className='h-[70vh] pr-4'>
+                <ScrollArea className='h-[calc(100vh-18rem)] pr-4'>
                   <MarkdownArticle content={selectedDoc.body} />
                 </ScrollArea>
               ) : (

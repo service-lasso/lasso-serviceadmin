@@ -1,6 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpDown, Copy, Search, SlidersHorizontal } from 'lucide-react'
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
+import { Copy, SlidersHorizontal } from 'lucide-react'
 import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
@@ -13,7 +26,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -23,10 +35,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DataTableColumnHeader,
+  DataTablePagination,
+  DataTableToolbar,
+} from '@/components/data-table'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 type VariablesProps = {
@@ -39,13 +57,10 @@ type VariableRow = {
   key: string
   value: string
   scope: 'global' | 'service'
-  secret?: boolean
-  source?: string
+  secret: 'secret' | 'plain'
+  source: string
   services: { id: string; name: string }[]
 }
-
-type VariablesSortKey = 'key' | 'value' | 'scope' | 'source' | 'services'
-type SortDirection = 'asc' | 'desc'
 
 function VariablesLoading() {
   return (
@@ -61,39 +76,89 @@ function VariablesLoading() {
   )
 }
 
-function SortableHead({
-  label,
-  active,
-  direction,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  direction: SortDirection
-  onClick: () => void
-}) {
-  return (
-    <Button
-      type='button'
-      variant='ghost'
-      size='sm'
-      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
-      onClick={onClick}
-    >
-      {label}
-      <ArrowUpDown
-        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-      />
-      <span className='sr-only'>
-        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
-      </span>
-    </Button>
-  )
-}
-
-function compareText(a: string, b: string, direction: SortDirection) {
-  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
-}
+const columns: ColumnDef<VariableRow>[] = [
+  {
+    accessorKey: 'key',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Key' />
+    ),
+    cell: ({ row }) => <span className='font-medium'>{row.original.key}</span>,
+    enableHiding: false,
+  },
+  {
+    id: 'value',
+    accessorFn: (row) => row.value,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Value' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex items-start gap-2'>
+        <span className='max-w-[320px] break-all text-sm text-muted-foreground'>
+          {row.original.secret === 'secret' ? '••••••••' : row.original.value}
+        </span>
+        <Button
+          type='button'
+          variant='outline'
+          size='icon'
+          className='size-7 shrink-0'
+          title='Copy value'
+          onClick={() => void copyText(row.original.value)}
+        >
+          <Copy className='size-3.5' />
+        </Button>
+      </div>
+    ),
+  },
+  {
+    id: 'scope',
+    accessorFn: (row) => row.scope,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Scope' />
+    ),
+    cell: ({ row }) => <Badge variant='outline'>{row.original.scope}</Badge>,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    id: 'secret',
+    accessorFn: (row) => row.secret,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Visibility' />
+    ),
+    cell: ({ row }) => (
+      <Badge variant={row.original.secret === 'secret' ? 'secondary' : 'outline'}>
+        {row.original.secret}
+      </Badge>
+    ),
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    id: 'source',
+    accessorFn: (row) => row.source,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Source' />
+    ),
+    cell: ({ row }) => row.original.source,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    id: 'services',
+    accessorFn: (row) => row.services.map((service) => service.name).join(', '),
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Services' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex flex-wrap gap-2'>
+        {row.original.services.map((service) => (
+          <Button key={service.id} variant='outline' size='sm' className='h-8' asChild>
+            <Link to='/services/$serviceId' params={{ serviceId: service.id }}>
+              {service.name}
+            </Link>
+          </Button>
+        ))}
+      </div>
+    ),
+  },
+]
 
 export function Variables({ service, keyFilter }: VariablesProps) {
   usePageMetadata({
@@ -102,31 +167,30 @@ export function Variables({ service, keyFilter }: VariablesProps) {
   })
 
   const servicesQuery = useServices()
-  const [query, setQuery] = useState(keyFilter ?? '')
-  const [scopeFilter, setScopeFilter] = useState<'all' | VariableRow['scope']>(
-    'all'
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'key', desc: false }])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
+    keyFilter ? [{ id: 'key', value: keyFilter }] : []
   )
-  const [sortKey, setSortKey] = useState<VariablesSortKey>('key')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-  const rows = useMemo(() => {
-    const sourceServices = (servicesQuery.data ?? []).filter(
+  const rows = useMemo<VariableRow[]>(() => {
+    const services = (servicesQuery.data ?? []).filter(
       (item) => !service || item.id === service
     )
     const map = new Map<string, VariableRow>()
 
-    for (const item of sourceServices) {
-      for (const variable of item.environmentVariables) {
+    for (const service of services) {
+      for (const variable of service.environmentVariables) {
         const id = [
           variable.key,
           variable.value,
           variable.scope,
-          variable.source ?? '',
           variable.secret ? 'secret' : 'plain',
+          variable.source ?? 'Not recorded',
         ].join('|')
+
         const existing = map.get(id)
         if (existing) {
-          existing.services.push({ id: item.id, name: item.name })
+          existing.services.push({ id: service.id, name: service.name })
           continue
         }
 
@@ -135,75 +199,42 @@ export function Variables({ service, keyFilter }: VariablesProps) {
           key: variable.key,
           value: variable.value,
           scope: variable.scope,
-          secret: variable.secret,
-          source: variable.source,
-          services: [{ id: item.id, name: item.name }],
+          secret: variable.secret ? 'secret' : 'plain',
+          source: variable.source ?? 'Not recorded',
+          services: [{ id: service.id, name: service.name }],
         })
       }
     }
 
-    const normalized = query.trim().toLowerCase()
-    const filtered = Array.from(map.values()).filter((row) => {
-      if (scopeFilter !== 'all' && row.scope !== scopeFilter) return false
-      if (!normalized) return true
-      return [
-        row.key,
-        row.value,
-        row.scope,
-        row.source ?? '',
-        row.services.map((item) => item.name + ' ' + item.id).join(' '),
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalized)
-    })
+    return Array.from(map.values())
+  }, [service, servicesQuery.data])
 
-    return filtered.sort((a, b) => {
-      if (sortKey === 'key') return compareText(a.key, b.key, sortDirection)
-      if (sortKey === 'value') {
-        return compareText(a.value, b.value, sortDirection)
-      }
-      if (sortKey === 'scope') {
-        return compareText(a.scope, b.scope, sortDirection)
-      }
-      if (sortKey === 'source') {
-        return compareText(
-          a.source ?? 'Not recorded',
-          b.source ?? 'Not recorded',
-          sortDirection
-        )
-      }
+  const sources = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.source))).sort(),
+    [rows]
+  )
 
-      return compareText(
-        a.services.map((item) => item.name).join(', '),
-        b.services.map((item) => item.name).join(', '),
-        sortDirection
-      )
-    })
-  }, [query, scopeFilter, service, servicesQuery.data, sortDirection, sortKey])
-
-  const toggleSort = (key: VariablesSortKey) => {
-    if (sortKey === key) {
-      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-
-    setSortKey(key)
-    setSortDirection('asc')
-  }
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: {
+      sorting,
+      columnFilters,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+  })
 
   return (
     <>
       <Header fixed>
-        <div className='relative w-full max-w-sm'>
-          <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search variable keys, values, sources, or services...'
-            className='pl-9'
-          />
-        </div>
+        <Search />
         <div className='ms-auto flex items-center space-x-4'>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -216,7 +247,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Variables</h2>
             <p className='text-muted-foreground'>
-              Shared and service-local environment values in one operator table.
+              Shared and service-local values in the standard operator table.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -238,156 +269,71 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                 <SlidersHorizontal className='size-4' /> Environment variables
               </CardTitle>
               <CardDescription>
-                Aggregated variable view with copy actions, sort controls, and
-                jumps back to the owning service detail page.
+                {table.getFilteredRowModel().rows.length} variable rows shown across all services.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='relative w-full max-w-md'>
-                <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder='Search variable keys, values, sources, or services...'
-                  className='pl-9'
-                />
-              </div>
+              <DataTableToolbar
+                table={table}
+                searchPlaceholder='Search variable keys, values, sources, or services...'
+                searchKey='key'
+                filters={[
+                  {
+                    columnId: 'scope',
+                    title: 'Scope',
+                    options: [
+                      { label: 'Global', value: 'global' },
+                      { label: 'Service', value: 'service' },
+                    ],
+                  },
+                  {
+                    columnId: 'source',
+                    title: 'Source',
+                    options: sources.map((source) => ({ label: source, value: source })),
+                  },
+                  {
+                    columnId: 'secret',
+                    title: 'Visibility',
+                    options: [
+                      { label: 'Secret', value: 'secret' },
+                      { label: 'Plain', value: 'plain' },
+                    ],
+                  },
+                ]}
+              />
 
-              <div className='flex flex-wrap gap-2'>
-                <Button
-                  type='button'
-                  size='sm'
-                  variant={scopeFilter === 'all' ? 'default' : 'outline'}
-                  onClick={() => setScopeFilter('all')}
-                >
-                  all scopes
-                </Button>
-                <Button
-                  type='button'
-                  size='sm'
-                  variant={scopeFilter === 'global' ? 'default' : 'outline'}
-                  onClick={() => setScopeFilter('global')}
-                >
-                  global
-                </Button>
-                <Button
-                  type='button'
-                  size='sm'
-                  variant={scopeFilter === 'service' ? 'default' : 'outline'}
-                  onClick={() => setScopeFilter('service')}
-                >
-                  service
-                </Button>
-              </div>
-
-              <div className='overflow-x-auto rounded-md border'>
+              <div className='overflow-hidden rounded-md border'>
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <SortableHead
-                          label='Key'
-                          active={sortKey === 'key'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('key')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Value'
-                          active={sortKey === 'value'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('value')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Scope'
-                          active={sortKey === 'scope'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('scope')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Source'
-                          active={sortKey === 'source'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('source')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Services'
-                          active={sortKey === 'services'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('services')}
-                        />
-                      </TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id} colSpan={header.colSpan}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
                   </TableHeader>
                   <TableBody>
-                    {rows.length ? (
-                      rows.map((row) => (
+                    {table.getRowModel().rows.length ? (
+                      table.getRowModel().rows.map((row) => (
                         <TableRow key={row.id}>
-                          <TableCell className='font-medium'>
-                            {row.key}
-                          </TableCell>
-                          <TableCell className='max-w-[320px]'>
-                            <div className='flex items-center gap-2'>
-                              <span className='text-sm break-all text-muted-foreground'>
-                                {row.secret ? '••••••••' : row.value}
-                              </span>
-                              <Button
-                                type='button'
-                                variant='outline'
-                                size='icon'
-                                className='size-7 shrink-0'
-                                title='Copy value'
-                                onClick={() => void copyText(row.value)}
-                              >
-                                <Copy className='size-3.5' />
-                                <span className='sr-only'>Copy value</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                row.scope === 'global' ? 'secondary' : 'outline'
-                              }
-                            >
-                              {row.scope}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{row.source ?? 'Not recorded'}</TableCell>
-                          <TableCell>
-                            <div className='flex flex-wrap gap-2'>
-                              {row.services.map((serviceItem) => (
-                                <Badge key={serviceItem.id} variant='outline'>
-                                  {serviceItem.name}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {row.services.length === 1 ? (
-                              <Button variant='outline' size='sm' asChild>
-                                <Link
-                                  to='/services/$serviceId'
-                                  params={{ serviceId: row.services[0].id }}
-                                >
-                                  Details
-                                </Link>
-                              </Button>
-                            ) : null}
-                          </TableCell>
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className='h-24 text-center'>
+                        <TableCell colSpan={columns.length} className='h-24 text-center'>
                           No variables match the current filters.
                         </TableCell>
                       </TableRow>
@@ -395,6 +341,8 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                   </TableBody>
                 </Table>
               </div>
+
+              <DataTablePagination table={table} className='mt-auto' />
             </CardContent>
           </Card>
         )}

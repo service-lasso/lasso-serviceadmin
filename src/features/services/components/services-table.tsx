@@ -54,7 +54,6 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
       { columnId: 'name', searchKey: 'service', type: 'string' },
       { columnId: 'status', searchKey: 'status', type: 'array' },
       { columnId: 'favorite', searchKey: 'favorite', type: 'array' },
-      { columnId: 'installed', searchKey: 'installed', type: 'array' },
     ],
   })
 
@@ -106,14 +105,6 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
             options: [
               { label: 'Favorite', value: 'favorite' },
               { label: 'Standard', value: 'standard' },
-            ],
-          },
-          {
-            columnId: 'installed',
-            title: 'Installed',
-            options: [
-              { label: 'Installed', value: 'installed' },
-              { label: 'Missing', value: 'missing' },
             ],
           },
         ]}

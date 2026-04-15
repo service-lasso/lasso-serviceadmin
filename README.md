@@ -10,6 +10,7 @@ Current env contract:
 
 - `VITE_SERVICE_LASSO_API_BASE_URL`
 - `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
+- `VITE_SERVICE_LASSO_LOGS_DEBUG`
 
 Example:
 
@@ -22,6 +23,7 @@ Current UI runtime behavior:
 - favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
 - favorites are expected to load from `GET /api/services/meta`
 - favorites are expected to update through `PATCH /api/services/:serviceId/meta`
+- set `VITE_SERVICE_LASSO_LOGS_DEBUG=true` to enable Logs screen debug output in the browser console outside dev mode
 - if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
 
 ![alt text](public/images/shadcn-admin.png)

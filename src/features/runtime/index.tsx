@@ -1,13 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
-  Activity,
-  ArrowUpDown,
-  Clock3,
-  HeartPulse,
-  RotateCcw,
-  Search,
-} from 'lucide-react'
+  type ColumnDef,
+  type ColumnFiltersState,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
+import { Activity } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
@@ -20,7 +26,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -30,21 +35,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DataTableColumnHeader,
+  DataTablePagination,
+  DataTableToolbar,
+} from '@/components/data-table'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-
-type RuntimeSortKey =
-  | 'service'
-  | 'status'
-  | 'health'
-  | 'uptime'
-  | 'lastCheck'
-  | 'lastRestart'
-  | 'runtime'
-type SortDirection = 'asc' | 'desc'
 
 function RuntimeLoading() {
   return (
@@ -60,63 +61,98 @@ function RuntimeLoading() {
   )
 }
 
-function SortableHead({
-  label,
-  active,
-  direction,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  direction: SortDirection
-  onClick: () => void
-}) {
-  return (
-    <Button
-      type='button'
-      variant='ghost'
-      size='sm'
-      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
-      onClick={onClick}
-    >
-      {label}
-      <ArrowUpDown
-        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-      />
-      <span className='sr-only'>
-        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
-      </span>
-    </Button>
-  )
-}
-
-function compareText(a: string, b: string, direction: SortDirection) {
-  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
-}
-
 function StatusBadge({ status }: { status: DashboardService['status'] }) {
   if (status === 'running') {
-    return (
-      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
-    )
+    return <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
   }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
 }
 
-function HealthBadge({
-  health,
-}: {
-  health: DashboardService['runtimeHealth']['health']
-}) {
-  if (health === 'healthy') {
-    return (
-      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Healthy</Badge>
-    )
-  }
-  if (health === 'warning') return <Badge variant='secondary'>Warning</Badge>
-  return <Badge variant='destructive'>Critical</Badge>
+const statusSortRank: Record<DashboardService['status'], number> = {
+  degraded: 0,
+  stopped: 1,
+  running: 2,
 }
+
+const columns: ColumnDef<DashboardService>[] = [
+  {
+    accessorKey: 'name',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Service' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex min-w-0 flex-col'>
+        <Link
+          to='/services/$serviceId'
+          params={{ serviceId: row.original.id }}
+          className='truncate font-medium hover:underline'
+        >
+          {row.original.name}
+        </Link>
+        <span className='text-xs text-muted-foreground'>{row.original.id}</span>
+      </div>
+    ),
+    enableHiding: false,
+  },
+  {
+    id: 'status',
+    accessorFn: (row) => row.status,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Status' />
+    ),
+    cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+    sortingFn: (rowA, rowB, columnId) =>
+      statusSortRank[rowA.getValue(columnId) as DashboardService['status']] -
+      statusSortRank[rowB.getValue(columnId) as DashboardService['status']],
+  },
+  {
+    id: 'runtime',
+    accessorFn: (row) => row.role,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Runtime' />
+    ),
+    cell: ({ row }) => row.original.role,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    id: 'summary',
+    accessorFn: (row) => row.runtimeHealth.summary,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Summary' />
+    ),
+    cell: ({ row }) => (
+      <div className='max-w-[360px] text-sm text-muted-foreground'>
+        {row.original.runtimeHealth.summary}
+      </div>
+    ),
+  },
+  {
+    id: 'uptime',
+    accessorFn: (row) => row.runtimeHealth.uptime,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Uptime' />
+    ),
+    cell: ({ row }) => row.original.runtimeHealth.uptime,
+  },
+  {
+    id: 'lastCheckAt',
+    accessorFn: (row) => row.runtimeHealth.lastCheckAt,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Last check' />
+    ),
+    cell: ({ row }) => row.original.runtimeHealth.lastCheckAt,
+  },
+  {
+    id: 'lastRestartAt',
+    accessorFn: (row) => row.runtimeHealth.lastRestartAt ?? 'Not recorded',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Last restart' />
+    ),
+    cell: ({ row }) => row.original.runtimeHealth.lastRestartAt ?? 'Not recorded',
+  },
+]
 
 export function Runtime() {
   usePageMetadata({
@@ -125,113 +161,46 @@ export function Runtime() {
   })
 
   const servicesQuery = useServices()
-  const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<
-    'all' | DashboardService['status']
-  >('all')
-  const [healthFilter, setHealthFilter] = useState<
-    'all' | DashboardService['runtimeHealth']['health']
-  >('all')
-  const [sortKey, setSortKey] = useState<RuntimeSortKey>('service')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-
-  const rows = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    const filtered = (servicesQuery.data ?? []).filter((service) => {
-      if (statusFilter !== 'all' && service.status !== statusFilter)
-        return false
-      if (
-        healthFilter !== 'all' &&
-        service.runtimeHealth.health !== healthFilter
-      ) {
-        return false
-      }
-
-      if (!normalized) return true
-      return [
-        service.name,
-        service.id,
-        service.status,
-        service.runtimeHealth.health,
-        service.runtimeHealth.summary,
-        service.runtimeHealth.uptime,
-        service.runtimeHealth.lastCheckAt,
-        service.runtimeHealth.lastRestartAt ?? '',
-        service.metadata.runtime,
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalized)
-    })
-
-    return filtered.sort((a, b) => {
-      if (sortKey === 'service') {
-        return compareText(a.name, b.name, sortDirection)
-      }
-      if (sortKey === 'status') {
-        return compareText(a.status, b.status, sortDirection)
-      }
-      if (sortKey === 'health') {
-        return compareText(
-          a.runtimeHealth.health,
-          b.runtimeHealth.health,
-          sortDirection
-        )
-      }
-      if (sortKey === 'uptime') {
-        return compareText(
-          a.runtimeHealth.uptime,
-          b.runtimeHealth.uptime,
-          sortDirection
-        )
-      }
-      if (sortKey === 'lastCheck') {
-        return compareText(
-          a.runtimeHealth.lastCheckAt,
-          b.runtimeHealth.lastCheckAt,
-          sortDirection
-        )
-      }
-      if (sortKey === 'lastRestart') {
-        return compareText(
-          a.runtimeHealth.lastRestartAt ?? '',
-          b.runtimeHealth.lastRestartAt ?? '',
-          sortDirection
-        )
-      }
-
-      return compareText(a.metadata.runtime, b.metadata.runtime, sortDirection)
-    })
-  }, [
-    healthFilter,
-    query,
-    servicesQuery.data,
-    sortDirection,
-    sortKey,
-    statusFilter,
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'status', desc: false },
+    { id: 'name', desc: false },
   ])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
-  const toggleSort = (key: RuntimeSortKey) => {
-    if (sortKey === key) {
-      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortKey(key)
-    setSortDirection('asc')
-  }
+  const table = useReactTable({
+    data: servicesQuery.data ?? [],
+    columns,
+    state: {
+      sorting,
+      columnFilters,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+  })
+
+  const unhealthyCount = useMemo(
+    () =>
+      (servicesQuery.data ?? []).filter(
+        (service) => service.runtimeHealth.health !== 'healthy'
+      ).length,
+    [servicesQuery.data]
+  )
+
+  const runtimes = useMemo(
+    () => Array.from(new Set((servicesQuery.data ?? []).map((service) => service.role))).sort(),
+    [servicesQuery.data]
+  )
 
   return (
     <>
       <Header fixed>
-        <div className='relative w-full max-w-sm'>
-          <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search runtime status, health, summaries, or checks...'
-            className='pl-9'
-          />
-        </div>
+        <Search />
         <div className='ms-auto flex items-center space-x-4'>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -244,8 +213,7 @@ export function Runtime() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Runtime</h2>
             <p className='text-muted-foreground'>
-              Search, filter, and sort runtime state, health, and check history
-              for every service.
+              Runtime state, health, and check history in the standard operator table.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -258,213 +226,85 @@ export function Runtime() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className='flex items-center gap-2'>
-              <Activity className='size-4' /> Runtime filters
-            </CardTitle>
-            <CardDescription>
-              Narrow runtime rows before sorting and drilling into details.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='space-y-3'>
-            <div className='relative w-full max-w-md'>
-              <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder='Search runtime status, health, summaries, or checks...'
-                className='pl-9'
-              />
-            </div>
-
-            <div className='flex flex-wrap gap-2'>
-              <span className='self-center text-sm text-muted-foreground'>
-                Status:
-              </span>
-              {(['all', 'running', 'degraded', 'stopped'] as const).map(
-                (value) => (
-                  <Button
-                    key={value}
-                    type='button'
-                    size='sm'
-                    variant={statusFilter === value ? 'default' : 'outline'}
-                    onClick={() => setStatusFilter(value)}
-                  >
-                    {value}
-                  </Button>
-                )
-              )}
-            </div>
-            <div className='flex flex-wrap gap-2'>
-              <span className='self-center text-sm text-muted-foreground'>
-                Health:
-              </span>
-              {(['all', 'healthy', 'warning', 'critical'] as const).map(
-                (value) => (
-                  <Button
-                    key={value}
-                    type='button'
-                    size='sm'
-                    variant={healthFilter === value ? 'default' : 'outline'}
-                    onClick={() => setHealthFilter(value)}
-                  >
-                    {value}
-                  </Button>
-                )
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
         {servicesQuery.isLoading ? (
           <RuntimeLoading />
         ) : (
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
-                <HeartPulse className='size-4' /> Service runtime table
+                <Activity className='size-4' /> Runtime status
               </CardTitle>
               <CardDescription>
-                Proper operator table with search, filters, and sortable
-                columns.
+                {table.getFilteredRowModel().rows.length} services shown, {unhealthyCount} with warning or critical health.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className='overflow-x-auto rounded-md border'>
+            <CardContent className='space-y-4'>
+              <DataTableToolbar
+                table={table}
+                searchPlaceholder='Search services, summaries, checks, or runtime...'
+                searchKey='name'
+                filters={[
+                  {
+                    columnId: 'status',
+                    title: 'Status',
+                    options: [
+                      { label: 'Running', value: 'running' },
+                      { label: 'Degraded', value: 'degraded' },
+                      { label: 'Stopped', value: 'stopped' },
+                    ],
+                  },
+                  {
+                    columnId: 'runtime',
+                    title: 'Runtime',
+                    options: runtimes.map((runtime) => ({
+                      label: runtime,
+                      value: runtime,
+                    })),
+                  },
+                ]}
+              />
+
+              <div className='overflow-hidden rounded-md border'>
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <SortableHead
-                          label='Service'
-                          active={sortKey === 'service'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('service')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Status'
-                          active={sortKey === 'status'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('status')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Health'
-                          active={sortKey === 'health'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('health')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Uptime'
-                          active={sortKey === 'uptime'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('uptime')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Last check'
-                          active={sortKey === 'lastCheck'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('lastCheck')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Last restart'
-                          active={sortKey === 'lastRestart'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('lastRestart')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Runtime'
-                          active={sortKey === 'runtime'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('runtime')}
-                        />
-                      </TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id} colSpan={header.colSpan}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
                   </TableHeader>
                   <TableBody>
-                    {rows.length ? (
-                      rows.map((service) => (
-                        <TableRow key={service.id}>
-                          <TableCell>
-                            <div className='space-y-1'>
-                              <div className='font-medium'>{service.name}</div>
-                              <div className='text-xs text-muted-foreground'>
-                                {service.id}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={service.status} />
-                          </TableCell>
-                          <TableCell>
-                            <HealthBadge
-                              health={service.runtimeHealth.health}
-                            />
-                          </TableCell>
-                          <TableCell>{service.runtimeHealth.uptime}</TableCell>
-                          <TableCell className='text-sm text-muted-foreground'>
-                            {service.runtimeHealth.lastCheckAt}
-                          </TableCell>
-                          <TableCell className='text-sm text-muted-foreground'>
-                            {service.runtimeHealth.lastRestartAt ??
-                              'Not recorded'}
-                          </TableCell>
-                          <TableCell>{service.metadata.runtime}</TableCell>
-                          <TableCell>
-                            <div className='flex flex-wrap gap-2'>
-                              <Button variant='outline' size='sm' asChild>
-                                <Link
-                                  to='/runtime'
-                                  search={{ service: service.id }}
-                                >
-                                  <RotateCcw className='mr-2 size-3.5' />
-                                  Focus
-                                </Link>
-                              </Button>
-                              <Button variant='outline' size='sm' asChild>
-                                <Link
-                                  to='/logs'
-                                  search={{ service: service.id }}
-                                >
-                                  <Clock3 className='mr-2 size-3.5' />
-                                  Logs
-                                </Link>
-                              </Button>
-                              <Button variant='outline' size='sm' asChild>
-                                <Link
-                                  to='/services/$serviceId'
-                                  params={{ serviceId: service.id }}
-                                >
-                                  Details
-                                </Link>
-                              </Button>
-                            </div>
-                          </TableCell>
+                    {table.getRowModel().rows.length ? (
+                      table.getRowModel().rows.map((row) => (
+                        <TableRow key={row.id}>
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className='h-24 text-center'>
-                          No runtime rows match the current search/filters.
+                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                          No runtime rows match the current filters.
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
+
+              <DataTablePagination table={table} className='mt-auto' />
             </CardContent>
           </Card>
         )}

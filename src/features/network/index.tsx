@@ -1,17 +1,24 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
-  ArrowUpDown,
-  Copy,
-  Globe,
-  Link2,
-  Network as NetworkIcon,
-  Search,
-} from 'lucide-react'
+  type ColumnDef,
+  type ColumnFiltersState,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
+import { Copy, ExternalLink, Network as NetworkIcon } from 'lucide-react'
 import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -20,7 +27,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -30,22 +36,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DataTableColumnHeader,
+  DataTablePagination,
+  DataTableToolbar,
+} from '@/components/data-table'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
-type NetworkSortKey =
-  | 'service'
-  | 'endpoint'
-  | 'url'
-  | 'bind'
-  | 'port'
-  | 'exposure'
-type SortDirection = 'asc' | 'desc'
-
 type NetworkRow = {
+  id: string
   service: DashboardService
   endpoint: DashboardService['endpoints'][number]
 }
@@ -64,39 +68,99 @@ function NetworkLoading() {
   )
 }
 
-function SortableHead({
-  label,
-  active,
-  direction,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  direction: SortDirection
-  onClick: () => void
-}) {
-  return (
-    <Button
-      type='button'
-      variant='ghost'
-      size='sm'
-      className='h-auto px-0 py-0 font-medium hover:bg-transparent'
-      onClick={onClick}
-    >
-      {label}
-      <ArrowUpDown
-        className={`ml-2 size-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-      />
-      <span className='sr-only'>
-        Sort {label} {direction === 'asc' ? 'descending' : 'ascending'}
-      </span>
-    </Button>
-  )
-}
-
-function compareText(a: string, b: string, direction: SortDirection) {
-  return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
-}
+const columns: ColumnDef<NetworkRow>[] = [
+  {
+    id: 'serviceName',
+    accessorFn: (row) => row.service.name,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Service' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex min-w-0 flex-col'>
+        <Link
+          to='/services/$serviceId'
+          params={{ serviceId: row.original.service.id }}
+          className='truncate font-medium hover:underline'
+        >
+          {row.original.service.name}
+        </Link>
+        <span className='text-xs text-muted-foreground'>{row.original.service.id}</span>
+      </div>
+    ),
+    enableHiding: false,
+  },
+  {
+    id: 'label',
+    accessorFn: (row) => row.endpoint.label,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Endpoint' />
+    ),
+    cell: ({ row }) => row.original.endpoint.label,
+  },
+  {
+    id: 'url',
+    accessorFn: (row) => row.endpoint.url,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='URL' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex items-start gap-2'>
+        <span className='max-w-[360px] break-all text-sm text-muted-foreground'>
+          {row.original.endpoint.url}
+        </span>
+        <Button
+          type='button'
+          variant='outline'
+          size='icon'
+          className='size-7 shrink-0'
+          title='Copy URL'
+          onClick={() => void copyText(row.original.endpoint.url)}
+        >
+          <Copy className='size-3.5' />
+        </Button>
+        <Button variant='outline' size='icon' className='size-7 shrink-0' asChild>
+          <a href={row.original.endpoint.url} target='_blank' rel='noreferrer'>
+            <ExternalLink className='size-3.5' />
+          </a>
+        </Button>
+      </div>
+    ),
+  },
+  {
+    id: 'bind',
+    accessorFn: (row) => row.endpoint.bind,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Bind' />
+    ),
+    cell: ({ row }) => row.original.endpoint.bind,
+  },
+  {
+    id: 'port',
+    accessorFn: (row) => row.endpoint.port,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Port' />
+    ),
+    cell: ({ row }) => row.original.endpoint.port,
+  },
+  {
+    id: 'protocol',
+    accessorFn: (row) => row.endpoint.protocol,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Protocol' />
+    ),
+    cell: ({ row }) => row.original.endpoint.protocol,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    id: 'exposure',
+    accessorFn: (row) => row.endpoint.exposure,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Exposure' />
+    ),
+    cell: ({ row }) => <Badge variant='outline'>{row.original.endpoint.exposure}</Badge>,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+]
 
 export function Network() {
   usePageMetadata({
@@ -105,91 +169,48 @@ export function Network() {
   })
 
   const servicesQuery = useServices()
-  const [query, setQuery] = useState('')
-  const [exposureFilter, setExposureFilter] = useState<
-    'all' | 'local' | 'lan' | 'public'
-  >('all')
-  const [sortKey, setSortKey] = useState<NetworkSortKey>('service')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'serviceName', desc: false },
+    { id: 'label', desc: false },
+  ])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
-  const endpointRows = useMemo(() => {
-    const raw: NetworkRow[] = (servicesQuery.data ?? []).flatMap((service) =>
-      service.endpoints.map((endpoint) => ({ service, endpoint }))
+  const rows = useMemo<NetworkRow[]>(() => {
+    return (servicesQuery.data ?? []).flatMap((service) =>
+      service.endpoints.map((endpoint, index) => ({
+        id: `${service.id}-${endpoint.label}-${index}`,
+        service,
+        endpoint,
+      }))
     )
-    const normalized = query.trim().toLowerCase()
+  }, [servicesQuery.data])
 
-    const scoped =
-      exposureFilter === 'all'
-        ? raw
-        : raw.filter(({ endpoint }) => endpoint.exposure === exposureFilter)
+  const protocols = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.endpoint.protocol))).sort(),
+    [rows]
+  )
 
-    const filtered = !normalized
-      ? scoped
-      : scoped.filter(({ service, endpoint }) =>
-          [
-            service.name,
-            service.id,
-            endpoint.label,
-            endpoint.url,
-            endpoint.bind,
-            endpoint.protocol,
-            endpoint.exposure,
-            String(endpoint.port),
-          ]
-            .join(' ')
-            .toLowerCase()
-            .includes(normalized)
-        )
-
-    return filtered.sort((a, b) => {
-      if (sortKey === 'service') {
-        return compareText(a.service.name, b.service.name, sortDirection)
-      }
-      if (sortKey === 'endpoint') {
-        return compareText(a.endpoint.label, b.endpoint.label, sortDirection)
-      }
-      if (sortKey === 'url') {
-        return compareText(a.endpoint.url, b.endpoint.url, sortDirection)
-      }
-      if (sortKey === 'bind') {
-        return compareText(a.endpoint.bind, b.endpoint.bind, sortDirection)
-      }
-      if (sortKey === 'port') {
-        return sortDirection === 'asc'
-          ? a.endpoint.port - b.endpoint.port
-          : b.endpoint.port - a.endpoint.port
-      }
-
-      return compareText(
-        a.endpoint.exposure,
-        b.endpoint.exposure,
-        sortDirection
-      )
-    })
-  }, [exposureFilter, query, servicesQuery.data, sortDirection, sortKey])
-
-  const toggleSort = (key: NetworkSortKey) => {
-    if (sortKey === key) {
-      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-
-    setSortKey(key)
-    setSortDirection('asc')
-  }
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: {
+      sorting,
+      columnFilters,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+  })
 
   return (
     <>
       <Header fixed>
-        <div className='relative w-full max-w-sm'>
-          <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search services, URLs, binds, ports, or exposure...'
-            className='pl-9'
-          />
-        </div>
+        <Search />
         <div className='ms-auto flex items-center space-x-4'>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -202,8 +223,7 @@ export function Network() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Network</h2>
             <p className='text-muted-foreground'>
-              Search service endpoints, sort the columns, copy URLs quickly, and
-              inspect bind/exposure facts in one table.
+              Endpoints and exposure facts in the standard operator table.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -225,170 +245,76 @@ export function Network() {
                 <NetworkIcon className='size-4' /> Service endpoints
               </CardTitle>
               <CardDescription>
-                Searchable operator table with sortable columns and copy/open
-                actions for every service URL.
+                {table.getFilteredRowModel().rows.length} endpoints shown with copy and open actions.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='relative w-full max-w-md'>
-                <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder='Search services, URLs, binds, ports, or exposure...'
-                  className='pl-9'
-                />
-              </div>
+              <DataTableToolbar
+                table={table}
+                searchPlaceholder='Search services, URLs, binds, ports, or exposure...'
+                searchKey='serviceName'
+                filters={[
+                  {
+                    columnId: 'exposure',
+                    title: 'Exposure',
+                    options: [
+                      { label: 'Local', value: 'local' },
+                      { label: 'LAN', value: 'lan' },
+                      { label: 'Public', value: 'public' },
+                    ],
+                  },
+                  {
+                    columnId: 'protocol',
+                    title: 'Protocol',
+                    options: protocols.map((protocol) => ({
+                      label: protocol,
+                      value: protocol,
+                    })),
+                  },
+                ]}
+              />
 
-              <div className='flex flex-wrap gap-2'>
-                <Button
-                  type='button'
-                  size='sm'
-                  variant={exposureFilter === 'all' ? 'default' : 'outline'}
-                  onClick={() => setExposureFilter('all')}
-                >
-                  all exposure
-                </Button>
-                {(['local', 'lan', 'public'] as const).map((value) => (
-                  <Button
-                    key={value}
-                    type='button'
-                    size='sm'
-                    variant={exposureFilter === value ? 'default' : 'outline'}
-                    onClick={() => setExposureFilter(value)}
-                  >
-                    {value}
-                  </Button>
-                ))}
-              </div>
-
-              <div className='overflow-x-auto rounded-md border'>
+              <div className='overflow-hidden rounded-md border'>
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <SortableHead
-                          label='Service'
-                          active={sortKey === 'service'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('service')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Endpoint'
-                          active={sortKey === 'endpoint'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('endpoint')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='URL'
-                          active={sortKey === 'url'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('url')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Bind'
-                          active={sortKey === 'bind'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('bind')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Port'
-                          active={sortKey === 'port'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('port')}
-                        />
-                      </TableHead>
-                      <TableHead>
-                        <SortableHead
-                          label='Exposure'
-                          active={sortKey === 'exposure'}
-                          direction={sortDirection}
-                          onClick={() => toggleSort('exposure')}
-                        />
-                      </TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id} colSpan={header.colSpan}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
                   </TableHeader>
                   <TableBody>
-                    {endpointRows.length ? (
-                      endpointRows.map(({ service, endpoint }) => (
-                        <TableRow key={`${service.id}-${endpoint.url}`}>
-                          <TableCell>
-                            <div className='space-y-1'>
-                              <div className='font-medium'>{service.name}</div>
-                              <div className='text-xs text-muted-foreground'>
-                                {service.id}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className='flex items-center gap-2'>
-                              <Globe className='size-4 text-muted-foreground' />
-                              {endpoint.label}
-                            </div>
-                          </TableCell>
-                          <TableCell className='max-w-[280px]'>
-                            <div className='flex items-center gap-2'>
-                              <span className='text-sm break-all text-muted-foreground'>
-                                {endpoint.url}
-                              </span>
-                              <Button
-                                type='button'
-                                variant='outline'
-                                size='icon'
-                                className='size-7 shrink-0'
-                                title='Copy URL'
-                                onClick={() => void copyText(endpoint.url)}
-                              >
-                                <Copy className='size-3.5' />
-                                <span className='sr-only'>Copy URL</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>{endpoint.bind}</TableCell>
-                          <TableCell>{endpoint.port}</TableCell>
-                          <TableCell>{endpoint.exposure}</TableCell>
-                          <TableCell>
-                            <div className='flex flex-wrap gap-2'>
-                              <Button variant='outline' size='sm' asChild>
-                                <a
-                                  href={endpoint.url}
-                                  target='_blank'
-                                  rel='noreferrer'
-                                >
-                                  <Link2 className='mr-2 size-3.5' /> Open
-                                </a>
-                              </Button>
-                              <Button variant='outline' size='sm' asChild>
-                                <Link
-                                  to='/services/$serviceId'
-                                  params={{ serviceId: service.id }}
-                                >
-                                  Details
-                                </Link>
-                              </Button>
-                            </div>
-                          </TableCell>
+                    {table.getRowModel().rows.length ? (
+                      table.getRowModel().rows.map((row) => (
+                        <TableRow key={row.id}>
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className='h-24 text-center'>
-                          No endpoints match the current search.
+                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                          No endpoints match the current filters.
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
+
+              <DataTablePagination table={table} className='mt-auto' />
             </CardContent>
           </Card>
         )}

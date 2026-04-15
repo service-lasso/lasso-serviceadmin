@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  buildStubServiceLogUrl,
   favoritesMutationEnabled,
   fetchDashboardService,
   fetchDashboardSummary,
@@ -29,6 +30,15 @@ export function useDashboardService(serviceId: string) {
     queryKey: [...dashboardQueryKey, serviceId],
     queryFn: () => fetchDashboardService(serviceId),
   })
+}
+
+export function getServiceLogStubUrl(
+  serviceId: string,
+  options?: {
+    type?: 'default' | 'access' | 'error'
+  }
+) {
+  return buildStubServiceLogUrl(serviceId, options)
 }
 
 export function useDashboardAction() {

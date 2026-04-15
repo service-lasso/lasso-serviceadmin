@@ -1,5 +1,5 @@
 import { Link, Outlet } from '@tanstack/react-router'
-import { Monitor, Bell, Palette } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -16,16 +16,6 @@ const sidebarNavItems = [
     title: 'Appearance',
     href: '/settings/appearance',
     icon: <Palette size={18} />,
-  },
-  {
-    title: 'Notifications',
-    href: '/settings/notifications',
-    icon: <Bell size={18} />,
-  },
-  {
-    title: 'Display',
-    href: '/settings/display',
-    icon: <Monitor size={18} />,
   },
 ]
 

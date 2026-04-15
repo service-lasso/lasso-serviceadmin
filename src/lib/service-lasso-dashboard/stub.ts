@@ -698,6 +698,38 @@ export async function fetchDashboardService(serviceId: string) {
   )
 }
 
+export function resolveStubServiceLogInfo(
+  serviceId: string,
+  type: 'default' | 'access' | 'error' = 'default'
+) {
+  const service = services.find((item) => item.id === serviceId)
+  if (!service) return null
+
+  const defaultPath = service.metadata.logPath ?? '/mock-logs/service-sample.log'
+  const availableTypes: Array<'default' | 'access' | 'error'> = ['default']
+
+  return {
+    serviceId,
+    type,
+    path: defaultPath,
+    availableTypes,
+  }
+}
+
+export function buildStubServiceLogUrl(
+  serviceId: string,
+  options?: {
+    type?: 'default' | 'access' | 'error'
+  }
+) {
+  const params = new URLSearchParams({
+    service: serviceId,
+    type: options?.type ?? 'default',
+  })
+
+  return `/api/logs/content?${params.toString()}`
+}
+
 export async function runDashboardAction(action: DashboardAction) {
   await wait(180)
 

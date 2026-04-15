@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Bell, ChevronsUpDown, LogOut } from 'lucide-react'
+import { ChevronsUpDown, LogOut, Settings } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -73,9 +73,9 @@ export function NavUser({ user }: NavUserProps) {
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                  <Link to='/settings/notifications'>
-                    <Bell />
-                    Notifications
+                  <Link to='/settings/appearance'>
+                    <Settings />
+                    Settings
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
