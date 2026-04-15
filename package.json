@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "knip": "knip"
+    "knip": "knip",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:logs:unit": "vitest run src/features/logs/provider.stub.test.ts src/features/logs/provider.runtime.test.ts",
+    "test:logs:e2e": "start-server-and-test \"vite --host 127.0.0.1 --port 4175 --strictPort\" http://127.0.0.1:4175 \"cypress run --config baseUrl=http://127.0.0.1:4175 --spec cypress/e2e/logs/logs-page.cy.js\""
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.3",
@@ -69,20 +73,28 @@
     "@tanstack/react-query-devtools": "^5.95.2",
     "@tanstack/react-router-devtools": "^1.166.11",
     "@tanstack/router-plugin": "^1.167.5",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.3.0",
+    "cypress": "^15.13.1",
     "eslint": "^10.1.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "jsdom": "^29.0.2",
     "knip": "^6.0.6",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "start-server-and-test": "^3.0.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.57.2",
-    "vite": "^8.0.3"
+    "vite": "^8.0.3",
+    "vitest": "^4.1.4"
   }
 }
