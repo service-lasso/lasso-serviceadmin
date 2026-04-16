@@ -435,14 +435,20 @@ function ServiceLazyLogViewer({
 
   return (
     <div className='space-y-3'>
-      <div className='flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground'>
-        <div>
+      <div className='flex items-center gap-3 text-xs text-muted-foreground'>
+        <div
+          className='min-w-0 flex-1 truncate whitespace-nowrap'
+          title={logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}
+        >
           Source:{' '}
           <span className='font-medium'>
             {logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}
           </span>
         </div>
-        <div>
+        <div
+          className='shrink-0 truncate whitespace-nowrap text-right'
+          title={`Showing newest tail first, chunk size ${DEFAULT_LOG_CHUNK_SIZE}, total ${totalLines.toLocaleString()} lines`}
+        >
           Showing newest tail first, chunk size {DEFAULT_LOG_CHUNK_SIZE}, total{' '}
           {totalLines.toLocaleString()} lines
         </div>
