@@ -60,8 +60,16 @@ export function UserAuthForm({
         setIsLoading(false)
 
         // Mock successful authentication with expiry computed at success time
+        const emailLocalPart = data.email.split('@')[0] || 'operator'
+        const displayName = emailLocalPart
+          .split(/[._-]+/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ')
+
         const mockUser = {
-          accountNo: 'ACC001',
+          accountNo: emailLocalPart.toUpperCase(),
+          displayName,
           email: data.email,
           role: ['user'],
           exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours from now
