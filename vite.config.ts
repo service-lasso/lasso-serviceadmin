@@ -38,13 +38,35 @@ function resolveStubServiceLogInfo(
   }
 }
 
-async function readResolvedLogLines(filePath: string) {
-  const content = await fs.readFile(filePath, 'utf8')
+function normalizeLogLines(content: string) {
   const allLines = content.replace(/\r\n/g, '\n').split('\n')
 
   return allLines.length && allLines[allLines.length - 1] === ''
     ? allLines.slice(0, -1)
     : allLines
+}
+
+async function readResolvedLogLines(filePath: string) {
+  try {
+    const content = await fs.readFile(filePath, 'utf8')
+
+    return {
+      path: filePath,
+      lines: normalizeLogLines(content),
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return {
+        path: filePath,
+        lines: [
+          'Log file not created yet.',
+          `Waiting for first log output from ${path.basename(filePath)}.`,
+        ],
+      }
+    }
+
+    throw error
+  }
 }
 
 function normalizeLogReadLimit(value: string | null) {
@@ -166,11 +188,11 @@ function attachLogMiddlewares(
       }
 
       const filePath = logInfo.path
-      const normalizedLines = await readResolvedLogLines(filePath)
-      const totalLines = normalizedLines.length
+      const logData = await readResolvedLogLines(filePath)
+      const totalLines = logData.lines.length
       const safeBefore = normalizeLogReadBefore(beforeParam, totalLines)
       const start = Math.max(0, safeBefore - limit)
-      const lines = normalizedLines.slice(start, safeBefore)
+      const lines = logData.lines.slice(start, safeBefore)
 
       res.statusCode = 200
       res.setHeader('Content-Type', 'application/json')
@@ -178,7 +200,7 @@ function attachLogMiddlewares(
         JSON.stringify({
           serviceId,
           type,
-          path: filePath,
+          path: logData.path,
           totalLines,
           start,
           end: safeBefore,
