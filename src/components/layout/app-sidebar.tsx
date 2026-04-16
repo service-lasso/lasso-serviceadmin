@@ -17,9 +17,12 @@ export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const authUser = useAuthStore((state) => state.auth.user)
   const fallbackTeam = sidebarData.teams[0]
-  const sessionDisplayName =
-    authUser?.displayName || authUser?.accountNo || fallbackTeam.name
-  const sessionEmail = authUser?.email || fallbackTeam.plan
+  const signedOutName = 'Not signed in'
+  const signedOutEmail = 'No active session'
+  const sessionDisplayName = authUser
+    ? authUser.displayName || authUser.accountNo
+    : signedOutName
+  const sessionEmail = authUser?.email || signedOutEmail
 
   const sidebarTeams = [
     {
