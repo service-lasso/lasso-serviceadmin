@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import { Activity, PauseCircle, PlayCircle, ScrollText, Wifi } from 'lucide-react'
@@ -7,9 +14,8 @@ import { usePageMetadata } from '@/lib/page-metadata'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import {
   debugLogs,
+  fetchServiceLogChunk,
   fetchServiceLogInfo,
-  fetchServiceLogText,
-  resolveServiceLogContentUrl,
   type ServiceLogInfo,
 } from './provider'
 import { Badge } from '@/components/ui/badge'
@@ -72,79 +78,103 @@ function LogsLoading() {
 }
 
 
+const DEFAULT_LOG_CHUNK_SIZE = 100
+const LOAD_OLDER_THRESHOLD_PX = 48
+const FOLLOW_POLL_MS = 4000
+
+type LogViewerScrollArgs = {
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+}
+
 function RealServiceLogViewer({
   service,
   paused,
-  logText,
+  lines,
+  loadingOlder,
+  hasMore,
+  onScroll,
 }: {
   service: DashboardService
   paused: boolean
-  logText: string
+  lines: string[]
+  loadingOlder: boolean
+  hasMore: boolean
+  onScroll: (args: LogViewerScrollArgs) => void
 }) {
-  const logUrl = resolveServiceLogContentUrl(service, 'default')
+  const logText = useMemo(() => lines.join('\n'), [lines])
 
   useEffect(() => {
     debugLogs('lazylog mount', {
       serviceId: service.id,
       paused,
-      logUrl,
-      textLength: logText.length,
+      lineCount: lines.length,
     })
 
     return () => {
       debugLogs('lazylog unmount', {
         serviceId: service.id,
-        logUrl,
       })
     }
-  }, [logText.length, logUrl, paused, service.id])
+  }, [lines.length, paused, service.id])
 
   return (
-    <div
-      className='overflow-hidden rounded-md border'
-      style={{ height: '640px', minHeight: '640px' }}
-    >
-      <ScrollFollow
-        startFollowing={!paused}
-        render={({ follow, onScroll }) => (
-          <LazyLog
-            caseInsensitive
-            enableSearch
-            extraLines={1}
-            follow={follow}
-            selectableLines
-            text={logText}
-            onLoad={() => {
-              debugLogs('lazylog onLoad', {
-                serviceId: service.id,
-                logUrl,
-                textLength: logText.length,
-              })
-            }}
-            onError={(error) => {
-              debugLogs('lazylog onError', {
-                serviceId: service.id,
-                logUrl,
-                error: error instanceof Error ? error.message : String(error),
-              })
-            }}
-            onScroll={(args) => {
-              debugLogs('lazylog onScroll', {
-                serviceId: service.id,
-                logUrl,
-                ...args,
-              })
-              onScroll(args)
-            }}
-            style={{
-              height: '640px',
-              minHeight: '640px',
-              width: '100%',
-              background: 'transparent',
-            }}
-          />
-        )}
-      />
+    <div className='space-y-2'>
+      <div
+        className='overflow-hidden rounded-md border'
+        style={{ height: '640px', minHeight: '640px' }}
+      >
+        <ScrollFollow
+          startFollowing={!paused}
+          render={({ follow, onScroll: handleFollowScroll }) => (
+            <LazyLog
+              caseInsensitive
+              enableSearch
+              extraLines={1}
+              follow={follow}
+              selectableLines
+              text={logText}
+              onLoad={() => {
+                debugLogs('lazylog onLoad', {
+                  serviceId: service.id,
+                  lineCount: lines.length,
+                })
+              }}
+              onError={(error) => {
+                debugLogs('lazylog onError', {
+                  serviceId: service.id,
+                  error: error instanceof Error ? error.message : String(error),
+                })
+              }}
+              onScroll={(args) => {
+                debugLogs('lazylog onScroll', {
+                  serviceId: service.id,
+                  ...args,
+                })
+                handleFollowScroll(args)
+                onScroll(args)
+              }}
+              style={{
+                height: '640px',
+                minHeight: '640px',
+                width: '100%',
+                background: 'transparent',
+              }}
+            />
+          )}
+        />
+      </div>
+      <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
+        <div>
+          {loadingOlder
+            ? 'Loading older lines...'
+            : hasMore
+              ? 'Scroll upward to load older lines.'
+              : 'Reached the start of the file.'}
+        </div>
+        <div>{lines.length.toLocaleString()} loaded lines</div>
+      </div>
     </div>
   )
 }
@@ -158,8 +188,57 @@ function ServiceLazyLogViewer({
 }) {
   const [logInfo, setLogInfo] = useState<ServiceLogInfo | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [logText, setLogText] = useState('')
+  const [lines, setLines] = useState<string[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const [nextBefore, setNextBefore] = useState<number | null>(null)
+  const [totalLines, setTotalLines] = useState(0)
+  const viewerRef = useRef<HTMLDivElement | null>(null)
+  const prependAdjustmentRef = useRef<{
+    scrollTop: number
+    scrollHeight: number
+  } | null>(null)
+
+  const loadOlder = useCallback(async () => {
+    if (!service || !hasMore || loadingOlder || nextBefore == null) {
+      return
+    }
+
+    const scrollElement = viewerRef.current?.querySelector(
+      '.react-lazylog'
+    ) as HTMLElement | null
+
+    prependAdjustmentRef.current = scrollElement
+      ? {
+          scrollTop: scrollElement.scrollTop,
+          scrollHeight: scrollElement.scrollHeight,
+        }
+      : null
+
+    try {
+      setLoadingOlder(true)
+      const olderChunk = await fetchServiceLogChunk(
+        service,
+        'default',
+        nextBefore,
+        DEFAULT_LOG_CHUNK_SIZE
+      )
+
+      setLines((current) => [...olderChunk.lines, ...current])
+      setHasMore(olderChunk.hasMore)
+      setNextBefore(olderChunk.nextBefore)
+      setTotalLines(olderChunk.totalLines)
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load older log lines right now.'
+      )
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [hasMore, loadingOlder, nextBefore, service])
 
   useEffect(() => {
     let cancelled = false
@@ -168,8 +247,12 @@ function ServiceLazyLogViewer({
       if (!service) {
         debugLogs('loadInitial skipped because no service is selected')
         setLogInfo(null)
-        setLogText('')
+        setLines([])
+        setHasMore(false)
+        setNextBefore(null)
+        setTotalLines(0)
         setLoading(false)
+        setLoadingOlder(false)
         setError(null)
         return
       }
@@ -182,16 +265,26 @@ function ServiceLazyLogViewer({
       try {
         setLoading(true)
         setError(null)
-        const info = await fetchServiceLogInfo(service, 'default')
-        const text = await fetchServiceLogText(service, 'default')
+        const [info, chunk] = await Promise.all([
+          fetchServiceLogInfo(service, 'default'),
+          fetchServiceLogChunk(service, 'default', undefined, DEFAULT_LOG_CHUNK_SIZE),
+        ])
+
         if (cancelled) return
+
         setLogInfo(info)
-        setLogText(text)
+        setLines(chunk.lines)
+        setHasMore(chunk.hasMore)
+        setNextBefore(chunk.nextBefore)
+        setTotalLines(chunk.totalLines)
+
         debugLogs('loadInitial state applied', {
           serviceId: service.id,
           logPath: info.path,
-          contentUrl: resolveServiceLogContentUrl(service, 'default'),
-          textLength: text.length,
+          lineCount: chunk.lines.length,
+          totalLines: chunk.totalLines,
+          hasMore: chunk.hasMore,
+          nextBefore: chunk.nextBefore,
         })
       } catch (error) {
         if (cancelled) return
@@ -201,7 +294,10 @@ function ServiceLazyLogViewer({
         })
         setError('Unable to load log content right now.')
         setLogInfo(null)
-        setLogText('')
+        setLines([])
+        setHasMore(false)
+        setNextBefore(null)
+        setTotalLines(0)
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -213,18 +309,109 @@ function ServiceLazyLogViewer({
     return () => {
       cancelled = true
     }
-  }, [service?.id])
+  }, [paused, service?.id])
+
+  useLayoutEffect(() => {
+    const adjustment = prependAdjustmentRef.current
+    if (!adjustment) return
+
+    const scrollElement = viewerRef.current?.querySelector(
+      '.react-lazylog'
+    ) as HTMLElement | null
+
+    if (scrollElement) {
+      const nextScrollHeight = scrollElement.scrollHeight
+      const scrollDelta = nextScrollHeight - adjustment.scrollHeight
+      scrollElement.scrollTop = adjustment.scrollTop + scrollDelta
+    }
+
+    prependAdjustmentRef.current = null
+  }, [lines])
+
+  useEffect(() => {
+    if (!service || paused || loading || loadingOlder) {
+      return
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const newestChunk = await fetchServiceLogChunk(
+          service,
+          'default',
+          undefined,
+          DEFAULT_LOG_CHUNK_SIZE
+        )
+
+        setTotalLines((currentTotalLines) => {
+          const appendedLineCount = newestChunk.totalLines - currentTotalLines
+
+          if (appendedLineCount <= 0) {
+            return currentTotalLines
+          }
+
+          setLines((currentLines) => {
+            if (appendedLineCount > newestChunk.lines.length) {
+              return newestChunk.lines
+            }
+
+            return [
+              ...currentLines,
+              ...newestChunk.lines.slice(-appendedLineCount),
+            ]
+          })
+
+          if (appendedLineCount > newestChunk.lines.length) {
+            setHasMore(newestChunk.hasMore)
+            setNextBefore(newestChunk.nextBefore)
+          }
+
+          return newestChunk.totalLines
+        })
+      } catch (error) {
+        debugLogs('follow poll failed', {
+          serviceId: service.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }, FOLLOW_POLL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [loading, loadingOlder, paused, service])
+
+  const handleViewerScroll = useCallback(
+    (args: LogViewerScrollArgs) => {
+      if (args.scrollTop <= LOAD_OLDER_THRESHOLD_PX) {
+        void loadOlder()
+      }
+    },
+    [loadOlder]
+  )
 
   useEffect(() => {
     debugLogs('viewer render state', {
       serviceId: service?.id ?? null,
       hasError: Boolean(error),
       loading,
+      loadingOlder,
       logPath: logInfo?.path ?? null,
-      contentUrl: service ? resolveServiceLogContentUrl(service, 'default') : null,
-      textLength: logText.length,
+      lineCount: lines.length,
+      hasMore,
+      nextBefore,
+      totalLines,
     })
-  }, [error, loading, logInfo?.path, logText.length, service])
+  }, [
+    error,
+    hasMore,
+    lines.length,
+    loading,
+    loadingOlder,
+    logInfo?.path,
+    nextBefore,
+    service,
+    totalLines,
+  ])
 
   if (!service) {
     return (
@@ -250,15 +437,27 @@ function ServiceLazyLogViewer({
     <div className='space-y-3'>
       <div className='flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground'>
         <div>
-          Source: <span className='font-medium'>{logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}</span>
+          Source:{' '}
+          <span className='font-medium'>
+            {logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}
+          </span>
+        </div>
+        <div>
+          Showing newest tail first, chunk size {DEFAULT_LOG_CHUNK_SIZE}, total{' '}
+          {totalLines.toLocaleString()} lines
         </div>
       </div>
-      <RealServiceLogViewer
-        key={`${service.id}:${logInfo?.path ?? 'default'}`}
-        service={service}
-        paused={paused}
-        logText={logText}
-      />
+      <div ref={viewerRef}>
+        <RealServiceLogViewer
+          key={`${service.id}:${logInfo?.path ?? 'default'}`}
+          service={service}
+          paused={paused}
+          lines={lines}
+          loadingOlder={loadingOlder}
+          hasMore={hasMore}
+          onScroll={handleViewerScroll}
+        />
+      </div>
     </div>
   )
 }
