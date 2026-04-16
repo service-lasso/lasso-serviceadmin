@@ -1,0 +1,46 @@
+{
+  "id": "dagu",
+  "name": "Dagu",
+  "description": "Workflow engine used to execute scheduled and manual automation runs.",
+  "enabled": true,
+  "version": "0.17.1",
+  "logoutput": true,
+  "icon": "workflow",
+  "servicetype": 40,
+  "servicelocation": 10,
+  "logo": "./logo.svg",
+  "logs": {
+    "default": {
+      "path": "./service.log"
+    }
+  },
+  "actions": {
+    "install": {
+      "description": "Install or refresh the Dagu workflow engine."
+    },
+    "config": {
+      "description": "Write the effective Dagu scheduler configuration."
+    },
+    "start": {
+      "description": "Start the Dagu workflow engine."
+    },
+    "stop": {
+      "description": "Stop the Dagu workflow engine gracefully."
+    }
+  },
+  "execconfig": {
+    "serviceorder": 40,
+    "serviceport": 8082,
+    "execcwd": ".",
+    "executable": "dagu",
+    "env": {
+      "DAGU_HOME": "./workflows"
+    },
+    "depend_on": [
+      "traefik"
+    ],
+    "healthcheck": {
+      "type": "process"
+    }
+  }
+}

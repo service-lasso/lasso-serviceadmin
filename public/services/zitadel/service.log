@@ -1,0 +1,4 @@
+2026-04-16T16:00:01.001Z INFO zitadel ZITADEL startup sequence started
+2026-04-16T16:00:01.522Z WARN zitadel SMTP provider not configured in stub mode
+2026-04-16T16:00:01.913Z INFO zitadel HTTP listener bound on 8081
+2026-04-16T16:00:02.147Z INFO zitadel Ready for local authentication flows

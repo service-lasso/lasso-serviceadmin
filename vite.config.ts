@@ -1,140 +1,281 @@
-import { defineConfig, type Plugin } from 'vite'
+import { promises as fs } from 'fs'
+import path from 'path'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
-import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
-import type { IncomingMessage, ServerResponse } from 'node:http'
-import path from 'node:path'
-import { stubBackend } from './src/lib/service-lasso-api/stub-backend'
-import type { ServiceAction } from './src/lib/service-lasso-api/types'
+import tailwindcss from '@tailwindcss/vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
-function json(res: ServerResponse, status: number, body: unknown) {
-  res.statusCode = status
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(body))
+const DEFAULT_LOG_READ_LIMIT = 100
+const MAX_LOG_READ_LIMIT = 1000
+
+type StubServiceDefinition = {
+  id: string
+  name?: string
+  description?: string
+  logs?: Partial<
+    Record<
+      'default' | 'access' | 'error',
+      {
+        path?: string
+      }
+    >
+  >
 }
 
-function handleStubApi(req: IncomingMessage, res: ServerResponse) {
-  const method = req.method ?? 'GET'
-  const url = new URL(req.url ?? '/', 'http://localhost')
-  const pathname = url.pathname
-
-  if (!pathname.startsWith('/api/')) {
-    return false
-  }
-
-  if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, stubBackend.getHealth())
-    return true
-  }
-
-  if (method === 'GET' && pathname === '/api/runtime/status') {
-    json(res, 200, stubBackend.getRuntimeSummary())
-    return true
-  }
-
-  const runtimeActionMatch = pathname.match(
-    /^\/api\/runtime\/actions\/([^/]+)$/
+async function loadStubServiceDefinition(serviceId: string) {
+  const serviceJsonPath = path.resolve(
+    __dirname,
+    'public',
+    'services',
+    serviceId,
+    'service.json'
   )
-  if (method === 'POST' && runtimeActionMatch) {
-    json(
-      res,
-      200,
-      stubBackend.runRuntimeAction(runtimeActionMatch[1] as ServiceAction)
-    )
-    return true
-  }
 
-  if (method === 'GET' && pathname === '/api/services') {
-    json(res, 200, stubBackend.getServices())
-    return true
-  }
-
-  const serviceDetailMatch = pathname.match(/^\/api\/services\/([^/]+)$/)
-  if (method === 'GET' && serviceDetailMatch) {
-    const service = stubBackend.getService(
-      decodeURIComponent(serviceDetailMatch[1])
-    )
-    if (!service) {
-      json(res, 404, { message: 'Service not found' })
-      return true
+  try {
+    const content = await fs.readFile(serviceJsonPath, 'utf8')
+    return {
+      serviceJsonPath,
+      serviceDefinition: JSON.parse(content) as StubServiceDefinition,
     }
-    json(res, 200, service)
-    return true
-  }
-
-  const serviceActionMatch = pathname.match(
-    /^\/api\/services\/([^/]+)\/actions\/([^/]+)$/
-  )
-  if (method === 'POST' && serviceActionMatch) {
-    const result = stubBackend.runServiceAction(
-      decodeURIComponent(serviceActionMatch[1]),
-      decodeURIComponent(serviceActionMatch[2]) as ServiceAction
-    )
-    if (!result) {
-      json(res, 404, { message: 'Service not found' })
-      return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return null
     }
-    json(res, 200, result)
-    return true
-  }
 
-  if (method === 'GET' && pathname === '/api/dependencies') {
-    json(res, 200, stubBackend.getDependencyGraph())
-    return true
+    throw error
   }
-
-  if (method === 'GET' && pathname === '/api/network') {
-    json(res, 200, stubBackend.getNetworkBindings())
-    return true
-  }
-
-  if (method === 'GET' && pathname === '/api/installed') {
-    json(res, 200, stubBackend.getInstalledRecords())
-    return true
-  }
-
-  if (method === 'GET' && pathname === '/api/settings') {
-    json(res, 200, stubBackend.getOperatorSettings())
-    return true
-  }
-
-  json(res, 404, { message: 'Unknown stub endpoint', path: pathname, method })
-  return true
 }
 
-function serviceLassoStubApiPlugin(): Plugin {
+async function resolveStubServiceLogInfo(
+  serviceId: string,
+  type: 'default' | 'access' | 'error' = 'default'
+) {
+  const loadedServiceDefinition = await loadStubServiceDefinition(serviceId)
+  const serviceDefinition = loadedServiceDefinition?.serviceDefinition
+  const configuredPath = serviceDefinition?.logs?.[type]?.path
+  if (!configuredPath || !loadedServiceDefinition) return null
+
+  const resolvedPath = path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(path.dirname(loadedServiceDefinition.serviceJsonPath), configuredPath)
+
   return {
-    name: 'service-lasso-stub-api',
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (handleStubApi(req, res)) {
-          return
-        }
-        next()
-      })
+    serviceId,
+    type,
+    path: resolvedPath,
+    availableTypes: Object.entries(serviceDefinition.logs ?? {})
+      .filter(([, value]) => Boolean(value?.path))
+      .map(([key]) => key),
+  }
+}
+
+function normalizeLogLines(content: string) {
+  const allLines = content.replace(/\r\n/g, '\n').split('\n')
+
+  return allLines.length && allLines[allLines.length - 1] === ''
+    ? allLines.slice(0, -1)
+    : allLines
+}
+
+async function readResolvedLogLines(filePath: string) {
+  try {
+    const content = await fs.readFile(filePath, 'utf8')
+
+    return {
+      path: filePath,
+      lines: normalizeLogLines(content),
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return {
+        path: filePath,
+        lines: [
+          'Log file not created yet.',
+          `Waiting for first log output from ${path.basename(filePath)}.`,
+        ],
+      }
+    }
+
+    throw error
+  }
+}
+
+function normalizeLogReadLimit(value: string | null) {
+  const parsed = Number(value ?? String(DEFAULT_LOG_READ_LIMIT))
+  if (!Number.isFinite(parsed)) return DEFAULT_LOG_READ_LIMIT
+  return Math.max(1, Math.min(MAX_LOG_READ_LIMIT, Math.trunc(parsed)))
+}
+
+function normalizeLogReadBefore(value: string | null, totalLines: number) {
+  if (value == null || value === '') return totalLines
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return totalLines
+  return Math.max(0, Math.min(totalLines, Math.trunc(parsed)))
+}
+
+function attachLogMiddlewares(
+  middlewares: {
+    use: (path: string, handler: (req: any, res: any) => void | Promise<void>) => void
+  }
+) {
+  middlewares.use('/api/services/log-info', async (req, res) => {
+    try {
+      const requestUrl = new URL(req.url ?? '', 'http://localhost')
+      const serviceId = requestUrl.searchParams.get('service')
+      const type = (requestUrl.searchParams.get('type') ?? 'default') as
+        | 'default'
+        | 'access'
+        | 'error'
+
+      if (!serviceId) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Missing service query parameter' }))
+        return
+      }
+
+      const logInfo = await resolveStubServiceLogInfo(serviceId, type)
+      if (!logInfo) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Unknown service log target' }))
+        return
+      }
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(logInfo))
+    } catch (error) {
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(
+        JSON.stringify({
+          error:
+            error instanceof Error ? error.message : 'Failed to resolve service log info',
+        })
+      )
+    }
+  })
+
+  middlewares.use('/api/logs/content', async (req, res) => {
+    try {
+      const requestUrl = new URL(req.url ?? '', 'http://localhost')
+      const serviceId = requestUrl.searchParams.get('service')
+      const type = (requestUrl.searchParams.get('type') ?? 'default') as
+        | 'default'
+        | 'access'
+        | 'error'
+
+      if (!serviceId) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+        res.end('Missing service query parameter')
+        return
+      }
+
+      const logInfo = await resolveStubServiceLogInfo(serviceId, type)
+      if (!logInfo?.path) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+        res.end('Unknown service log target')
+        return
+      }
+
+      const content = await fs.readFile(logInfo.path, 'utf8')
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.end(content)
+    } catch (error) {
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.end(error instanceof Error ? error.message : 'Failed to read log file')
+    }
+  })
+
+  middlewares.use('/api/logs/read', async (req, res) => {
+    try {
+      const requestUrl = new URL(req.url ?? '', 'http://localhost')
+      const serviceId = requestUrl.searchParams.get('service')
+      const type = (requestUrl.searchParams.get('type') ?? 'default') as
+        | 'default'
+        | 'access'
+        | 'error'
+      const limit = normalizeLogReadLimit(requestUrl.searchParams.get('limit'))
+      const beforeParam = requestUrl.searchParams.get('before')
+
+      if (!serviceId) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Missing service query parameter' }))
+        return
+      }
+
+      const logInfo = await resolveStubServiceLogInfo(serviceId, type)
+      if (!logInfo?.path) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Unknown service log target' }))
+        return
+      }
+
+      const filePath = logInfo.path
+      const logData = await readResolvedLogLines(filePath)
+      const totalLines = logData.lines.length
+      const safeBefore = normalizeLogReadBefore(beforeParam, totalLines)
+      const start = Math.max(0, safeBefore - limit)
+      const lines = logData.lines.slice(start, safeBefore)
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(
+        JSON.stringify({
+          serviceId,
+          type,
+          path: logData.path,
+          totalLines,
+          start,
+          end: safeBefore,
+          hasMore: start > 0,
+          nextBefore: start,
+          limit,
+          lines,
+        })
+      )
+    } catch (error) {
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : 'Failed to read log file',
+        })
+      )
+    }
+  })
+}
+
+function createLogReadEndpointPlugin() {
+  return {
+    name: 'service-lasso-log-read-endpoint',
+    configureServer(server: import('vite').ViteDevServer) {
+      attachLogMiddlewares(server.middlewares)
     },
-    configurePreviewServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (handleStubApi(req, res)) {
-          return
-        }
-        next()
-      })
+    configurePreviewServer(server: import('vite').PreviewServer) {
+      attachLogMiddlewares(server.middlewares)
     },
   }
 }
 
+// https://vite.dev/config/
 export default defineConfig({
-  plugins: [TanStackRouterVite(), react(), serviceLassoStubApiPlugin()],
-  server: {
-    host: '0.0.0.0',
-    port: 17700,
-    strictPort: true,
-  },
-  preview: {
-    host: '0.0.0.0',
-    port: 17700,
-    strictPort: true,
-  },
+  plugins: [
+    createLogReadEndpointPlugin(),
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: true,
+    }),
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

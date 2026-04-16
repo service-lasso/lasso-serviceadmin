@@ -1,12 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createFileRoute } from '@tanstack/react-router'
-import { ServiceDetailPage } from '@/features/service-detail'
+import { ServiceDetail } from '@/features/service-detail'
+
+function ServicesDetailRoute() {
+  const { serviceId } = Route.useParams()
+  return <ServiceDetail serviceId={serviceId} />
+}
 
 export const Route = createFileRoute('/_authenticated/services/$serviceId')({
-  component: RouteComponent,
+  component: ServicesDetailRoute,
 })
-
-function RouteComponent() {
-  const { serviceId } = Route.useParams()
-  return <ServiceDetailPage serviceId={serviceId} />
-}

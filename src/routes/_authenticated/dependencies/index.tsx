@@ -1,6 +1,12 @@
+import z from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
-import { DependenciesPage } from '@/features/dependencies'
+import { Dependencies } from '@/features/dependencies'
+
+const dependenciesSearchSchema = z.object({
+  service: z.string().optional().catch(undefined),
+})
 
 export const Route = createFileRoute('/_authenticated/dependencies/')({
-  component: DependenciesPage,
+  validateSearch: dependenciesSearchSchema,
+  component: Dependencies,
 })

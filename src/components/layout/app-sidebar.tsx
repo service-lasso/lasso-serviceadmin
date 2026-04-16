@@ -1,52 +1,37 @@
-import { Link } from '@tanstack/react-router'
-import { PanelsTopLeft } from 'lucide-react'
+import { useLayout } from '@/context/layout-provider'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarRail,
 } from '@/components/ui/sidebar'
-import { sidebarData } from '@/components/layout/data/sidebar-data'
-import { NavGroup } from '@/components/layout/nav-group'
+// import { AppTitle } from './app-title'
+import { sidebarData } from './data/sidebar-data'
+import { NavGroup } from './nav-group'
+import { NavUser } from './nav-user'
+import { TeamSwitcher } from './team-switcher'
 
 export function AppSidebar() {
+  const { collapsible, variant } = useLayout()
   return (
-    <Sidebar collapsible='icon' variant='inset'>
+    <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size='lg' asChild>
-              <Link to='/'>
-                <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'>
-                  <PanelsTopLeft className='size-4' />
-                </div>
-                <div className='grid flex-1 text-left text-sm leading-tight'>
-                  <span className='truncate font-semibold'>Service Lasso</span>
-                  <span className='truncate text-xs text-muted-foreground'>
-                    lasso-@serviceadmin
-                  </span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
+        <TeamSwitcher teams={sidebarData.teams} />
 
+        {/* Replace <TeamSwitch /> with the following <AppTitle />
+         /* if you want to use the normal app title instead of TeamSwitch dropdown */}
+        {/* <AppTitle /> */}
+      </SidebarHeader>
       <SidebarContent>
-        {sidebarData.navGroups.map((group) => (
-          <NavGroup key={group.title} {...group} />
+        {sidebarData.navGroups.map((props) => (
+          <NavGroup key={props.title} {...props} />
         ))}
       </SidebarContent>
-
       <SidebarFooter>
-        <div className='rounded-lg border p-3 text-xs text-muted-foreground'>
-          Optional operator UI, API-driven, and currently wired to explicit
-          harness stubs.
-        </div>
+        <NavUser user={sidebarData.user} />
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   )
 }

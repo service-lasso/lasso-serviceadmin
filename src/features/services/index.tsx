@@ -1,107 +1,72 @@
-import { Link } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
-import { useServices } from '@/lib/service-lasso-api/hooks'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { ServiceActionButtons } from '@/features/service-lasso/action-buttons'
-import { StatusBadge } from '@/features/service-lasso/status-badge'
+import { getRouteApi } from '@tanstack/react-router'
+import { usePageMetadata } from '@/lib/page-metadata'
+import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ConfigDrawer } from '@/components/config-drawer'
+import { Header } from '@/components/layout/header'
+import { Main } from '@/components/layout/main'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { ServicesTable } from './components/services-table'
 
-export function ServicesPage() {
-  const { data: services } = useServices()
+const route = getRouteApi('/_authenticated/services/')
 
-  if (!services) {
-    return null
-  }
-
+function ServicesLoading() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Services</CardTitle>
-        <CardDescription>
-          First-pass service list with operator actions, ports, URLs, and
-          stub-backed state.
-        </CardDescription>
+        <Skeleton className='h-6 w-40' />
+        <Skeleton className='h-4 w-96' />
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Service</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Acquisition</TableHead>
-              <TableHead>Ports</TableHead>
-              <TableHead>URLs</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {services.map((service) => (
-              <TableRow key={service.id}>
-                <TableCell>
-                  <div className='font-medium'>
-                    <Link
-                      to='/services/$serviceId'
-                      params={{ serviceId: service.id }}
-                      className='hover:underline'
-                    >
-                      {service.name}
-                    </Link>
-                  </div>
-                  <div className='text-sm text-muted-foreground'>
-                    {service.id}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={service.status} />
-                </TableCell>
-                <TableCell className='capitalize'>{service.category}</TableCell>
-                <TableCell>{service.acquisition}</TableCell>
-                <TableCell>
-                  {service.ports.length ? service.ports.join(', ') : '—'}
-                </TableCell>
-                <TableCell>
-                  <div className='flex flex-col gap-1'>
-                    {service.urls.length ? (
-                      service.urls.map((url: string) => (
-                        <a
-                          key={url}
-                          href={url}
-                          className='inline-flex items-center gap-1 text-sm text-primary hover:underline'
-                        >
-                          {url}
-                          <ExternalLink className='size-3' />
-                        </a>
-                      ))
-                    ) : (
-                      <span className='text-muted-foreground'>—</span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <ServiceActionButtons
-                    serviceId={service.id}
-                    actions={service.actions}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <Skeleton className='h-[420px] w-full' />
       </CardContent>
     </Card>
+  )
+}
+
+export function Services() {
+  usePageMetadata({
+    title: 'Service Admin - Services',
+    description: 'Service Admin services list for Service Lasso operators.',
+  })
+
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const servicesQuery = useServices()
+
+  const services = servicesQuery.data ?? []
+
+  return (
+    <>
+      <Header fixed>
+        <Search />
+        <div className='ms-auto flex items-center space-x-4'>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </div>
+      </Header>
+
+      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        <div className='flex flex-wrap items-end justify-between gap-2'>
+          <div>
+            <h2 className='text-2xl font-bold tracking-tight'>Services</h2>
+            <p className='text-muted-foreground'>
+              Manage Service Lasso services, inspect runtime state, and open the
+              detail view from the table below.
+            </p>
+          </div>
+        </div>
+
+        {servicesQuery.isLoading ? (
+          <ServicesLoading />
+        ) : (
+          <ServicesTable data={services} search={search} navigate={navigate} />
+        )}
+      </Main>
+    </>
   )
 }

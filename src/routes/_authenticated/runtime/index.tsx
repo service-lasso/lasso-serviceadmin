@@ -1,6 +1,12 @@
+import z from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
-import { RuntimePage } from '@/features/runtime'
+import { Runtime } from '@/features/runtime'
+
+const runtimeSearchSchema = z.object({
+  service: z.string().optional().catch(undefined),
+})
 
 export const Route = createFileRoute('/_authenticated/runtime/')({
-  component: RuntimePage,
+  validateSearch: runtimeSearchSchema,
+  component: Runtime,
 })
