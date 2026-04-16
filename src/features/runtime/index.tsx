@@ -82,15 +82,18 @@ const columns: ColumnDef<DashboardService>[] = [
       <DataTableColumnHeader column={column} title='Service' />
     ),
     cell: ({ row }) => (
-      <div className='flex min-w-0 flex-col'>
+      <div className='flex min-w-0 max-w-[180px] flex-col'>
         <Link
           to='/services/$serviceId'
           params={{ serviceId: row.original.id }}
           className='truncate font-medium hover:underline'
+          title={row.original.name}
         >
           {row.original.name}
         </Link>
-        <span className='text-xs text-muted-foreground'>{row.original.id}</span>
+        <span className='truncate text-xs text-muted-foreground' title={row.original.id}>
+          {row.original.id}
+        </span>
       </div>
     ),
     enableHiding: false,
@@ -113,7 +116,11 @@ const columns: ColumnDef<DashboardService>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Runtime' />
     ),
-    cell: ({ row }) => row.original.role,
+    cell: ({ row }) => (
+      <div className='max-w-[220px] truncate' title={row.original.role}>
+        {row.original.role}
+      </div>
+    ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
@@ -123,7 +130,10 @@ const columns: ColumnDef<DashboardService>[] = [
       <DataTableColumnHeader column={column} title='Summary' />
     ),
     cell: ({ row }) => (
-      <div className='max-w-[360px] text-sm text-muted-foreground'>
+      <div
+        className='max-w-[320px] truncate text-sm text-muted-foreground'
+        title={row.original.runtimeHealth.summary}
+      >
         {row.original.runtimeHealth.summary}
       </div>
     ),
@@ -134,7 +144,11 @@ const columns: ColumnDef<DashboardService>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Uptime' />
     ),
-    cell: ({ row }) => row.original.runtimeHealth.uptime,
+    cell: ({ row }) => (
+      <div className='whitespace-nowrap'>
+        {row.original.runtimeHealth.uptime}
+      </div>
+    ),
   },
   {
     id: 'lastCheckAt',
@@ -142,7 +156,14 @@ const columns: ColumnDef<DashboardService>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Last check' />
     ),
-    cell: ({ row }) => row.original.runtimeHealth.lastCheckAt,
+    cell: ({ row }) => (
+      <div
+        className='max-w-[190px] truncate whitespace-nowrap'
+        title={row.original.runtimeHealth.lastCheckAt}
+      >
+        {row.original.runtimeHealth.lastCheckAt}
+      </div>
+    ),
   },
   {
     id: 'lastRestartAt',
@@ -150,7 +171,14 @@ const columns: ColumnDef<DashboardService>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Last restart' />
     ),
-    cell: ({ row }) => row.original.runtimeHealth.lastRestartAt ?? 'Not recorded',
+    cell: ({ row }) => {
+      const value = row.original.runtimeHealth.lastRestartAt ?? 'Not recorded'
+      return (
+        <div className='max-w-[190px] truncate whitespace-nowrap' title={value}>
+          {value}
+        </div>
+      )
+    },
   },
 ]
 
@@ -265,7 +293,7 @@ export function Runtime() {
               />
 
               <div className='overflow-hidden rounded-md border'>
-                <Table>
+                <Table className='table-fixed'>
                   <TableHeader>
                     {table.getHeaderGroups().map((headerGroup) => (
                       <TableRow key={headerGroup.id}>
