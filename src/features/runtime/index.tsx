@@ -130,11 +130,13 @@ const columns: ColumnDef<DashboardService>[] = [
       <DataTableColumnHeader column={column} title='Summary' />
     ),
     cell: ({ row }) => (
-      <div
-        className='max-w-[320px] truncate text-sm text-muted-foreground'
-        title={row.original.runtimeHealth.summary}
-      >
-        {row.original.runtimeHealth.summary}
+      <div className='min-w-0 max-w-[320px]'>
+        <div
+          className='overflow-hidden text-ellipsis whitespace-nowrap text-sm text-muted-foreground'
+          title={row.original.runtimeHealth.summary}
+        >
+          {row.original.runtimeHealth.summary}
+        </div>
       </div>
     ),
   },
@@ -315,7 +317,7 @@ export function Runtime() {
                       table.getRowModel().rows.map((row) => (
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
+                            <TableCell key={cell.id} className='min-w-0'>
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </TableCell>
                           ))}
