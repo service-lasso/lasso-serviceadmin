@@ -2,9 +2,10 @@
   "id": "service-admin",
   "name": "Service Admin UI",
   "description": "Service Admin example service definition for UI stub mode.",
+  "logo": "./logo.svg",
   "logs": {
     "default": {
-      "path": "C:\\projects\\service-lasso\\lasso-@serviceadmin\\public\\mock-logs\\service-sample.log"
+      "path": "./service.log"
     }
   }
 }

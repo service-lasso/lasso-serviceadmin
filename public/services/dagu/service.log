@@ -1,0 +1,4 @@
+2026-04-16T16:00:01.001Z INFO dagu Workflow engine bootstrap requested
+2026-04-16T16:00:01.340Z INFO dagu Reading workflow definitions from stub data
+2026-04-16T16:00:01.771Z WARN dagu Scheduler idle because no active jobs are loaded
+2026-04-16T16:00:02.119Z INFO dagu Ready for workflow UI requests

@@ -1,10 +1,11 @@
 {
   "id": "dagu",
   "name": "Dagu",
-  "description": "Dagu example service definition for UI stub mode.",
+  "description": "Dagu workflow engine example service definition for UI stub mode.",
+  "logo": "./logo.svg",
   "logs": {
     "default": {
-      "path": "C:\\service-lasso\\dagu\\logs\\dagu.log"
+      "path": "./service.log"
     }
   }
 }

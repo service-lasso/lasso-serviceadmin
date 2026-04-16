@@ -2,9 +2,10 @@
   "id": "secrets-broker",
   "name": "Secrets Broker",
   "description": "Secrets Broker example service definition for UI stub mode.",
+  "logo": "./logo.svg",
   "logs": {
     "default": {
-      "path": "C:\\service-lasso\\secrets-broker\\logs\\broker.log"
+      "path": "./service.log"
     }
   }
 }

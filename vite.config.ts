@@ -33,7 +33,10 @@ async function loadStubServiceDefinition(serviceId: string) {
 
   try {
     const content = await fs.readFile(serviceJsonPath, 'utf8')
-    return JSON.parse(content) as StubServiceDefinition
+    return {
+      serviceJsonPath,
+      serviceDefinition: JSON.parse(content) as StubServiceDefinition,
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
       return null
@@ -47,9 +50,14 @@ async function resolveStubServiceLogInfo(
   serviceId: string,
   type: 'default' | 'access' | 'error' = 'default'
 ) {
-  const serviceDefinition = await loadStubServiceDefinition(serviceId)
-  const resolvedPath = serviceDefinition?.logs?.[type]?.path
-  if (!resolvedPath) return null
+  const loadedServiceDefinition = await loadStubServiceDefinition(serviceId)
+  const serviceDefinition = loadedServiceDefinition?.serviceDefinition
+  const configuredPath = serviceDefinition?.logs?.[type]?.path
+  if (!configuredPath || !loadedServiceDefinition) return null
+
+  const resolvedPath = path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(path.dirname(loadedServiceDefinition.serviceJsonPath), configuredPath)
 
   return {
     serviceId,
