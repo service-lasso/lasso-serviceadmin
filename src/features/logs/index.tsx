@@ -435,9 +435,9 @@ function ServiceLazyLogViewer({
 
   return (
     <div className='space-y-3'>
-      <div className='flex items-center gap-3 text-xs text-muted-foreground'>
+      <div className='space-y-1 text-xs text-muted-foreground'>
         <div
-          className='min-w-0 flex-1 truncate whitespace-nowrap'
+          className='truncate whitespace-nowrap'
           title={logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}
         >
           Source:{' '}
@@ -446,7 +446,7 @@ function ServiceLazyLogViewer({
           </span>
         </div>
         <div
-          className='shrink-0 truncate whitespace-nowrap text-right'
+          className='truncate whitespace-nowrap'
           title={`Showing newest tail first, chunk size ${DEFAULT_LOG_CHUNK_SIZE}, total ${totalLines.toLocaleString()} lines`}
         >
           Showing newest tail first, chunk size {DEFAULT_LOG_CHUNK_SIZE}, total{' '}
