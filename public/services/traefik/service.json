@@ -1,11 +1,50 @@
 {
   "id": "traefik",
   "name": "Traefik",
-  "description": "Edge router and ingress controller example service definition for UI stub mode.",
+  "description": "Edge router and ingress controller for local and LAN service exposure.",
+  "enabled": true,
+  "version": "3.1.2",
+  "logoutput": true,
+  "icon": "router",
+  "servicetype": 10,
+  "servicelocation": 10,
   "logo": "./logo.svg",
   "logs": {
     "default": {
       "path": "./service.log"
+    }
+  },
+  "actions": {
+    "install": {
+      "description": "Install or refresh the Traefik runtime payload."
+    },
+    "config": {
+      "description": "Render the effective Traefik configuration and routes."
+    },
+    "start": {
+      "description": "Start the Traefik edge router."
+    },
+    "stop": {
+      "description": "Stop the Traefik edge router gracefully."
+    },
+    "restart": {
+      "description": "Restart Traefik after config changes."
+    }
+  },
+  "execconfig": {
+    "serviceorder": 10,
+    "serviceport": 80,
+    "execcwd": ".",
+    "executable": "traefik",
+    "args": [
+      "--configfile=./traefik.yml"
+    ],
+    "env": {
+      "TRAEFIK_ENV": "local"
+    },
+    "depend_on": [],
+    "healthcheck": {
+      "type": "process"
     }
   }
 }

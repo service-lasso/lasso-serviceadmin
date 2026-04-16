@@ -1,11 +1,46 @@
 {
   "id": "zitadel",
   "name": "ZITADEL",
-  "description": "ZITADEL identity service example definition for UI stub mode.",
+  "description": "Identity and access management service for local authentication flows.",
+  "enabled": true,
+  "version": "2.57.0",
+  "logoutput": true,
+  "icon": "shield-check",
+  "servicetype": 30,
+  "servicelocation": 10,
   "logo": "./logo.svg",
   "logs": {
     "default": {
       "path": "./service.log"
+    }
+  },
+  "actions": {
+    "install": {
+      "description": "Install or refresh the ZITADEL runtime payload."
+    },
+    "config": {
+      "description": "Render the effective ZITADEL config."
+    },
+    "start": {
+      "description": "Start the ZITADEL identity service."
+    },
+    "stop": {
+      "description": "Stop the ZITADEL identity service gracefully."
+    }
+  },
+  "execconfig": {
+    "serviceorder": 30,
+    "serviceport": 8081,
+    "execcwd": ".",
+    "executable": "zitadel",
+    "env": {
+      "ZITADEL_EXTERNALDOMAIN": "localhost"
+    },
+    "depend_on": [
+      "traefik"
+    ],
+    "healthcheck": {
+      "type": "process"
     }
   }
 }
