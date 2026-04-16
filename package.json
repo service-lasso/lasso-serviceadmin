@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview:lan-test": "vite preview --host 0.0.0.0 --port 17880 --strictPort",
+    "preview:lan-test": "vite preview --host 0.0.0.0 --port 17700 --strictPort",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "knip": "knip",
