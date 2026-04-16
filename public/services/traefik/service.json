@@ -1,0 +1,10 @@
+{
+  "id": "traefik",
+  "name": "Traefik",
+  "description": "Edge router and ingress controller example service definition for UI stub mode.",
+  "logs": {
+    "default": {
+      "path": "C:\\service-lasso\\traefik\\logs\\traefik.log"
+    }
+  }
+}

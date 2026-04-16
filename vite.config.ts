@@ -8,33 +8,56 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite'
 const DEFAULT_LOG_READ_LIMIT = 100
 const MAX_LOG_READ_LIMIT = 1000
 
-function resolveStubServiceLogInfo(
+type StubServiceDefinition = {
+  id: string
+  name?: string
+  description?: string
+  logs?: Partial<
+    Record<
+      'default' | 'access' | 'error',
+      {
+        path?: string
+      }
+    >
+  >
+}
+
+async function loadStubServiceDefinition(serviceId: string) {
+  const serviceJsonPath = path.resolve(
+    __dirname,
+    'public',
+    'services',
+    serviceId,
+    'service.json'
+  )
+
+  try {
+    const content = await fs.readFile(serviceJsonPath, 'utf8')
+    return JSON.parse(content) as StubServiceDefinition
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return null
+    }
+
+    throw error
+  }
+}
+
+async function resolveStubServiceLogInfo(
   serviceId: string,
   type: 'default' | 'access' | 'error' = 'default'
 ) {
-  const samplePath = path.resolve(
-    __dirname,
-    'public',
-    'mock-logs',
-    'service-sample.log'
-  )
-
-  const logPaths: Record<string, string> = {
-    traefik: 'C:\\service-lasso\\traefik\\logs\\traefik.log',
-    'service-admin': samplePath,
-    zitadel: 'C:\\service-lasso\\zitadel\\logs\\zitadel.log',
-    dagu: 'C:\\service-lasso\\dagu\\logs\\dagu.log',
-    'secrets-broker': 'C:\\service-lasso\\secrets-broker\\logs\\broker.log',
-  }
-
-  const resolvedPath = logPaths[serviceId]
+  const serviceDefinition = await loadStubServiceDefinition(serviceId)
+  const resolvedPath = serviceDefinition?.logs?.[type]?.path
   if (!resolvedPath) return null
 
   return {
     serviceId,
     type,
     path: resolvedPath,
-    availableTypes: ['default'],
+    availableTypes: Object.entries(serviceDefinition.logs ?? {})
+      .filter(([, value]) => Boolean(value?.path))
+      .map(([key]) => key),
   }
 }
 
@@ -103,7 +126,7 @@ function attachLogMiddlewares(
         return
       }
 
-      const logInfo = resolveStubServiceLogInfo(serviceId, type)
+      const logInfo = await resolveStubServiceLogInfo(serviceId, type)
       if (!logInfo) {
         res.statusCode = 404
         res.setHeader('Content-Type', 'application/json')
@@ -142,7 +165,7 @@ function attachLogMiddlewares(
         return
       }
 
-      const logInfo = resolveStubServiceLogInfo(serviceId, type)
+      const logInfo = await resolveStubServiceLogInfo(serviceId, type)
       if (!logInfo?.path) {
         res.statusCode = 404
         res.setHeader('Content-Type', 'text/plain; charset=utf-8')
@@ -179,7 +202,7 @@ function attachLogMiddlewares(
         return
       }
 
-      const logInfo = resolveStubServiceLogInfo(serviceId, type)
+      const logInfo = await resolveStubServiceLogInfo(serviceId, type)
       if (!logInfo?.path) {
         res.statusCode = 404
         res.setHeader('Content-Type', 'application/json')

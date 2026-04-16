@@ -1,0 +1,10 @@
+{
+  "id": "dagu",
+  "name": "Dagu",
+  "description": "Dagu example service definition for UI stub mode.",
+  "logs": {
+    "default": {
+      "path": "C:\\service-lasso\\dagu\\logs\\dagu.log"
+    }
+  }
+}

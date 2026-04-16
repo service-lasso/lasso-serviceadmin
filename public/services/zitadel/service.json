@@ -1,0 +1,10 @@
+{
+  "id": "zitadel",
+  "name": "ZITADEL",
+  "description": "ZITADEL example service definition for UI stub mode.",
+  "logs": {
+    "default": {
+      "path": "C:\\service-lasso\\zitadel\\logs\\zitadel.log"
+    }
+  }
+}
