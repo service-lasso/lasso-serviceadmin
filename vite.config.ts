@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
+const DEFAULT_LOG_READ_LIMIT = 100
+const MAX_LOG_READ_LIMIT = 1000
+
 function resolveStubServiceLogInfo(
   serviceId: string,
   type: 'default' | 'access' | 'error' = 'default'
@@ -33,6 +36,28 @@ function resolveStubServiceLogInfo(
     path: resolvedPath,
     availableTypes: ['default'],
   }
+}
+
+async function readResolvedLogLines(filePath: string) {
+  const content = await fs.readFile(filePath, 'utf8')
+  const allLines = content.replace(/\r\n/g, '\n').split('\n')
+
+  return allLines.length && allLines[allLines.length - 1] === ''
+    ? allLines.slice(0, -1)
+    : allLines
+}
+
+function normalizeLogReadLimit(value: string | null) {
+  const parsed = Number(value ?? String(DEFAULT_LOG_READ_LIMIT))
+  if (!Number.isFinite(parsed)) return DEFAULT_LOG_READ_LIMIT
+  return Math.max(1, Math.min(MAX_LOG_READ_LIMIT, Math.trunc(parsed)))
+}
+
+function normalizeLogReadBefore(value: string | null, totalLines: number) {
+  if (value == null || value === '') return totalLines
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return totalLines
+  return Math.max(0, Math.min(totalLines, Math.trunc(parsed)))
 }
 
 function attachLogMiddlewares(
@@ -122,10 +147,7 @@ function attachLogMiddlewares(
         | 'default'
         | 'access'
         | 'error'
-      const limit = Math.max(
-        1,
-        Math.min(1000, Number(requestUrl.searchParams.get('limit') ?? '50'))
-      )
+      const limit = normalizeLogReadLimit(requestUrl.searchParams.get('limit'))
       const beforeParam = requestUrl.searchParams.get('before')
 
       if (!serviceId) {
@@ -144,18 +166,9 @@ function attachLogMiddlewares(
       }
 
       const filePath = logInfo.path
-      const content = await fs.readFile(filePath, 'utf8')
-      const allLines = content.replace(/\r\n/g, '\n').split('\n')
-      const normalizedLines =
-        allLines.length && allLines[allLines.length - 1] === ''
-          ? allLines.slice(0, -1)
-          : allLines
-
+      const normalizedLines = await readResolvedLogLines(filePath)
       const totalLines = normalizedLines.length
-      const before = beforeParam ? Number(beforeParam) : totalLines
-      const safeBefore = Number.isFinite(before)
-        ? Math.max(0, Math.min(totalLines, before))
-        : totalLines
+      const safeBefore = normalizeLogReadBefore(beforeParam, totalLines)
       const start = Math.max(0, safeBefore - limit)
       const lines = normalizedLines.slice(start, safeBefore)
 
@@ -171,6 +184,7 @@ function attachLogMiddlewares(
           end: safeBefore,
           hasMore: start > 0,
           nextBefore: start,
+          limit,
           lines,
         })
       )
