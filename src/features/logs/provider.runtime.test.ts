@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const service = {
-  id: 'service-admin',
+  id: '@serviceadmin',
   metadata: {
     logPath:
-      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\service-admin.log',
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\@serviceadmin.log',
   },
 } as const
 
@@ -24,9 +24,9 @@ describe('logs provider configured api mode', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            serviceId: 'service-admin',
+            serviceId: '@serviceadmin',
             type: 'default',
-            path: 'C:\\runtime\\service-admin.log',
+            path: 'C:\\runtime\\@serviceadmin.log',
             availableTypes: ['default'],
           }),
           {
@@ -38,9 +38,9 @@ describe('logs provider configured api mode', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            serviceId: 'service-admin',
+            serviceId: '@serviceadmin',
             type: 'default',
-            path: 'C:\\runtime\\service-admin.log',
+            path: 'C:\\runtime\\@serviceadmin.log',
             totalLines: 140,
             start: 40,
             end: 140,
@@ -69,14 +69,14 @@ describe('logs provider configured api mode', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://api.test/api/services/log-info?service=service-admin&type=default'
+      'http://api.test/api/services/log-info?service=@serviceadmin&type=default'
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://api.test/api/logs/read?service=service-admin&type=default&limit=100'
+      'http://api.test/api/logs/read?service=@serviceadmin&type=default&limit=100'
     )
 
-    expect(info.path).toBe('C:\\runtime\\service-admin.log')
+    expect(info.path).toBe('C:\\runtime\\@serviceadmin.log')
     expect(chunk.lines).toHaveLength(100)
     expect(chunk.nextBefore).toBe(40)
   })

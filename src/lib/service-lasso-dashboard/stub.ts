@@ -135,7 +135,7 @@ let services: DashboardService[] = [
     ],
     dependents: [
       {
-        id: 'service-admin',
+        id: '@serviceadmin',
         name: 'Service Admin UI',
         status: 'running',
         relation: 'dependent',
@@ -186,7 +186,7 @@ let services: DashboardService[] = [
     ],
   },
   {
-    id: 'service-admin',
+    id: '@serviceadmin',
     name: 'Service Admin UI',
     status: 'running',
     favorite: true,
@@ -234,7 +234,7 @@ let services: DashboardService[] = [
       configPath:
         'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts',
       dataPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin\\dist',
-      logPath: '/services/service-admin/service.log',
+      logPath: '/services/@serviceadmin/service.log',
       workPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin',
       profile: 'develop',
     },
@@ -280,7 +280,7 @@ let services: DashboardService[] = [
         timestamp: '2026-04-11T10:18:11+10:00',
         level: 'info',
         source: 'stdout',
-        message: 'GET /services/service-admin returned 200 in 19ms.',
+        message: 'GET /services/@serviceadmin returned 200 in 19ms.',
       },
       {
         timestamp: '2026-04-11T10:09:43+10:00',
@@ -349,7 +349,7 @@ let services: DashboardService[] = [
     ],
     dependents: [
       {
-        id: 'service-admin',
+        id: '@serviceadmin',
         name: 'Service Admin UI',
         status: 'running',
         relation: 'dependent',

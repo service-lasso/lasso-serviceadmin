@@ -20,7 +20,7 @@ import json, pathlib
 print(json.loads(pathlib.Path('service.json').read_text())['id'])
 PY
 )
-if [[ "$SERVICE_ID" != "service-admin" ]]; then
+if [[ "$SERVICE_ID" != "@serviceadmin" ]]; then
   echo "service.json id mismatch" >&2
   exit 1
 fi
@@ -30,12 +30,12 @@ import json, pathlib
 print(json.loads(pathlib.Path('verify/service-harness.json').read_text())['serviceId'])
 PY
 )
-if [[ "$CONTRACT_ID" != "service-admin" ]]; then
+if [[ "$CONTRACT_ID" != "@serviceadmin" ]]; then
   echo "service-harness.json serviceId mismatch" >&2
   exit 1
 fi
 
-PORT=17711 SERVICE_PORT=17711 SERVICE_HOST=127.0.0.1 node ./runtime/server.js > /tmp/service-admin-test.log 2>&1 &
+PORT=17711 SERVICE_PORT=17711 SERVICE_HOST=127.0.0.1 node ./runtime/server.js > /tmp/@serviceadmin-test.log 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" >/dev/null 2>&1 || true' EXIT
 

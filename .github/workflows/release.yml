@@ -17,13 +17,13 @@ jobs:
         include:
           - os: windows-latest
             platform: win32
-            artifact: dist/service-admin-win32.zip
+            artifact: dist/@serviceadmin-win32.zip
           - os: ubuntu-latest
             platform: linux
-            artifact: dist/service-admin-linux.tar.gz
+            artifact: dist/@serviceadmin-linux.tar.gz
           - os: macos-14
             platform: darwin
-            artifact: dist/service-admin-darwin.tar.gz
+            artifact: dist/@serviceadmin-darwin.tar.gz
 
     runs-on: ${{ matrix.os }}
 
@@ -64,5 +64,5 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: service-admin-${{ matrix.platform }}
+          name: @serviceadmin-${{ matrix.platform }}
           path: ${{ matrix.artifact }}

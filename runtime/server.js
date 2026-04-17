@@ -78,5 +78,5 @@ const server = http.createServer((request, response) => {
 })
 
 server.listen(port, host, () => {
-  console.log(`service-admin listening on http://${host}:${port}`)
+  console.log(`@serviceadmin listening on http://${host}:${port}`)
 })

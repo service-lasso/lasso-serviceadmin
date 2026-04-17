@@ -20,7 +20,7 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Services',
   },
   {
-    path: '/services/service-admin',
+    path: '/services/@serviceadmin',
     heading: /^Service Admin UI$/i,
     title: 'Service Admin - Service - Service Admin UI',
   },

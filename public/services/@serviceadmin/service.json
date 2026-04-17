@@ -8,12 +8,18 @@
   "icon": "layout-dashboard",
   "servicetype": 20,
   "servicelocation": 10,
+  "logo": "./logo.svg",
+  "logs": {
+    "default": {
+      "path": "./service.log"
+    }
+  },
   "actions": {
     "install": {
-      "description": "Install or refresh the Service Admin UI release content."
+      "description": "Install or refresh the Service Admin UI assets."
     },
     "config": {
-      "description": "Materialize the effective Service Admin runtime configuration."
+      "description": "Generate the effective Service Admin runtime configuration."
     },
     "start": {
       "description": "Start the Service Admin UI."
@@ -26,13 +32,9 @@
     "serviceorder": 100,
     "serviceport": 17700,
     "execcwd": ".",
-    "executable": "node",
-    "args": [
-      "runtime/server.js"
-    ],
+    "executable": "@serviceadmin",
     "env": {
-      "SERVICE_PORT": "17700",
-      "SERVICE_HOST": "127.0.0.1"
+      "SERVICE_LASSO_MODE": "stub"
     },
     "depend_on": [
       "traefik"
