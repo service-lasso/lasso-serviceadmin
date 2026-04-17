@@ -1,3 +1,4 @@
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import {
   AppWindow,
   Boxes,
@@ -8,19 +9,24 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react'
-import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 
-const serviceImageModules = import.meta.glob('../../public/images/services/*.svg', {
-  query: '?url',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>
+const serviceImageModules = import.meta.glob(
+  '../../public/images/services/*.svg',
+  {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  }
+) as Record<string, string>
 
 const serviceImageUrlByName = new Map<string, string>()
 
 for (const [modulePath, assetUrl] of Object.entries(serviceImageModules)) {
-  const filename = modulePath.split('/').pop()?.replace(/\.svg$/i, '')
+  const filename = modulePath
+    .split('/')
+    .pop()
+    ?.replace(/\.svg$/i, '')
   if (!filename) continue
   serviceImageUrlByName.set(filename.toLowerCase(), assetUrl)
 }
@@ -111,7 +117,7 @@ export function buildServiceNodeLabel({
   const accent = categoryNodeColor(category)
 
   return (
-    <div className='flex min-w-[170px] w-max max-w-[420px] items-center gap-3'>
+    <div className='flex w-max max-w-[420px] min-w-[170px] items-center gap-3'>
       <div
         className='flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border'
         style={{
@@ -130,7 +136,7 @@ export function buildServiceNodeLabel({
         )}
       </div>
       <div className='min-w-0 flex-1'>
-        <div className='text-sm font-semibold leading-tight break-words'>
+        <div className='text-sm leading-tight font-semibold break-words'>
           {name}
         </div>
         <div className='mt-0.5 text-xs leading-tight break-all text-muted-foreground'>
@@ -206,13 +212,25 @@ export function buildDependencyEdge({
     labelBgBorderRadius: 6,
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: selected ? (isDark ? '#22c55e' : '#16a34a') : isDark ? '#64748b' : '#94a3b8',
+      color: selected
+        ? isDark
+          ? '#22c55e'
+          : '#16a34a'
+        : isDark
+          ? '#64748b'
+          : '#94a3b8',
       width: 18,
       height: 18,
     },
     animated: selected,
     style: {
-      stroke: selected ? (isDark ? '#22c55e' : '#16a34a') : isDark ? '#64748b' : '#94a3b8',
+      stroke: selected
+        ? isDark
+          ? '#22c55e'
+          : '#16a34a'
+        : isDark
+          ? '#64748b'
+          : '#94a3b8',
       strokeWidth: selected ? 2.5 : 1.25,
     },
   }
@@ -277,10 +295,7 @@ export function getServiceNodeImage(
 
   const candidates = [service.name, service.id].flatMap((value) => {
     const normalized = normalizeServiceAssetName(value)
-    return [
-      `${normalized}_${isDark ? 'dark' : 'light'}`,
-      normalized,
-    ]
+    return [`${normalized}_${isDark ? 'dark' : 'light'}`, normalized]
   })
 
   for (const candidate of candidates) {

@@ -2,7 +2,8 @@ import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 
 const logsDebugEnabled =
-  import.meta.env.DEV || import.meta.env.VITE_SERVICE_LASSO_LOGS_DEBUG === 'true'
+  import.meta.env.DEV ||
+  import.meta.env.VITE_SERVICE_LASSO_LOGS_DEBUG === 'true'
 const relativeLogsApiBaseUrl = ''
 
 export type ServiceLogInfo = {
@@ -27,6 +28,7 @@ export type ServiceLogChunk = {
 
 export function debugLogs(message: string, details?: Record<string, unknown>) {
   if (!logsDebugEnabled) return
+  // eslint-disable-next-line no-console
   console.log('[logs-debug]', message, details ?? {})
 }
 

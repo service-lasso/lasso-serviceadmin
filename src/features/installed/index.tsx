@@ -36,12 +36,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
   DataTableToolbar,
 } from '@/components/data-table'
-import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -218,7 +218,9 @@ export function Installed() {
   const runtimes = useMemo(
     () =>
       Array.from(
-        new Set((servicesQuery.data ?? []).map((service) => service.metadata.runtime))
+        new Set(
+          (servicesQuery.data ?? []).map((service) => service.metadata.runtime)
+        )
       ).sort(),
     [servicesQuery.data]
   )
@@ -261,7 +263,8 @@ export function Installed() {
                 <PackageCheck className='size-4' /> Installed services
               </CardTitle>
               <CardDescription>
-                {table.getFilteredRowModel().rows.length} services shown with package, version, and path details.
+                {table.getFilteredRowModel().rows.length} services shown with
+                package, version, and path details.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
@@ -313,14 +316,20 @@ export function Installed() {
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
                           No installed services match the current filters.
                         </TableCell>
                       </TableRow>

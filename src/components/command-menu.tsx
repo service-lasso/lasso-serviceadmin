@@ -8,9 +8,9 @@ import {
   Search,
   Sun,
 } from 'lucide-react'
-import { useTheme } from '@/context/theme-provider'
-import { useSearch } from '@/context/search-provider'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import { useSearch } from '@/context/search-provider'
+import { useTheme } from '@/context/theme-provider'
 import {
   CommandDialog,
   CommandEmpty,

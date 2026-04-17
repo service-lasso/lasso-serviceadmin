@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const service = {
   id: 'service-admin',
   metadata: {
-    logPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\service-admin.log',
+    logPath:
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\service-admin.log',
   },
 } as const
 
@@ -46,7 +47,10 @@ describe('logs provider relative api mode', () => {
             hasMore: true,
             nextBefore: 22,
             limit: 100,
-            lines: Array.from({ length: 100 }, (_, index) => `line ${index + 23}`),
+            lines: Array.from(
+              { length: 100 },
+              (_, index) => `line ${index + 23}`
+            ),
           }),
           {
             status: 200,
@@ -57,7 +61,8 @@ describe('logs provider relative api mode', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    const { fetchServiceLogChunk, fetchServiceLogInfo } = await import('./provider')
+    const { fetchServiceLogChunk, fetchServiceLogInfo } =
+      await import('./provider')
 
     const info = await fetchServiceLogInfo(service as never, 'default')
     const chunk = await fetchServiceLogChunk(service as never, 'default')

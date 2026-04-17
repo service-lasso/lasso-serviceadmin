@@ -20,7 +20,7 @@ import {
   Workflow,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useTheme } from '@/context/theme-provider'
+import { usePageMetadata } from '@/lib/page-metadata'
 import {
   buildApiUsageEdge,
   buildDependencyEdge,
@@ -30,13 +30,13 @@ import {
   getGraphCategory,
   getServiceNodeImage,
 } from '@/lib/service-graph'
-import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useFavoriteFeatureState,
   useServices,
   useToggleFavorite,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import { useTheme } from '@/context/theme-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -703,7 +703,11 @@ export function Dependencies() {
                           <ArrowRight className='size-4' />
                         )}
                         <span className='sr-only'>
-                          Switch graph to {graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout
+                          Switch graph to{' '}
+                          {graphOrientation === 'horizontal'
+                            ? 'vertical'
+                            : 'horizontal'}{' '}
+                          layout
                         </span>
                       </Button>
                       <Separator orientation='vertical' className='h-6' />

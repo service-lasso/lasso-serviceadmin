@@ -42,7 +42,9 @@ async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
 function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
   if (serviceMeta.length === 0) return
 
-  const remoteMetaById = new Map(serviceMeta.map((service) => [service.id, service]))
+  const remoteMetaById = new Map(
+    serviceMeta.map((service) => [service.id, service])
+  )
 
   services = services.map((service) => {
     const remoteMeta = remoteMetaById.get(service.id)
@@ -232,8 +234,7 @@ let services: DashboardService[] = [
       configPath:
         'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts',
       dataPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin\\dist',
-      logPath:
-        '/services/service-admin/service.log',
+      logPath: '/services/service-admin/service.log',
       workPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin',
       profile: 'develop',
     },
@@ -705,7 +706,8 @@ export function resolveStubServiceLogInfo(
   const service = services.find((item) => item.id === serviceId)
   if (!service) return null
 
-  const defaultPath = service.metadata.logPath ?? '/mock-logs/service-sample.log'
+  const defaultPath =
+    service.metadata.logPath ?? '/mock-logs/service-sample.log'
   const availableTypes: Array<'default' | 'access' | 'error'> = ['default']
 
   return {

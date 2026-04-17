@@ -4,7 +4,7 @@ import { ServiceDetail } from '@/features/service-detail'
 
 function ServicesDetailRoute() {
   const { serviceId } = Route.useParams()
-  return <ServiceDetail serviceId={serviceId} />
+  return <ServiceDetail key={serviceId} serviceId={serviceId} />
 }
 
 export const Route = createFileRoute('/_authenticated/services/$serviceId')({

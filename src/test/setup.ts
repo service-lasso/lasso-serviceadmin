@@ -21,6 +21,7 @@ class IntersectionObserverMock {
   unobserve() {}
 }
 
+// eslint-disable-next-line no-console
 const originalConsoleError = console.error
 
 beforeAll(() => {
@@ -65,10 +66,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation((...args) => {
     const first = args[0]
-    if (
-      typeof first === 'string' &&
-      first.includes('not wrapped in act')
-    ) {
+    if (typeof first === 'string' && first.includes('not wrapped in act')) {
       return
     }
 

@@ -28,7 +28,9 @@ export function DependencyGraphPanel({
             <CardTitle>{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          {actions ? <div className='flex items-center gap-2'>{actions}</div> : null}
+          {actions ? (
+            <div className='flex items-center gap-2'>{actions}</div>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className='space-y-3'>{graph}</CardContent>

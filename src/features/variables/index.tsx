@@ -35,12 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
   DataTableToolbar,
 } from '@/components/data-table'
-import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -93,7 +93,7 @@ const columns: ColumnDef<VariableRow>[] = [
     ),
     cell: ({ row }) => (
       <div className='flex items-start gap-2'>
-        <span className='max-w-[320px] break-all text-sm text-muted-foreground'>
+        <span className='max-w-[320px] text-sm break-all text-muted-foreground'>
           {row.original.secret === 'secret' ? '••••••••' : row.original.value}
         </span>
         <Button
@@ -125,7 +125,9 @@ const columns: ColumnDef<VariableRow>[] = [
       <DataTableColumnHeader column={column} title='Visibility' />
     ),
     cell: ({ row }) => (
-      <Badge variant={row.original.secret === 'secret' ? 'secondary' : 'outline'}>
+      <Badge
+        variant={row.original.secret === 'secret' ? 'secondary' : 'outline'}
+      >
         {row.original.secret}
       </Badge>
     ),
@@ -149,7 +151,13 @@ const columns: ColumnDef<VariableRow>[] = [
     cell: ({ row }) => (
       <div className='flex flex-wrap gap-2'>
         {row.original.services.map((service) => (
-          <Button key={service.id} variant='outline' size='sm' className='h-8' asChild>
+          <Button
+            key={service.id}
+            variant='outline'
+            size='sm'
+            className='h-8'
+            asChild
+          >
             <Link to='/services/$serviceId' params={{ serviceId: service.id }}>
               {service.name}
             </Link>
@@ -167,7 +175,9 @@ export function Variables({ service, keyFilter }: VariablesProps) {
   })
 
   const servicesQuery = useServices()
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'key', desc: false }])
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'key', desc: false },
+  ])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     keyFilter ? [{ id: 'key', value: keyFilter }] : []
   )
@@ -269,7 +279,8 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                 <SlidersHorizontal className='size-4' /> Environment variables
               </CardTitle>
               <CardDescription>
-                {table.getFilteredRowModel().rows.length} variable rows shown across all services.
+                {table.getFilteredRowModel().rows.length} variable rows shown
+                across all services.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
@@ -289,7 +300,10 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                   {
                     columnId: 'source',
                     title: 'Source',
-                    options: sources.map((source) => ({ label: source, value: source })),
+                    options: sources.map((source) => ({
+                      label: source,
+                      value: source,
+                    })),
                   },
                   {
                     columnId: 'secret',
@@ -326,14 +340,20 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
                           No variables match the current filters.
                         </TableCell>
                       </TableRow>
