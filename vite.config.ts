@@ -1,9 +1,10 @@
-import { promises as fs } from 'fs'
 import path from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
+import { promises as fs } from 'fs'
+import type { IncomingMessage, ServerResponse } from 'http'
 
 const DEFAULT_LOG_READ_LIMIT = 100
 const MAX_LOG_READ_LIMIT = 1000
@@ -57,7 +58,10 @@ async function resolveStubServiceLogInfo(
 
   const resolvedPath = path.isAbsolute(configuredPath)
     ? configuredPath
-    : path.resolve(path.dirname(loadedServiceDefinition.serviceJsonPath), configuredPath)
+    : path.resolve(
+        path.dirname(loadedServiceDefinition.serviceJsonPath),
+        configuredPath
+      )
 
   return {
     serviceId,
@@ -113,11 +117,12 @@ function normalizeLogReadBefore(value: string | null, totalLines: number) {
   return Math.max(0, Math.min(totalLines, Math.trunc(parsed)))
 }
 
-function attachLogMiddlewares(
-  middlewares: {
-    use: (path: string, handler: (req: any, res: any) => void | Promise<void>) => void
-  }
-) {
+function attachLogMiddlewares(middlewares: {
+  use: (
+    path: string,
+    handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+  ) => void
+}) {
   middlewares.use('/api/services/log-info', async (req, res) => {
     try {
       const requestUrl = new URL(req.url ?? '', 'http://localhost')
@@ -151,7 +156,9 @@ function attachLogMiddlewares(
       res.end(
         JSON.stringify({
           error:
-            error instanceof Error ? error.message : 'Failed to resolve service log info',
+            error instanceof Error
+              ? error.message
+              : 'Failed to resolve service log info',
         })
       )
     }
@@ -188,7 +195,9 @@ function attachLogMiddlewares(
     } catch (error) {
       res.statusCode = 500
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-      res.end(error instanceof Error ? error.message : 'Failed to read log file')
+      res.end(
+        error instanceof Error ? error.message : 'Failed to read log file'
+      )
     }
   })
 
@@ -246,7 +255,8 @@ function attachLogMiddlewares(
       res.setHeader('Content-Type', 'application/json')
       res.end(
         JSON.stringify({
-          error: error instanceof Error ? error.message : 'Failed to read log file',
+          error:
+            error instanceof Error ? error.message : 'Failed to read log file',
         })
       )
     }

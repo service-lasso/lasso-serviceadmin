@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const service = {
   id: 'service-admin',
   metadata: {
-    logPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\service-admin.log',
+    logPath:
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\logs\\service-admin.log',
   },
 } as const
 
@@ -46,7 +47,10 @@ describe('logs provider configured api mode', () => {
             hasMore: true,
             nextBefore: 40,
             limit: 100,
-            lines: Array.from({ length: 100 }, (_, index) => `line ${index + 41}`),
+            lines: Array.from(
+              { length: 100 },
+              (_, index) => `line ${index + 41}`
+            ),
           }),
           {
             status: 200,
@@ -57,7 +61,8 @@ describe('logs provider configured api mode', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    const { fetchServiceLogChunk, fetchServiceLogInfo } = await import('./provider')
+    const { fetchServiceLogChunk, fetchServiceLogInfo } =
+      await import('./provider')
 
     const info = await fetchServiceLogInfo(service as never, 'default')
     const chunk = await fetchServiceLogChunk(service as never, 'default')
@@ -83,18 +88,19 @@ describe('logs provider configured api mode', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () =>
-        new Response('<!doctype html><html><body>wrong</body></html>', {
-          status: 200,
-          headers: { 'Content-Type': 'text/html' },
-        })
+      vi.fn(
+        async () =>
+          new Response('<!doctype html><html><body>wrong</body></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' },
+          })
       )
     )
 
     const { fetchServiceLogChunk } = await import('./provider')
 
-    await expect(fetchServiceLogChunk(service as never, 'default')).rejects.toThrow(
-      'Live logs are unavailable right now.'
-    )
+    await expect(
+      fetchServiceLogChunk(service as never, 'default')
+    ).rejects.toThrow('Live logs are unavailable right now.')
   })
 })

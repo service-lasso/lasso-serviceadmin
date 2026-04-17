@@ -36,12 +36,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
   DataTableToolbar,
 } from '@/components/data-table'
-import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -84,7 +84,9 @@ const columns: ColumnDef<NetworkRow>[] = [
         >
           {row.original.service.name}
         </Link>
-        <span className='text-xs text-muted-foreground'>{row.original.service.id}</span>
+        <span className='text-xs text-muted-foreground'>
+          {row.original.service.id}
+        </span>
       </div>
     ),
     enableHiding: false,
@@ -105,7 +107,7 @@ const columns: ColumnDef<NetworkRow>[] = [
     ),
     cell: ({ row }) => (
       <div className='flex items-start gap-2'>
-        <span className='max-w-[360px] break-all text-sm text-muted-foreground'>
+        <span className='max-w-[360px] text-sm break-all text-muted-foreground'>
           {row.original.endpoint.url}
         </span>
         <Button
@@ -118,7 +120,12 @@ const columns: ColumnDef<NetworkRow>[] = [
         >
           <Copy className='size-3.5' />
         </Button>
-        <Button variant='outline' size='icon' className='size-7 shrink-0' asChild>
+        <Button
+          variant='outline'
+          size='icon'
+          className='size-7 shrink-0'
+          asChild
+        >
           <a href={row.original.endpoint.url} target='_blank' rel='noreferrer'>
             <ExternalLink className='size-3.5' />
           </a>
@@ -157,7 +164,9 @@ const columns: ColumnDef<NetworkRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Exposure' />
     ),
-    cell: ({ row }) => <Badge variant='outline'>{row.original.endpoint.exposure}</Badge>,
+    cell: ({ row }) => (
+      <Badge variant='outline'>{row.original.endpoint.exposure}</Badge>
+    ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
 ]
@@ -190,7 +199,7 @@ export function Network() {
     [rows]
   )
 
-  const table = useReactTable({
+  const table = useReactTable<NetworkRow>({
     data: rows,
     columns,
     state: {
@@ -245,7 +254,8 @@ export function Network() {
                 <NetworkIcon className='size-4' /> Service endpoints
               </CardTitle>
               <CardDescription>
-                {table.getFilteredRowModel().rows.length} endpoints shown with copy and open actions.
+                {table.getFilteredRowModel().rows.length} endpoints shown with
+                copy and open actions.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
@@ -298,14 +308,20 @@ export function Network() {
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
                           No endpoints match the current filters.
                         </TableCell>
                       </TableRow>

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
-import { toast } from 'sonner'
 import {
   Position,
   useEdgesState,
@@ -23,8 +22,9 @@ import {
   Undo2,
   Wrench,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { copyText } from '@/lib/copy-text'
-import { useTheme } from '@/context/theme-provider'
+import { usePageMetadata } from '@/lib/page-metadata'
 import {
   buildApiUsageEdge,
   buildDependencyEdge,
@@ -32,9 +32,8 @@ import {
   buildServiceNodeStyle,
   getServiceNodeImage,
 } from '@/lib/service-graph'
-import { usePageMetadata } from '@/lib/page-metadata'
-import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 import { useDashboardService } from '@/lib/service-lasso-dashboard/hooks'
+import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 import type {
   DashboardService,
   ServiceAction,
@@ -44,6 +43,7 @@ import type {
   ServiceLogPreviewEntry,
   ServiceStatus,
 } from '@/lib/service-lasso-dashboard/types'
+import { useTheme } from '@/context/theme-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -53,14 +53,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -69,6 +63,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
@@ -223,7 +218,11 @@ type GraphOrientation = 'horizontal' | 'vertical'
 
 type GraphLayoutMap = Record<string, { x: number; y: number }>
 
-async function persistNodeLayoutToMeta(serviceId: string, x: number, y: number) {
+async function persistNodeLayoutToMeta(
+  serviceId: string,
+  x: number,
+  y: number
+) {
   if (!serviceLassoApiBaseUrl) {
     throw new Error('Service Lasso API base URL is not configured')
   }
@@ -282,27 +281,29 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
       })
     )
 
-    const dependentNodes: Node[] = service.dependents.map((dependent, index) => ({
-      id: `dnt-${dependent.id}`,
-      position:
-        layoutMap[`dnt-${dependent.id}`] ??
-        (graphOrientation === 'horizontal'
-          ? { x: xStep * 2, y: index * yStep + 30 }
-          : { x: index * xStep, y: yStep * 2 }),
-      data: {
-        label: buildServiceNodeLabel({
-          name: dependent.name,
-          id: dependent.id,
-          serviceType: 'dependent',
-          isDark,
-        }),
-      },
-      style: buildServiceNodeStyle({ selected: false, isDark }),
-      sourcePosition:
-        graphOrientation === 'horizontal' ? Position.Right : Position.Bottom,
-      targetPosition:
-        graphOrientation === 'horizontal' ? Position.Left : Position.Top,
-    }))
+    const dependentNodes: Node[] = service.dependents.map(
+      (dependent, index) => ({
+        id: `dnt-${dependent.id}`,
+        position:
+          layoutMap[`dnt-${dependent.id}`] ??
+          (graphOrientation === 'horizontal'
+            ? { x: xStep * 2, y: index * yStep + 30 }
+            : { x: index * xStep, y: yStep * 2 }),
+        data: {
+          label: buildServiceNodeLabel({
+            name: dependent.name,
+            id: dependent.id,
+            serviceType: 'dependent',
+            isDark,
+          }),
+        },
+        style: buildServiceNodeStyle({ selected: false, isDark }),
+        sourcePosition:
+          graphOrientation === 'horizontal' ? Position.Right : Position.Bottom,
+        targetPosition:
+          graphOrientation === 'horizontal' ? Position.Left : Position.Top,
+      })
+    )
 
     const centerNode: Node = {
       id: `svc-${service.id}`,
@@ -312,14 +313,16 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
           ? {
               x: xStep,
               y:
-                Math.max(dependencyNodes.length, dependentNodes.length) * yStep *
+                Math.max(dependencyNodes.length, dependentNodes.length) *
+                  yStep *
                   0.5 +
                 30,
             }
           : {
               x:
-                Math.max(dependencyNodes.length, dependentNodes.length) * xStep *
-                  0.5,
+                Math.max(dependencyNodes.length, dependentNodes.length) *
+                xStep *
+                0.5,
               y: yStep,
             }),
       data: {
@@ -420,7 +423,10 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
     try {
       await Promise.all(
         Object.entries(layoutMap).map(([nodeId, position]) => {
-          const serviceId = nodeId.replace(/^dep-/, '').replace(/^dnt-/, '').replace(/^svc-/, '')
+          const serviceId = nodeId
+            .replace(/^dep-/, '')
+            .replace(/^dnt-/, '')
+            .replace(/^svc-/, '')
           return persistNodeLayoutToMeta(serviceId, position.x, position.y)
         })
       )
@@ -705,12 +711,13 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const serviceQuery = useDashboardService(serviceId)
   const serviceName = serviceQuery.data?.name ?? serviceId
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'dependencies' | 'metadata' | 'endpoints' | 'variables' | 'logs'
+    | 'overview'
+    | 'dependencies'
+    | 'metadata'
+    | 'endpoints'
+    | 'variables'
+    | 'logs'
   >('overview')
-
-  useEffect(() => {
-    setActiveTab('overview')
-  }, [serviceId])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -821,37 +828,48 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                   </div>
                 </div>
 
-                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className='space-y-4'>
+                <Tabs
+                  value={activeTab}
+                  onValueChange={(value) =>
+                    setActiveTab(value as typeof activeTab)
+                  }
+                  className='space-y-4'
+                >
                   <TabsList className='flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-border bg-muted/70 p-1 text-muted-foreground shadow-sm dark:border-slate-700/70 dark:bg-slate-900/90 dark:text-slate-400 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
                     <TabsTrigger
                       value='overview'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Overview <span className='ml-1 italic opacity-80'>(1)</span>
+                      Overview{' '}
+                      <span className='ml-1 italic opacity-80'>(1)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='dependencies'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Dependencies <span className='ml-1 italic opacity-80'>(2)</span>
+                      Dependencies{' '}
+                      <span className='ml-1 italic opacity-80'>(2)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='metadata'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Metadata <span className='ml-1 italic opacity-80'>(3)</span>
+                      Metadata{' '}
+                      <span className='ml-1 italic opacity-80'>(3)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='endpoints'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Endpoints <span className='ml-1 italic opacity-80'>(4)</span>
+                      Endpoints{' '}
+                      <span className='ml-1 italic opacity-80'>(4)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='variables'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Variables <span className='ml-1 italic opacity-80'>(5)</span>
+                      Variables{' '}
+                      <span className='ml-1 italic opacity-80'>(5)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='logs'
@@ -884,7 +902,8 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           </div>
                           <div className='text-muted-foreground'>
                             Last restart:{' '}
-                            {service.runtimeHealth.lastRestartAt ?? 'Not recorded'}
+                            {service.runtimeHealth.lastRestartAt ??
+                              'Not recorded'}
                           </div>
                         </CardContent>
                       </Card>
@@ -899,7 +918,9 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           <div>Runtime: {service.metadata.runtime}</div>
                           <div>Version: {service.metadata.version}</div>
                           <div>Build: {service.metadata.build}</div>
-                          <div>Installed: {service.installed ? 'Yes' : 'No'}</div>
+                          <div>
+                            Installed: {service.installed ? 'Yes' : 'No'}
+                          </div>
                         </CardContent>
                       </Card>
                       <Card>
@@ -1006,8 +1027,8 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       <CardHeader>
                         <CardTitle>Environment variables</CardTitle>
                         <CardDescription>
-                          Service-local and shared environment values surfaced in a
-                          searchable top-level Variables page as well.
+                          Service-local and shared environment values surfaced
+                          in a searchable top-level Variables page as well.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className='space-y-4'>
@@ -1017,7 +1038,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         />
                         <div className='flex justify-end'>
                           <Button variant='outline' size='sm' asChild>
-                            <Link to='/variables' search={{ service: service.id }}>
+                            <Link
+                              to='/variables'
+                              search={{ service: service.id }}
+                            >
                               Open all variables
                             </Link>
                           </Button>
@@ -1059,7 +1083,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                             <Link to='/network'>Open network view</Link>
                           </Button>
                           <Button variant='outline' asChild>
-                            <Link to='/runtime' search={{ service: service.id }}>
+                            <Link
+                              to='/runtime'
+                              search={{ service: service.id }}
+                            >
                               Open runtime view
                             </Link>
                           </Button>

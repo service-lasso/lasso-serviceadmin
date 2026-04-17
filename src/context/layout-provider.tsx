@@ -30,9 +30,8 @@ type LayoutProviderProps = {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const [collapsible, _setCollapsible] = useState<Collapsible>(
-    DEFAULT_COLLAPSIBLE
-  )
+  const [collapsible, _setCollapsible] =
+    useState<Collapsible>(DEFAULT_COLLAPSIBLE)
 
   const [variant, _setVariant] = useState<Variant>(DEFAULT_VARIANT)
 
