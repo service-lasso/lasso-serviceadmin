@@ -30,7 +30,7 @@ $resolvedContractPath = Join-Path $root 'verify\service-harness.ci.json'
 $runOutputDir = Join-Path $outputPath 'harness-run'
 
 $doc = Get-Content $contractPath -Raw | ConvertFrom-Json
-$doc.artifact.path = '..\dist\service-admin-win32.zip'
+$doc.artifact.path = '..\dist\@serviceadmin-win32.zip'
 $doc | ConvertTo-Json -Depth 10 | Set-Content $resolvedContractPath
 
 $harness = Resolve-HarnessBinary

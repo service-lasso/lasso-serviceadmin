@@ -1,7 +1,7 @@
 {
-  "serviceId": "service-admin",
+  "serviceId": "@serviceadmin",
   "artifact": {
-    "path": "dist/service-admin-win32.zip",
+    "path": "dist/@serviceadmin-win32.zip",
     "kind": "archive"
   },
   "dependencies": [],

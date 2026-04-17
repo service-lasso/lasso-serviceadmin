@@ -3,8 +3,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root 'dist'
 $packageRoot = Join-Path $root '.package'
-$staging = Join-Path $packageRoot 'service-admin-win32'
-$zipPath = Join-Path $dist 'service-admin-win32.zip'
+$staging = Join-Path $packageRoot '@serviceadmin-win32'
+$zipPath = Join-Path $dist '@serviceadmin-win32.zip'
 
 if (-not (Test-Path (Join-Path $dist 'index.html'))) {
   throw 'Build output missing. Run npm run build first.'

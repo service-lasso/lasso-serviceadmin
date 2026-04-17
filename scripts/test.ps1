@@ -5,7 +5,7 @@ $required = @(
   (Join-Path $root 'service.json'),
   (Join-Path $root 'verify\service-harness.json'),
   (Join-Path $root 'runtime\server.js'),
-  (Join-Path $root 'runtime\win32\start-service-admin.ps1'),
+  (Join-Path $root 'runtime\win32\start-@serviceadmin.ps1'),
   (Join-Path $root 'dist\index.html')
 )
 
@@ -16,12 +16,12 @@ foreach ($path in $required) {
 }
 
 $service = Get-Content (Join-Path $root 'service.json') -Raw | ConvertFrom-Json
-if ($service.id -ne 'service-admin') {
+if ($service.id -ne '@serviceadmin') {
   throw 'service.json id mismatch'
 }
 
 $contract = Get-Content (Join-Path $root 'verify\service-harness.json') -Raw | ConvertFrom-Json
-if ($contract.serviceId -ne 'service-admin') {
+if ($contract.serviceId -ne '@serviceadmin') {
   throw 'service-harness.json serviceId mismatch'
 }
 
