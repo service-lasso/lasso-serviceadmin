@@ -68,7 +68,10 @@ jobs:
         shell: pwsh
         run: |
           Expand-Archive -Path ".harness/download/${{ matrix.archive_name }}" -DestinationPath ".harness/bin" -Force
-          Add-Content -Path $env:GITHUB_PATH -Value (Resolve-Path ".harness/bin")
+          $harness = Get-ChildItem -Recurse .harness/bin -File | Where-Object { $_.Name -in @('service-lasso-harness.exe', 'service-lasso-harness') } | Select-Object -First 1
+          if (-not $harness) { throw 'service-lasso-harness binary not found after extraction' }
+          Add-Content -Path $env:GITHUB_PATH -Value $harness.DirectoryName
+          Add-Content -Path $env:GITHUB_ENV -Value ("SERVICE_LASSO_HARNESS_BIN=" + $harness.FullName)
 
       - name: Extract released harness binary (POSIX)
         if: runner.os != 'Windows'
@@ -76,7 +79,14 @@ jobs:
         run: |
           set -euo pipefail
           tar -xzf ".harness/download/${{ matrix.archive_name }}" -C .harness/bin
-          echo "$PWD/.harness/bin" >> "$GITHUB_PATH"
+          HARNESS_BIN="$(find .harness/bin -type f \( -name 'service-lasso-harness' -o -name 'service-lasso-harness.exe' \) | head -n 1)"
+          if [[ -z "$HARNESS_BIN" ]]; then
+            echo "service-lasso-harness binary not found after extraction" >&2
+            exit 1
+          fi
+          chmod +x "$HARNESS_BIN" || true
+          echo "$PWD/$(dirname "$HARNESS_BIN")" >> "$GITHUB_PATH"
+          echo "SERVICE_LASSO_HARNESS_BIN=$PWD/$HARNESS_BIN" >> "$GITHUB_ENV"
 
       - name: Package service artifact (Windows)
         if: runner.os == 'Windows'
