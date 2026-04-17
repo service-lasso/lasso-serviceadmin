@@ -26,19 +26,17 @@
     "serviceorder": 100,
     "serviceport": 17700,
     "execcwd": ".",
-    "executable": "node",
+    "executable": "NODE",
     "args": [
       "runtime/server.js"
     ],
-    "env": {
-      "SERVICE_PORT": "17700",
-      "SERVICE_HOST": "127.0.0.1"
-    },
     "depend_on": [
-      "traefik"
+      "@traefik",
+      "@node"
     ],
     "healthcheck": {
       "type": "process"
-    }
+    },
+    "execservice": "@node"
   }
 }
