@@ -9,6 +9,9 @@ lerna-debug.log*
 
 node_modules
 dist
+.package/
+output/
+verify/service-harness.ci.json
 dist-ssr
 *.local
 

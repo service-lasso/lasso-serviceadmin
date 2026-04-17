@@ -1,0 +1,44 @@
+{
+  "id": "service-admin",
+  "name": "Service Admin UI",
+  "description": "Operator UI for inspecting and controlling Service Lasso services.",
+  "enabled": true,
+  "version": "0.1.0",
+  "logoutput": true,
+  "icon": "layout-dashboard",
+  "servicetype": 20,
+  "servicelocation": 10,
+  "actions": {
+    "install": {
+      "description": "Install or refresh the Service Admin UI release content."
+    },
+    "config": {
+      "description": "Materialize the effective Service Admin runtime configuration."
+    },
+    "start": {
+      "description": "Start the Service Admin UI."
+    },
+    "stop": {
+      "description": "Stop the Service Admin UI gracefully."
+    }
+  },
+  "execconfig": {
+    "serviceorder": 100,
+    "serviceport": 17700,
+    "execcwd": ".",
+    "executable": "node",
+    "args": [
+      "runtime/server.js"
+    ],
+    "env": {
+      "SERVICE_PORT": "17700",
+      "SERVICE_HOST": "127.0.0.1"
+    },
+    "depend_on": [
+      "traefik"
+    ],
+    "healthcheck": {
+      "type": "process"
+    }
+  }
+}

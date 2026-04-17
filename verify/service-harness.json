@@ -1,0 +1,28 @@
+{
+  "serviceId": "service-admin",
+  "artifact": {
+    "path": "dist/service-admin-win32.zip",
+    "kind": "archive"
+  },
+  "dependencies": [],
+  "lifecycle": {
+    "install": true,
+    "config": true,
+    "start": true,
+    "stop": true
+  },
+  "health": {
+    "type": "process",
+    "timeoutSeconds": 30
+  },
+  "expect": {
+    "logs": false,
+    "state": false,
+    "exitClean": true
+  },
+  "artifacts": {
+    "captureLogs": true,
+    "captureState": false,
+    "captureSummary": true
+  }
+}
