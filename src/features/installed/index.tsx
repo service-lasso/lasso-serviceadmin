@@ -50,13 +50,19 @@ import { ThemeSwitch } from '@/components/theme-switch'
 
 function PathCell({ icon, value }: { icon: ElementType; value?: string }) {
   const Icon = icon
+  const displayValue = value ?? 'Not recorded'
 
   return (
-    <div className='flex items-start gap-2'>
+    <div className='flex min-w-0 items-start gap-2'>
       <Icon className='mt-1 size-4 shrink-0 text-muted-foreground' />
-      <span className='max-w-[280px] break-all text-sm text-muted-foreground'>
-        {value ?? 'Not recorded'}
-      </span>
+      <div className='min-w-0 flex-1'>
+        <span
+          className='block truncate text-sm text-muted-foreground'
+          title={displayValue}
+        >
+          {displayValue}
+        </span>
+      </div>
       <Button
         type='button'
         variant='outline'

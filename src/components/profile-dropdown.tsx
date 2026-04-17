@@ -23,8 +23,8 @@ export function ProfileDropdown() {
   const [open, setOpen] = useState(false)
   const authUser = useAuthStore((state) => state.auth.user)
   const user = {
-    name: authUser?.accountNo || 'Max Barrass',
-    email: authUser?.email || 'max@example.com',
+    name: authUser?.displayName || authUser?.accountNo || 'Not signed in',
+    email: authUser?.email || 'No active session',
     avatar: '',
   }
 
