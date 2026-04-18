@@ -22,7 +22,6 @@ mkdir -p "$DIST" "$PACKAGE_ROOT"
 rm -rf "$STAGING"
 mkdir -p "$STAGING/runtime" "$STAGING/dist"
 
-cp "$ROOT/service.json" "$STAGING/service.json"
 cp "$ROOT/runtime/server.js" "$STAGING/runtime/server.js"
 cp "$ROOT/runtime/$PLATFORM/start-@serviceadmin.sh" "$STAGING/runtime/start-@serviceadmin.sh"
 cp -R "$ROOT/config" "$STAGING/config"
