@@ -22,21 +22,62 @@ type RemoteServiceMeta = {
   imageUrl?: string
 }
 
-async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
+type RemoteDashboardSummaryPayload = {
+  summary?: DashboardSummary
+}
+
+type RemoteDashboardServicesPayload = {
+  services?: DashboardService[]
+}
+
+type RemoteDashboardServicePayload = {
+  service?: DashboardService | null
+}
+
+async function fetchRemoteJson<T>(path: string): Promise<T | null> {
   if (!serviceLassoApiBaseUrl) return null
 
   try {
-    const response = await fetch(`${serviceLassoApiBaseUrl}/api/services/meta`)
+    const response = await fetch(`${serviceLassoApiBaseUrl}${path}`)
     if (!response.ok) return null
 
-    const payload = (await response.json()) as {
-      services?: RemoteServiceMeta[]
-    }
-
-    return payload.services ?? []
+    return (await response.json()) as T
   } catch {
     return null
   }
+}
+
+async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
+  const payload = await fetchRemoteJson<{
+    services?: RemoteServiceMeta[]
+  }>('/api/services/meta')
+
+  return payload?.services ?? null
+}
+
+async function fetchRemoteDashboardSummary(): Promise<DashboardSummary | null> {
+  const payload =
+    await fetchRemoteJson<RemoteDashboardSummaryPayload>('/api/dashboard')
+
+  return payload?.summary ? structuredClone(payload.summary) : null
+}
+
+async function fetchRemoteDashboardServices(): Promise<DashboardService[] | null> {
+  const payload = await fetchRemoteJson<RemoteDashboardServicesPayload>(
+    '/api/dashboard/services'
+  )
+
+  return payload?.services ? structuredClone(payload.services) : null
+}
+
+async function fetchRemoteDashboardService(
+  serviceId: string
+): Promise<DashboardService | null> {
+  const payload = await fetchRemoteJson<RemoteDashboardServicePayload>(
+    `/api/dashboard/services/${encodeURIComponent(serviceId)}`
+  )
+
+  return payload?.service ? structuredClone(payload.service) : null
 }
 
 function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
@@ -680,18 +721,24 @@ async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
 
 export async function fetchDashboardSummary() {
   await wait(120)
+  const remoteSummary = await fetchRemoteDashboardSummary()
+  if (remoteSummary) return remoteSummary
   await syncFavoriteStateFromApi()
   return structuredClone(buildSummary())
 }
 
 export async function fetchServices() {
   await wait(120)
+  const remoteServices = await fetchRemoteDashboardServices()
+  if (remoteServices) return remoteServices
   await syncFavoriteStateFromApi()
   return structuredClone(services)
 }
 
 export async function fetchDashboardService(serviceId: string) {
   await wait(120)
+  const remoteService = await fetchRemoteDashboardService(serviceId)
+  if (remoteService) return remoteService
   await syncFavoriteStateFromApi()
   return (
     structuredClone(services.find((service) => service.id === serviceId)) ??
@@ -734,6 +781,41 @@ export function buildStubServiceLogUrl(
 
 export async function runDashboardAction(action: DashboardAction) {
   await wait(180)
+
+  if (serviceLassoApiBaseUrl) {
+    try {
+      if (action === 'reload-runtime') {
+        const response = await fetch(
+          `${serviceLassoApiBaseUrl}/api/runtime/actions/reload`,
+          { method: 'POST' }
+        )
+        if (response.ok) {
+          const summary = await fetchRemoteDashboardSummary()
+          if (summary) return summary
+        }
+      } else if (action === 'start-services') {
+        const response = await fetch(
+          `${serviceLassoApiBaseUrl}/api/runtime/actions/startAll`,
+          { method: 'POST' }
+        )
+        if (response.ok) {
+          const summary = await fetchRemoteDashboardSummary()
+          if (summary) return summary
+        }
+      } else {
+        const service = services.find((item) => item.id === action.serviceId)
+        const nextFavorite = service ? !service.favorite : true
+        const updated = await updateFavoriteViaApi(action.serviceId, nextFavorite)
+
+        if (updated) {
+          const summary = await fetchRemoteDashboardSummary()
+          if (summary) return summary
+        }
+      }
+    } catch {
+      // Fall through to stub behavior when the runtime API is unavailable.
+    }
+  }
 
   if (action === 'reload-runtime') {
     runtime = {

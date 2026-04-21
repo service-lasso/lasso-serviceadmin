@@ -69,11 +69,11 @@ describe('logs provider configured api mode', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://api.test/api/services/log-info?service=@serviceadmin&type=default'
+      'http://api.test/api/services/log-info?service=%40serviceadmin&type=default'
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://api.test/api/logs/read?service=@serviceadmin&type=default&limit=100'
+      'http://api.test/api/logs/read?service=%40serviceadmin&type=default&limit=100'
     )
 
     expect(info.path).toBe('C:\\runtime\\@serviceadmin.log')
