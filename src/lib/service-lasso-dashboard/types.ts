@@ -134,6 +134,51 @@ export type ServiceUpdateState = {
 
 export type ServiceUpdateAction = 'check' | 'download' | 'install'
 
+export type ServiceRecoveryEventKind = 'monitor' | 'doctor' | 'restart' | 'hook'
+
+export type ServiceRecoveryStepResult = {
+  phase?: string
+  name: string
+  command: string
+  ok: boolean
+  exitCode: number | null
+  timedOut: boolean
+  failurePolicy: string
+  stdout: string
+  stderr: string
+  startedAt: string
+  finishedAt: string
+}
+
+export type ServiceRecoveryEvent = {
+  kind: ServiceRecoveryEventKind
+  serviceId: string
+  action?: 'restart' | 'skip' | 'healthy'
+  reason?: string
+  phase?: string
+  ok?: boolean
+  blocked?: boolean
+  message?: string
+  steps?: ServiceRecoveryStepResult[]
+  at: string
+}
+
+export type ServiceRecoveryHistoryState = {
+  serviceId: string
+  updatedAt: string
+  events: ServiceRecoveryEvent[]
+}
+
+export type ServiceRecoveryDoctorActionResult = {
+  serviceId: string
+  doctor: {
+    ok: boolean
+    blocked: boolean
+    steps: ServiceRecoveryStepResult[]
+  }
+  recovery: ServiceRecoveryHistoryState
+}
+
 export type DashboardService = {
   id: string
   name: string
@@ -152,6 +197,7 @@ export type DashboardService = {
   recentLogs: ServiceLogPreviewEntry[]
   actions: ServiceAction[]
   updates?: ServiceUpdateState
+  recovery?: ServiceRecoveryHistoryState
 }
 
 export type DashboardRuntime = {
@@ -178,6 +224,13 @@ export type DashboardSummary = {
     downloadedCount: number
     deferredCount: number
     failedCount: number
+    messages: string[]
+  }
+  recoveryNotifications: {
+    monitorAttentionCount: number
+    doctorBlockedCount: number
+    hookBlockedCount: number
+    restartFailureCount: number
     messages: string[]
   }
 }

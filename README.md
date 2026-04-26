@@ -35,6 +35,14 @@ Service update UI contract:
 - service detail actions call `POST /api/updates/check`, `POST /api/services/:serviceId/update/download`, and `POST /api/services/:serviceId/update/install`
 - when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, update actions are visible against the local stub data but do not call a runtime API
 
+Recovery UI contract:
+
+- the dashboard, services table, and service detail page display recovery states from Service Lasso runtime history
+- the stub layer loads recovery state from `GET /api/recovery`
+- the dashboard shows a global recovery message banner when monitor, doctor, restart, or hook events need review
+- service detail exposes a bounded doctor/preflight action that calls `POST /api/services/:serviceId/recovery/doctor`
+- when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, recovery actions are visible against local stub data but do not call a runtime API
+
 ![alt text](public/images/shadcn-admin.png)
 
 [![Sponsored by Clerk](https://img.shields.io/badge/Sponsored%20by-Clerk-5b6ee1?logo=clerk)](https://go.clerk.com/GttUAaK)

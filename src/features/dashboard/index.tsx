@@ -6,6 +6,7 @@ import {
   PackageOpen,
   Play,
   RefreshCcw,
+  ShieldCheck,
   ShieldAlert,
   Star,
 } from 'lucide-react'
@@ -39,6 +40,10 @@ import {
   getServiceUpdateDescription,
   ServiceUpdateBadge,
 } from '@/components/service-update-status'
+import {
+  getServiceRecoveryDescription,
+  ServiceRecoveryBadge,
+} from '@/components/service-recovery-status'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -144,6 +149,15 @@ function ServiceCard({ service }: { service: DashboardService }) {
           </div>
           <p className='mt-1 text-muted-foreground'>
             {getServiceUpdateDescription(service.updates)}
+          </p>
+        </div>
+        <div className='rounded-md border border-emerald-500/20 bg-emerald-500/5 p-2 text-xs'>
+          <div className='flex items-center justify-between gap-2'>
+            <span className='font-medium'>Recovery</span>
+            <ServiceRecoveryBadge recovery={service.recovery} />
+          </div>
+          <p className='mt-1 text-muted-foreground'>
+            {getServiceRecoveryDescription(service.recovery)}
           </p>
         </div>
         <div className='flex flex-wrap gap-2'>
@@ -296,6 +310,30 @@ export function Dashboard() {
             </CardContent>
           </Card>
         ) : null}
+        {summary.recoveryNotifications.messages.length > 0 ? (
+          <Card className='border-emerald-500/30 bg-emerald-500/5'>
+            <CardHeader className='pb-3'>
+              <CardTitle className='flex items-center gap-2 text-base'>
+                <ShieldCheck className='size-4 text-emerald-600' />
+                Recovery events need review
+              </CardTitle>
+              <CardDescription>
+                These messages come from Service Lasso recovery history and
+                match doctor, monitor, restart, and hook state.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
+              {summary.recoveryNotifications.messages.map((message) => (
+                <div
+                  key={message}
+                  className='rounded-lg border bg-background p-3 text-sm'
+                >
+                  {message}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
         <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5'>
           <SummaryCard
             title='Runtime health'
@@ -353,6 +391,17 @@ export function Dashboard() {
             )}
             description={`${summary.updateNotifications.failedCount} failed check(s)`}
             icon={ShieldAlert}
+          />
+          <SummaryCard
+            title='Recovery'
+            value={String(
+              summary.recoveryNotifications.monitorAttentionCount +
+                summary.recoveryNotifications.doctorBlockedCount +
+                summary.recoveryNotifications.hookBlockedCount +
+                summary.recoveryNotifications.restartFailureCount
+            )}
+            description='Monitor, doctor, restart, and hook events needing review'
+            icon={ShieldCheck}
           />
         </div>
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>
