@@ -6,6 +6,7 @@ import {
   fetchDashboardSummary,
   fetchServices,
   runDashboardAction,
+  runServiceRecoveryDoctorAction,
   runServiceUpdateAction,
 } from './stub'
 import type {
@@ -108,6 +109,30 @@ export function useServiceUpdateAction() {
       for (const service of allServices) {
         queryClient.setQueryData([...dashboardQueryKey, service.id], service)
       }
+    },
+  })
+}
+
+export function useServiceRecoveryDoctorAction() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (serviceId: string) => runServiceRecoveryDoctorAction(serviceId),
+    onSuccess: (result) => {
+      const patchService = (service: DashboardService) =>
+        service.id === result.serviceId
+          ? { ...service, recovery: result.recovery }
+          : service
+
+      queryClient.setQueryData<DashboardService[]>(
+        [...dashboardQueryKey, 'services'],
+        (services) => services?.map(patchService)
+      )
+      queryClient.setQueryData<DashboardService | null>(
+        [...dashboardQueryKey, result.serviceId],
+        (service) => (service ? patchService(service) : service)
+      )
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
     },
   })
 }

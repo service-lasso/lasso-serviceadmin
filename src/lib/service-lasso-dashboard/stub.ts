@@ -2,6 +2,8 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceRecoveryDoctorActionResult,
+  ServiceRecoveryHistoryState,
   ServiceUpdateAction,
   ServiceUpdateState,
 } from './types'
@@ -29,6 +31,11 @@ type RemoteServiceUpdate = {
   update: ServiceUpdateState
 }
 
+type RemoteServiceRecovery = {
+  serviceId: string
+  recovery: ServiceRecoveryHistoryState
+}
+
 function createEmptyUpdateState(serviceId: string): ServiceUpdateState {
   return {
     serviceId,
@@ -48,6 +55,14 @@ function createEmptyUpdateState(serviceId: string): ServiceUpdateState {
     downloadedCandidate: null,
     installDeferred: null,
     failed: null,
+  }
+}
+
+function createEmptyRecoveryState(serviceId: string): ServiceRecoveryHistoryState {
+  return {
+    serviceId,
+    updatedAt: new Date('2026-04-11T10:00:00+10:00').toISOString(),
+    events: [],
   }
 }
 
@@ -79,6 +94,25 @@ async function fetchRemoteUpdateStates(): Promise<
 
     const payload = (await response.json()) as {
       services?: RemoteServiceUpdate[]
+    }
+
+    return payload.services ?? []
+  } catch {
+    return null
+  }
+}
+
+async function fetchRemoteRecoveryStates(): Promise<
+  RemoteServiceRecovery[] | null
+> {
+  if (!serviceLassoApiBaseUrl) return null
+
+  try {
+    const response = await fetch(`${serviceLassoApiBaseUrl}/api/recovery`)
+    if (!response.ok) return null
+
+    const payload = (await response.json()) as {
+      services?: RemoteServiceRecovery[]
     }
 
     return payload.services ?? []
@@ -125,16 +159,36 @@ export function applyRemoteUpdateStates(updateStates: RemoteServiceUpdate[]) {
   }))
 }
 
+export function applyRemoteRecoveryStates(
+  recoveryStates: RemoteServiceRecovery[]
+) {
+  if (recoveryStates.length === 0) return
+
+  const recoveryById = new Map(
+    recoveryStates.map((service) => [service.serviceId, service.recovery])
+  )
+
+  services = services.map((service) => ({
+    ...service,
+    recovery: recoveryById.get(service.id) ?? service.recovery,
+  }))
+}
+
 async function syncRemoteStateFromApi() {
-  const [remoteServiceMeta, remoteUpdateStates] = await Promise.all([
-    fetchRemoteServiceMeta(),
-    fetchRemoteUpdateStates(),
-  ])
+  const [remoteServiceMeta, remoteUpdateStates, remoteRecoveryStates] =
+    await Promise.all([
+      fetchRemoteServiceMeta(),
+      fetchRemoteUpdateStates(),
+      fetchRemoteRecoveryStates(),
+    ])
   if (remoteServiceMeta) {
     applyRemoteServiceMeta(remoteServiceMeta)
   }
   if (remoteUpdateStates) {
     applyRemoteUpdateStates(remoteUpdateStates)
+  }
+  if (remoteRecoveryStates) {
+    applyRemoteRecoveryStates(remoteRecoveryStates)
   }
 }
 
@@ -745,6 +799,99 @@ let services: DashboardService[] = [
   },
 ]
 
+function createDemoRecoveryState(serviceId: string): ServiceRecoveryHistoryState {
+  const base = createEmptyRecoveryState(serviceId)
+  const at = new Date('2026-04-11T10:18:00+10:00').toISOString()
+
+  if (serviceId === 'zitadel') {
+    return {
+      ...base,
+      updatedAt: at,
+      events: [
+        {
+          kind: 'monitor',
+          serviceId,
+          action: 'skip',
+          reason: 'unhealthy_threshold',
+          message: 'Service is unhealthy but has not reached threshold.',
+          at,
+        },
+      ],
+    }
+  }
+
+  if (serviceId === 'dagu') {
+    return {
+      ...base,
+      updatedAt: at,
+      events: [
+        {
+          kind: 'restart',
+          serviceId,
+          ok: false,
+          message: 'Restart readiness check failed.',
+          at,
+        },
+      ],
+    }
+  }
+
+  if (serviceId === 'secrets-broker') {
+    return {
+      ...base,
+      updatedAt: at,
+      events: [
+        {
+          kind: 'hook',
+          serviceId,
+          phase: 'postUpgrade',
+          ok: false,
+          blocked: true,
+          steps: [
+            {
+              phase: 'postUpgrade',
+              name: 'reload-secrets',
+              command: 'node ./hooks/reload-secrets.mjs',
+              ok: false,
+              exitCode: 7,
+              timedOut: false,
+              failurePolicy: 'block',
+              stdout: '',
+              stderr: 'reload failed',
+              startedAt: new Date('2026-04-11T10:17:50+10:00').toISOString(),
+              finishedAt: new Date('2026-04-11T10:17:51+10:00').toISOString(),
+            },
+          ],
+          at,
+        },
+      ],
+    }
+  }
+
+  return {
+    ...base,
+    updatedAt: at,
+    events: [
+      {
+        kind: serviceId === 'service-admin' ? 'doctor' : 'monitor',
+        serviceId,
+        action: serviceId === 'service-admin' ? undefined : 'healthy',
+        reason: serviceId === 'service-admin' ? undefined : 'healthy',
+        ok: serviceId === 'service-admin' ? true : undefined,
+        blocked: serviceId === 'service-admin' ? false : undefined,
+        message: serviceId === 'service-admin' ? undefined : 'Service is healthy.',
+        steps: serviceId === 'service-admin' ? [] : undefined,
+        at,
+      },
+    ],
+  }
+}
+
+services = services.map((service) => ({
+  ...service,
+  recovery: service.recovery ?? createDemoRecoveryState(service.id),
+}))
+
 let runtime = {
   status: 'warning' as const,
   lastReloadedAt: new Date('2026-04-10T19:55:00+10:00').toISOString(),
@@ -767,6 +914,7 @@ function buildWarnings(currentServices: DashboardService[]) {
 
   const updateNotifications = buildUpdateNotifications(currentServices)
   warnings.push(...updateNotifications.messages)
+  warnings.push(...buildRecoveryNotifications(currentServices).messages)
 
   return warnings
 }
@@ -816,9 +964,58 @@ export function buildUpdateNotifications(currentServices: DashboardService[]) {
   }
 }
 
+export function buildRecoveryNotifications(currentServices: DashboardService[]) {
+  const latestEvents = currentServices.flatMap((service) => {
+    const event = service.recovery?.events[
+      service.recovery.events.length - 1
+    ]
+    return event ? [{ service, event }] : []
+  })
+  const monitorAttentionCount = latestEvents.filter(
+    ({ event }) =>
+      event.kind === 'monitor' &&
+      event.action !== 'healthy' &&
+      event.reason !== 'healthy'
+  ).length
+  const doctorBlockedCount = latestEvents.filter(
+    ({ event }) => event.kind === 'doctor' && event.blocked === true
+  ).length
+  const hookBlockedCount = latestEvents.filter(
+    ({ event }) => event.kind === 'hook' && event.blocked === true
+  ).length
+  const restartFailureCount = latestEvents.filter(
+    ({ event }) => event.kind === 'restart' && event.ok === false
+  ).length
+  const messages: string[] = []
+
+  if (monitorAttentionCount > 0) {
+    messages.push(
+      `${monitorAttentionCount} service monitor event(s) need review.`
+    )
+  }
+  if (doctorBlockedCount > 0) {
+    messages.push(`${doctorBlockedCount} doctor/preflight check(s) are blocked.`)
+  }
+  if (hookBlockedCount > 0) {
+    messages.push(`${hookBlockedCount} lifecycle hook run(s) are blocked.`)
+  }
+  if (restartFailureCount > 0) {
+    messages.push(`${restartFailureCount} restart attempt(s) failed readiness.`)
+  }
+
+  return {
+    monitorAttentionCount,
+    doctorBlockedCount,
+    hookBlockedCount,
+    restartFailureCount,
+    messages,
+  }
+}
+
 function buildSummary(): DashboardSummary {
   const warnings = buildWarnings(services)
   const updateNotifications = buildUpdateNotifications(services)
+  const recoveryNotifications = buildRecoveryNotifications(services)
   const favorites = services.filter((service) => service.favorite)
   const others = services.filter((service) => !service.favorite)
 
@@ -848,6 +1045,7 @@ function buildSummary(): DashboardSummary {
       (service) => service.status === 'degraded' || service.status === 'stopped'
     ),
     updateNotifications,
+    recoveryNotifications,
   }
 }
 
@@ -960,6 +1158,63 @@ export async function runServiceUpdateAction(options: {
   }
 
   return structuredClone(buildSummary())
+}
+
+function applyServiceRecoveryState(
+  serviceId: string,
+  recovery: ServiceRecoveryHistoryState
+) {
+  services = services.map((service) =>
+    service.id === serviceId ? { ...service, recovery } : service
+  )
+}
+
+export async function runServiceRecoveryDoctorAction(serviceId: string) {
+  await wait(120)
+
+  if (!serviceLassoApiBaseUrl) {
+    const recovery =
+      services.find((service) => service.id === serviceId)?.recovery ??
+      createEmptyRecoveryState(serviceId)
+    const event = {
+      kind: 'doctor' as const,
+      serviceId,
+      ok: true,
+      blocked: false,
+      steps: [],
+      at: new Date().toISOString(),
+    }
+    const nextRecovery = {
+      ...recovery,
+      updatedAt: event.at,
+      events: [...recovery.events, event],
+    }
+    applyServiceRecoveryState(serviceId, nextRecovery)
+    return structuredClone({
+      serviceId,
+      doctor: { ok: true, blocked: false, steps: [] },
+      recovery: nextRecovery,
+    } satisfies ServiceRecoveryDoctorActionResult)
+  }
+
+  const response = await fetch(
+    `${serviceLassoApiBaseUrl}/api/services/${serviceId}/recovery/doctor`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Doctor check failed for ${serviceId}`)
+  }
+
+  const payload = (await response.json()) as ServiceRecoveryDoctorActionResult
+  applyServiceRecoveryState(serviceId, payload.recovery)
+  return structuredClone(payload)
 }
 
 export function resolveStubServiceLogInfo(

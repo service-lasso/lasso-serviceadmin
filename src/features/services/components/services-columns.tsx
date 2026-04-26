@@ -15,6 +15,10 @@ import {
   getServiceUpdateDescription,
   ServiceUpdateBadge,
 } from '@/components/service-update-status'
+import {
+  getServiceRecoveryDescription,
+  ServiceRecoveryBadge,
+} from '@/components/service-recovery-status'
 import { DataTableRowActions } from './data-table-row-actions'
 
 function renderStatusBadge(status: DashboardService['status']) {
@@ -120,6 +124,26 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
           <ServiceUpdateBadge updates={service.updates} />
           <span className='line-clamp-2 text-xs text-muted-foreground'>
             {getServiceUpdateDescription(service.updates)}
+          </span>
+        </div>
+      )
+    },
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    id: 'recovery',
+    accessorFn: (row) =>
+      row.recovery?.events[row.recovery.events.length - 1]?.kind ?? 'none',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Recovery' />
+    ),
+    cell: ({ row }) => {
+      const service = row.original
+      return (
+        <div className='flex max-w-[220px] flex-col gap-1'>
+          <ServiceRecoveryBadge recovery={service.recovery} />
+          <span className='line-clamp-2 text-xs text-muted-foreground'>
+            {getServiceRecoveryDescription(service.recovery)}
           </span>
         </div>
       )

@@ -79,6 +79,11 @@ import {
   ServiceUpdateActions,
   ServiceUpdateBadge,
 } from '@/components/service-update-status'
+import {
+  getServiceRecoveryDescription,
+  ServiceRecoveryBadge,
+  ServiceRecoveryDoctorButton,
+} from '@/components/service-recovery-status'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -818,6 +823,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       <StatusBadge status={service.status} />
                       <HealthBadge health={service.runtimeHealth.health} />
                       <ServiceUpdateBadge updates={service.updates} />
+                      <ServiceRecoveryBadge recovery={service.recovery} />
                     </div>
                     <div>
                       <h2 className='text-2xl font-bold tracking-tight'>
@@ -965,6 +971,26 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                               })
                             }
                           />
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className='pb-2'>
+                          <CardTitle className='flex items-center gap-2 text-sm font-medium'>
+                            <HeartPulse className='size-4' /> Recovery
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className='space-y-3 text-sm'>
+                          <div className='flex items-center justify-between gap-3'>
+                            <span className='font-medium'>Status</span>
+                            <ServiceRecoveryBadge recovery={service.recovery} />
+                          </div>
+                          <p className='text-muted-foreground'>
+                            {getServiceRecoveryDescription(service.recovery)}
+                          </p>
+                          <div className='text-xs text-muted-foreground'>
+                            Events: {service.recovery?.events.length ?? 0}
+                          </div>
+                          <ServiceRecoveryDoctorButton serviceId={service.id} />
                         </CardContent>
                       </Card>
                       <Card>
