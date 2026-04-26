@@ -26,6 +26,15 @@ Current UI runtime behavior:
 - set `VITE_SERVICE_LASSO_LOGS_DEBUG=true` to enable Logs screen debug output in the browser console outside dev mode
 - if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
 
+Service update UI contract:
+
+- the dashboard, services table, and service detail page display update states from the Service Lasso runtime
+- the stub layer loads update state from `GET /api/updates`
+- the UI surfaces `installed`, `available`, `downloadedCandidate`, `installDeferred`, and `failed` states
+- the dashboard shows a global update message banner when updates are available, downloaded, deferred by install window, or failed
+- service detail actions call `POST /api/updates/check`, `POST /api/services/:serviceId/update/download`, and `POST /api/services/:serviceId/update/install`
+- when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, update actions are visible against the local stub data but do not call a runtime API
+
 ![alt text](public/images/shadcn-admin.png)
 
 [![Sponsored by Clerk](https://img.shields.io/badge/Sponsored%20by-Clerk-5b6ee1?logo=clerk)](https://go.clerk.com/GttUAaK)

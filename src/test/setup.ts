@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
@@ -65,10 +66,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation((...args) => {
     const first = args[0]
-    if (
-      typeof first === 'string' &&
-      first.includes('not wrapped in act')
-    ) {
+    if (typeof first === 'string' && first.includes('not wrapped in act')) {
       return
     }
 

@@ -6,8 +6,13 @@ import {
   fetchDashboardSummary,
   fetchServices,
   runDashboardAction,
+  runServiceUpdateAction,
 } from './stub'
-import type { DashboardAction, DashboardService } from './types'
+import type {
+  DashboardAction,
+  DashboardService,
+  ServiceUpdateAction,
+} from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
 
@@ -80,4 +85,29 @@ export function useFavoriteFeatureState() {
   return {
     enabled: favoritesMutationEnabled,
   }
+}
+
+export function useServiceUpdateAction() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (options: {
+      action: ServiceUpdateAction
+      serviceId: string
+      force?: boolean
+    }) => runServiceUpdateAction(options),
+    onSuccess: (data) => {
+      queryClient.setQueryData(dashboardQueryKey, data)
+
+      const allServices = [
+        ...data.favorites,
+        ...data.others,
+      ] satisfies DashboardService[]
+      queryClient.setQueryData([...dashboardQueryKey, 'services'], allServices)
+
+      for (const service of allServices) {
+        queryClient.setQueryData([...dashboardQueryKey, service.id], service)
+      }
+    },
+  })
 }
