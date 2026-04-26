@@ -2,6 +2,8 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceUpdateAction,
+  ServiceUpdateState,
 } from './types'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -22,6 +24,33 @@ type RemoteServiceMeta = {
   imageUrl?: string
 }
 
+type RemoteServiceUpdate = {
+  serviceId: string
+  update: ServiceUpdateState
+}
+
+function createEmptyUpdateState(serviceId: string): ServiceUpdateState {
+  return {
+    serviceId,
+    state: 'installed',
+    updatedAt: new Date('2026-04-11T10:00:00+10:00').toISOString(),
+    lastCheck: {
+      checkedAt: new Date('2026-04-11T10:00:00+10:00').toISOString(),
+      status: 'latest',
+      reason: 'No newer update has been reported.',
+      sourceRepo: null,
+      track: null,
+      installedTag: null,
+      manifestTag: null,
+      latestTag: null,
+    },
+    available: null,
+    downloadedCandidate: null,
+    installDeferred: null,
+    failed: null,
+  }
+}
+
 async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
   if (!serviceLassoApiBaseUrl) return null
 
@@ -39,10 +68,31 @@ async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
   }
 }
 
+async function fetchRemoteUpdateStates(): Promise<
+  RemoteServiceUpdate[] | null
+> {
+  if (!serviceLassoApiBaseUrl) return null
+
+  try {
+    const response = await fetch(`${serviceLassoApiBaseUrl}/api/updates`)
+    if (!response.ok) return null
+
+    const payload = (await response.json()) as {
+      services?: RemoteServiceUpdate[]
+    }
+
+    return payload.services ?? []
+  } catch {
+    return null
+  }
+}
+
 function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
   if (serviceMeta.length === 0) return
 
-  const remoteMetaById = new Map(serviceMeta.map((service) => [service.id, service]))
+  const remoteMetaById = new Map(
+    serviceMeta.map((service) => [service.id, service])
+  )
 
   services = services.map((service) => {
     const remoteMeta = remoteMetaById.get(service.id)
@@ -62,10 +112,29 @@ function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
   })
 }
 
-async function syncFavoriteStateFromApi() {
-  const remoteServiceMeta = await fetchRemoteServiceMeta()
+export function applyRemoteUpdateStates(updateStates: RemoteServiceUpdate[]) {
+  if (updateStates.length === 0) return
+
+  const updateById = new Map(
+    updateStates.map((service) => [service.serviceId, service.update])
+  )
+
+  services = services.map((service) => ({
+    ...service,
+    updates: updateById.get(service.id) ?? service.updates,
+  }))
+}
+
+async function syncRemoteStateFromApi() {
+  const [remoteServiceMeta, remoteUpdateStates] = await Promise.all([
+    fetchRemoteServiceMeta(),
+    fetchRemoteUpdateStates(),
+  ])
   if (remoteServiceMeta) {
     applyRemoteServiceMeta(remoteServiceMeta)
+  }
+  if (remoteUpdateStates) {
+    applyRemoteUpdateStates(remoteUpdateStates)
   }
 }
 
@@ -182,6 +251,7 @@ let services: DashboardService[] = [
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open dashboard', kind: 'open_admin' },
     ],
+    updates: createEmptyUpdateState('traefik'),
   },
   {
     id: 'service-admin',
@@ -232,8 +302,7 @@ let services: DashboardService[] = [
       configPath:
         'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts',
       dataPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin\\dist',
-      logPath:
-        '/services/service-admin/service.log',
+      logPath: '/services/service-admin/service.log',
       workPath: 'C:\\projects\\service-lasso\\lasso-@serviceadmin',
       profile: 'develop',
     },
@@ -296,6 +365,31 @@ let services: DashboardService[] = [
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_config', label: 'Open config', kind: 'open_config' },
     ],
+    updates: {
+      ...createEmptyUpdateState('service-admin'),
+      state: 'available',
+      updatedAt: new Date('2026-04-11T10:12:00+10:00').toISOString(),
+      lastCheck: {
+        checkedAt: new Date('2026-04-11T10:12:00+10:00').toISOString(),
+        status: 'update_available',
+        reason: 'A newer Service Admin release is available.',
+        sourceRepo: 'service-lasso/lasso-serviceadmin',
+        track: 'latest',
+        installedTag: '2026.4.18-170a1af',
+        manifestTag: '2026.4.18-170a1af',
+        latestTag: '2026.4.26-demo',
+      },
+      available: {
+        tag: '2026.4.26-demo',
+        version: '2026.4.26-demo',
+        releaseUrl:
+          'https://github.com/service-lasso/lasso-serviceadmin/releases/tag/2026.4.26-demo',
+        publishedAt: new Date('2026-04-26T00:00:00Z').toISOString(),
+        assetName: '@serviceadmin-win32.zip',
+        assetUrl:
+          'https://github.com/service-lasso/lasso-serviceadmin/releases/download/2026.4.26-demo/@serviceadmin-win32.zip',
+      },
+    },
   },
   {
     id: 'zitadel',
@@ -396,6 +490,26 @@ let services: DashboardService[] = [
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open auth UI', kind: 'open_admin' },
     ],
+    updates: {
+      ...createEmptyUpdateState('zitadel'),
+      state: 'failed',
+      updatedAt: new Date('2026-04-11T10:14:00+10:00').toISOString(),
+      lastCheck: {
+        checkedAt: new Date('2026-04-11T10:14:00+10:00').toISOString(),
+        status: 'check_failed',
+        reason: 'Release source returned an error.',
+        sourceRepo: 'service-lasso/zitadel',
+        track: 'latest',
+        installedTag: '2.57.0',
+        manifestTag: '2.57.0',
+        latestTag: null,
+      },
+      failed: {
+        reason: 'Release source returned an error.',
+        failedAt: new Date('2026-04-11T10:14:00+10:00').toISOString(),
+        sourceStatus: 'check_failed',
+      },
+    },
   },
   {
     id: 'dagu',
@@ -481,6 +595,31 @@ let services: DashboardService[] = [
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open workflow UI', kind: 'open_admin' },
     ],
+    updates: {
+      ...createEmptyUpdateState('dagu'),
+      state: 'downloadedCandidate',
+      updatedAt: new Date('2026-04-11T10:15:00+10:00').toISOString(),
+      lastCheck: {
+        checkedAt: new Date('2026-04-11T10:15:00+10:00').toISOString(),
+        status: 'update_available',
+        reason: 'Update candidate has been downloaded.',
+        sourceRepo: 'service-lasso/dagu',
+        track: 'latest',
+        installedTag: '0.17.1',
+        manifestTag: '0.17.1',
+        latestTag: '0.18.0',
+      },
+      downloadedCandidate: {
+        tag: '0.18.0',
+        version: '0.18.0',
+        assetName: 'dagu-win32.zip',
+        assetUrl: 'https://example.invalid/dagu-win32.zip',
+        archivePath:
+          'C:\\service-lasso\\dagu\\.state\\update-candidates\\0.18.0\\dagu-win32.zip',
+        extractedPath: null,
+        downloadedAt: new Date('2026-04-11T10:15:00+10:00').toISOString(),
+      },
+    },
   },
   {
     id: 'secrets-broker',
@@ -583,6 +722,26 @@ let services: DashboardService[] = [
       { id: 'open_config', label: 'Open config', kind: 'open_config' },
       { id: 'uninstall', label: 'Uninstall service', kind: 'uninstall' },
     ],
+    updates: {
+      ...createEmptyUpdateState('secrets-broker'),
+      state: 'installDeferred',
+      updatedAt: new Date('2026-04-11T10:16:00+10:00').toISOString(),
+      lastCheck: {
+        checkedAt: new Date('2026-04-11T10:16:00+10:00').toISOString(),
+        status: 'update_available',
+        reason: 'Install is waiting for the maintenance window.',
+        sourceRepo: 'service-lasso/secrets-broker',
+        track: 'latest',
+        installedTag: 'v0.4.0-dev',
+        manifestTag: 'v0.4.0-dev',
+        latestTag: 'v0.4.1',
+      },
+      installDeferred: {
+        reason: 'Current time is outside updates.installWindow.',
+        deferredAt: new Date('2026-04-11T10:16:00+10:00').toISOString(),
+        nextEligibleAt: new Date('2026-04-12T02:00:00+10:00').toISOString(),
+      },
+    },
   },
 ]
 
@@ -606,11 +765,60 @@ function buildWarnings(currentServices: DashboardService[]) {
     warnings.push('No favorite services are configured for quick access.')
   }
 
+  const updateNotifications = buildUpdateNotifications(currentServices)
+  warnings.push(...updateNotifications.messages)
+
   return warnings
+}
+
+export function buildUpdateNotifications(currentServices: DashboardService[]) {
+  const latestCount = currentServices.filter(
+    (service) => service.updates?.state === 'installed'
+  ).length
+  const availableCount = currentServices.filter(
+    (service) => service.updates?.state === 'available'
+  ).length
+  const downloadedCount = currentServices.filter(
+    (service) => service.updates?.state === 'downloadedCandidate'
+  ).length
+  const deferredCount = currentServices.filter(
+    (service) => service.updates?.state === 'installDeferred'
+  ).length
+  const failedCount = currentServices.filter(
+    (service) => service.updates?.state === 'failed'
+  ).length
+  const messages: string[] = []
+
+  if (availableCount > 0) {
+    messages.push(`${availableCount} service update(s) are available.`)
+  }
+  if (downloadedCount > 0) {
+    messages.push(
+      `${downloadedCount} downloaded update candidate(s) are ready.`
+    )
+  }
+  if (deferredCount > 0) {
+    messages.push(
+      `${deferredCount} update install(s) are waiting for a window.`
+    )
+  }
+  if (failedCount > 0) {
+    messages.push(`${failedCount} update check(s) need attention.`)
+  }
+
+  return {
+    latestCount,
+    availableCount,
+    downloadedCount,
+    deferredCount,
+    failedCount,
+    messages,
+  }
 }
 
 function buildSummary(): DashboardSummary {
   const warnings = buildWarnings(services)
+  const updateNotifications = buildUpdateNotifications(services)
   const favorites = services.filter((service) => service.favorite)
   const others = services.filter((service) => !service.favorite)
 
@@ -639,6 +847,7 @@ function buildSummary(): DashboardSummary {
     problemServices: services.filter(
       (service) => service.status === 'degraded' || service.status === 'stopped'
     ),
+    updateNotifications,
   }
 }
 
@@ -679,23 +888,78 @@ async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
 
 export async function fetchDashboardSummary() {
   await wait(120)
-  await syncFavoriteStateFromApi()
+  await syncRemoteStateFromApi()
   return structuredClone(buildSummary())
 }
 
 export async function fetchServices() {
   await wait(120)
-  await syncFavoriteStateFromApi()
+  await syncRemoteStateFromApi()
   return structuredClone(services)
 }
 
 export async function fetchDashboardService(serviceId: string) {
   await wait(120)
-  await syncFavoriteStateFromApi()
+  await syncRemoteStateFromApi()
   return (
     structuredClone(services.find((service) => service.id === serviceId)) ??
     null
   )
+}
+
+function applyServiceUpdateState(
+  serviceId: string,
+  update: ServiceUpdateState
+) {
+  services = services.map((service) =>
+    service.id === serviceId ? { ...service, updates: update } : service
+  )
+}
+
+export async function runServiceUpdateAction(options: {
+  action: ServiceUpdateAction
+  serviceId: string
+  force?: boolean
+}) {
+  await wait(120)
+
+  if (!serviceLassoApiBaseUrl) {
+    return structuredClone(buildSummary())
+  }
+
+  const endpoint =
+    options.action === 'check'
+      ? `${serviceLassoApiBaseUrl}/api/updates/check`
+      : `${serviceLassoApiBaseUrl}/api/services/${options.serviceId}/update/${options.action}`
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body:
+      options.action === 'check'
+        ? JSON.stringify({ serviceId: options.serviceId })
+        : JSON.stringify({ force: options.force === true }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Update ${options.action} failed for ${options.serviceId}`)
+  }
+
+  const payload = (await response.json()) as {
+    update?: ServiceUpdateState
+    services?: Array<{ serviceId: string; update: ServiceUpdateState }>
+  }
+  const update =
+    payload.update ??
+    payload.services?.find((service) => service.serviceId === options.serviceId)
+      ?.update
+
+  if (update) {
+    applyServiceUpdateState(options.serviceId, update)
+  }
+
+  return structuredClone(buildSummary())
 }
 
 export function resolveStubServiceLogInfo(
@@ -705,7 +969,8 @@ export function resolveStubServiceLogInfo(
   const service = services.find((item) => item.id === serviceId)
   if (!service) return null
 
-  const defaultPath = service.metadata.logPath ?? '/mock-logs/service-sample.log'
+  const defaultPath =
+    service.metadata.logPath ?? '/mock-logs/service-sample.log'
   const availableTypes: Array<'default' | 'access' | 'error'> = ['default']
 
   return {

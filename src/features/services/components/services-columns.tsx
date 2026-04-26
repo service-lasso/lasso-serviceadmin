@@ -11,6 +11,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { LongText } from '@/components/long-text'
+import {
+  getServiceUpdateDescription,
+  ServiceUpdateBadge,
+} from '@/components/service-update-status'
 import { DataTableRowActions } from './data-table-row-actions'
 
 function renderStatusBadge(status: DashboardService['status']) {
@@ -102,6 +106,25 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
         statusSortRank[rowB.getValue(columnId) as DashboardService['status']]
       return left - right
     },
+  },
+  {
+    id: 'updates',
+    accessorFn: (row) => row.updates?.state ?? 'unknown',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Updates' />
+    ),
+    cell: ({ row }) => {
+      const service = row.original
+      return (
+        <div className='flex max-w-[220px] flex-col gap-1'>
+          <ServiceUpdateBadge updates={service.updates} />
+          <span className='line-clamp-2 text-xs text-muted-foreground'>
+            {getServiceUpdateDescription(service.updates)}
+          </span>
+        </div>
+      )
+    },
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
     id: 'favorite',

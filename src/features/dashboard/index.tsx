@@ -6,6 +6,7 @@ import {
   PackageOpen,
   Play,
   RefreshCcw,
+  ShieldAlert,
   Star,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
@@ -34,6 +35,10 @@ import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
+import {
+  getServiceUpdateDescription,
+  ServiceUpdateBadge,
+} from '@/components/service-update-status'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -132,6 +137,15 @@ function ServiceCard({ service }: { service: DashboardService }) {
             <StatusBadge status={service.status} />
           </div>
         </div>
+        <div className='rounded-md border border-blue-500/20 bg-blue-500/5 p-2 text-xs'>
+          <div className='flex items-center justify-between gap-2'>
+            <span className='font-medium'>Updates</span>
+            <ServiceUpdateBadge updates={service.updates} />
+          </div>
+          <p className='mt-1 text-muted-foreground'>
+            {getServiceUpdateDescription(service.updates)}
+          </p>
+        </div>
         <div className='flex flex-wrap gap-2'>
           {service.links.slice(0, 2).map((link) => (
             <Button
@@ -179,7 +193,7 @@ function DashboardLoading() {
             </p>
           </div>
         </div>
-        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5'>
           {Array.from({ length: 4 }).map((_, index) => (
             <Card key={index}>
               <CardHeader>
@@ -258,7 +272,31 @@ export function Dashboard() {
             </p>
           </div>
         </div>
-        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+        {summary.updateNotifications.messages.length > 0 ? (
+          <Card className='border-blue-500/30 bg-blue-500/5'>
+            <CardHeader className='pb-3'>
+              <CardTitle className='flex items-center gap-2 text-base'>
+                <ShieldAlert className='size-4 text-blue-600' />
+                Service updates need attention
+              </CardTitle>
+              <CardDescription>
+                These messages come from the Service Lasso update API/state and
+                match the CLI update states.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
+              {summary.updateNotifications.messages.map((message) => (
+                <div
+                  key={message}
+                  className='rounded-lg border bg-background p-3 text-sm'
+                >
+                  {message}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
+        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5'>
           <SummaryCard
             title='Runtime health'
             value={summary.runtime.status === 'healthy' ? 'Healthy' : 'Warning'}
@@ -305,6 +343,16 @@ export function Dashboard() {
             value={String(summary.installedCount)}
             description='Installed services tracked by the stub'
             icon={PackageOpen}
+          />
+          <SummaryCard
+            title='Updates'
+            value={String(
+              summary.updateNotifications.availableCount +
+                summary.updateNotifications.downloadedCount +
+                summary.updateNotifications.deferredCount
+            )}
+            description={`${summary.updateNotifications.failedCount} failed check(s)`}
+            icon={ShieldAlert}
           />
         </div>
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>

@@ -6,18 +6,18 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Link, getRouteApi } from '@tanstack/react-router'
+import { Link, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
-import { Activity, PauseCircle, PlayCircle, ScrollText, Wifi } from 'lucide-react'
-import { useServices } from '@/lib/service-lasso-dashboard/hooks'
-import { usePageMetadata } from '@/lib/page-metadata'
-import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import {
-  debugLogs,
-  fetchServiceLogChunk,
-  fetchServiceLogInfo,
-  type ServiceLogInfo,
-} from './provider'
+  Activity,
+  PauseCircle,
+  PlayCircle,
+  ScrollText,
+  Wifi,
+} from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
+import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +43,12 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  debugLogs,
+  fetchServiceLogChunk,
+  fetchServiceLogInfo,
+  type ServiceLogInfo,
+} from './provider'
 
 const route = getRouteApi('/_authenticated/logs/')
 
@@ -50,12 +56,16 @@ function selectedServiceFromSearch(
   services: DashboardService[],
   selectedId?: string
 ) {
-  return services.find((service) => service.id === selectedId) ?? services[0] ?? null
+  return (
+    services.find((service) => service.id === selectedId) ?? services[0] ?? null
+  )
 }
 
 function StatusBadge({ status }: { status: DashboardService['status'] }) {
   if (status === 'running') {
-    return <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
+    )
   }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
@@ -76,7 +86,6 @@ function LogsLoading() {
     </div>
   )
 }
-
 
 const DEFAULT_LOG_CHUNK_SIZE = 100
 const LOAD_OLDER_THRESHOLD_PX = 48
@@ -267,7 +276,12 @@ function ServiceLazyLogViewer({
         setError(null)
         const [info, chunk] = await Promise.all([
           fetchServiceLogInfo(service, 'default'),
-          fetchServiceLogChunk(service, 'default', undefined, DEFAULT_LOG_CHUNK_SIZE),
+          fetchServiceLogChunk(
+            service,
+            'default',
+            undefined,
+            DEFAULT_LOG_CHUNK_SIZE
+          ),
         ])
 
         if (cancelled) return
@@ -438,11 +452,17 @@ function ServiceLazyLogViewer({
       <div className='space-y-1 text-xs text-muted-foreground'>
         <div
           className='truncate whitespace-nowrap'
-          title={logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}
+          title={
+            logInfo?.path ??
+            service.metadata.logPath ??
+            'resolved by service endpoint'
+          }
         >
           Source:{' '}
           <span className='font-medium'>
-            {logInfo?.path ?? service.metadata.logPath ?? 'resolved by service endpoint'}
+            {logInfo?.path ??
+              service.metadata.logPath ??
+              'resolved by service endpoint'}
           </span>
         </div>
         <div
@@ -471,22 +491,18 @@ function ServiceLazyLogViewer({
 export function Logs() {
   usePageMetadata({
     title: 'Service Admin - Logs',
-    description: 'Service Admin log viewing surface for Service Lasso services.',
+    description:
+      'Service Admin log viewing surface for Service Lasso services.',
   })
 
   const searchState = route.useSearch()
+  const navigate = useNavigate()
   const servicesQuery = useServices()
   const [paused, setPaused] = useState(true)
   const [serviceQuery, setServiceQuery] = useState('')
-  const [selectedServiceId, setSelectedServiceId] = useState(searchState.service ?? '')
+  const selectedServiceId = searchState.service ?? ''
 
-  const services = servicesQuery.data ?? []
-
-  useEffect(() => {
-    if (searchState.service) {
-      setSelectedServiceId(searchState.service)
-    }
-  }, [searchState.service])
+  const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
 
   const filteredServices = useMemo(() => {
     const normalized = serviceQuery.trim().toLowerCase()
@@ -528,10 +544,14 @@ export function Logs() {
           </div>
           <div className='flex flex-wrap gap-2'>
             <Button variant='outline' size='sm' asChild>
-              <Link to='/services' search={{}}>Services</Link>
+              <Link to='/services' search={{}}>
+                Services
+              </Link>
             </Button>
             <Button variant='outline' size='sm' asChild>
-              <Link to='/runtime' search={{}}>Runtime</Link>
+              <Link to='/runtime' search={{}}>
+                Runtime
+              </Link>
             </Button>
           </div>
         </div>
@@ -567,7 +587,8 @@ export function Logs() {
                     {paused ? 'Paused' : 'Following'}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    Uses the resolved service log endpoint and scroll-follow behavior.
+                    Uses the resolved service log endpoint and scroll-follow
+                    behavior.
                   </p>
                 </CardContent>
               </Card>
@@ -582,7 +603,8 @@ export function Logs() {
                     {selectedService?.metadata.logPath ?? 'Resolved by API'}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    The browser only requests service + type. The server resolves the real path.
+                    The browser only requests service + type. The server
+                    resolves the real path.
                   </p>
                 </CardContent>
               </Card>
@@ -593,7 +615,8 @@ export function Logs() {
                 <CardHeader>
                   <CardTitle>Services</CardTitle>
                   <CardDescription>
-                    Search and select the service whose logs you want to inspect.
+                    Search and select the service whose logs you want to
+                    inspect.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-4'>
@@ -617,13 +640,26 @@ export function Logs() {
                             <TableRow
                               key={service.id}
                               className='cursor-pointer'
-                              data-state={selectedService?.id === service.id ? 'selected' : undefined}
-                              onClick={() => setSelectedServiceId(service.id)}
+                              data-state={
+                                selectedService?.id === service.id
+                                  ? 'selected'
+                                  : undefined
+                              }
+                              onClick={() => {
+                                void navigate({
+                                  to: '/logs',
+                                  search: { service: service.id },
+                                })
+                              }}
                             >
                               <TableCell>
                                 <div className='flex min-w-0 flex-col'>
-                                  <span className='font-medium'>{service.name}</span>
-                                  <span className='text-xs text-muted-foreground'>{service.id}</span>
+                                  <span className='font-medium'>
+                                    {service.name}
+                                  </span>
+                                  <span className='text-xs text-muted-foreground'>
+                                    {service.id}
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell>
@@ -678,7 +714,10 @@ export function Logs() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ServiceLazyLogViewer service={selectedService} paused={paused} />
+                  <ServiceLazyLogViewer
+                    service={selectedService}
+                    paused={paused}
+                  />
                 </CardContent>
               </Card>
             </div>

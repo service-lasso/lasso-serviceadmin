@@ -77,6 +77,63 @@ export type ServiceAction = {
     | 'open_admin'
 }
 
+export type ServiceUpdateStateKind =
+  | 'installed'
+  | 'available'
+  | 'downloadedCandidate'
+  | 'installDeferred'
+  | 'failed'
+
+export type ServiceUpdateState = {
+  serviceId: string
+  state: ServiceUpdateStateKind
+  updatedAt: string
+  lastCheck: {
+    checkedAt: string
+    status:
+      | 'latest'
+      | 'update_available'
+      | 'pinned'
+      | 'unavailable'
+      | 'check_failed'
+    reason: string
+    sourceRepo: string | null
+    track: string | null
+    installedTag: string | null
+    manifestTag: string | null
+    latestTag: string | null
+  } | null
+  available: {
+    tag: string | null
+    version: string | null
+    releaseUrl: string | null
+    publishedAt: string | null
+    assetName: string | null
+    assetUrl: string | null
+  } | null
+  downloadedCandidate: {
+    tag: string
+    version: string | null
+    assetName: string
+    assetUrl: string
+    archivePath: string
+    extractedPath: string | null
+    downloadedAt: string
+  } | null
+  installDeferred: {
+    reason: string
+    deferredAt: string
+    nextEligibleAt: string | null
+  } | null
+  failed: {
+    reason: string
+    failedAt: string
+    sourceStatus: string | null
+  } | null
+}
+
+export type ServiceUpdateAction = 'check' | 'download' | 'install'
+
 export type DashboardService = {
   id: string
   name: string
@@ -94,6 +151,7 @@ export type DashboardService = {
   environmentVariables: ServiceEnvironmentVariable[]
   recentLogs: ServiceLogPreviewEntry[]
   actions: ServiceAction[]
+  updates?: ServiceUpdateState
 }
 
 export type DashboardRuntime = {
@@ -114,6 +172,14 @@ export type DashboardSummary = {
   others: DashboardService[]
   warnings: string[]
   problemServices: DashboardService[]
+  updateNotifications: {
+    latestCount: number
+    availableCount: number
+    downloadedCount: number
+    deferredCount: number
+    failedCount: number
+    messages: string[]
+  }
 }
 
 export type DashboardAction =
