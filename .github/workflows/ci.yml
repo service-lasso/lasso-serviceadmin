@@ -35,8 +35,17 @@ jobs:
       - name: Run Prettier check
         run: npm run format:check
 
+      - name: Run unit tests
+        run: npm run test:unit
+
       - name: Build the project
         run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser UI tests
+        run: npm run test:ui
 
       - name: Run service template checks
         shell: bash
