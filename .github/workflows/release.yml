@@ -41,6 +41,10 @@ jobs:
         shell: bash
         run: npm ci --legacy-peer-deps
 
+      - name: Run unit tests
+        shell: bash
+        run: npm run test:unit
+
       - name: Build app
         shell: bash
         run: npm run build
@@ -61,8 +65,35 @@ jobs:
           name: serviceadmin-${{ matrix.platform }}
           path: ${{ matrix.artifact }}
 
+  browser-e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright browser
+        shell: bash
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser UI tests
+        shell: bash
+        run: npm run test:ui
+
   release:
-    needs: build
+    needs:
+      - build
+      - browser-e2e
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
 

@@ -11,25 +11,14 @@ import {
 } from 'lucide-react'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 
-const serviceImageModules = import.meta.glob(
-  '../../public/images/services/*.svg',
-  {
-    query: '?url',
-    import: 'default',
-    eager: true,
-  }
-) as Record<string, string>
-
-const serviceImageUrlByName = new Map<string, string>()
-
-for (const [modulePath, assetUrl] of Object.entries(serviceImageModules)) {
-  const filename = modulePath
-    .split('/')
-    .pop()
-    ?.replace(/\.svg$/i, '')
-  if (!filename) continue
-  serviceImageUrlByName.set(filename.toLowerCase(), assetUrl)
-}
+const serviceImageNames = new Set([
+  'dagu',
+  'secrets-broker',
+  'service-admin',
+  'traefik',
+  'zitadel_dark',
+  'zitadel_light',
+])
 
 export type GraphCategory =
   | 'app'
@@ -284,7 +273,7 @@ export function buildApiUsageEdge({
 }
 
 function normalizeServiceAssetName(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, '_')
+  return value.trim().toLowerCase().replace(/^@/, '').replace(/\s+/g, '_')
 }
 
 export function getServiceNodeImage(
@@ -295,12 +284,22 @@ export function getServiceNodeImage(
 
   const candidates = [service.name, service.id].flatMap((value) => {
     const normalized = normalizeServiceAssetName(value)
-    return [`${normalized}_${isDark ? 'dark' : 'light'}`, normalized]
+    const hyphenated = normalized.replace(/_/g, '-')
+    return [
+      `${normalized}_${isDark ? 'dark' : 'light'}`,
+      `${hyphenated}_${isDark ? 'dark' : 'light'}`,
+      normalized,
+      hyphenated,
+    ]
   })
 
+  if (service.id === '@serviceadmin') {
+    candidates.unshift('service-admin')
+  }
+
   for (const candidate of candidates) {
-    const match = serviceImageUrlByName.get(candidate)
-    if (match) return match
+    if (serviceImageNames.has(candidate))
+      return `/images/services/${candidate}.svg`
   }
 
   return undefined

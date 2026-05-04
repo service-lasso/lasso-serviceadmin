@@ -13,6 +13,7 @@
     "knip": "knip",
     "test": "vitest run",
     "test:unit": "vitest run",
+    "test:ui": "playwright test",
     "test:logs:unit": "vitest run src/features/logs/provider.stub.test.ts src/features/logs/provider.runtime.test.ts",
     "test:logs:e2e": "start-server-and-test \"vite --host 127.0.0.1 --port 4175 --strictPort\" http://127.0.0.1:4175 \"cypress run --config baseUrl=http://127.0.0.1:4175 --spec cypress/e2e/logs/logs-page.cy.js\""
   },
@@ -69,6 +70,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@faker-js/faker": "^10.4.0",
+    "@playwright/test": "^1.59.1",
     "@tanstack/eslint-plugin-query": "^5.95.2",
     "@tanstack/react-query-devtools": "^5.95.2",
     "@tanstack/react-router-devtools": "^1.166.11",

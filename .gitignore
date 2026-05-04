@@ -11,6 +11,8 @@ node_modules
 dist
 .package/
 output/
+playwright-report/
+test-results/
 verify/service-harness.ci.json
 dist-ssr
 *.local
