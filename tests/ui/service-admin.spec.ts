@@ -6,13 +6,13 @@ test('dashboard renders and starts stopped services', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   await expect(page.getByText('Runtime health', { exact: true })).toBeVisible()
   await expect(page.getByText('1 stopped, 1 degraded')).toBeVisible()
-  await expect(page.getByText('3/5')).toBeVisible()
+  await expect(page.getByText('2/4')).toBeVisible()
   await expect(page.getByText('Dagu').first()).toBeVisible()
   await expect(page.getByText('Stopped').first()).toBeVisible()
 
   await page.getByRole('button', { name: /start services/i }).click()
 
-  await expect(page.getByText('4/5')).toBeVisible()
+  await expect(page.getByText('3/4')).toBeVisible()
   await expect(
     page.getByRole('link', { name: /dagu add favorite running/i })
   ).toBeVisible()

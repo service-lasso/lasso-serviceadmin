@@ -13,7 +13,6 @@ import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 
 const serviceImageNames = new Set([
   'dagu',
-  'secrets-broker',
   'service-admin',
   'traefik',
   'zitadel_dark',

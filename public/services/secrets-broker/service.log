@@ -1,4 +1,0 @@
-2026-04-16T16:00:01.001Z INFO secrets-broker Vault bootstrap started
-2026-04-16T16:00:01.455Z INFO secrets-broker Provider token cache warm
-2026-04-16T16:00:01.899Z INFO secrets-broker Local api listening on 8083
-2026-04-16T16:00:02.171Z INFO secrets-broker Ready to resolve secret references
