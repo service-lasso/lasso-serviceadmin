@@ -9,6 +9,7 @@ import {
   Square,
   Star,
 } from 'lucide-react'
+import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import {
   useFavoriteFeatureState,
   useDashboardAction,
@@ -83,7 +84,7 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         type='button'
         size='icon'
         variant='outline'
-        className='size-8'
+        className={lifecycleActionButtonClass('start', 'size-8')}
         aria-label={`Start ${service.name}`}
         title={`Start ${service.name}`}
         disabled={disabled}
@@ -98,7 +99,7 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         type='button'
         size='icon'
         variant='outline'
-        className='size-8'
+        className={lifecycleActionButtonClass('stop', 'size-8')}
         aria-label={`Stop ${service.name}`}
         title={`Stop ${service.name}`}
         disabled={disabled}
@@ -113,7 +114,7 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         type='button'
         size='icon'
         variant='outline'
-        className='size-8'
+        className={lifecycleActionButtonClass('restart', 'size-8')}
         aria-label={`Restart ${service.name}`}
         title={`Restart ${service.name}`}
         disabled={disabled}

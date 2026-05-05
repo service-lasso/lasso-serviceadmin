@@ -1,6 +1,7 @@
 import { getRouteApi } from '@tanstack/react-router'
 import { Play, RotateCcw, Square } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import {
   useDashboardAction,
   useServices,
@@ -70,6 +71,8 @@ export function Services() {
             <Button
               type='button'
               size='sm'
+              variant='outline'
+              className={lifecycleActionButtonClass('start')}
               disabled={actionsDisabled}
               onClick={() => actionMutation.mutate('start-services')}
             >
@@ -80,6 +83,7 @@ export function Services() {
               type='button'
               size='sm'
               variant='outline'
+              className={lifecycleActionButtonClass('stop')}
               disabled={actionsDisabled}
               onClick={() => actionMutation.mutate('stop-services')}
             >
@@ -90,6 +94,7 @@ export function Services() {
               type='button'
               size='sm'
               variant='outline'
+              className={lifecycleActionButtonClass('restart')}
               disabled={actionsDisabled}
               onClick={() => actionMutation.mutate('restart-services')}
             >
