@@ -2,6 +2,7 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceStatus,
 } from './types'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -46,22 +47,24 @@ function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
     serviceMeta.map((service) => [service.id, service])
   )
 
-  services = services.map((service) => {
-    const remoteMeta = remoteMetaById.get(service.id)
-    if (!remoteMeta) return service
+  setServices(
+    services.map((service) => {
+      const remoteMeta = remoteMetaById.get(service.id)
+      if (!remoteMeta) return service
 
-    return {
-      ...service,
-      favorite:
-        remoteMeta.favorite === undefined
-          ? service.favorite
-          : Boolean(remoteMeta.favorite),
-      metadata: {
-        ...service.metadata,
-        imageUrl: remoteMeta.imageUrl ?? service.metadata.imageUrl,
-      },
-    }
-  })
+      return {
+        ...service,
+        favorite:
+          remoteMeta.favorite === undefined
+            ? service.favorite
+            : Boolean(remoteMeta.favorite),
+        metadata: {
+          ...service.metadata,
+          imageUrl: remoteMeta.imageUrl ?? service.metadata.imageUrl,
+        },
+      }
+    })
+  )
 }
 
 async function syncFavoriteStateFromApi() {
@@ -71,7 +74,9 @@ async function syncFavoriteStateFromApi() {
   }
 }
 
-let services: DashboardService[] = [
+const stubStateStorageKey = 'service-lasso-dashboard-stub-state-v1'
+
+const defaultServices: DashboardService[] = [
   {
     id: 'traefik',
     name: 'Traefik',
@@ -463,9 +468,157 @@ let services: DashboardService[] = [
   },
 ]
 
-let runtime = {
+type StubRuntimeState = {
+  status: 'warning'
+  lastReloadedAt: string
+}
+
+const defaultRuntime: StubRuntimeState = {
   status: 'warning' as const,
   lastReloadedAt: new Date('2026-04-10T19:55:00+10:00').toISOString(),
+}
+
+type PersistedStubState = {
+  services?: DashboardService[]
+  runtime?: StubRuntimeState
+}
+
+function getBrowserStorage() {
+  if (typeof window === 'undefined') return null
+
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+function cloneDefaultServices() {
+  return structuredClone(defaultServices)
+}
+
+function hasCurrentServiceSet(servicesToCheck: DashboardService[]) {
+  const currentIds = new Set(defaultServices.map((service) => service.id))
+  if (servicesToCheck.length !== currentIds.size) return false
+
+  return servicesToCheck.every((service) => currentIds.has(service.id))
+}
+
+function restorePersistedServices(servicesToRestore?: DashboardService[]) {
+  if (!servicesToRestore || !hasCurrentServiceSet(servicesToRestore)) {
+    return cloneDefaultServices()
+  }
+
+  const persistedById = new Map(
+    servicesToRestore.map((service) => [service.id, service])
+  )
+
+  return defaultServices.map((defaultService) => {
+    const persistedService = persistedById.get(defaultService.id)
+    if (!persistedService) return structuredClone(defaultService)
+
+    return {
+      ...structuredClone(defaultService),
+      favorite:
+        typeof persistedService.favorite === 'boolean'
+          ? persistedService.favorite
+          : defaultService.favorite,
+      note:
+        typeof persistedService.note === 'string'
+          ? persistedService.note
+          : defaultService.note,
+      status: persistedService.status ?? defaultService.status,
+      runtimeHealth: {
+        ...defaultService.runtimeHealth,
+        ...persistedService.runtimeHealth,
+      },
+      recentLogs: Array.isArray(persistedService.recentLogs)
+        ? persistedService.recentLogs.slice(0, 5)
+        : defaultService.recentLogs,
+    }
+  })
+}
+
+function restorePersistedRuntime(runtimeToRestore?: StubRuntimeState) {
+  return {
+    ...defaultRuntime,
+    ...runtimeToRestore,
+  }
+}
+
+function readPersistedStubState(): PersistedStubState {
+  const storage = getBrowserStorage()
+  if (!storage) return {}
+
+  const rawState = storage.getItem(stubStateStorageKey)
+  if (!rawState) return {}
+
+  try {
+    return JSON.parse(rawState) as PersistedStubState
+  } catch {
+    storage.removeItem(stubStateStorageKey)
+    return {}
+  }
+}
+
+function syncRelationshipStatuses(servicesToSync: DashboardService[]) {
+  const serviceStateById = new Map(
+    servicesToSync.map((service) => [
+      service.id,
+      { name: service.name, status: service.status },
+    ])
+  )
+
+  const syncRelation = (relation: DashboardService['dependencies'][number]) => {
+    const linkedService = serviceStateById.get(relation.id)
+    if (!linkedService) return relation
+
+    return {
+      ...relation,
+      name: linkedService.name,
+      status: linkedService.status,
+    }
+  }
+
+  return servicesToSync.map((service) => ({
+    ...service,
+    dependencies: service.dependencies.map(syncRelation),
+    dependents: service.dependents.map(syncRelation),
+  }))
+}
+
+const persistedState = readPersistedStubState()
+
+let services: DashboardService[] = syncRelationshipStatuses(
+  restorePersistedServices(persistedState.services)
+)
+
+let runtime = restorePersistedRuntime(persistedState.runtime)
+
+function persistStubState() {
+  const storage = getBrowserStorage()
+  if (!storage) return
+
+  storage.setItem(
+    stubStateStorageKey,
+    JSON.stringify({
+      services,
+      runtime,
+    } satisfies PersistedStubState)
+  )
+}
+
+function setServices(nextServices: DashboardService[]) {
+  services = syncRelationshipStatuses(nextServices)
+  persistStubState()
+}
+
+function serviceHealthForStatus(
+  status: ServiceStatus
+): DashboardService['runtimeHealth']['health'] {
+  if (status === 'running') return 'healthy'
+  if (status === 'degraded') return 'warning'
+  return 'critical'
 }
 
 function buildWarnings(currentServices: DashboardService[]) {
@@ -520,13 +673,15 @@ function buildSummary(): DashboardSummary {
 }
 
 function syncFavoriteState(serviceId: string, favorite?: boolean) {
-  services = services.map((service) =>
-    service.id === serviceId
-      ? {
-          ...service,
-          favorite: favorite ?? !service.favorite,
-        }
-      : service
+  setServices(
+    services.map((service) =>
+      service.id === serviceId
+        ? {
+            ...service,
+            favorite: favorite ?? !service.favorite,
+          }
+        : service
+    )
   )
 }
 
@@ -608,129 +763,121 @@ export function buildStubServiceLogUrl(
   return `/api/logs/content?${params.toString()}`
 }
 
+function updateServiceLifecycleState({
+  service,
+  nextStatus,
+  note,
+  logMessage,
+  now,
+  restartRecorded,
+}: {
+  service: DashboardService
+  nextStatus: ServiceStatus
+  note: string
+  logMessage: string
+  now: string
+  restartRecorded: boolean
+}) {
+  return {
+    ...service,
+    status: nextStatus,
+    note,
+    runtimeHealth: {
+      ...service.runtimeHealth,
+      state: nextStatus,
+      health: serviceHealthForStatus(nextStatus),
+      uptime: nextStatus === 'running' ? '0m' : '0m',
+      lastCheckAt: now,
+      lastRestartAt: restartRecorded
+        ? now
+        : service.runtimeHealth.lastRestartAt,
+      summary: note,
+    },
+    recentLogs: [
+      {
+        timestamp: now,
+        level: 'info' as const,
+        source: 'supervisor' as const,
+        message: logMessage,
+      },
+      ...service.recentLogs,
+    ].slice(0, 5),
+  }
+}
+
 export async function runDashboardAction(action: DashboardAction) {
   await wait(180)
+  const now = new Date().toISOString()
 
   if (action === 'reload-runtime') {
     runtime = {
       ...runtime,
-      lastReloadedAt: new Date().toISOString(),
+      lastReloadedAt: now,
     }
+    persistStubState()
   } else if (action === 'start-services') {
-    services = services.map((service) => {
-      if (service.status === 'stopped') {
-        return {
-          ...service,
-          status: 'running',
+    setServices(
+      services.map((service) => {
+        if (service.status !== 'stopped') return service
+
+        return updateServiceLifecycleState({
+          service,
+          nextStatus: 'running',
           note: 'Service was started from the dashboard action.',
-          runtimeHealth: {
-            ...service.runtimeHealth,
-            state: 'running',
-            health: 'healthy',
-            uptime: '0m',
-            lastCheckAt: new Date().toISOString(),
-            lastRestartAt: new Date().toISOString(),
-            summary: 'Service was started from the dashboard action.',
-          },
-          recentLogs: [
-            {
-              timestamp: new Date().toISOString(),
-              level: 'info' as const,
-              source: 'supervisor' as const,
-              message: 'Service started from dashboard bulk action.',
-            },
-            ...service.recentLogs,
-          ].slice(0, 5),
-        }
-      }
-
-      return service
-    })
+          logMessage: 'Service started from dashboard bulk action.',
+          now,
+          restartRecorded: true,
+        })
+      })
+    )
   } else if (action === 'stop-services') {
-    services = services.map((service) => ({
-      ...service,
-      status: 'stopped',
-      note: 'Service was stopped from the dashboard action.',
-      runtimeHealth: {
-        ...service.runtimeHealth,
-        state: 'stopped',
-        health: 'critical',
-        uptime: '0m',
-        lastCheckAt: new Date().toISOString(),
-        summary: 'Service was stopped from the dashboard action.',
-      },
-      recentLogs: [
-        {
-          timestamp: new Date().toISOString(),
-          level: 'info' as const,
-          source: 'supervisor' as const,
-          message: 'Service stopped from dashboard bulk action.',
-        },
-        ...service.recentLogs,
-      ].slice(0, 5),
-    }))
+    setServices(
+      services.map((service) =>
+        updateServiceLifecycleState({
+          service,
+          nextStatus: 'stopped',
+          note: 'Service was stopped from the dashboard action.',
+          logMessage: 'Service stopped from dashboard bulk action.',
+          now,
+          restartRecorded: false,
+        })
+      )
+    )
   } else if (action === 'restart-services') {
-    services = services.map((service) => ({
-      ...service,
-      status: 'running',
-      note: 'Service was restarted from the dashboard action.',
-      runtimeHealth: {
-        ...service.runtimeHealth,
-        state: 'running',
-        health: 'healthy',
-        uptime: '0m',
-        lastCheckAt: new Date().toISOString(),
-        lastRestartAt: new Date().toISOString(),
-        summary: 'Service was restarted from the dashboard action.',
-      },
-      recentLogs: [
-        {
-          timestamp: new Date().toISOString(),
-          level: 'info' as const,
-          source: 'supervisor' as const,
-          message: 'Service restarted from dashboard bulk action.',
-        },
-        ...service.recentLogs,
-      ].slice(0, 5),
-    }))
+    setServices(
+      services.map((service) =>
+        updateServiceLifecycleState({
+          service,
+          nextStatus: 'running',
+          note: 'Service was restarted from the dashboard action.',
+          logMessage: 'Service restarted from dashboard bulk action.',
+          now,
+          restartRecorded: true,
+        })
+      )
+    )
   } else if (action.kind === 'service-lifecycle') {
-    services = services.map((service) => {
-      if (service.id !== action.serviceId) return service
+    const nextStatus = action.action === 'stop' ? 'stopped' : 'running'
+    const actionLabel = {
+      restart: 'restarted',
+      start: 'started',
+      stop: 'stopped',
+    }[action.action]
 
-      const nextStatus = action.action === 'stop' ? 'stopped' : 'running'
-      const actionLabel = {
-        restart: 'restarted',
-        start: 'started',
-        stop: 'stopped',
-      }[action.action]
+    setServices(
+      services.map((service) => {
+        if (service.id !== action.serviceId) return service
 
-      return {
-        ...service,
-        status: nextStatus,
-        note: `Service was ${actionLabel} from the services table.`,
-        runtimeHealth: {
-          ...service.runtimeHealth,
-          state: nextStatus,
-          health: nextStatus === 'running' ? 'healthy' : 'critical',
-          uptime: nextStatus === 'running' ? '0m' : '0m',
-          lastCheckAt: new Date().toISOString(),
-          lastRestartAt:
-            action.action === 'stop'
-              ? service.runtimeHealth.lastRestartAt
-              : new Date().toISOString(),
-          summary: `Service was ${actionLabel} from the services table.`,
-        },
-        recentLogs: [
-          {
-            timestamp: new Date().toISOString(),
-            level: 'info' as const,
-            source: 'supervisor' as const,
-            message: `Service ${action.action} requested from services table.`,
-          },
-          ...service.recentLogs,
-        ].slice(0, 5),
-      }
-    })
+        return updateServiceLifecycleState({
+          service,
+          nextStatus,
+          note: `Service was ${actionLabel} from the Service Admin UI.`,
+          logMessage: `Service ${action.action} requested from Service Admin UI.`,
+          now,
+          restartRecorded: action.action !== 'stop',
+        })
+      })
+    )
   } else {
     const service = services.find((item) => item.id === action.serviceId)
     const nextFavorite = service ? !service.favorite : true

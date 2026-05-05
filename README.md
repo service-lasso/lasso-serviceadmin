@@ -20,7 +20,7 @@ Example:
 Current UI runtime behavior:
 
 - if `VITE_SERVICE_LASSO_API_BASE_URL` is set, dashboard service status, health, runtime actions, and logs are read from the live Service Lasso runtime API
-- if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, the UI uses local demo stub data for development preview only
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, the UI uses local demo stub data for development preview only; lifecycle and favorite changes are persisted in browser local storage so the UI behaves consistently during a dev session
 - a configured but unavailable runtime API is treated as an error instead of falling back to demo status
 - favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
 - favorites are expected to load from `GET /api/services/meta`
