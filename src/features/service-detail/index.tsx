@@ -32,7 +32,11 @@ import {
   buildServiceNodeStyle,
   getServiceNodeImage,
 } from '@/lib/service-graph'
-import { useDashboardService } from '@/lib/service-lasso-dashboard/hooks'
+import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
+import {
+  useDashboardAction,
+  useDashboardService,
+} from '@/lib/service-lasso-dashboard/hooks'
 import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 import type {
   DashboardService,
@@ -636,7 +640,14 @@ function EnvironmentTable({
   )
 }
 
-function renderActionButton(action: ServiceAction, service: DashboardService) {
+function ServiceActionButton({
+  action,
+  service,
+}: {
+  action: ServiceAction
+  service: DashboardService
+}) {
+  const actionMutation = useDashboardAction()
   const key = action.id
 
   if (action.kind === 'open_logs') {
@@ -670,6 +681,33 @@ function renderActionButton(action: ServiceAction, service: DashboardService) {
         <a href={adminTarget ?? '#'} target='_blank' rel='noreferrer'>
           {action.label}
         </a>
+      </Button>
+    )
+  }
+
+  if (
+    action.kind === 'start' ||
+    action.kind === 'stop' ||
+    action.kind === 'restart'
+  ) {
+    const lifecycleAction = action.kind
+
+    return (
+      <Button
+        key={key}
+        variant='outline'
+        size='sm'
+        disabled={actionMutation.isPending}
+        className={lifecycleActionButtonClass(lifecycleAction)}
+        onClick={() =>
+          actionMutation.mutate({
+            kind: 'service-lifecycle',
+            serviceId: service.id,
+            action: lifecycleAction,
+          })
+        }
+      >
+        {action.label}
       </Button>
     )
   }
@@ -930,9 +968,13 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           </CardTitle>
                         </CardHeader>
                         <CardContent className='flex flex-wrap gap-2'>
-                          {service.actions.map((action) =>
-                            renderActionButton(action, service)
-                          )}
+                          {service.actions.map((action) => (
+                            <ServiceActionButton
+                              key={action.id}
+                              action={action}
+                              service={service}
+                            />
+                          ))}
                         </CardContent>
                       </Card>
                     </div>

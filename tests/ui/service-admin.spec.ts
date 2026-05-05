@@ -26,20 +26,38 @@ test('services table filters and opens service detail', async ({ page }) => {
     page.getByRole('button', { name: 'Start all', exact: true })
   ).toBeEnabled()
   await expect(
+    page.getByRole('button', { name: 'Start all', exact: true })
+  ).toHaveClass(/hover:bg-emerald-600/)
+  await expect(
     page.getByRole('button', { name: 'Stop all', exact: true })
   ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: 'Stop all', exact: true })
+  ).toHaveClass(/hover:bg-red-600/)
   await expect(
     page.getByRole('button', { name: 'Restart all', exact: true })
   ).toBeEnabled()
   await expect(
+    page.getByRole('button', { name: 'Restart all', exact: true })
+  ).toHaveClass(/hover:bg-red-600/)
+  await expect(
     page.getByRole('button', { name: 'Start Traefik', exact: true })
   ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: 'Start Traefik', exact: true })
+  ).toHaveClass(/hover:bg-emerald-600/)
   await expect(
     page.getByRole('button', { name: 'Stop Traefik', exact: true })
   ).toBeEnabled()
   await expect(
+    page.getByRole('button', { name: 'Stop Traefik', exact: true })
+  ).toHaveClass(/hover:bg-red-600/)
+  await expect(
     page.getByRole('button', { name: 'Restart Traefik', exact: true })
   ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: 'Restart Traefik', exact: true })
+  ).toHaveClass(/hover:bg-red-600/)
 
   await page
     .getByPlaceholder(
@@ -85,6 +103,18 @@ test('services table filters and opens service detail', async ({ page }) => {
   await expect(
     page.getByText('Operator dashboard for Service Lasso')
   ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Start service', exact: true })
+  ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: 'Start service', exact: true })
+  ).toHaveClass(/hover:bg-emerald-600/)
+  await expect(
+    page.getByRole('button', { name: 'Stop service', exact: true })
+  ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: 'Stop service', exact: true })
+  ).toHaveClass(/hover:bg-red-600/)
   await page.getByRole('tab', { name: /variables/i }).click()
   await expect(page.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toBeVisible()
 })
