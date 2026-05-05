@@ -52,3 +52,9 @@ jobs:
         run: |
           bash ./scripts/test.sh
           bash ./scripts/package.sh
+
+      - name: Run packaged Service Lasso dev server smoke
+        shell: bash
+        env:
+          SERVICEADMIN_ARTIFACT_PATH: dist/@serviceadmin-linux.tar.gz
+        run: npm run test:dev-server
