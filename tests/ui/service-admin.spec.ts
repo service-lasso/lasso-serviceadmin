@@ -24,22 +24,37 @@ test('services table filters and opens service detail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Services' })).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Start all', exact: true })
-  ).toBeVisible()
+  ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Stop all', exact: true })
-  ).toBeVisible()
+  ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Restart all', exact: true })
-  ).toBeVisible()
+  ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Start Traefik', exact: true })
-  ).toBeVisible()
+  ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Stop Traefik', exact: true })
-  ).toBeVisible()
+  ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Restart Traefik', exact: true })
-  ).toBeVisible()
+  ).toBeEnabled()
+
+  await page
+    .getByPlaceholder(
+      'Search services and open details from the matching row...'
+    )
+    .fill('Traefik')
+
+  await page.getByRole('button', { name: 'Stop Traefik', exact: true }).click()
+  await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Start Traefik', exact: true })
+  ).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Start Traefik', exact: true }).click()
+  await expect(page.getByText('Running', { exact: true })).toBeVisible()
 
   await page
     .getByPlaceholder(
@@ -49,6 +64,18 @@ test('services table filters and opens service detail', async ({ page }) => {
 
   await expect(page.getByText('Service Admin UI')).toBeVisible()
   await expect(page.getByText('Traefik')).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Start Service Admin UI', exact: true })
+  ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: 'Stop Service Admin UI', exact: true })
+  ).toBeEnabled()
+  await expect(
+    page.getByRole('button', {
+      name: 'Restart Service Admin UI',
+      exact: true,
+    })
+  ).toBeEnabled()
 
   await page.getByRole('link', { name: /details/i }).click()
   await expect(page).toHaveURL(/\/services\/%40serviceadmin$/)
