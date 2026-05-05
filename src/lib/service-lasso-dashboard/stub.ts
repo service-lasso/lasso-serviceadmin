@@ -124,15 +124,7 @@ let services: DashboardService[] = [
       profile: 'default',
       imageUrl: '/services/traefik/logo.svg',
     },
-    dependencies: [
-      {
-        id: 'secrets-broker',
-        name: 'Secrets Broker',
-        status: 'running',
-        relation: 'depends_on',
-        note: 'Uses broker-managed certificates and route secrets.',
-      },
-    ],
+    dependencies: [],
     dependents: [
       {
         id: '@serviceadmin',
@@ -339,14 +331,7 @@ let services: DashboardService[] = [
       workPath: 'C:\\service-lasso\\zitadel',
       profile: 'default',
     },
-    dependencies: [
-      {
-        id: 'secrets-broker',
-        name: 'Secrets Broker',
-        status: 'running',
-        relation: 'depends_on',
-      },
-    ],
+    dependencies: [],
     dependents: [
       {
         id: '@serviceadmin',
@@ -438,14 +423,7 @@ let services: DashboardService[] = [
       workPath: 'C:\\service-lasso\\dagu',
       profile: 'default',
     },
-    dependencies: [
-      {
-        id: 'secrets-broker',
-        name: 'Secrets Broker',
-        status: 'running',
-        relation: 'depends_on',
-      },
-    ],
+    dependencies: [],
     dependents: [],
     environmentVariables: [
       {
@@ -481,108 +459,6 @@ let services: DashboardService[] = [
       { id: 'install', label: 'Install workflow engine', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open workflow UI', kind: 'open_admin' },
-    ],
-  },
-  {
-    id: 'secrets-broker',
-    name: 'Secrets Broker',
-    status: 'running',
-    favorite: false,
-    role: 'Token and secret resolution layer',
-    note: 'Secrets broker stub is healthy.',
-    installed: true,
-    links: [{ label: 'Local', url: 'http://localhost:8083', kind: 'local' }],
-    runtimeHealth: {
-      state: 'running',
-      health: 'healthy',
-      uptime: '3d 7h',
-      lastCheckAt: '2026-04-11T10:18:48+10:00',
-      lastRestartAt: '2026-04-08T02:19:00+10:00',
-      summary: 'Secrets and provider tokens are resolving normally.',
-    },
-    endpoints: [
-      {
-        label: 'Local broker API',
-        url: 'http://localhost:8083',
-        bind: '127.0.0.1',
-        port: 8083,
-        protocol: 'http',
-        exposure: 'local',
-      },
-    ],
-    metadata: {
-      serviceType: 'security-core',
-      runtime: 'go-service',
-      version: 'v0.4.0-dev',
-      build: 'broker-demo-build',
-      packageId: 'service-lasso/secrets-broker',
-      installPath: 'C:\\service-lasso\\secrets-broker',
-      configPath: 'C:\\service-lasso\\secrets-broker\\config.json',
-      dataPath: 'C:\\service-lasso\\secrets-broker\\vault',
-      logPath: '/services/secrets-broker/service.log',
-      workPath: 'C:\\service-lasso\\secrets-broker',
-      profile: 'default',
-    },
-    dependencies: [],
-    dependents: [
-      {
-        id: 'traefik',
-        name: 'Traefik',
-        status: 'running',
-        relation: 'dependent',
-      },
-      {
-        id: 'zitadel',
-        name: 'ZITADEL',
-        status: 'degraded',
-        relation: 'dependent',
-      },
-      {
-        id: 'dagu',
-        name: 'Dagu',
-        status: 'stopped',
-        relation: 'dependent',
-      },
-    ],
-    environmentVariables: [
-      {
-        key: 'SECRETS_BROKER_PORT',
-        value: '8083',
-        scope: 'service',
-        source: 'config.json',
-      },
-      {
-        key: 'SECRETS_BROKER_VAULT_PATH',
-        value: 'C:\\service-lasso\\secrets-broker\\vault',
-        scope: 'service',
-        source: 'config.json',
-      },
-      {
-        key: 'SERVICE_LASSO_ROOT',
-        value: 'C:\\service-lasso',
-        scope: 'global',
-        source: '.env',
-      },
-    ],
-    recentLogs: [
-      {
-        timestamp: '2026-04-11T10:18:52+10:00',
-        level: 'info',
-        source: 'app',
-        message: 'Resolved provider token refs for 3 dependent services.',
-      },
-      {
-        timestamp: '2026-04-11T10:01:12+10:00',
-        level: 'info',
-        source: 'healthcheck',
-        message: 'Vault integrity check passed.',
-      },
-    ],
-    actions: [
-      { id: 'restart', label: 'Restart broker', kind: 'restart' },
-      { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
-      { id: 'open_config', label: 'Open config', kind: 'open_config' },
-      { id: 'uninstall', label: 'Uninstall service', kind: 'uninstall' },
     ],
   },
 ]

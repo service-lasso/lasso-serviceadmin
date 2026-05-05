@@ -15,12 +15,12 @@ describe('service lasso dashboard stub', () => {
 
     const summary = await fetchDashboardSummary()
 
-    expect(summary.servicesTotal).toBe(5)
-    expect(summary.servicesRunning).toBe(3)
+    expect(summary.servicesTotal).toBe(4)
+    expect(summary.servicesRunning).toBe(2)
     expect(summary.servicesStopped).toBe(1)
     expect(summary.servicesDegraded).toBe(1)
-    expect(summary.installedCount).toBe(5)
-    expect(summary.networkExposureCount).toBe(7)
+    expect(summary.installedCount).toBe(4)
+    expect(summary.networkExposureCount).toBe(6)
     expect(summary.runtime.status).toBe('warning')
     expect(summary.warnings).toEqual([
       'One or more services are degraded and need attention.',
@@ -68,12 +68,12 @@ describe('service lasso dashboard stub', () => {
 
     const stoppedSummary = await runDashboardAction('stop-services')
 
-    expect(stoppedSummary.servicesStopped).toBe(5)
+    expect(stoppedSummary.servicesStopped).toBe(4)
     expect((await fetchDashboardService('traefik'))?.status).toBe('stopped')
 
     const restartedSummary = await runDashboardAction('restart-services')
 
-    expect(restartedSummary.servicesRunning).toBe(5)
+    expect(restartedSummary.servicesRunning).toBe(4)
     expect((await fetchDashboardService('traefik'))?.status).toBe('running')
   })
 
