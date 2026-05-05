@@ -18,7 +18,7 @@
     "test:logs:e2e": "start-server-and-test \"vite --host 127.0.0.1 --port 4175 --strictPort\" http://127.0.0.1:4175 \"cypress run --config baseUrl=http://127.0.0.1:4175 --spec cypress/e2e/logs/logs-page.cy.js\""
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.61.3",
+    "@clerk/react": "^6.5.0",
     "@hookform/resolvers": "^5.2.2",
     "@melloware/react-logviewer": "^6.5.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
