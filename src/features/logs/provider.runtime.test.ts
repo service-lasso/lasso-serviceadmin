@@ -103,4 +103,89 @@ describe('logs provider configured api mode', () => {
       fetchServiceLogChunk(service as never, 'default')
     ).rejects.toThrow('Live logs are unavailable right now.')
   })
+
+  it('reads runtime logs for Traefik, Service Admin, and Service Broker', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: 'http://api.test',
+    }))
+
+    const serviceLogs = new Map<string, string[]>([
+      [
+        '@traefik',
+        [
+          '2026-04-16T16:00:01.001Z INFO traefik Traefik bootstrap starting',
+          '2026-04-16T16:00:01.214Z INFO traefik Loading dynamic configuration providers',
+          '2026-04-16T16:00:01.602Z INFO traefik EntryPoints web, websecure configured',
+          '2026-04-16T16:00:02.031Z INFO traefik Waiting for first routed requests',
+        ],
+      ],
+      [
+        '@serviceadmin',
+        ['2026-04-16T16:00:02.400Z INFO serviceadmin UI started'],
+      ],
+      [
+        'service-broker',
+        ['2026-04-16T16:00:02.800Z INFO service-broker API started'],
+      ],
+    ])
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        const serviceId = parsed.searchParams.get('service') ?? ''
+        const lines = serviceLogs.get(serviceId) ?? []
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'default',
+              path: `C:\\runtime\\${serviceId}.log`,
+              availableTypes: ['default'],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'default',
+              path: `C:\\runtime\\${serviceId}.log`,
+              totalLines: lines.length,
+              start: 0,
+              end: lines.length,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 100,
+              lines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    const { fetchServiceLogChunk, fetchServiceLogInfo } =
+      await import('./provider')
+
+    for (const serviceId of serviceLogs.keys()) {
+      const logService = { id: serviceId, metadata: {} }
+      const info = await fetchServiceLogInfo(logService as never, 'default')
+      const chunk = await fetchServiceLogChunk(logService as never, 'default')
+
+      expect(info.path).toBe(`C:\\runtime\\${serviceId}.log`)
+      expect(chunk.lines).toEqual(serviceLogs.get(serviceId))
+    }
+  })
 })
