@@ -103,6 +103,25 @@ async function runRuntimeDashboardAction(action: DashboardAction) {
     return fetchRuntimeDashboardSummary()
   }
 
+  if (action === 'stop-services') {
+    await fetchRuntimeJson('/api/runtime/actions/stopAll', { method: 'POST' })
+    return fetchRuntimeDashboardSummary()
+  }
+
+  if (action === 'restart-services') {
+    await fetchRuntimeJson('/api/runtime/actions/stopAll', { method: 'POST' })
+    await fetchRuntimeJson('/api/runtime/actions/startAll', { method: 'POST' })
+    return fetchRuntimeDashboardSummary()
+  }
+
+  if (action.kind === 'service-lifecycle') {
+    await fetchRuntimeJson(
+      `/api/services/${encodeServiceId(action.serviceId)}/${action.action}`,
+      { method: 'POST' }
+    )
+    return fetchRuntimeDashboardSummary()
+  }
+
   return updateRuntimeFavorite(action.serviceId)
 }
 

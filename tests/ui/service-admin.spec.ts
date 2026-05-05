@@ -22,6 +22,25 @@ test('services table filters and opens service detail', async ({ page }) => {
   await page.goto('/services')
 
   await expect(page.getByRole('heading', { name: 'Services' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Start all', exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Stop all', exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Restart all', exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Start Traefik', exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Stop Traefik', exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Restart Traefik', exact: true })
+  ).toBeVisible()
+
   await page
     .getByPlaceholder(
       'Search services and open details from the matching row...'

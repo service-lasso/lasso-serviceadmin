@@ -63,6 +63,44 @@ describe('service lasso dashboard stub', () => {
     ])
   })
 
+  it('stops and restarts services from dashboard actions', async () => {
+    const { fetchDashboardService, runDashboardAction } = await loadStub()
+
+    const stoppedSummary = await runDashboardAction('stop-services')
+
+    expect(stoppedSummary.servicesStopped).toBe(5)
+    expect((await fetchDashboardService('traefik'))?.status).toBe('stopped')
+
+    const restartedSummary = await runDashboardAction('restart-services')
+
+    expect(restartedSummary.servicesRunning).toBe(5)
+    expect((await fetchDashboardService('traefik'))?.status).toBe('running')
+  })
+
+  it('runs per-service lifecycle actions from services table controls', async () => {
+    const { fetchDashboardService, runDashboardAction } = await loadStub()
+
+    await runDashboardAction({
+      kind: 'service-lifecycle',
+      serviceId: '@serviceadmin',
+      action: 'stop',
+    })
+
+    expect((await fetchDashboardService('@serviceadmin'))?.status).toBe(
+      'stopped'
+    )
+
+    await runDashboardAction({
+      kind: 'service-lifecycle',
+      serviceId: '@serviceadmin',
+      action: 'restart',
+    })
+
+    expect((await fetchDashboardService('@serviceadmin'))?.status).toBe(
+      'running'
+    )
+  })
+
   it('toggles favorite state and returns cloned service data', async () => {
     const { fetchDashboardService, fetchServices, runDashboardAction } =
       await loadStub()
