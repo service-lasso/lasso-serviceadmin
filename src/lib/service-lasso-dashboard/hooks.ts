@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  buildStubServiceLogUrl,
-  favoritesMutationEnabled,
+  buildServiceLogUrl,
   fetchDashboardService,
   fetchDashboardSummary,
   fetchServices,
   runDashboardAction,
-} from './stub'
+} from './client'
+import { favoritesMutationEnabled } from './stub'
 import type { DashboardAction, DashboardService } from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
@@ -38,7 +38,7 @@ export function getServiceLogStubUrl(
     type?: 'default' | 'access' | 'error'
   }
 ) {
-  return buildStubServiceLogUrl(serviceId, options)
+  return buildServiceLogUrl(serviceId, options)
 }
 
 export function useDashboardAction() {

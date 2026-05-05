@@ -19,10 +19,15 @@ Example:
 
 Current UI runtime behavior:
 
-- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, the dashboard stub layer can call the Service Lasso API for service metadata
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, dashboard service status, health, runtime actions, and logs are read from the live Service Lasso runtime API
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, the UI uses local demo stub data for development preview only
+- a configured but unavailable runtime API is treated as an error instead of falling back to demo status
 - favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
 - favorites are expected to load from `GET /api/services/meta`
 - favorites are expected to update through `PATCH /api/services/:serviceId/meta`
+- service status is expected to load from `GET /api/dashboard` and `GET /api/dashboard/services`
+- bulk start is expected to call `POST /api/runtime/actions/startAll`
+- reload is expected to call `POST /api/runtime/actions/reload`
 - set `VITE_SERVICE_LASSO_LOGS_DEBUG=true` to enable Logs screen debug output in the browser console outside dev mode
 - if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
 
