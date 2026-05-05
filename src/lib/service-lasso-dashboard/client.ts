@@ -56,9 +56,8 @@ function hasRuntimeApi() {
 }
 
 async function fetchRuntimeDashboardSummary() {
-  const payload = await fetchRuntimeJson<DashboardSummaryResponse>(
-    '/api/dashboard'
-  )
+  const payload =
+    await fetchRuntimeJson<DashboardSummaryResponse>('/api/dashboard')
   return payload.summary
 }
 

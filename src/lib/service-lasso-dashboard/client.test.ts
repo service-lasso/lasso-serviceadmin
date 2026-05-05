@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  DashboardService,
-  DashboardSummary,
-  ServiceStatus,
-} from './types'
+import type { DashboardService, DashboardSummary, ServiceStatus } from './types'
 
 function service(
   id: string,
@@ -141,9 +137,7 @@ describe('service lasso dashboard runtime client', () => {
         return jsonResponse({ services })
       }
 
-      if (
-        url === 'http://runtime.test/api/dashboard/services/%40traefik'
-      ) {
+      if (url === 'http://runtime.test/api/dashboard/services/%40traefik') {
         return jsonResponse({ service: services[0] })
       }
 
@@ -207,7 +201,9 @@ describe('service lasso dashboard runtime client', () => {
           skipped: [],
         })
       )
-      .mockResolvedValueOnce(jsonResponse({ summary: summary(runningServices) }))
+      .mockResolvedValueOnce(
+        jsonResponse({ summary: summary(runningServices) })
+      )
 
     vi.stubGlobal('fetch', fetchMock)
 
