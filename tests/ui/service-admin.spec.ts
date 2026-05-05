@@ -4,7 +4,7 @@ test('dashboard renders and starts stopped services', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
-  await expect(page.getByText('Runtime health')).toBeVisible()
+  await expect(page.getByText('Runtime health', { exact: true })).toBeVisible()
   await expect(page.getByText('1 stopped, 1 degraded')).toBeVisible()
   await expect(page.getByText('3/5')).toBeVisible()
   await expect(page.getByText('Dagu').first()).toBeVisible()
