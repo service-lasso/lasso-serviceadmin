@@ -1,9 +1,17 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Link } from '@tanstack/react-router'
 import { type ColumnDef } from '@tanstack/react-table'
-import { ExternalLink, Search, Star } from 'lucide-react'
+import {
+  ExternalLink,
+  Play,
+  RotateCcw,
+  Search,
+  Square,
+  Star,
+} from 'lucide-react'
 import {
   useFavoriteFeatureState,
+  useDashboardAction,
   useToggleFavorite,
 } from '@/lib/service-lasso-dashboard/hooks'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
@@ -54,6 +62,69 @@ function FavoriteCell({ service }: { service: DashboardService }) {
         className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
       />
     </button>
+  )
+}
+
+function ServiceLifecycleControls({ service }: { service: DashboardService }) {
+  const actionMutation = useDashboardAction()
+  const disabled = actionMutation.isPending
+
+  const runAction = (action: 'start' | 'stop' | 'restart') => {
+    actionMutation.mutate({
+      kind: 'service-lifecycle',
+      serviceId: service.id,
+      action,
+    })
+  }
+
+  return (
+    <div className='flex items-center gap-1'>
+      <Button
+        type='button'
+        size='icon'
+        variant='outline'
+        className='size-8'
+        aria-label={`Start ${service.name}`}
+        title={`Start ${service.name}`}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation()
+          runAction('start')
+        }}
+      >
+        <Play className='size-3.5' />
+      </Button>
+      <Button
+        type='button'
+        size='icon'
+        variant='outline'
+        className='size-8'
+        aria-label={`Stop ${service.name}`}
+        title={`Stop ${service.name}`}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation()
+          runAction('stop')
+        }}
+      >
+        <Square className='size-3.5' />
+      </Button>
+      <Button
+        type='button'
+        size='icon'
+        variant='outline'
+        className='size-8'
+        aria-label={`Restart ${service.name}`}
+        title={`Restart ${service.name}`}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation()
+          runAction('restart')
+        }}
+      >
+        <RotateCcw className='size-3.5' />
+      </Button>
+    </div>
   )
 }
 
@@ -146,6 +217,13 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
       )
     },
     enableSorting: false,
+  },
+  {
+    id: 'controls',
+    header: 'Controls',
+    cell: ({ row }) => <ServiceLifecycleControls service={row.original} />,
+    enableSorting: false,
+    enableHiding: false,
   },
   {
     id: 'open',

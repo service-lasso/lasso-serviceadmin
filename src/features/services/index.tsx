@@ -1,6 +1,11 @@
 import { getRouteApi } from '@tanstack/react-router'
+import { Play, RotateCcw, Square } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
-import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import {
+  useDashboardAction,
+  useServices,
+} from '@/lib/service-lasso-dashboard/hooks'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -36,8 +41,10 @@ export function Services() {
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const servicesQuery = useServices()
+  const actionMutation = useDashboardAction()
 
   const services = servicesQuery.data ?? []
+  const actionsDisabled = actionMutation.isPending || services.length === 0
 
   return (
     <>
@@ -58,6 +65,37 @@ export function Services() {
               Manage Service Lasso services, inspect runtime state, and open the
               detail view from the table below.
             </p>
+          </div>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Button
+              type='button'
+              size='sm'
+              disabled={actionsDisabled}
+              onClick={() => actionMutation.mutate('start-services')}
+            >
+              <Play className='size-3.5' />
+              Start all
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              disabled={actionsDisabled}
+              onClick={() => actionMutation.mutate('stop-services')}
+            >
+              <Square className='size-3.5' />
+              Stop all
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              disabled={actionsDisabled}
+              onClick={() => actionMutation.mutate('restart-services')}
+            >
+              <RotateCcw className='size-3.5' />
+              Restart all
+            </Button>
           </div>
         </div>
 

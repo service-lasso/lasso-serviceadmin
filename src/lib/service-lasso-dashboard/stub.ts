@@ -770,6 +770,91 @@ export async function runDashboardAction(action: DashboardAction) {
 
       return service
     })
+  } else if (action === 'stop-services') {
+    services = services.map((service) => ({
+      ...service,
+      status: 'stopped',
+      note: 'Service was stopped from the dashboard action.',
+      runtimeHealth: {
+        ...service.runtimeHealth,
+        state: 'stopped',
+        health: 'critical',
+        uptime: '0m',
+        lastCheckAt: new Date().toISOString(),
+        summary: 'Service was stopped from the dashboard action.',
+      },
+      recentLogs: [
+        {
+          timestamp: new Date().toISOString(),
+          level: 'info' as const,
+          source: 'supervisor' as const,
+          message: 'Service stopped from dashboard bulk action.',
+        },
+        ...service.recentLogs,
+      ].slice(0, 5),
+    }))
+  } else if (action === 'restart-services') {
+    services = services.map((service) => ({
+      ...service,
+      status: 'running',
+      note: 'Service was restarted from the dashboard action.',
+      runtimeHealth: {
+        ...service.runtimeHealth,
+        state: 'running',
+        health: 'healthy',
+        uptime: '0m',
+        lastCheckAt: new Date().toISOString(),
+        lastRestartAt: new Date().toISOString(),
+        summary: 'Service was restarted from the dashboard action.',
+      },
+      recentLogs: [
+        {
+          timestamp: new Date().toISOString(),
+          level: 'info' as const,
+          source: 'supervisor' as const,
+          message: 'Service restarted from dashboard bulk action.',
+        },
+        ...service.recentLogs,
+      ].slice(0, 5),
+    }))
+  } else if (action.kind === 'service-lifecycle') {
+    services = services.map((service) => {
+      if (service.id !== action.serviceId) return service
+
+      const nextStatus = action.action === 'stop' ? 'stopped' : 'running'
+      const actionLabel = {
+        restart: 'restarted',
+        start: 'started',
+        stop: 'stopped',
+      }[action.action]
+
+      return {
+        ...service,
+        status: nextStatus,
+        note: `Service was ${actionLabel} from the services table.`,
+        runtimeHealth: {
+          ...service.runtimeHealth,
+          state: nextStatus,
+          health: nextStatus === 'running' ? 'healthy' : 'critical',
+          uptime: nextStatus === 'running' ? '0m' : '0m',
+          lastCheckAt: new Date().toISOString(),
+          lastRestartAt:
+            action.action === 'stop'
+              ? service.runtimeHealth.lastRestartAt
+              : new Date().toISOString(),
+          summary: `Service was ${actionLabel} from the services table.`,
+        },
+        recentLogs: [
+          {
+            timestamp: new Date().toISOString(),
+            level: 'info' as const,
+            source: 'supervisor' as const,
+            message: `Service ${action.action} requested from services table.`,
+          },
+          ...service.recentLogs,
+        ].slice(0, 5),
+      }
+    })
   } else {
     const service = services.find((item) => item.id === action.serviceId)
     const nextFavorite = service ? !service.favorite : true

@@ -119,4 +119,11 @@ export type DashboardSummary = {
 export type DashboardAction =
   | 'reload-runtime'
   | 'start-services'
+  | 'stop-services'
+  | 'restart-services'
   | { kind: 'toggle-favorite'; serviceId: string }
+  | {
+      kind: 'service-lifecycle'
+      serviceId: string
+      action: 'start' | 'stop' | 'restart'
+    }

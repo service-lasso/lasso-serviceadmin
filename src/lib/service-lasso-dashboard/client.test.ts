@@ -224,4 +224,119 @@ describe('service lasso dashboard runtime client', () => {
     expect(runtimeSummary.servicesRunning).toBe(3)
     expect(runtimeSummary.problemServices).toEqual([])
   })
+
+  it('runs stop-all and restart-all through runtime orchestration endpoints', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const runningServices = [
+      service('@traefik', 'Traefik', 'running'),
+      service('@serviceadmin', 'Service Admin', 'running'),
+      service('service-broker', 'Service Broker', 'running'),
+    ]
+    const stoppedServices = runningServices.map((item) => ({
+      ...item,
+      status: 'stopped' as const,
+      runtimeHealth: {
+        ...item.runtimeHealth,
+        state: 'stopped' as const,
+        health: 'critical' as const,
+      },
+    }))
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          action: 'stopAll',
+          ok: true,
+          results: [],
+          skipped: [],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ summary: summary(stoppedServices) })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          action: 'stopAll',
+          ok: true,
+          results: [],
+          skipped: [],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          action: 'startAll',
+          ok: true,
+          results: [],
+          skipped: [],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ summary: summary(runningServices) })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { runDashboardAction } = await import('./client')
+
+    const stoppedSummary = await runDashboardAction('stop-services')
+    const restartedSummary = await runDashboardAction('restart-services')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://runtime.test/api/runtime/actions/stopAll',
+      { method: 'POST' }
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://runtime.test/api/runtime/actions/stopAll',
+      { method: 'POST' }
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'http://runtime.test/api/runtime/actions/startAll',
+      { method: 'POST' }
+    )
+    expect(stoppedSummary.servicesStopped).toBe(3)
+    expect(restartedSummary.servicesRunning).toBe(3)
+  })
+
+  it('runs per-service lifecycle actions through service runtime endpoints', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const services = [
+      service('@traefik', 'Traefik', 'running'),
+      service('@serviceadmin', 'Service Admin', 'running'),
+      service('service-broker', 'Service Broker', 'running'),
+    ]
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          action: 'restart',
+          serviceId: '@traefik',
+          ok: true,
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ summary: summary(services) }))
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { runDashboardAction } = await import('./client')
+
+    const runtimeSummary = await runDashboardAction({
+      kind: 'service-lifecycle',
+      serviceId: '@traefik',
+      action: 'restart',
+    })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://runtime.test/api/services/%40traefik/restart',
+      { method: 'POST' }
+    )
+    expect(runtimeSummary.servicesRunning).toBe(3)
+  })
 })
