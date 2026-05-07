@@ -26,6 +26,12 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  countDiagnosticsByStatus,
+  secretsBrokerDiagnostics,
+  type SecretsBrokerDiagnostic,
+  type SecretsBrokerDiagnosticStatus,
+} from './diagnostics'
 
 type WizardSource = {
   id: string
@@ -131,6 +137,21 @@ const statusVariant: Record<
   'policy-denied': 'destructive',
 }
 
+const diagnosticStatusCopy: Record<SecretsBrokerDiagnosticStatus, string> = {
+  pass: 'Passing',
+  warning: 'Warning',
+  fail: 'Failing',
+}
+
+const diagnosticStatusVariant: Record<
+  SecretsBrokerDiagnosticStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  pass: 'default',
+  warning: 'secondary',
+  fail: 'destructive',
+}
+
 function SourceIcon({ source }: { source: WizardSource }) {
   if (source.id === 'local-vault') return <LockKeyhole className='size-4' />
   if (source.id === 'file-source') return <FileKey2 className='size-4' />
@@ -180,6 +201,76 @@ function SafeExample({ value }: { value: string }) {
   )
 }
 
+function DiagnosticCard({
+  diagnostic,
+}: {
+  diagnostic: SecretsBrokerDiagnostic
+}) {
+  return (
+    <div className='rounded-lg border p-3 text-sm'>
+      <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
+        <div>
+          <div className='font-medium'>{diagnostic.title}</div>
+          <div className='text-xs text-muted-foreground'>
+            {diagnostic.category} · {diagnostic.code} · last checked{' '}
+            {diagnostic.lastCheckedAt}
+          </div>
+        </div>
+        <Badge variant={diagnosticStatusVariant[diagnostic.status]}>
+          {diagnosticStatusCopy[diagnostic.status]}
+        </Badge>
+      </div>
+      <p className='text-muted-foreground'>{diagnostic.normalizedMessage}</p>
+      <div className='mt-3 grid gap-2 md:grid-cols-2'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Affected refs
+          </div>
+          <div className='mt-1 flex flex-wrap gap-1'>
+            {diagnostic.affectedRefs.length ? (
+              diagnostic.affectedRefs.map((ref) => (
+                <Badge key={ref} variant='outline'>
+                  {ref}
+                </Badge>
+              ))
+            ) : (
+              <span className='text-xs text-muted-foreground'>none</span>
+            )}
+          </div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Affected services/workflows
+          </div>
+          <div className='mt-1 flex flex-wrap gap-1'>
+            {diagnostic.affectedServices.map((service) => (
+              <Badge key={service} variant='outline'>
+                {service}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className='mt-3 rounded-md bg-muted/40 p-2'>
+        <div className='text-xs font-medium text-muted-foreground uppercase'>
+          Suggested fix
+        </div>
+        <div>{diagnostic.suggestedFix}</div>
+      </div>
+      <div className='mt-3 flex flex-wrap items-center justify-between gap-2'>
+        <span className='text-xs text-muted-foreground'>
+          Source: {diagnostic.sourceLabel}
+        </span>
+        <Button variant='outline' size='sm' asChild>
+          <Link to={diagnostic.link.to} search={diagnostic.link.search}>
+            {diagnostic.link.label}
+          </Link>
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function SecretsBrokerSetupWizard() {
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Setup',
@@ -198,6 +289,7 @@ export function SecretsBrokerSetupWizard() {
     (source) => source.status === 'ready'
   ).length
   const blockedCount = wizardSources.length - readyCount
+  const diagnosticCounts = countDiagnosticsByStatus(secretsBrokerDiagnostics)
 
   return (
     <>
@@ -266,6 +358,63 @@ export function SecretsBrokerSetupWizard() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <AlertTriangle className='size-4' /> Diagnostics and
+                  troubleshooting
+                </CardTitle>
+                <CardDescription>
+                  Normalized, secret-safe checks for broker lifecycle, provider,
+                  auth, policy, and workflow runtime failures.
+                </CardDescription>
+              </div>
+              <Badge variant='secondary'>Raw output scrubbed</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-3 md:grid-cols-3'>
+              <div className='rounded-lg border p-3'>
+                <div className='text-2xl font-bold'>
+                  {diagnosticCounts.pass}
+                </div>
+                <p className='text-xs text-muted-foreground'>passing checks</p>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-2xl font-bold'>
+                  {diagnosticCounts.warning}
+                </div>
+                <p className='text-xs text-muted-foreground'>degraded checks</p>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-2xl font-bold'>
+                  {diagnosticCounts.fail}
+                </div>
+                <p className='text-xs text-muted-foreground'>failed checks</p>
+              </div>
+            </div>
+            <div className='grid gap-3 lg:grid-cols-2'>
+              {secretsBrokerDiagnostics.map((diagnostic) => (
+                <DiagnosticCard key={diagnostic.id} diagnostic={diagnostic} />
+              ))}
+            </div>
+            <div className='flex gap-3 rounded-lg border p-3 text-sm'>
+              <ShieldCheck className='mt-0.5 size-4 shrink-0' />
+              <div>
+                <div className='font-medium'>Secret-safe diagnostics only</div>
+                <p className='text-muted-foreground'>
+                  Checks show normalized codes, source labels, affected refs,
+                  affected services or workflows, and suggested fixes. Raw
+                  command stdout/stderr and resolved secret values are never
+                  rendered.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]'>
           <Card>
