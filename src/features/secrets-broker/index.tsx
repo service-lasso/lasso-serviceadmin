@@ -65,6 +65,41 @@ type WizardSource = {
   nextAction: string
 }
 
+type SecretsBrokerOverviewState =
+  | 'healthy'
+  | 'degraded'
+  | 'offline'
+  | 'unconfigured'
+
+type SecretsBrokerOverviewScenario = {
+  id: SecretsBrokerOverviewState
+  label: string
+  health: {
+    state: SecretsBrokerOverviewState
+    title: string
+    summary: string
+    apiReachable: boolean
+    lastCheckedAt: string
+  }
+  storage: {
+    localStore: string
+    externalSource: string
+    backendState: string
+  }
+  keystore: {
+    state: string
+    version: string
+    warning: string
+  }
+  operations: {
+    reconnectRequired: number
+    recentResolveFailures: number
+    recentDeniedRequests: number
+    lastAuditEvent: string
+  }
+  emptyState?: string
+}
+
 const wizardSources: WizardSource[] = [
   {
     id: 'local-vault',
@@ -138,6 +173,123 @@ const wizardSources: WizardSource[] = [
   },
 ]
 
+const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
+  {
+    id: 'healthy',
+    label: 'Healthy preview',
+    health: {
+      state: 'healthy',
+      title: '@secretsbroker healthy',
+      summary:
+        'Broker API is reachable and all startup-critical sources have safe metadata available.',
+      apiReachable: true,
+      lastCheckedAt: '2026-05-07T19:20:00Z',
+    },
+    storage: {
+      localStore: 'local encrypted store reachable',
+      externalSource: 'Vault-backed source available behind broker',
+      backendState: 'hybrid local-first backend',
+    },
+    keystore: {
+      state: 'available',
+      version: 'key version v3',
+      warning: 'no rotation warning',
+    },
+    operations: {
+      reconnectRequired: 0,
+      recentResolveFailures: 0,
+      recentDeniedRequests: 1,
+      lastAuditEvent: 'resolve granted · local · 2026-05-07T19:18:00Z',
+    },
+  },
+  {
+    id: 'degraded',
+    label: 'Degraded preview',
+    health: {
+      state: 'degraded',
+      title: '@secretsbroker degraded',
+      summary:
+        'Broker API is reachable, but one external provider requires operator re-authentication before dependent services use it.',
+      apiReachable: true,
+      lastCheckedAt: '2026-05-07T19:21:00Z',
+    },
+    storage: {
+      localStore: 'local encrypted store reachable',
+      externalSource: 'Vault source_auth_required',
+      backendState: 'external source unavailable for dependent refs',
+    },
+    keystore: {
+      state: 'available',
+      version: 'key version v3',
+      warning: 'rotation not required',
+    },
+    operations: {
+      reconnectRequired: 1,
+      recentResolveFailures: 2,
+      recentDeniedRequests: 1,
+      lastAuditEvent: 'refresh failure · vault · 2026-05-07T19:19:00Z',
+    },
+  },
+  {
+    id: 'offline',
+    label: 'Offline preview',
+    health: {
+      state: 'offline',
+      title: '@secretsbroker offline',
+      summary:
+        'Broker API is not reachable. Service Admin can show the last safe metadata snapshot, but live tests are unavailable.',
+      apiReachable: false,
+      lastCheckedAt: '2026-05-07T19:10:00Z',
+    },
+    storage: {
+      localStore: 'unknown while broker is offline',
+      externalSource: 'not checked',
+      backendState: 'live backend state unavailable',
+    },
+    keystore: {
+      state: 'unknown',
+      version: 'not exposed while offline',
+      warning: 'start @secretsbroker or inspect core API/CLI',
+    },
+    operations: {
+      reconnectRequired: 0,
+      recentResolveFailures: 0,
+      recentDeniedRequests: 0,
+      lastAuditEvent: 'last cached event only',
+    },
+  },
+  {
+    id: 'unconfigured',
+    label: 'Unconfigured preview',
+    health: {
+      state: 'unconfigured',
+      title: '@secretsbroker setup needed',
+      summary:
+        'No broker source is configured yet. Add a local encrypted store or external source before resolving refs.',
+      apiReachable: true,
+      lastCheckedAt: '2026-05-07T19:22:00Z',
+    },
+    storage: {
+      localStore: 'not configured',
+      externalSource: 'none configured',
+      backendState: 'setup_needed',
+    },
+    keystore: {
+      state: 'unavailable',
+      version: 'no key version yet',
+      warning: 'create or import a master key before enabling sources',
+    },
+    operations: {
+      reconnectRequired: 0,
+      recentResolveFailures: 0,
+      recentDeniedRequests: 0,
+      lastAuditEvent: 'no audit events yet',
+    },
+    emptyState:
+      'Add a local encrypted store or connect an external source to activate @secretsbroker.',
+  },
+]
+
 const statusCopy: Record<WizardSource['status'], string> = {
   ready: 'Ready',
   locked: 'Locked',
@@ -155,6 +307,23 @@ const statusVariant: Record<
   'auth-required': 'secondary',
   degraded: 'outline',
   'policy-denied': 'destructive',
+}
+
+const brokerOverviewStateCopy: Record<SecretsBrokerOverviewState, string> = {
+  healthy: 'Healthy',
+  degraded: 'Degraded',
+  offline: 'Offline',
+  unconfigured: 'Setup needed',
+}
+
+const brokerOverviewStateVariant: Record<
+  SecretsBrokerOverviewState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  healthy: 'default',
+  degraded: 'secondary',
+  offline: 'destructive',
+  unconfigured: 'outline',
 }
 
 const diagnosticStatusCopy: Record<SecretsBrokerDiagnosticStatus, string> = {
@@ -651,6 +820,12 @@ export function SecretsBrokerSetupWizard() {
     SecretsBrokerProviderConnectionState | 'all'
   >('all')
   const [connectionQueryFilter, setConnectionQueryFilter] = useState('')
+  const [overviewScenarioId, setOverviewScenarioId] =
+    useState<SecretsBrokerOverviewState>('healthy')
+  const brokerOverview =
+    brokerOverviewScenarios.find(
+      (scenario) => scenario.id === overviewScenarioId
+    ) ?? brokerOverviewScenarios[0]
   const selectedSource = useMemo(
     () =>
       wizardSources.find((source) => source.id === selectedId) ??
@@ -736,6 +911,174 @@ export function SecretsBrokerSetupWizard() {
           </div>
         </div>
 
+        <Card>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <ShieldCheck className='size-4' /> @secretsbroker overview
+                </CardTitle>
+                <CardDescription>
+                  Broker health, API reachability, backend state, keystore
+                  posture, and operator action summary. This overview uses safe
+                  metadata only and never renders resolved secret values.
+                </CardDescription>
+              </div>
+              <Badge
+                variant={
+                  brokerOverviewStateVariant[brokerOverview.health.state]
+                }
+              >
+                {brokerOverviewStateCopy[brokerOverview.health.state]}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='max-w-xs'>
+              <label
+                htmlFor='broker-overview-scenario'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Preview state
+              </label>
+              <select
+                id='broker-overview-scenario'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={overviewScenarioId}
+                onChange={(event) =>
+                  setOverviewScenarioId(
+                    event.target.value as SecretsBrokerOverviewState
+                  )
+                }
+              >
+                {brokerOverviewScenarios.map((scenario) => (
+                  <option key={scenario.id} value={scenario.id}>
+                    {scenario.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className='grid gap-4 lg:grid-cols-[1.2fr_1fr]'>
+              <div className='rounded-lg border p-4'>
+                <div className='mb-2 flex flex-wrap items-center gap-2'>
+                  {brokerOverview.health.apiReachable ? (
+                    <CheckCircle2 className='size-4 text-primary' />
+                  ) : (
+                    <AlertTriangle className='size-4 text-destructive' />
+                  )}
+                  <div className='font-medium'>
+                    {brokerOverview.health.title}
+                  </div>
+                </div>
+                <p className='text-sm text-muted-foreground'>
+                  {brokerOverview.health.summary}
+                </p>
+                <div className='mt-3 grid gap-3 text-sm md:grid-cols-2'>
+                  <div>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      API reachable
+                    </div>
+                    <div>
+                      {brokerOverview.health.apiReachable ? 'yes' : 'no'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Last health check
+                    </div>
+                    <div>{brokerOverview.health.lastCheckedAt}</div>
+                  </div>
+                </div>
+                {brokerOverview.emptyState ? (
+                  <div className='mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+                    {brokerOverview.emptyState}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-1'>
+                <div className='rounded-lg border p-3 text-sm'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Storage / backend summary
+                  </div>
+                  <div className='mt-1'>
+                    {brokerOverview.storage.localStore}
+                  </div>
+                  <div className='text-muted-foreground'>
+                    {brokerOverview.storage.externalSource}
+                  </div>
+                  <Badge className='mt-2' variant='outline'>
+                    {brokerOverview.storage.backendState}
+                  </Badge>
+                </div>
+                <div className='rounded-lg border p-3 text-sm'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Keystore / master key
+                  </div>
+                  <div className='mt-1'>{brokerOverview.keystore.state}</div>
+                  <div className='text-muted-foreground'>
+                    {brokerOverview.keystore.version}
+                  </div>
+                  <div className='mt-1 text-xs text-muted-foreground'>
+                    {brokerOverview.keystore.warning}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className='grid gap-3 md:grid-cols-4'>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Reconnect required
+                </div>
+                <div className='text-2xl font-bold'>
+                  {brokerOverview.operations.reconnectRequired}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Recent resolve failures
+                </div>
+                <div className='text-2xl font-bold'>
+                  {brokerOverview.operations.recentResolveFailures}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Recent denied requests
+                </div>
+                <div className='text-2xl font-bold'>
+                  {brokerOverview.operations.recentDeniedRequests}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Last audit event
+                </div>
+                <div className='text-sm font-medium'>
+                  {brokerOverview.operations.lastAuditEvent}
+                </div>
+              </div>
+            </div>
+
+            <div className='flex flex-wrap gap-2'>
+              <Button variant='outline' size='sm' asChild>
+                <a href='#provider-connections'>View provider connections</a>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <a href='#secret-sources'>View secret sources</a>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <a href='#audit-events'>View audit/events</a>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <a href='#diagnostics'>View diagnostics</a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className='grid gap-4 md:grid-cols-3'>
           <Card>
             <CardHeader className='pb-2'>
@@ -772,7 +1115,7 @@ export function SecretsBrokerSetupWizard() {
           </Card>
         </div>
 
-        <Card>
+        <Card id='secret-sources'>
           <CardHeader>
             <div className='flex flex-wrap items-start justify-between gap-3'>
               <div>
@@ -824,7 +1167,7 @@ export function SecretsBrokerSetupWizard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id='provider-connections'>
           <CardHeader>
             <div className='flex flex-wrap items-start justify-between gap-3'>
               <div>
@@ -1039,7 +1382,7 @@ export function SecretsBrokerSetupWizard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id='audit-events'>
           <CardHeader>
             <div className='flex flex-wrap items-start justify-between gap-3'>
               <div>
@@ -1224,7 +1567,7 @@ export function SecretsBrokerSetupWizard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id='diagnostics'>
           <CardHeader>
             <div className='flex flex-wrap items-start justify-between gap-3'>
               <div>
