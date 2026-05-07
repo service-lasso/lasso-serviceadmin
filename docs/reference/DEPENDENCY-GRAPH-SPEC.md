@@ -25,7 +25,7 @@ It is meant to help an operator answer questions like:
 Chosen graph surface: **React Flow**
 
 Reason:
-- best fit for a modern React/shadcn admin UI
+- best fit for a modern React/Service Admin UI
 - good node/edge interaction out of the box
 - easier to theme and maintain than raw D3 for this use case
 - strong fit for service dependency maps with clickable nodes and operator actions
@@ -277,7 +277,7 @@ The graph should feel:
 - readable at a glance
 - polished enough for a modern admin UI
 - clearly operator-oriented
-- consistent with the rest of the shadcn-admin visual language
+- consistent with the rest of the Service Admin visual language
 
 If it looks like a generic graph playground instead of a service dependency surface, it is not done.
 
