@@ -3,6 +3,7 @@ import {
   Command,
   GitBranch,
   Globe,
+  KeyRound,
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
@@ -65,6 +66,11 @@ export const sidebarData: SidebarData = {
           title: 'Variables',
           url: '/variables',
           icon: SlidersHorizontal,
+        },
+        {
+          title: 'Secrets Broker',
+          url: '/secrets-broker',
+          icon: KeyRound,
         },
         {
           title: 'Network',
