@@ -7,6 +7,7 @@ import {
   FileKey2,
   KeyRound,
   LockKeyhole,
+  Network,
   ShieldCheck,
   TerminalSquare,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ConfigDrawer } from '@/components/config-drawer'
+import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -52,6 +54,10 @@ import {
   type SecretsBrokerSourceBackend,
   type SecretsBrokerSourceState,
 } from './source-backends'
+import {
+  buildSecretsBrokerTopology,
+  toReactFlowSecretsBrokerTopology,
+} from './topology'
 
 type WizardSource = {
   id: string
@@ -878,6 +884,14 @@ export function SecretsBrokerSetupWizard() {
     filteredAuditEvents.find((event) => event.id === selectedAuditEventId) ??
     filteredAuditEvents[0] ??
     secretsBrokerAuditEvents[0]
+  const secretsTopology = useMemo(() => buildSecretsBrokerTopology(), [])
+  const reactFlowSecretsTopology = useMemo(
+    () => toReactFlowSecretsBrokerTopology(secretsTopology),
+    [secretsTopology]
+  )
+  const topologyProblemEdges = secretsTopology.edges.filter((edge) =>
+    ['failed', 'denied', 'missing', 'warning'].includes(edge.status)
+  )
 
   return (
     <>
@@ -1379,6 +1393,155 @@ export function SecretsBrokerSetupWizard() {
                 </table>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card id='secrets-topology'>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <Network className='size-4' /> Secrets Broker topology
+                </CardTitle>
+                <CardDescription>
+                  Safe topology graph for services, workflows, runs, SecretRefs,
+                  broker sources, and provider connections. Graph labels and
+                  fallback rows use the same safe metadata and never render
+                  resolved secret values.
+                </CardDescription>
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <Badge variant='secondary'>Safe metadata only</Badge>
+                <Badge variant='outline'>List fallback included</Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-3 md:grid-cols-4'>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Graph nodes</div>
+                <div className='text-2xl font-bold'>
+                  {secretsTopology.nodes.length}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Graph edges</div>
+                <div className='text-2xl font-bold'>
+                  {secretsTopology.edges.length}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Action edges
+                </div>
+                <div className='text-2xl font-bold'>
+                  {topologyProblemEdges.length}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Value policy
+                </div>
+                <div className='mt-1'>hidden / never rendered</div>
+              </div>
+            </div>
+
+            <DependencyGraphCanvas
+              nodes={reactFlowSecretsTopology.nodes}
+              edges={reactFlowSecretsTopology.edges}
+              height={480}
+              draggable={false}
+              selectable={false}
+              showMiniMap={false}
+              legendItems={[
+                { label: 'ok', color: '#16a34a' },
+                { label: 'warning / missing', color: '#f59e0b', dashed: true },
+                { label: 'failed', color: '#dc2626', dashed: true },
+                { label: 'denied', color: '#991b1b', dashed: true },
+              ]}
+            />
+
+            <div className='rounded-lg border p-3 text-sm'>
+              <div className='font-medium'>
+                Actionable relationship fallback
+              </div>
+              <p className='text-muted-foreground'>
+                This list mirrors the graph relationships for accessibility and
+                troubleshooting. Each edge links to detail, audit, or diagnostic
+                context instead of relying on decorative graph-only state.
+              </p>
+            </div>
+
+            <div className='overflow-x-auto rounded-lg border'>
+              <table className='w-full text-sm'>
+                <thead className='bg-muted/50 text-left'>
+                  <tr>
+                    <th className='p-3 font-medium'>Relationship</th>
+                    <th className='p-3 font-medium'>From</th>
+                    <th className='p-3 font-medium'>To</th>
+                    <th className='p-3 font-medium'>Status</th>
+                    <th className='p-3 font-medium'>Context</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {secretsTopology.edges.map((edge) => {
+                    const sourceNode = secretsTopology.nodes.find(
+                      (node) => node.id === edge.source
+                    )
+                    const targetNode = secretsTopology.nodes.find(
+                      (node) => node.id === edge.target
+                    )
+
+                    return (
+                      <tr key={edge.id} className='border-t align-top'>
+                        <td className='p-3 font-medium'>{edge.label}</td>
+                        <td className='p-3'>
+                          <div>{sourceNode?.label ?? edge.source}</div>
+                          <div className='text-xs text-muted-foreground'>
+                            {sourceNode?.kind}
+                          </div>
+                        </td>
+                        <td className='p-3'>
+                          <div>{targetNode?.label ?? edge.target}</div>
+                          <div className='text-xs text-muted-foreground'>
+                            {targetNode?.kind}
+                          </div>
+                        </td>
+                        <td className='p-3'>
+                          <Badge
+                            variant={
+                              edge.status === 'ok'
+                                ? 'default'
+                                : edge.status === 'failed' ||
+                                    edge.status === 'denied'
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                          >
+                            {edge.status}
+                          </Badge>
+                        </td>
+                        <td className='p-3'>
+                          <div className='flex flex-wrap gap-2'>
+                            <Button asChild size='sm' variant='outline'>
+                              <a href={edge.detailHref}>Detail</a>
+                            </Button>
+                            <Button asChild size='sm' variant='outline'>
+                              <a href={edge.auditHref}>Audit</a>
+                            </Button>
+                            {edge.diagnosticHref ? (
+                              <Button asChild size='sm' variant='outline'>
+                                <a href={edge.diagnosticHref}>Diagnostics</a>
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
 
