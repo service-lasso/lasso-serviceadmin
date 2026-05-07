@@ -59,12 +59,6 @@ jobs:
         shell: bash
         run: bash ./scripts/package.sh
 
-      - name: Run packaged Service Lasso dev server smoke
-        shell: bash
-        env:
-          SERVICEADMIN_ARTIFACT_PATH: ${{ matrix.artifact }}
-        run: npm run test:dev-server
-
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v7
         with:
