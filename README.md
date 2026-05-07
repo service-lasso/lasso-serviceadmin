@@ -73,8 +73,16 @@ See `docs/reference/MIGRATION-REPORT.md` for the stricter migration rules.
 Install dependencies:
 
 ```bash
-npm install
+npm ci --legacy-peer-deps
 ```
+
+For editable local installs, use:
+
+```bash
+npm install --legacy-peer-deps
+```
+
+`npm run test:dev-server` requires the `@service-lasso/service-lasso` devDependency from `node_modules`; run one of the install commands above after a fresh clone or pull.
 
 Start the Vite dev server:
 

@@ -17,7 +17,34 @@ const serviceAdminArtifactPath = process.env.SERVICEADMIN_ARTIFACT_PATH
   ? path.resolve(process.env.SERVICEADMIN_ARTIFACT_PATH)
   : null
 
-const serviceLassoCliPath = fileURLToPath(await import.meta.resolve('@service-lasso/service-lasso/cli'))
+async function resolveServiceLassoCliPath() {
+  try {
+    return fileURLToPath(await import.meta.resolve('@service-lasso/service-lasso/cli'))
+  } catch (error) {
+    if (error?.code !== 'ERR_MODULE_NOT_FOUND') {
+      throw error
+    }
+
+    const message = [
+      'Service Admin dev-server smoke requires the @service-lasso/service-lasso devDependency to be installed.',
+      '',
+      `Repo: ${repoRoot}`,
+      '',
+      'Install dependencies first, then rerun the smoke test:',
+      '',
+      '  npm ci --legacy-peer-deps',
+      '  npm run test:dev-server',
+      '',
+      'For an editable local dependency install, use:',
+      '',
+      '  npm install --legacy-peer-deps',
+    ].join('\n')
+
+    throw new Error(message, { cause: error })
+  }
+}
+
+const serviceLassoCliPath = await resolveServiceLassoCliPath()
 
 function log(message) {
   console.log(`[serviceadmin dev:server] ${message}`)
