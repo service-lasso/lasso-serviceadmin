@@ -49,6 +49,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Variables',
   },
   {
+    path: '/secrets-broker',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Setup',
+  },
+  {
     path: '/network',
     heading: /^Network$/i,
     title: 'Service Admin - Network',
