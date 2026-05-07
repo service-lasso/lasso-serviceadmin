@@ -37,6 +37,49 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.queryByText('plaintext secret')).not.toBeInTheDocument()
   })
 
+  it('renders broker overview healthy degraded offline and unconfigured states', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getByText(/@secretsbroker overview/i)).toBeVisible()
+    expect(screen.getByText(/@secretsbroker healthy/i)).toBeVisible()
+    expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
+    expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()
+    expect(screen.getByText(/key version v3/i)).toBeVisible()
+    expect(screen.getByText(/View provider connections/i)).toBeVisible()
+    expect(screen.getByText(/View audit\/events/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Preview state/i),
+      'degraded'
+    )
+    expect(screen.getByText(/@secretsbroker degraded/i)).toBeVisible()
+    expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
+    expect(screen.getByText(/Recent resolve failures/i)).toBeVisible()
+    expect(screen.getByText(/refresh failure · vault/i)).toBeVisible()
+
+    await user.selectOptions(screen.getByLabelText(/Preview state/i), 'offline')
+    expect(screen.getByText(/@secretsbroker offline/i)).toBeVisible()
+    expect(screen.getAllByText(/API reachable/i)[0]).toBeVisible()
+    expect(screen.getByText(/^no$/i)).toBeVisible()
+    expect(screen.getByText(/live backend state unavailable/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Preview state/i),
+      'unconfigured'
+    )
+    expect(screen.getByText(/@secretsbroker setup needed/i)).toBeVisible()
+    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(
+        /Add a local encrypted store or connect an external source/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+  })
+
   it('covers locked, auth-required, degraded, policy-denied, cancel, and ready states', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker')
@@ -119,7 +162,7 @@ describe('Secrets Broker setup wizard', () => {
 
     expect(screen.getAllByText(/Provider Connections/i)[0]).toBeVisible()
     expect(screen.getByText(/Local default encrypted store/i)).toBeVisible()
-    expect(screen.getByText(/Vault ops connection/i)).toBeVisible()
+    expect(screen.getAllByText(/Vault ops connection/i)[0]).toBeVisible()
     expect(screen.getByText(/AWS backup worker connection/i)).toBeVisible()
     expect(screen.getAllByText(/Healthy/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Reconnect required/i)[0]).toBeVisible()
@@ -142,7 +185,7 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByLabelText(/Connection provider/i),
       'vault'
     )
-    expect(screen.getByText(/Vault ops connection/i)).toBeVisible()
+    expect(screen.getAllByText(/Vault ops connection/i)[0]).toBeVisible()
     expect(
       screen.queryByText(/Local default encrypted store/i)
     ).not.toBeInTheDocument()
