@@ -7,6 +7,10 @@ import {
   secretsBrokerAuditEvents,
 } from './audit-events'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
+import {
+  secretsBrokerSourceBackends,
+  sourceBackendHasSecretValue,
+} from './source-backends'
 
 describe('Secrets Broker setup wizard', () => {
   it('shows the safe setup contract without plaintext values', async () => {
@@ -64,6 +68,46 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByText(/Confirm operation, policy decision, and audit reason/i)
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
+  })
+
+  it('renders secret sources and backends with warning states and metadata-only test results', async () => {
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getByText(/Secret Sources \/ Backends/i)).toBeVisible()
+    expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
+    expect(screen.getByText(/Environment provider/i)).toBeVisible()
+    expect(screen.getByText(/File provider/i)).toBeVisible()
+    expect(screen.getByText(/Exec provider/i)).toBeVisible()
+    expect(screen.getByText(/HashiCorp Vault CLI/i)).toBeVisible()
+    expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/1Password CLI/i)[0]).toBeVisible()
+    expect(screen.getByText(/Bitwarden \/ BWS CLI/i)).toBeVisible()
+    expect(
+      screen.getByText(/Docker\/Kubernetes mounted secrets/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Broad env allowlist/i)).toBeVisible()
+    expect(screen.getByText(/Insecure path override/i)).toBeVisible()
+    expect(screen.getByText(/Untrusted command path/i)).toBeVisible()
+    expect(screen.getByText(/Missing timeout\/output limits/i)).toBeVisible()
+    expect(
+      screen.getAllByRole('button', { name: /Test source/i })[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByRole('button', { name: /View diagnostics/i })[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByRole('button', { name: /Edit configuration/i })[0]
+    ).toBeVisible()
+    expect(screen.getByText(/3 keys matched allowlist/i)).toBeVisible()
+    expect(screen.getByText(/path policy denied/i)).toBeVisible()
+    expect(screen.getByText(/command not executed/i)).toBeVisible()
+    expect(screen.getAllByText(/value=hidden/i)[0]).toBeVisible()
+  })
+
+  it('keeps source backend fixtures free of secret values', () => {
+    expect(secretsBrokerSourceBackends.some(sourceBackendHasSecretValue)).toBe(
+      false
+    )
   })
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {

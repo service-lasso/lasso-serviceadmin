@@ -41,6 +41,12 @@ import {
   type SecretsBrokerDiagnostic,
   type SecretsBrokerDiagnosticStatus,
 } from './diagnostics'
+import {
+  countSourceBackendsByState,
+  secretsBrokerSourceBackends,
+  type SecretsBrokerSourceBackend,
+  type SecretsBrokerSourceState,
+} from './source-backends'
 
 type WizardSource = {
   id: string
@@ -172,6 +178,44 @@ const auditOutcomeVariant: Record<
   revoked: 'outline',
 }
 
+const sourceStateCopy: Record<SecretsBrokerSourceState, string> = {
+  configured: 'Configured',
+  'not-configured': 'Not configured',
+  reachable: 'Reachable',
+  failing: 'Failing',
+  untested: 'Untested',
+}
+
+const sourceStateVariant: Record<
+  SecretsBrokerSourceState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  configured: 'secondary',
+  'not-configured': 'outline',
+  reachable: 'default',
+  failing: 'destructive',
+  untested: 'outline',
+}
+
+const warningVariant: Record<
+  SecretsBrokerSourceBackend['warnings'][number]['severity'],
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  info: 'outline',
+  warning: 'secondary',
+  critical: 'destructive',
+}
+
+const sourceActionCopy: Record<
+  SecretsBrokerSourceBackend['supportedActions'][number],
+  string
+> = {
+  'test-source': 'Test source',
+  'view-diagnostics': 'View diagnostics',
+  'edit-configuration': 'Edit configuration',
+  'view-examples': 'View examples',
+}
+
 const auditTypes = Array.from(
   new Set(secretsBrokerAuditEvents.map((event) => event.type))
 )
@@ -227,6 +271,124 @@ function SafeExample({ value }: { value: string }) {
   return (
     <div className='rounded-md border bg-muted/40 p-3 font-mono text-sm break-all'>
       {value}
+    </div>
+  )
+}
+
+function SourceBackendCard({ source }: { source: SecretsBrokerSourceBackend }) {
+  return (
+    <div className='rounded-lg border p-4 text-sm'>
+      <div className='mb-3 flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex items-center gap-2 font-medium'>
+            <FileKey2 className='size-4' />
+            {source.title}
+          </div>
+          <div className='text-xs text-muted-foreground'>
+            {source.type} · {source.provider} · {source.mode}
+          </div>
+        </div>
+        <Badge variant={sourceStateVariant[source.state]}>
+          {sourceStateCopy[source.state]}
+        </Badge>
+      </div>
+      <p className='text-muted-foreground'>{source.summary}</p>
+
+      <div className='mt-3 grid gap-3 md:grid-cols-2'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Source/backend
+          </div>
+          <div>{source.source}</div>
+          <div className='text-xs text-muted-foreground'>
+            {source.connection}
+          </div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Last test result
+          </div>
+          <div>
+            {source.testResult.outcome} · {source.testResult.checkedAt}
+          </div>
+          <div className='text-xs text-muted-foreground'>
+            Last check: {source.lastCheckedAt}
+          </div>
+        </div>
+      </div>
+
+      <div className='mt-3 rounded-md bg-muted/40 p-2'>
+        <div className='text-xs font-medium text-muted-foreground uppercase'>
+          Test metadata only
+        </div>
+        <div className='mt-1 flex flex-wrap gap-1'>
+          {source.testResult.metadata.map((item) => (
+            <Badge key={item} variant='outline'>
+              {item}
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      <div className='mt-3 grid gap-3 md:grid-cols-2'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Example refs
+          </div>
+          <div className='mt-1 space-y-1'>
+            {source.exampleRefs.map((ref) => (
+              <div key={ref} className='font-mono text-xs break-all'>
+                {ref}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Example config
+          </div>
+          <div className='mt-1 space-y-1'>
+            {source.exampleConfig.map((line) => (
+              <div key={line} className='font-mono text-xs break-all'>
+                {line}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {source.warnings.length ? (
+        <div className='mt-3 space-y-2'>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Security warnings
+          </div>
+          {source.warnings.map((warning) => (
+            <div key={warning.code} className='rounded-md border p-2'>
+              <div className='mb-1 flex flex-wrap items-center gap-2'>
+                <Badge variant={warningVariant[warning.severity]}>
+                  {warning.title}
+                </Badge>
+                <span className='font-mono text-xs text-muted-foreground'>
+                  {warning.code}
+                </span>
+              </div>
+              <div className='text-muted-foreground'>{warning.description}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className='mt-3 rounded-md border border-dashed p-2 text-xs text-muted-foreground'>
+          No source security warnings.
+        </div>
+      )}
+
+      <div className='mt-3 flex flex-wrap gap-2'>
+        {source.supportedActions.map((action) => (
+          <Button key={action} type='button' variant='outline' size='sm'>
+            {sourceActionCopy[action]}
+          </Button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -424,6 +586,11 @@ export function SecretsBrokerSetupWizard() {
   ).length
   const blockedCount = wizardSources.length - readyCount
   const diagnosticCounts = countDiagnosticsByStatus(secretsBrokerDiagnostics)
+  const sourceCounts = countSourceBackendsByState(secretsBrokerSourceBackends)
+  const sourceWarningCount = secretsBrokerSourceBackends.reduce(
+    (count, source) => count + source.warnings.length,
+    0
+  )
   const filteredAuditEvents = useMemo(
     () =>
       filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
@@ -515,6 +682,58 @@ export function SecretsBrokerSetupWizard() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <FileKey2 className='size-4' /> Secret Sources / Backends
+                </CardTitle>
+                <CardDescription>
+                  Inspect local and external Secrets Broker sources, source test
+                  results, safe example refs/config, and security warnings
+                  without displaying returned secret values.
+                </CardDescription>
+              </div>
+              <Badge variant='secondary'>Metadata only</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-3 md:grid-cols-4'>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Reachable</div>
+                <div className='text-2xl font-bold'>
+                  {sourceCounts.reachable}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Configured</div>
+                <div className='text-2xl font-bold'>
+                  {sourceCounts.configured}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Failing/untested
+                </div>
+                <div className='text-2xl font-bold'>
+                  {sourceCounts.failing + sourceCounts.untested}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Warnings</div>
+                <div className='text-2xl font-bold'>{sourceWarningCount}</div>
+              </div>
+            </div>
+
+            <div className='grid gap-4 lg:grid-cols-2'>
+              {secretsBrokerSourceBackends.map((source) => (
+                <SourceBackendCard key={source.id} source={source} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
