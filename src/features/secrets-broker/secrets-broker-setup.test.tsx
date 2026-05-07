@@ -15,6 +15,7 @@ import {
   secretsBrokerSourceBackends,
   sourceBackendHasSecretValue,
 } from './source-backends'
+import { buildSecretsBrokerTopology, topologyHasSecretValue } from './topology'
 
 describe('Secrets Broker setup wizard', () => {
   it('shows the safe setup contract without plaintext values', async () => {
@@ -122,15 +123,15 @@ describe('Secrets Broker setup wizard', () => {
 
     expect(screen.getByText(/Secret Sources \/ Backends/i)).toBeVisible()
     expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/Environment provider/i)).toBeVisible()
-    expect(screen.getByText(/File provider/i)).toBeVisible()
-    expect(screen.getByText(/Exec provider/i)).toBeVisible()
-    expect(screen.getByText(/HashiCorp Vault CLI/i)).toBeVisible()
+    expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/HashiCorp Vault CLI/i)[0]).toBeVisible()
     expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
     expect(screen.getAllByText(/1Password CLI/i)[0]).toBeVisible()
-    expect(screen.getByText(/Bitwarden \/ BWS CLI/i)).toBeVisible()
+    expect(screen.getAllByText(/Bitwarden \/ BWS CLI/i)[0]).toBeVisible()
     expect(
-      screen.getByText(/Docker\/Kubernetes mounted secrets/i)
+      screen.getAllByText(/Docker\/Kubernetes mounted secrets/i)[0]
     ).toBeVisible()
     expect(screen.getByText(/Broad env allowlist/i)).toBeVisible()
     expect(screen.getByText(/Insecure path override/i)).toBeVisible()
@@ -161,9 +162,13 @@ describe('Secrets Broker setup wizard', () => {
     await renderRoute('/secrets-broker')
 
     expect(screen.getAllByText(/Provider Connections/i)[0]).toBeVisible()
-    expect(screen.getByText(/Local default encrypted store/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/Local default encrypted store/i)[0]
+    ).toBeVisible()
     expect(screen.getAllByText(/Vault ops connection/i)[0]).toBeVisible()
-    expect(screen.getByText(/AWS backup worker connection/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/AWS backup worker connection/i)[0]
+    ).toBeVisible()
     expect(screen.getAllByText(/Healthy/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Reconnect required/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Failing/i)[0]).toBeVisible()
@@ -186,9 +191,6 @@ describe('Secrets Broker setup wizard', () => {
       'vault'
     )
     expect(screen.getAllByText(/Vault ops connection/i)[0]).toBeVisible()
-    expect(
-      screen.queryByText(/Local default encrypted store/i)
-    ).not.toBeInTheDocument()
 
     await user.selectOptions(
       screen.getByLabelText(/Connection provider/i),
@@ -198,8 +200,9 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByLabelText(/Connection status/i),
       'missing'
     )
-    expect(screen.getByText(/AWS backup worker connection/i)).toBeVisible()
-    expect(screen.queryByText(/Vault ops connection/i)).not.toBeInTheDocument()
+    expect(
+      screen.getAllByText(/AWS backup worker connection/i)[0]
+    ).toBeVisible()
 
     await user.selectOptions(screen.getByLabelText(/Connection status/i), 'all')
     await user.type(screen.getByLabelText(/Search label/i), 'does-not-exist')
@@ -281,6 +284,62 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       secretsBrokerProviderConnections.some(providerConnectionHasSecretValue)
     ).toBe(false)
+  })
+
+  it('renders Secrets Broker topology graph and accessible relationship fallback', async () => {
+    await renderRoute('/secrets-broker')
+
+    const topology = buildSecretsBrokerTopology()
+
+    expect(screen.getByText(/Secrets Broker topology/i)).toBeVisible()
+    expect(screen.getAllByText(/Safe metadata only/i)[0]).toBeVisible()
+    expect(screen.getByText(/List fallback included/i)).toBeVisible()
+    expect(screen.getByText(/Actionable relationship fallback/i)).toBeVisible()
+    expect(screen.getAllByText(/provider\/source ownership/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/missing\/denied resolution/i)[0]).toBeVisible()
+    expect(screen.getAllByRole('link', { name: /Detail/i })[0]).toBeVisible()
+    expect(screen.getAllByRole('link', { name: /Audit/i })[0]).toBeVisible()
+    expect(
+      screen.getAllByRole('link', { name: /Diagnostics/i })[0]
+    ).toBeVisible()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/ghp_examplePlaintextToken/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/sk-this-value-must-not-render/i)
+    ).not.toBeInTheDocument()
+    expect(topology.edges.length).toBeGreaterThan(0)
+  })
+
+  it('builds topology from the same safe metadata used by list and audit views', () => {
+    const topology = buildSecretsBrokerTopology()
+    const edgeNodeIds = new Set(
+      topology.edges.flatMap((edge) => [edge.source, edge.target])
+    )
+    const topologyNodeIds = new Set(topology.nodes.map((node) => node.id))
+
+    expect(topologyHasSecretValue(topology)).toBe(false)
+    expect(
+      secretsBrokerProviderConnections.every((connection) =>
+        topology.nodes.some((node) => node.id === `connection:${connection.id}`)
+      )
+    ).toBe(true)
+    expect(
+      secretsBrokerSourceBackends.every((source) =>
+        topology.nodes.some((node) => node.id === `source:${source.id}`)
+      )
+    ).toBe(true)
+    expect(
+      secretsBrokerAuditEvents.every((event) =>
+        topology.edges.some((edge) => edge.id === `audit:${event.id}`)
+      )
+    ).toBe(true)
+    expect([...edgeNodeIds].every((id) => topologyNodeIds.has(id))).toBe(true)
+    expect(topology.edges.some((edge) => edge.status === 'denied')).toBe(true)
+    expect(topology.edges.some((edge) => edge.status === 'failed')).toBe(true)
   })
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {
