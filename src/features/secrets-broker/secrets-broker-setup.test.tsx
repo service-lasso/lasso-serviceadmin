@@ -8,6 +8,10 @@ import {
 } from './audit-events'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
 import {
+  providerConnectionHasSecretValue,
+  secretsBrokerProviderConnections,
+} from './provider-connections'
+import {
   secretsBrokerSourceBackends,
   sourceBackendHasSecretValue,
 } from './source-backends'
@@ -108,6 +112,92 @@ describe('Secrets Broker setup wizard', () => {
     expect(secretsBrokerSourceBackends.some(sourceBackendHasSecretValue)).toBe(
       false
     )
+  })
+
+  it('links to provider connection detail records from the setup surface', async () => {
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getByText(/Provider connection details/i)).toBeVisible()
+    expect(screen.getByText(/Local default encrypted store/i)).toBeVisible()
+    expect(screen.getByText(/Vault ops connection/i)).toBeVisible()
+    expect(screen.getByText(/AWS backup worker connection/i)).toBeVisible()
+    expect(
+      screen.getAllByRole('link', { name: /View detail/i })[0]
+    ).toHaveAttribute('href', '/secrets-broker/local-default')
+  })
+
+  it('renders safe provider connection detail without raw secret values', async () => {
+    await renderRoute('/secrets-broker/local-default')
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /Local default encrypted store/i,
+      })
+    ).toBeVisible()
+    expect(screen.getByText(/Safe metadata summary/i)).toBeVisible()
+    expect(screen.getByText(/Status and health/i)).toBeVisible()
+    expect(screen.getByText(/Secret material state/i)).toBeVisible()
+    expect(screen.getByText(/Presence: Present/i)).toBeVisible()
+    expect(screen.getByText(/Raw value: hidden/i)).toBeVisible()
+    expect(screen.getByText(/Copy value: unavailable/i)).toBeVisible()
+    expect(screen.getByText(/Key version/i)).toBeVisible()
+    expect(screen.getByText(/Expiry/i)).toBeVisible()
+    expect(screen.getByText(/Last successful resolve\/use/i)).toBeVisible()
+    expect(screen.getByText(/Recent audit events/i)).toBeVisible()
+    expect(screen.getByText(/Connection actions/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Replace\/rotate secret material/i })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Existing services may need restart/i)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Delete connection/i })
+    ).toBeVisible()
+    expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/ghp_examplePlaintextToken/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/sk-this-value-must-not-render/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Copy secret/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('explains degraded and missing provider connection next actions', async () => {
+    const degraded = await renderRoute('/secrets-broker/vault-ops')
+
+    expect(screen.getByText(/Authentication required/i)).toBeVisible()
+    expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
+    expect(screen.getByText(/Reconnect the Vault CLI session/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /Reconnect/i })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Replace\/rotate secret material/i })
+    ).toBeDisabled()
+    expect(
+      screen.getByText(/Reconnect before rotating external material/i)
+    ).toBeVisible()
+
+    degraded.unmount()
+    await renderRoute('/secrets-broker/aws-backup-worker')
+    expect(screen.getByText(/Missing credentials/i)).toBeVisible()
+    expect(screen.getAllByText(/credential_handle_missing/i)[0]).toBeVisible()
+    expect(screen.getByText(/Add a scoped AWS profile/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Clear\/revoke secret material/i })
+    ).toBeDisabled()
+    expect(screen.getByText(/No material is present/i)).toBeVisible()
+  })
+
+  it('keeps provider connection detail fixtures free of secret values', () => {
+    expect(
+      secretsBrokerProviderConnections.some(providerConnectionHasSecretValue)
+    ).toBe(false)
   })
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {
