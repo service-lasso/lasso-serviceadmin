@@ -266,6 +266,20 @@ const defaultServices: DashboardService[] = [
         source: '.env.local',
       },
       {
+        key: 'SESSION_SECRET',
+        value: 'secret://@serviceadmin/SESSION_SECRET',
+        scope: 'service',
+        secret: true,
+        source: '@secretsbroker/local/default',
+      },
+      {
+        key: 'OPENCLAW_ANTHROPIC_API_KEY',
+        value: 'secret://openclaw/anthropic/api_key',
+        scope: 'service',
+        secret: true,
+        source: '@secretsbroker/openclaw/service-lasso',
+      },
+      {
         key: 'SERVICE_LASSO_ROOT',
         value: 'C:\\service-lasso',
         scope: 'global',
@@ -360,6 +374,13 @@ const defaultServices: DashboardService[] = [
         source: 'zitadel.env',
       },
       {
+        key: 'POSTGRES_ADMIN_PASSWORD',
+        value: 'secret://postgres.ADMIN_PASSWORD',
+        scope: 'service',
+        secret: true,
+        source: '@secretsbroker/local/default',
+      },
+      {
         key: 'SERVICE_LASSO_ROOT',
         value: 'C:\\service-lasso',
         scope: 'global',
@@ -442,6 +463,13 @@ const defaultServices: DashboardService[] = [
         value: 'C:\\service-lasso\\dagu',
         scope: 'service',
         source: 'service.json',
+      },
+      {
+        key: 'TELEGRAM_BOT_TOKEN',
+        value: 'secret://telegram.bot_token',
+        scope: 'service',
+        secret: true,
+        source: '@secretsbroker/external/ops',
       },
       {
         key: 'SERVICE_LASSO_ROOT',
