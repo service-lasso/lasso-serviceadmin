@@ -41,6 +41,7 @@ import {
   type SecretsBrokerDiagnostic,
   type SecretsBrokerDiagnosticStatus,
 } from './diagnostics'
+import { secretsBrokerProviderConnections } from './provider-connections'
 import {
   countSourceBackendsByState,
   secretsBrokerSourceBackends,
@@ -732,6 +733,45 @@ export function SecretsBrokerSetupWizard() {
                 <SourceBackendCard key={source.id} source={source} />
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <KeyRound className='size-4' /> Provider connection details
+                </CardTitle>
+                <CardDescription>
+                  Open safe detail records for individual provider connections.
+                  These pages show presence, version, expiry, health, usage, and
+                  action state without raw secret values.
+                </CardDescription>
+              </div>
+              <Badge variant='secondary'>No raw values</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className='grid gap-3 md:grid-cols-3'>
+            {secretsBrokerProviderConnections.map((connection) => (
+              <div key={connection.id} className='rounded-lg border p-3'>
+                <div className='font-medium'>{connection.title}</div>
+                <div className='text-sm text-muted-foreground'>
+                  {connection.provider} · {connection.source}
+                </div>
+                <div className='mt-3 flex items-center justify-between gap-3'>
+                  <Badge variant='outline'>{connection.state}</Badge>
+                  <Button asChild size='sm' variant='secondary'>
+                    <Link
+                      to='/secrets-broker/$connectionId'
+                      params={{ connectionId: connection.id }}
+                    >
+                      View detail
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
