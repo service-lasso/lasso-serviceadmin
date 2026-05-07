@@ -2,10 +2,9 @@
 import { spawn } from 'node:child_process'
 import { createReadStream } from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 
 const __filename = fileURLToPath(import.meta.url)
 const repoRoot = path.resolve(path.dirname(__filename), '..')
@@ -387,9 +386,11 @@ async function writeServiceAdmin(servicesRoot, ports, serviceAdminArtifact = nul
 }
 
 async function prepareRuntimeRoots(serviceAdminArtifact = null) {
+  const repoTempRoot = path.join(repoRoot, '.tmp')
+  await mkdir(repoTempRoot, { recursive: true })
   const defaultRoot = verifyMode
-    ? await import('node:fs/promises').then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), 'serviceadmin-dev-server-')))
-    : path.join(repoRoot, '.tmp', 'dev-server')
+    ? await mkdtemp(path.join(repoTempRoot, 'dev-server-verify-'))
+    : path.join(repoTempRoot, 'dev-server')
   const root = path.resolve(process.env.SERVICEADMIN_DEV_SERVER_ROOT || defaultRoot)
 
   if (!keepRoot) {
