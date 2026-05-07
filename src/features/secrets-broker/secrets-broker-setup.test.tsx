@@ -114,16 +114,56 @@ describe('Secrets Broker setup wizard', () => {
     )
   })
 
-  it('links to provider connection detail records from the setup surface', async () => {
+  it('renders provider connections list with status badges and safe material state', async () => {
     await renderRoute('/secrets-broker')
 
-    expect(screen.getByText(/Provider connection details/i)).toBeVisible()
+    expect(screen.getAllByText(/Provider Connections/i)[0]).toBeVisible()
     expect(screen.getByText(/Local default encrypted store/i)).toBeVisible()
     expect(screen.getByText(/Vault ops connection/i)).toBeVisible()
     expect(screen.getByText(/AWS backup worker connection/i)).toBeVisible()
+    expect(screen.getAllByText(/Healthy/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Reconnect required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Failing/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Operator action required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/value hidden/i)[0]).toBeVisible()
     expect(
-      screen.getAllByRole('link', { name: /View detail/i })[0]
+      screen.getAllByRole('link', { name: /View details/i })[0]
     ).toHaveAttribute('href', '/secrets-broker/local-default')
+    expect(
+      screen.queryByRole('button', { name: /Copy secret/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('filters provider connections by provider status and label with empty state', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    await user.selectOptions(
+      screen.getByLabelText(/Connection provider/i),
+      'vault'
+    )
+    expect(screen.getByText(/Vault ops connection/i)).toBeVisible()
+    expect(
+      screen.queryByText(/Local default encrypted store/i)
+    ).not.toBeInTheDocument()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Connection provider/i),
+      'all'
+    )
+    await user.selectOptions(
+      screen.getByLabelText(/Connection status/i),
+      'missing'
+    )
+    expect(screen.getByText(/AWS backup worker connection/i)).toBeVisible()
+    expect(screen.queryByText(/Vault ops connection/i)).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText(/Connection status/i), 'all')
+    await user.type(screen.getByLabelText(/Search label/i), 'does-not-exist')
+    expect(
+      screen.getByText(/No provider connections match these filters/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Add a source or connection/i)).toBeVisible()
   })
 
   it('renders safe provider connection detail without raw secret values', async () => {
@@ -221,7 +261,7 @@ describe('Secrets Broker setup wizard', () => {
       screen.queryByRole('button', { name: /session token revoked/i })
     ).not.toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText(/Provider/i), 'local')
+    await user.selectOptions(screen.getByLabelText(/Audit provider/i), 'local')
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
     expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
 

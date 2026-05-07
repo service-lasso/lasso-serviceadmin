@@ -41,7 +41,11 @@ import {
   type SecretsBrokerDiagnostic,
   type SecretsBrokerDiagnosticStatus,
 } from './diagnostics'
-import { secretsBrokerProviderConnections } from './provider-connections'
+import {
+  secretsBrokerProviderConnections,
+  type SecretsBrokerProviderConnectionDetail,
+  type SecretsBrokerProviderConnectionState,
+} from './provider-connections'
 import {
   countSourceBackendsByState,
   secretsBrokerSourceBackends,
@@ -215,6 +219,71 @@ const sourceActionCopy: Record<
   'view-diagnostics': 'View diagnostics',
   'edit-configuration': 'Edit configuration',
   'view-examples': 'View examples',
+}
+
+const providerConnectionStatusCopy: Record<
+  SecretsBrokerProviderConnectionState,
+  string
+> = {
+  healthy: 'Healthy',
+  degraded: 'Reconnect required',
+  failed: 'Failing',
+  disabled: 'Disabled',
+  missing: 'Failing',
+}
+
+const providerConnectionStatusVariant: Record<
+  SecretsBrokerProviderConnectionState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  healthy: 'default',
+  degraded: 'secondary',
+  failed: 'destructive',
+  disabled: 'outline',
+  missing: 'destructive',
+}
+
+const providerConnectionStates = Array.from(
+  new Set(
+    secretsBrokerProviderConnections.map((connection) => connection.state)
+  )
+)
+const providerConnectionProviders = Array.from(
+  new Set(
+    secretsBrokerProviderConnections.map((connection) => connection.provider)
+  )
+)
+
+function filterProviderConnections(
+  connections: SecretsBrokerProviderConnectionDetail[],
+  filters: {
+    provider: string
+    status: SecretsBrokerProviderConnectionState | 'all'
+    query: string
+  }
+) {
+  const query = filters.query.trim().toLowerCase()
+
+  return connections.filter((connection) => {
+    const providerMatches =
+      filters.provider === 'all' || connection.provider === filters.provider
+    const statusMatches =
+      filters.status === 'all' || connection.state === filters.status
+    const queryMatches =
+      query.length === 0 ||
+      [
+        connection.title,
+        connection.provider,
+        connection.source,
+        connection.connectionRef,
+        connection.health.label,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+
+    return providerMatches && statusMatches && queryMatches
+  })
 }
 
 const auditTypes = Array.from(
@@ -576,6 +645,12 @@ export function SecretsBrokerSetupWizard() {
   const [selectedAuditEventId, setSelectedAuditEventId] = useState(
     secretsBrokerAuditEvents[0].id
   )
+  const [connectionProviderFilter, setConnectionProviderFilter] =
+    useState('all')
+  const [connectionStatusFilter, setConnectionStatusFilter] = useState<
+    SecretsBrokerProviderConnectionState | 'all'
+  >('all')
+  const [connectionQueryFilter, setConnectionQueryFilter] = useState('')
   const selectedSource = useMemo(
     () =>
       wizardSources.find((source) => source.id === selectedId) ??
@@ -592,6 +667,19 @@ export function SecretsBrokerSetupWizard() {
     (count, source) => count + source.warnings.length,
     0
   )
+  const filteredProviderConnections = useMemo(
+    () =>
+      filterProviderConnections(secretsBrokerProviderConnections, {
+        provider: connectionProviderFilter,
+        status: connectionStatusFilter,
+        query: connectionQueryFilter,
+      }),
+    [connectionProviderFilter, connectionQueryFilter, connectionStatusFilter]
+  )
+  const providerConnectionsNeedingAction =
+    secretsBrokerProviderConnections.filter((connection) =>
+      ['degraded', 'failed', 'missing'].includes(connection.state)
+    ).length
   const filteredAuditEvents = useMemo(
     () =>
       filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
@@ -741,37 +829,213 @@ export function SecretsBrokerSetupWizard() {
             <div className='flex flex-wrap items-start justify-between gap-3'>
               <div>
                 <CardTitle className='flex items-center gap-2'>
-                  <KeyRound className='size-4' /> Provider connection details
+                  <KeyRound className='size-4' /> Provider Connections
                 </CardTitle>
                 <CardDescription>
-                  Open safe detail records for individual provider connections.
-                  These pages show presence, version, expiry, health, usage, and
-                  action state without raw secret values.
+                  Search and filter external provider connections by provider,
+                  status, and label. Secret material shows presence/status only,
+                  never raw values.
                 </CardDescription>
               </div>
-              <Badge variant='secondary'>No raw values</Badge>
+              <div className='flex flex-wrap gap-2'>
+                <Badge variant='secondary'>No raw values</Badge>
+                <Badge variant='outline'>
+                  {providerConnectionsNeedingAction} need action
+                </Badge>
+              </div>
             </div>
           </CardHeader>
-          <CardContent className='grid gap-3 md:grid-cols-3'>
-            {secretsBrokerProviderConnections.map((connection) => (
-              <div key={connection.id} className='rounded-lg border p-3'>
-                <div className='font-medium'>{connection.title}</div>
-                <div className='text-sm text-muted-foreground'>
-                  {connection.provider} · {connection.source}
-                </div>
-                <div className='mt-3 flex items-center justify-between gap-3'>
-                  <Badge variant='outline'>{connection.state}</Badge>
-                  <Button asChild size='sm' variant='secondary'>
-                    <Link
-                      to='/secrets-broker/$connectionId'
-                      params={{ connectionId: connection.id }}
-                    >
-                      View detail
-                    </Link>
-                  </Button>
-                </div>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-3 md:grid-cols-3'>
+              <div>
+                <label
+                  htmlFor='provider-connection-search'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Search label
+                </label>
+                <Input
+                  id='provider-connection-search'
+                  value={connectionQueryFilter}
+                  onChange={(event) =>
+                    setConnectionQueryFilter(event.target.value)
+                  }
+                  placeholder='label, source, provider'
+                />
               </div>
-            ))}
+              <div>
+                <label
+                  htmlFor='provider-connection-provider'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Connection provider
+                </label>
+                <select
+                  id='provider-connection-provider'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={connectionProviderFilter}
+                  onChange={(event) =>
+                    setConnectionProviderFilter(event.target.value)
+                  }
+                >
+                  <option value='all'>all</option>
+                  {providerConnectionProviders.map((provider) => (
+                    <option key={provider} value={provider}>
+                      {provider}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor='provider-connection-status'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Connection status
+                </label>
+                <select
+                  id='provider-connection-status'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={connectionStatusFilter}
+                  onChange={(event) =>
+                    setConnectionStatusFilter(
+                      event.target.value as
+                        | SecretsBrokerProviderConnectionState
+                        | 'all'
+                    )
+                  }
+                >
+                  <option value='all'>all</option>
+                  {providerConnectionStates.map((status) => (
+                    <option key={status} value={status}>
+                      {providerConnectionStatusCopy[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {filteredProviderConnections.length === 0 ? (
+              <div className='rounded-lg border border-dashed p-6 text-sm text-muted-foreground'>
+                No provider connections match these filters. Add a source or
+                connection from Secret Sources / Backends, then test the
+                connection before using it in services.
+              </div>
+            ) : (
+              <div className='overflow-x-auto rounded-lg border'>
+                <table className='w-full text-sm'>
+                  <thead className='bg-muted/50 text-left'>
+                    <tr>
+                      <th className='p-3 font-medium'>Provider</th>
+                      <th className='p-3 font-medium'>Connection label</th>
+                      <th className='p-3 font-medium'>Auth method</th>
+                      <th className='p-3 font-medium'>Status</th>
+                      <th className='p-3 font-medium'>Secret material</th>
+                      <th className='p-3 font-medium'>Expiry / refresh</th>
+                      <th className='p-3 font-medium'>Last used/error</th>
+                      <th className='p-3 font-medium'>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProviderConnections.map((connection) => (
+                      <tr key={connection.id} className='border-t align-top'>
+                        <td className='p-3 font-medium'>
+                          {connection.provider}
+                        </td>
+                        <td className='p-3'>
+                          <div className='font-medium'>{connection.title}</div>
+                          <div className='text-xs text-muted-foreground'>
+                            {connection.source}
+                          </div>
+                        </td>
+                        <td className='p-3'>
+                          {connection.metadata.find(
+                            (item) =>
+                              item.label === 'Auth mode' ||
+                              item.label === 'Mode' ||
+                              item.label === 'Profile'
+                          )?.value ?? 'metadata-only auth'}
+                        </td>
+                        <td className='p-3'>
+                          <Badge
+                            variant={
+                              providerConnectionStatusVariant[connection.state]
+                            }
+                          >
+                            {providerConnectionStatusCopy[connection.state]}
+                          </Badge>
+                          {['degraded', 'failed', 'missing'].includes(
+                            connection.state
+                          ) ? (
+                            <div className='mt-2 text-xs font-medium text-destructive'>
+                              Operator action required
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className='p-3'>
+                          <div>{connection.secretMaterial.presence}</div>
+                          <div className='text-xs text-muted-foreground'>
+                            value hidden
+                          </div>
+                        </td>
+                        <td className='p-3'>
+                          {connection.secretMaterial.expiresAt ?? 'not set'}
+                          <div className='text-xs text-muted-foreground'>
+                            {connection.secretMaterial.refreshWindow ??
+                              connection.health.nextAction}
+                          </div>
+                        </td>
+                        <td className='p-3'>
+                          <div>
+                            {connection.usage.lastSuccessfulResolve ??
+                              'no successful resolve yet'}
+                          </div>
+                          {connection.usage.lastFailure ? (
+                            <div className='text-xs text-destructive'>
+                              {connection.usage.lastFailure}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className='p-3'>
+                          <div className='flex flex-wrap gap-2'>
+                            {connection.actions
+                              .filter((action) =>
+                                [
+                                  'reconnect',
+                                  'refresh-test-now',
+                                  'disable-enable',
+                                ].includes(action.id)
+                              )
+                              .map((action) => (
+                                <Button
+                                  key={action.id}
+                                  type='button'
+                                  size='sm'
+                                  variant='outline'
+                                  disabled={action.state === 'disabled'}
+                                >
+                                  {action.label}
+                                </Button>
+                              ))}
+                            <Button asChild size='sm' variant='secondary'>
+                              <Link
+                                to='/secrets-broker/$connectionId'
+                                params={{ connectionId: connection.id }}
+                              >
+                                View details
+                              </Link>
+                            </Button>
+                            <Button type='button' size='sm' variant='outline'>
+                              View audit
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -848,7 +1112,7 @@ export function SecretsBrokerSetupWizard() {
                   htmlFor='secret-audit-provider'
                   className='mb-1 block text-xs text-muted-foreground'
                 >
-                  Provider
+                  Audit provider
                 </label>
                 <select
                   id='secret-audit-provider'
