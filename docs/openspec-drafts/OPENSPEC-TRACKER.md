@@ -10,6 +10,8 @@ _Status: working tracker_
 | Draft Spec | Area | Status | Main Source Docs | Intended Repo Target | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `SPEC-SERVICE-TEMPLATE-REPO.md` | Template | `draft` | `docs/reference/SERVICE-TEMPLATE-REPO.md`, `docs/reference/SERVICE-STRUCTURE-REVIEW.md`, `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md` | `service-template` | Canonical template/service-author contract draft. |
+| `SPEC-CI-SECURITY-MAINTENANCE.md` | CI/Security | `draft` | `.github/workflows/*.yml`, `package.json`, `package-lock.json`, `pnpm-lock.yaml` | `lasso-serviceadmin` | Maintenance contract for action runtime and npm vulnerability hygiene. |
+| `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Repo identity | `draft` | `README.md`, `index.html`, `package.json`, `public/images/*` | `lasso-serviceadmin` | Service Admin identity contract and donor-branding cleanup. |
 
 ## Current focus
 1. lock the canonical template repo contract
@@ -20,6 +22,8 @@ _Status: working tracker_
 ## Current local source set
 - `README.md`
 - `docs/openspec-drafts/SPEC-SERVICE-TEMPLATE-REPO.md`
+- `docs/openspec-drafts/SPEC-CI-SECURITY-MAINTENANCE.md`
+- `docs/openspec-drafts/SPEC-SERVICEADMIN-REPO-IDENTITY.md`
 - `docs/reference/SERVICE-TEMPLATE-REPO.md`
 - `docs/reference/SERVICE-STRUCTURE-REVIEW.md`
 - `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md`

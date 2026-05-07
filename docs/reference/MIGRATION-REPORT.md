@@ -33,14 +33,14 @@ This keeps the admin UI portable across local dev, demo, and real runtime deploy
 
 ## Current baseline status
 
-The repo has been reset back to the chosen `shadcn-admin` template baseline so the app now reflects the template look and feel first.
+The repo has been reset back to the chosen `Service Admin` template baseline so the app now reflects the template look and feel first.
 
 This means the current app is primarily a **template-faithful baseline**, not yet a full Service Lasso-adapted admin UI.
 
 ## What from the provided references is currently present
 
 ### 1. Template shell and look/feel
-Present now, from the chosen `shadcn-admin` template baseline:
+Present now, from the chosen `Service Admin` template baseline:
 - sidebar shell
 - header/topbar shell
 - dashboard layout structure
