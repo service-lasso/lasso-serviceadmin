@@ -46,15 +46,15 @@ describe('service graph helpers', () => {
   it('builds dependency and api usage edges with expected direction and labels', () => {
     expect(
       buildDependencyEdge({
-        id: 'traefik->serviceadmin',
-        source: 'traefik',
+        id: '@traefik->serviceadmin',
+        source: '@traefik',
         target: '@serviceadmin',
         selected: true,
         isDark: false,
       })
     ).toMatchObject({
-      id: 'traefik->serviceadmin',
-      source: 'traefik',
+      id: '@traefik->serviceadmin',
+      source: '@traefik',
       target: '@serviceadmin',
       label: 'depends_on',
       animated: true,

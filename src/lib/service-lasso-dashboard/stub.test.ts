@@ -28,7 +28,7 @@ describe('service lasso dashboard stub', () => {
       'At least one managed service is currently stopped.',
     ])
     expect(summary.favorites.map((service) => service.id)).toEqual([
-      'traefik',
+      '@traefik',
       '@serviceadmin',
     ])
     expect(summary.problemServices.map((service) => service.id)).toEqual([
@@ -70,12 +70,12 @@ describe('service lasso dashboard stub', () => {
     const stoppedSummary = await runDashboardAction('stop-services')
 
     expect(stoppedSummary.servicesStopped).toBe(4)
-    expect((await fetchDashboardService('traefik'))?.status).toBe('stopped')
+    expect((await fetchDashboardService('@traefik'))?.status).toBe('stopped')
 
     const restartedSummary = await runDashboardAction('restart-services')
 
     expect(restartedSummary.servicesRunning).toBe(4)
-    expect((await fetchDashboardService('traefik'))?.status).toBe('running')
+    expect((await fetchDashboardService('@traefik'))?.status).toBe('running')
   })
 
   it('runs per-service lifecycle actions from services table controls', async () => {
@@ -107,18 +107,18 @@ describe('service lasso dashboard stub', () => {
 
     await firstStub.runDashboardAction({
       kind: 'service-lifecycle',
-      serviceId: 'traefik',
+      serviceId: '@traefik',
       action: 'stop',
     })
 
-    expect((await firstStub.fetchDashboardService('traefik'))?.status).toBe(
+    expect((await firstStub.fetchDashboardService('@traefik'))?.status).toBe(
       'stopped'
     )
 
     const serviceAdmin = await firstStub.fetchDashboardService('@serviceadmin')
     expect(serviceAdmin?.dependencies).toEqual([
       expect.objectContaining({
-        id: 'traefik',
+        id: '@traefik',
         status: 'stopped',
       }),
       expect.objectContaining({
@@ -129,7 +129,7 @@ describe('service lasso dashboard stub', () => {
 
     const reloadedStub = await loadStub()
 
-    expect((await reloadedStub.fetchDashboardService('traefik'))?.status).toBe(
+    expect((await reloadedStub.fetchDashboardService('@traefik'))?.status).toBe(
       'stopped'
     )
     expect((await reloadedStub.fetchDashboardSummary()).servicesStopped).toBe(2)
@@ -142,7 +142,7 @@ describe('service lasso dashboard stub', () => {
     const services = await fetchServices()
     services[0].name = 'mutated by test'
 
-    expect((await fetchDashboardService('traefik'))?.name).toBe('Traefik')
+    expect((await fetchDashboardService('@traefik'))?.name).toBe('Traefik')
 
     const summary = await runDashboardAction({
       kind: 'toggle-favorite',

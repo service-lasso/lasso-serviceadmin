@@ -1,5 +1,5 @@
 {
-  "id": "traefik",
+  "id": "@traefik",
   "name": "Traefik",
   "description": "Edge router and ingress controller for local and LAN service exposure.",
   "enabled": true,
