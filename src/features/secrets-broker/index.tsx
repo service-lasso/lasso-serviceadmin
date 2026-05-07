@@ -20,12 +20,21 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  auditEventTypeLabel,
+  filterSecretsBrokerAuditEvents,
+  secretsBrokerAuditEvents,
+  type SecretsBrokerAuditEvent,
+  type SecretsBrokerAuditEventType,
+  type SecretsBrokerAuditOutcome,
+} from './audit-events'
 import {
   countDiagnosticsByStatus,
   secretsBrokerDiagnostics,
@@ -152,6 +161,27 @@ const diagnosticStatusVariant: Record<
   fail: 'destructive',
 }
 
+const auditOutcomeVariant: Record<
+  SecretsBrokerAuditOutcome,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  granted: 'default',
+  success: 'default',
+  denied: 'destructive',
+  failure: 'secondary',
+  revoked: 'outline',
+}
+
+const auditTypes = Array.from(
+  new Set(secretsBrokerAuditEvents.map((event) => event.type))
+)
+const auditOutcomes = Array.from(
+  new Set(secretsBrokerAuditEvents.map((event) => event.outcome))
+)
+const auditProviders = Array.from(
+  new Set(secretsBrokerAuditEvents.map((event) => event.provider))
+)
+
 function SourceIcon({ source }: { source: WizardSource }) {
   if (source.id === 'local-vault') return <LockKeyhole className='size-4' />
   if (source.id === 'file-source') return <FileKey2 className='size-4' />
@@ -198,6 +228,95 @@ function SafeExample({ value }: { value: string }) {
     <div className='rounded-md border bg-muted/40 p-3 font-mono text-sm break-all'>
       {value}
     </div>
+  )
+}
+
+function AuditEventDetail({ event }: { event: SecretsBrokerAuditEvent }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle className='text-base'>Event detail</CardTitle>
+            <CardDescription>{event.id}</CardDescription>
+          </div>
+          <Badge variant={auditOutcomeVariant[event.outcome]}>
+            {event.outcome}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4 text-sm'>
+        <div className='grid gap-3 md:grid-cols-2'>
+          <div>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Event
+            </div>
+            <div>{auditEventTypeLabel(event.type)}</div>
+          </div>
+          <div>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Timestamp
+            </div>
+            <div>{event.timestamp}</div>
+          </div>
+          <div>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Provider/source
+            </div>
+            <div>
+              {event.provider} · {event.source}
+            </div>
+          </div>
+          <div>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Connection
+            </div>
+            <div>{event.connection}</div>
+          </div>
+          <div>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Actor
+            </div>
+            <div>
+              {event.actorType}: {event.actorId}
+            </div>
+          </div>
+          <div>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Service/workflow/run
+            </div>
+            <div>{event.serviceOrWorkflow}</div>
+          </div>
+        </div>
+        <div className='rounded-md bg-muted/40 p-2'>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            SecretRef identifier
+          </div>
+          <div className='font-mono break-all'>{event.ref}</div>
+        </div>
+        <div className='rounded-md bg-muted/40 p-2'>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Policy decision
+          </div>
+          <div>{event.policyId}</div>
+          <div className='text-muted-foreground'>{event.policyDecision}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Normalized reason
+          </div>
+          <p className='text-muted-foreground'>{event.normalizedReason}</p>
+        </div>
+        <div className='flex gap-3 rounded-lg border p-3'>
+          <ShieldCheck className='mt-0.5 size-4 shrink-0' />
+          <div>
+            Event details use safe identifiers, policy metadata, and normalized
+            reasons only. Resolved secret values are not stored in this fixture
+            or rendered by this panel.
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -279,6 +398,21 @@ export function SecretsBrokerSetupWizard() {
   })
 
   const [selectedId, setSelectedId] = useState(wizardSources[0].id)
+  const [auditTypeFilter, setAuditTypeFilter] = useState<
+    SecretsBrokerAuditEventType | 'all'
+  >('all')
+  const [auditOutcomeFilter, setAuditOutcomeFilter] = useState<
+    SecretsBrokerAuditOutcome | 'all'
+  >('all')
+  const [auditProviderFilter, setAuditProviderFilter] = useState<
+    SecretsBrokerAuditEvent['provider'] | 'all'
+  >('all')
+  const [auditQueryFilter, setAuditQueryFilter] = useState('')
+  const [auditSinceFilter, setAuditSinceFilter] = useState('')
+  const [auditUntilFilter, setAuditUntilFilter] = useState('')
+  const [selectedAuditEventId, setSelectedAuditEventId] = useState(
+    secretsBrokerAuditEvents[0].id
+  )
   const selectedSource = useMemo(
     () =>
       wizardSources.find((source) => source.id === selectedId) ??
@@ -290,6 +424,29 @@ export function SecretsBrokerSetupWizard() {
   ).length
   const blockedCount = wizardSources.length - readyCount
   const diagnosticCounts = countDiagnosticsByStatus(secretsBrokerDiagnostics)
+  const filteredAuditEvents = useMemo(
+    () =>
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        type: auditTypeFilter,
+        outcome: auditOutcomeFilter,
+        provider: auditProviderFilter,
+        query: auditQueryFilter,
+        since: auditSinceFilter,
+        until: auditUntilFilter,
+      }),
+    [
+      auditOutcomeFilter,
+      auditProviderFilter,
+      auditQueryFilter,
+      auditSinceFilter,
+      auditTypeFilter,
+      auditUntilFilter,
+    ]
+  )
+  const selectedAuditEvent =
+    filteredAuditEvents.find((event) => event.id === selectedAuditEventId) ??
+    filteredAuditEvents[0] ??
+    secretsBrokerAuditEvents[0]
 
   return (
     <>
@@ -358,6 +515,191 @@ export function SecretsBrokerSetupWizard() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <ClipboardCheck className='size-4' /> Audit and events
+                </CardTitle>
+                <CardDescription>
+                  Inspect Secrets Broker operations by type, outcome, provider,
+                  source/backend, connection, service/workflow/run, actor, and
+                  timestamp without exposing secret values.
+                </CardDescription>
+              </div>
+              <Badge variant='secondary'>Values never rendered</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-3 md:grid-cols-6'>
+              <div>
+                <label
+                  htmlFor='secret-audit-type'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Event type
+                </label>
+                <select
+                  id='secret-audit-type'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={auditTypeFilter}
+                  onChange={(event) =>
+                    setAuditTypeFilter(
+                      event.target.value as SecretsBrokerAuditEventType | 'all'
+                    )
+                  }
+                >
+                  <option value='all'>all</option>
+                  {auditTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {auditEventTypeLabel(type)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor='secret-audit-outcome'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Outcome
+                </label>
+                <select
+                  id='secret-audit-outcome'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={auditOutcomeFilter}
+                  onChange={(event) =>
+                    setAuditOutcomeFilter(
+                      event.target.value as SecretsBrokerAuditOutcome | 'all'
+                    )
+                  }
+                >
+                  <option value='all'>all</option>
+                  {auditOutcomes.map((outcome) => (
+                    <option key={outcome} value={outcome}>
+                      {outcome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor='secret-audit-provider'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Provider
+                </label>
+                <select
+                  id='secret-audit-provider'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={auditProviderFilter}
+                  onChange={(event) =>
+                    setAuditProviderFilter(
+                      event.target.value as
+                        | SecretsBrokerAuditEvent['provider']
+                        | 'all'
+                    )
+                  }
+                >
+                  <option value='all'>all</option>
+                  {auditProviders.map((provider) => (
+                    <option key={provider} value={provider}>
+                      {provider}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor='secret-audit-query'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Source / actor
+                </label>
+                <Input
+                  id='secret-audit-query'
+                  value={auditQueryFilter}
+                  onChange={(event) => setAuditQueryFilter(event.target.value)}
+                  placeholder='source, connection, target, actor'
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor='secret-audit-since'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Since
+                </label>
+                <Input
+                  id='secret-audit-since'
+                  type='datetime-local'
+                  value={auditSinceFilter}
+                  onChange={(event) => setAuditSinceFilter(event.target.value)}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor='secret-audit-until'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Until
+                </label>
+                <Input
+                  id='secret-audit-until'
+                  type='datetime-local'
+                  value={auditUntilFilter}
+                  onChange={(event) => setAuditUntilFilter(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className='grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]'>
+              <div className='space-y-2'>
+                {filteredAuditEvents.length ? (
+                  filteredAuditEvents.map((event) => (
+                    <button
+                      key={event.id}
+                      type='button'
+                      className={`w-full rounded-lg border p-3 text-left text-sm transition hover:border-primary ${
+                        selectedAuditEvent.id === event.id
+                          ? 'border-primary bg-muted/60'
+                          : 'bg-card'
+                      }`}
+                      onClick={() => setSelectedAuditEventId(event.id)}
+                    >
+                      <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
+                        <div>
+                          <div className='font-medium'>
+                            {auditEventTypeLabel(event.type)}
+                          </div>
+                          <div className='text-xs text-muted-foreground'>
+                            {event.timestamp} · {event.provider} ·{' '}
+                            {event.source}
+                          </div>
+                        </div>
+                        <Badge variant={auditOutcomeVariant[event.outcome]}>
+                          {event.outcome}
+                        </Badge>
+                      </div>
+                      <div className='grid gap-2 text-xs text-muted-foreground md:grid-cols-3'>
+                        <span>ref: {event.ref}</span>
+                        <span>actor: {event.actorId}</span>
+                        <span>target: {event.serviceOrWorkflow}</span>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+                    No audit events match the current filters.
+                  </div>
+                )}
+              </div>
+              <AuditEventDetail event={selectedAuditEvent} />
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

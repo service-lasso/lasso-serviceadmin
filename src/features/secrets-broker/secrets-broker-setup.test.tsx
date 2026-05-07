@@ -2,6 +2,10 @@ import { renderRoute } from '@/test/render-route'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import {
+  filterSecretsBrokerAuditEvents,
+  secretsBrokerAuditEvents,
+} from './audit-events'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
 
 describe('Secrets Broker setup wizard', () => {
@@ -17,6 +21,8 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getAllByText(/Generated secret write-back/i)[0]).toBeVisible()
     expect(screen.getByText(/SecretRef:/i)).toBeVisible()
     expect(screen.getAllByText(/value hidden/i)[0]).toBeVisible()
+    expect(screen.getByText(/Audit and events/i)).toBeVisible()
+    expect(screen.getByText(/Values never rendered/i)).toBeVisible()
     expect(screen.getByText(/Diagnostics and troubleshooting/i)).toBeVisible()
     expect(screen.getByText(/Raw output scrubbed/i)).toBeVisible()
     expect(screen.queryByText('supersecret')).not.toBeInTheDocument()
@@ -58,6 +64,79 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByText(/Confirm operation, policy decision, and audit reason/i)
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
+  })
+
+  it('covers audit event types, filtering, and safe detail rendering', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/refresh failure/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/session token revoked/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Event detail/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/policy\/openclaw\/service-lasso\/read/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Resolver granted access/i)).toBeVisible()
+
+    await user.selectOptions(screen.getByLabelText(/Outcome/i), 'denied')
+    expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /session token revoked/i })
+    ).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText(/Provider/i), 'local')
+    expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
+
+    await user.type(screen.getByLabelText(/Source \/ actor/i), '@serviceadmin')
+    expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /resolve denied/i })
+    ).not.toBeInTheDocument()
+
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/ghp_examplePlaintextToken/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/sk-this-value-must-not-render/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('plaintext secret')).not.toBeInTheDocument()
+  })
+
+  it('filters audit events by type outcome provider and time range', () => {
+    expect(
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        type: 'resolve_denied',
+        outcome: 'denied',
+        provider: 'local',
+        query: 'postgres',
+      }).map((event) => event.id)
+    ).toEqual(['evt-20260507-002'])
+
+    expect(
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        outcome: 'revoked',
+      })[0]
+    ).toMatchObject({ type: 'session_token_revoked' })
+
+    const rangedEvents = filterSecretsBrokerAuditEvents(
+      secretsBrokerAuditEvents,
+      {
+        since: '2026-05-07T18:16:00Z',
+        until: '2026-05-07T18:19:00Z',
+      }
+    )
+    expect(rangedEvents.map((event) => event.id)).toEqual([
+      'evt-20260507-003',
+      'evt-20260507-004',
+      'evt-20260507-005',
+    ])
   })
 
   it('covers diagnostic failure categories and suggested fixes without raw secret output', async () => {
