@@ -78,7 +78,7 @@ const stubStateStorageKey = 'service-lasso-dashboard-stub-state-v1'
 
 const defaultServices: DashboardService[] = [
   {
-    id: 'traefik',
+    id: '@traefik',
     name: 'Traefik',
     status: 'running',
     favorite: true,
@@ -124,10 +124,10 @@ const defaultServices: DashboardService[] = [
       installPath: 'C:\\service-lasso\\traefik',
       configPath: 'C:\\service-lasso\\traefik\\traefik.yml',
       dataPath: 'C:\\service-lasso\\traefik\\data',
-      logPath: '/services/traefik/service.log',
+      logPath: '/services/@traefik/service.log',
       workPath: 'C:\\service-lasso\\traefik',
       profile: 'default',
-      imageUrl: '/services/traefik/logo.svg',
+      imageUrl: '/services/@traefik/logo.svg',
     },
     dependencies: [],
     dependents: [
@@ -237,7 +237,7 @@ const defaultServices: DashboardService[] = [
     },
     dependencies: [
       {
-        id: 'traefik',
+        id: '@traefik',
         name: 'Traefik',
         status: 'running',
         relation: 'depends_on',
