@@ -58,7 +58,8 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('link', { name: /^Secrets Broker$/ }).click()
+    await page.getByRole('button', { name: /^Secrets Broker$/ }).click()
+    await page.getByRole('link', { name: 'Overview / Setup' }).click()
 
     await expect(page).toHaveURL(/\/secrets-broker$/)
     await expectNoBlankScreen(page)
@@ -70,7 +71,7 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText('Secret Sources / Backends', { exact: true })
     ).toBeVisible()
     await expect(
-      page.getByText('Provider Connections', { exact: true })
+      page.locator('main').getByText('Provider Connections', { exact: true })
     ).toBeVisible()
     await expect(
       page.getByText('Audit and events', { exact: true })
@@ -81,6 +82,43 @@ test.describe('Secrets Broker browser coverage', () => {
     await expectNoSecretMaterial(page)
     await expect(page.getByText(/values hidden/i).first()).toBeVisible()
     await expect(page.getByText(/raw output scrubbed/i).first()).toBeVisible()
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('dedicated Secrets Broker navigation reaches each broker sub-page', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /^Secrets Broker$/ }).click()
+
+    const navLinks = [
+      ['Overview / Setup', /\/secrets-broker$/],
+      ['Sources / Backends', /\/secrets-broker#secret-sources$/],
+      ['Provider Connections', /\/secrets-broker#provider-connections$/],
+      ['Backup / Keys', /\/secrets-broker#backup-key-management$/],
+      ['Workflow Boundaries', /\/secrets-broker#workflow-authoring-boundary$/],
+      ['Topology', /\/secrets-broker#secrets-topology$/],
+      ['Audit / Events', /\/secrets-broker#audit-events$/],
+      ['Diagnostics', /\/secrets-broker#diagnostics$/],
+    ] as const
+
+    for (const [name, urlPattern] of navLinks) {
+      await page
+        .locator('[data-sidebar="menu-sub-button"]')
+        .filter({ hasText: name })
+        .first()
+        .click()
+      await expect(page).toHaveURL(urlPattern)
+      await expectNoBlankScreen(page)
+      await expectNoSecretMaterial(page)
+    }
+
+    await expect(
+      page.getByRole('link', { name: 'Secret Inventory' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'Policy Simulation' })
+    ).toBeVisible()
     expect(consoleErrors).toEqual([])
   })
 
@@ -121,6 +159,9 @@ test.describe('Secrets Broker browser coverage', () => {
     const sections = [
       ['secret-sources', /Secret Sources \/ Backends/i],
       ['provider-connections', /Provider Connections/i],
+      ['backup-key-management', /Backup, restore, and key management/i],
+      ['workflow-authoring-boundary', /Workflow authoring boundary/i],
+      ['secrets-topology', /Secrets Broker topology/i],
       ['audit-events', /Audit and events/i],
       ['diagnostics', /Diagnostics and troubleshooting/i],
     ] as const
