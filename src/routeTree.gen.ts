@@ -28,6 +28,7 @@ import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authen
 import { Route as AuthenticatedVariablesIndexRouteImport } from './routes/_authenticated/variables/index'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index'
+import { Route as AuthenticatedSupportBundleIndexRouteImport } from './routes/_authenticated/support-bundle/index'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
 import { Route as AuthenticatedSecretsBrokerIndexRouteImport } from './routes/_authenticated/secrets-broker/index'
@@ -145,6 +146,12 @@ const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
   path: '/tasks/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSupportBundleIndexRoute =
+  AuthenticatedSupportBundleIndexRouteImport.update({
+    id: '/support-bundle/',
+    path: '/support-bundle/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
     id: '/',
@@ -309,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/support-bundle/': typeof AuthenticatedSupportBundleIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/variables/': typeof AuthenticatedVariablesIndexRoute
@@ -348,6 +356,7 @@ export interface FileRoutesByTo {
   '/secrets-broker': typeof AuthenticatedSecretsBrokerIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/support-bundle': typeof AuthenticatedSupportBundleIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
   '/variables': typeof AuthenticatedVariablesIndexRoute
@@ -392,6 +401,7 @@ export interface FileRoutesById {
   '/_authenticated/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/support-bundle/': typeof AuthenticatedSupportBundleIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/variables/': typeof AuthenticatedVariablesIndexRoute
@@ -434,6 +444,7 @@ export interface FileRouteTypes {
     | '/secrets-broker/'
     | '/services/'
     | '/settings/'
+    | '/support-bundle/'
     | '/tasks/'
     | '/users/'
     | '/variables/'
@@ -473,6 +484,7 @@ export interface FileRouteTypes {
     | '/secrets-broker'
     | '/services'
     | '/settings'
+    | '/support-bundle'
     | '/tasks'
     | '/users'
     | '/variables'
@@ -516,6 +528,7 @@ export interface FileRouteTypes {
     | '/_authenticated/secrets-broker/'
     | '/_authenticated/services/'
     | '/_authenticated/settings/'
+    | '/_authenticated/support-bundle/'
     | '/_authenticated/tasks/'
     | '/_authenticated/users/'
     | '/_authenticated/variables/'
@@ -669,6 +682,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks/'
       preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/support-bundle/': {
+      id: '/_authenticated/support-bundle/'
+      path: '/support-bundle'
+      fullPath: '/support-bundle/'
+      preLoaderRoute: typeof AuthenticatedSupportBundleIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings/': {
@@ -868,6 +888,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRuntimeIndexRoute: typeof AuthenticatedRuntimeIndexRoute
   AuthenticatedSecretsBrokerIndexRoute: typeof AuthenticatedSecretsBrokerIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
+  AuthenticatedSupportBundleIndexRoute: typeof AuthenticatedSupportBundleIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedVariablesIndexRoute: typeof AuthenticatedVariablesIndexRoute
@@ -891,6 +912,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRuntimeIndexRoute: AuthenticatedRuntimeIndexRoute,
   AuthenticatedSecretsBrokerIndexRoute: AuthenticatedSecretsBrokerIndexRoute,
   AuthenticatedServicesIndexRoute: AuthenticatedServicesIndexRoute,
+  AuthenticatedSupportBundleIndexRoute: AuthenticatedSupportBundleIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedVariablesIndexRoute: AuthenticatedVariablesIndexRoute,
