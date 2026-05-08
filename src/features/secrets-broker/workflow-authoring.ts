@@ -83,7 +83,7 @@ export const workflowAuthoringBoundaries: WorkflowAuthoringBoundary[] = [
     summary:
       'Show authors missing and denied refs before a workflow can be saved or handed to a runner.',
     targetRuntime:
-      'Workflow authoring metadata; Dagu-specific execution remains out of scope.',
+      'Workflow authoring metadata; execution-runner specifics remain out of scope.',
     status: 'needs-action',
     refs: [
       {
@@ -124,7 +124,7 @@ export const workflowAuthoringBoundaries: WorkflowAuthoringBoundary[] = [
     guardrails: [
       'Denied and missing refs are visible before save/run handoff.',
       'Authors get policy and remediation context without broker value resolution.',
-      'No Dagu editor controls are rendered in Service Admin for this slice.',
+      'No runner/editor controls are rendered in Service Admin for this slice.',
     ],
   },
 ]

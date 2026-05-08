@@ -295,7 +295,7 @@ describe('Secrets Broker setup wizard', () => {
     await renderRoute('/secrets-broker')
 
     expect(screen.getByText(/Workflow authoring boundary/i)).toBeVisible()
-    expect(screen.getByText(/No Dagu editor/i)).toBeVisible()
+    expect(screen.getByText(/No runner editor/i)).toBeVisible()
     expect(screen.getByText(/SecretRefs only/i)).toBeVisible()
     expect(screen.getByText(/metadata-only validation/i)).toBeVisible()
     expect(screen.getAllByText(/Service start bootstrap/i)[0]).toBeVisible()
