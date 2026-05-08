@@ -1444,12 +1444,12 @@ export function SecretsBrokerSetupWizard() {
                 <CardDescription>
                   Metadata-only guidance for authors wiring Secrets Broker refs
                   into workflows. This panel validates refs and generates safe
-                  snippets without becoming a Dagu editor or resolving secret
+                  snippets without becoming a runner editor or resolving secret
                   values.
                 </CardDescription>
               </div>
               <div className='flex flex-wrap gap-2'>
-                <Badge variant='secondary'>No Dagu editor</Badge>
+                <Badge variant='secondary'>No runner editor</Badge>
                 <Badge variant='outline'>SecretRefs only</Badge>
               </div>
             </div>
