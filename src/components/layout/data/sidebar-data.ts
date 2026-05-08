@@ -121,6 +121,11 @@ export const sidebarData: SidebarData = {
               icon: KeyRound,
             },
             {
+              title: 'Single Reveal',
+              url: '/secrets-broker#privileged-secret-reveal',
+              icon: LockKeyhole,
+            },
+            {
               title: 'Backup / Keys',
               url: '/secrets-broker#backup-key-management',
               icon: FileKey2,

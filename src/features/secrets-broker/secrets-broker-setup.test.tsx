@@ -16,6 +16,12 @@ import {
   secretsBrokerProviderConnections,
 } from './provider-connections'
 import {
+  revealFixtureLooksLikeProviderCredential,
+  revealSafeSurfacesIncludeRawValue,
+  singleSecretRevealReference,
+  singleSecretRevealScenarios,
+} from './single-secret-reveal'
+import {
   secretsBrokerSourceBackends,
   sourceBackendHasSecretValue,
 } from './source-backends'
@@ -125,6 +131,142 @@ describe('Secrets Broker setup wizard', () => {
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
   }, 10000)
+
+  it('renders privileged single-secret reveal default and fail-closed states without raw material', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getByText(/Privileged single-secret reveal/i)).toBeVisible()
+    expect(screen.getByText(/Selected safe metadata/i)).toBeVisible()
+    expect(screen.getByText(singleSecretRevealReference.ref)).toBeVisible()
+    expect(screen.getByText(singleSecretRevealReference.name)).toBeVisible()
+    expect(
+      screen.getAllByText(singleSecretRevealReference.owningService)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Value hidden by default/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Reveal secret value/i })
+    ).toBeDisabled()
+    expect(screen.getByText(/Bulk reveal disabled/i)).toBeVisible()
+    expect(screen.getByText(/Copy disabled/i)).toBeVisible()
+    expect(screen.getByText(/No route\/query value material/i)).toBeVisible()
+    expect(
+      screen.queryByText(singleSecretRevealReference.fakeRawValue)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Copy secret/i })
+    ).not.toBeInTheDocument()
+
+    const blockedStates = [
+      [
+        'auth-required',
+        /Reveal blocked until operator authorization completes/i,
+      ],
+      ['policy-denied', /Reveal denied by policy/i],
+      [
+        'broker-offline',
+        /Reveal unavailable because @secretsbroker is offline/i,
+      ],
+      [
+        'unconfigured',
+        /Reveal unavailable until a source\/backend is configured/i,
+      ],
+      [
+        'audit-unavailable',
+        /Reveal blocked because audit recording is unavailable/i,
+      ],
+    ] as const
+
+    for (const [state, status] of blockedStates) {
+      await user.selectOptions(
+        screen.getByLabelText(/Reveal workflow state/i),
+        state
+      )
+      expect(screen.getByText(status)).toBeVisible()
+      expect(
+        screen.getByRole('button', { name: /Reveal secret value/i })
+      ).toBeDisabled()
+      expect(
+        screen.queryByText(singleSecretRevealReference.fakeRawValue)
+      ).not.toBeInTheDocument()
+    }
+  }, 10000)
+
+  it('reveals deterministic fake material only after explicit action and re-hides on cancel or expiry', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    await user.selectOptions(
+      screen.getByLabelText(/Reveal workflow state/i),
+      'allowed'
+    )
+    expect(
+      screen.getByText(/Ready for explicit, time-limited reveal/i)
+    ).toBeVisible()
+    expect(
+      screen.queryByText(singleSecretRevealReference.fakeRawValue)
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: /Reveal secret value/i })
+    )
+    expect(
+      screen.getByText(singleSecretRevealReference.fakeRawValue)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Audit event recorded: audit-reveal-001/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Reveal window expires in 60 seconds/i)
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /Copy secret/i })
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Cancel reveal/i }))
+    expect(
+      screen.getByText(/Reveal cancelled; value remains hidden/i)
+    ).toBeVisible()
+    expect(
+      screen.queryByText(singleSecretRevealReference.fakeRawValue)
+    ).not.toBeInTheDocument()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Reveal workflow state/i),
+      'allowed'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Reveal secret value/i })
+    )
+    expect(
+      screen.getByText(singleSecretRevealReference.fakeRawValue)
+    ).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: /Expire reveal window/i })
+    )
+    expect(
+      screen.getByText(/Reveal window expired; value re-hidden/i)
+    ).toBeVisible()
+    expect(
+      screen.queryByText(singleSecretRevealReference.fakeRawValue)
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps single-secret reveal safe surfaces free of raw material', () => {
+    expect(singleSecretRevealScenarios.map((scenario) => scenario.id)).toEqual([
+      'hidden',
+      'auth-required',
+      'policy-denied',
+      'broker-offline',
+      'unconfigured',
+      'audit-unavailable',
+      'allowed',
+      'cancelled',
+      'expired',
+    ])
+    expect(revealSafeSurfacesIncludeRawValue()).toBe(false)
+    expect(revealFixtureLooksLikeProviderCredential()).toBe(false)
+  })
 
   it('renders backup restore and key-management metadata without raw material', async () => {
     await renderRoute('/secrets-broker')
@@ -488,9 +630,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getAllByText(/refresh failure/i)[0]).toBeVisible()
     expect(screen.getAllByText(/session token revoked/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Event detail/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/policy\/openclaw\/service-lasso\/read/i)
-    ).toBeVisible()
+    expect(screen.getByText('policy/openclaw/service-lasso/read')).toBeVisible()
     expect(screen.getByText(/Resolver granted access/i)).toBeVisible()
 
     await user.selectOptions(screen.getByLabelText(/Outcome/i), 'denied')
