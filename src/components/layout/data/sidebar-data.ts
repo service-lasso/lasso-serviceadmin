@@ -4,6 +4,7 @@ import {
   GitBranch,
   Globe,
   KeyRound,
+  LifeBuoy,
   LockKeyhole,
   SlidersHorizontal,
   HardDrive,
@@ -77,6 +78,11 @@ export const sidebarData: SidebarData = {
           title: 'ZITADEL Session',
           url: '/auth-session',
           icon: LockKeyhole,
+        },
+        {
+          title: 'Support Bundle',
+          url: '/support-bundle',
+          icon: LifeBuoy,
         },
         {
           title: 'Network',

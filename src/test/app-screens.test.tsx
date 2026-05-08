@@ -59,6 +59,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - ZITADEL Session',
   },
   {
+    path: '/support-bundle',
+    heading: /^Support bundle export$/i,
+    title: 'Service Admin - Support Bundle',
+  },
+  {
     path: '/network',
     heading: /^Network$/i,
     title: 'Service Admin - Network',
