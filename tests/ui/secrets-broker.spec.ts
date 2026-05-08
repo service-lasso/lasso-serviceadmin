@@ -98,6 +98,7 @@ test.describe('Secrets Broker browser coverage', () => {
 
     const navLinks = [
       ['Overview / Setup', /\/secrets-broker$/],
+      ['Secrets', /\/secrets-broker\/secrets$/],
       ['Sources / Backends', /\/secrets-broker#secret-sources$/],
       ['Provider Connections', /\/secrets-broker#provider-connections$/],
       ['Single Reveal', /\/secrets-broker#privileged-secret-reveal$/],
@@ -125,6 +126,53 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByRole('link', { name: 'Policy Simulation' })
     ).toBeVisible()
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('covers the Secrets sub-page table search and safe action previews', async ({
+    page,
+  }) => {
+    await page.goto('/secrets-broker/secrets')
+    await expectNoBlankScreen(page)
+    await expect(page.getByRole('heading', { name: /^Secrets$/ })).toBeVisible()
+    await expect(
+      page.getByText(/Metadata table · values hidden/i)
+    ).toBeVisible()
+    await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
+    await expect(page.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
+
+    await page.getByLabel(/Metadata search/i).fill('payments')
+    await expect(page.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
+    await expect(page.getByText(/Metadata matches: 1/i)).toBeVisible()
+
+    await page.getByLabel(/Broker-backed value search/i).fill('session')
+    await expect(page.getByText(/Value search unsupported/i)).toBeVisible()
+    await page
+      .getByRole('button', { name: /Simulate supported value search/i })
+      .click()
+    await expect(
+      page.getByText(/Value search supported: 1 safe ref metadata match/i)
+    ).toBeVisible()
+
+    await page
+      .getByRole('button', { name: /Controlled reveal/i })
+      .first()
+      .click()
+    await expect(page.getByText(/Uses the #38 reveal pattern/i)).toBeVisible()
+    await page
+      .getByRole('button', { name: /Edit\/update dry-run/i })
+      .first()
+      .click()
+    await expect(
+      page.getByText(/dry-run required before apply|blocked: ref unavailable/i)
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', {
+        name: /Apply disabled until dry-run preview is accepted/i,
+      })
+    ).toBeDisabled()
+    await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })
 
