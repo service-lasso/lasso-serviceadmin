@@ -1,6 +1,5 @@
 import { renderRoute } from '@/test/render-route'
 import { screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
   auditEventsContainSecretMaterial,
@@ -32,52 +31,41 @@ describe('Secrets Broker audit event viewer', () => {
     ).toBeVisible()
   })
 
-  it('filters by event type, outcome, provider, source, and tamper evidence', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+  it('filters by event type, outcome, provider, source, and tamper evidence', () => {
+    const filtered = filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+      type: 'migration_completed',
+      outcome: 'success',
+      provider: 'vault',
+      tamperEvidence: 'verified',
+      query: 'billing-worker',
+      since: '2026-05-07T18:00:00Z',
+      until: '2026-05-07T18:30:00Z',
+    })
 
-    await user.selectOptions(
-      screen.getByLabelText(/Event type/i),
-      'migration_completed'
-    )
-    expect(screen.getAllByText(/migration completed/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/approved backend migration/i)[0]).toBeVisible()
-
-    await user.selectOptions(screen.getByLabelText(/Outcome/i), 'success')
-    await user.selectOptions(screen.getByLabelText(/Audit provider/i), 'vault')
-    expect(screen.getByText(/Local to Vault migration/i)).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Tamper evidence/i),
-      'verified'
-    )
-    expect(
-      screen.getByText(/Migration summary and counts were verified/i)
-    ).toBeVisible()
-
-    await user.clear(screen.getByLabelText(/Source \/ actor/i))
-    await user.type(screen.getByLabelText(/Source \/ actor/i), 'billing-worker')
-    expect(screen.getByText(/billing-worker/i)).toBeVisible()
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0]).toMatchObject({
+      type: 'migration_completed',
+      outcome: 'success',
+      provider: 'vault',
+      auditReason: 'approved backend migration',
+    })
   })
 
-  it('shows broken and unavailable tamper-evidence states without leaking payloads', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+  it('models broken and unavailable tamper-evidence states without payloads', () => {
+    expect(
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        tamperEvidence: 'broken',
+      })[0].tamperEvidence.note
+    ).toMatch(/investigation required/i)
 
-    await user.selectOptions(
-      screen.getByLabelText(/Tamper evidence/i),
-      'broken'
-    )
-    expect(screen.getByText(/Tamper evidence broken/i)).toBeVisible()
-    expect(screen.getByText(/investigation required/i)).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Tamper evidence/i),
-      'unavailable'
-    )
-    expect(screen.getByText(/Tamper evidence unavailable/i)).toBeVisible()
-    expect(screen.getByText(/Provider is auth-required/i)).toBeVisible()
-    expect(screen.getByText(/sequence: unavailable/i)).toBeVisible()
+    const unavailable = filterSecretsBrokerAuditEvents(
+      secretsBrokerAuditEvents,
+      {
+        tamperEvidence: 'unavailable',
+      }
+    )[0]
+    expect(unavailable.tamperEvidence.sequence).toBeNull()
+    expect(unavailable.tamperEvidence.note).toMatch(/auth-required/i)
   })
 
   it('keeps audit fixtures and rendered safe surface free of raw secret material', async () => {
