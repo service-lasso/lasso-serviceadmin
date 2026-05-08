@@ -31,6 +31,7 @@ import {
   type SecretsBrokerProviderConnectionAction,
   type SecretsBrokerProviderConnectionDetail,
   type SecretsBrokerProviderConnectionState,
+  type SecretsBrokerProviderLifecycleStatus,
   type SecretsBrokerSecretMaterialState,
 } from './provider-connections'
 
@@ -64,6 +65,32 @@ const materialStateCopy: Record<SecretsBrokerSecretMaterialState, string> = {
   revoked: 'Revoked',
 }
 
+const lifecycleStatusCopy: Record<
+  SecretsBrokerProviderLifecycleStatus,
+  string
+> = {
+  connected: 'Connected',
+  expiring: 'Expiring',
+  'auth-required': 'Auth required',
+  'reconnect-required': 'Reconnect required',
+  revoked: 'Revoked',
+  'permission-changed': 'Permission changed',
+  degraded: 'Degraded',
+}
+
+const lifecycleStatusVariant: Record<
+  SecretsBrokerProviderLifecycleStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  connected: 'default',
+  expiring: 'secondary',
+  'auth-required': 'destructive',
+  'reconnect-required': 'secondary',
+  revoked: 'destructive',
+  'permission-changed': 'secondary',
+  degraded: 'secondary',
+}
+
 const actionVariant: Record<
   SecretsBrokerProviderConnectionAction['state'],
   'default' | 'secondary' | 'destructive' | 'outline'
@@ -71,6 +98,7 @@ const actionVariant: Record<
   available: 'secondary',
   disabled: 'outline',
   danger: 'destructive',
+  unsupported: 'outline',
 }
 
 function StateIcon({ state }: { state: SecretsBrokerProviderConnectionState }) {
@@ -141,10 +169,11 @@ function ActionButton({
       <Button
         type='button'
         variant={actionVariant[action.state]}
-        disabled={action.state === 'disabled'}
+        disabled={action.state === 'disabled' || action.state === 'unsupported'}
         className='w-full justify-start'
       >
         {action.label}
+        {action.state === 'unsupported' ? ' unavailable' : ''}
       </Button>
       {action.confirmationCopy ? (
         <p className='mt-2 text-xs text-muted-foreground'>
@@ -153,7 +182,8 @@ function ActionButton({
       ) : null}
       {action.disabledReason ? (
         <p className='mt-2 text-xs text-muted-foreground'>
-          Disabled: {action.disabledReason}
+          {action.state === 'unsupported' ? 'Unavailable' : 'Disabled'}:{' '}
+          {action.disabledReason}
         </p>
       ) : null}
     </div>
@@ -230,6 +260,58 @@ export function SecretsBrokerProviderConnectionDetailPage({
         </Card>
 
         <div className='grid gap-4 lg:grid-cols-2'>
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center gap-2'>
+                <Clock3 className='size-4' /> Lifecycle status
+              </CardTitle>
+              <CardDescription>
+                Normalized provider lifecycle metadata for reconnect, refresh,
+                and retry decisions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-3 text-sm'>
+              <Badge
+                variant={lifecycleStatusVariant[connection.lifecycle.status]}
+              >
+                {lifecycleStatusCopy[connection.lifecycle.status]}
+              </Badge>
+              <p>{connection.lifecycle.summary}</p>
+              <div className='rounded-lg border p-3'>
+                <div className='text-muted-foreground'>Last check</div>
+                <div className='font-medium'>
+                  {connection.lifecycle.lastCheckedAt}
+                </div>
+              </div>
+              {connection.lifecycle.lastRefreshError ? (
+                <div className='rounded-lg border p-3'>
+                  <div className='text-muted-foreground'>
+                    Last refresh/check error
+                  </div>
+                  <div className='font-medium'>
+                    {connection.lifecycle.lastRefreshError}
+                  </div>
+                </div>
+              ) : null}
+              <div className='flex flex-wrap gap-2'>
+                {connection.lifecycle.auditEventRef ? (
+                  <Button asChild size='sm' variant='outline'>
+                    <a href='#recent-audit-events'>
+                      Audit {connection.lifecycle.auditEventRef}
+                    </a>
+                  </Button>
+                ) : null}
+                {connection.lifecycle.diagnosticRef ? (
+                  <Button asChild size='sm' variant='outline'>
+                    <a href='/secrets-broker#diagnostics'>
+                      Diagnostics {connection.lifecycle.diagnosticRef}
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
@@ -425,7 +507,7 @@ export function SecretsBrokerProviderConnectionDetailPage({
           </Card>
         </div>
 
-        <Card>
+        <Card id='recent-audit-events'>
           <CardHeader>
             <CardTitle>Recent audit events</CardTitle>
             <CardDescription>

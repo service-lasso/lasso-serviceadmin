@@ -223,8 +223,19 @@ describe('Secrets Broker setup wizard', () => {
     ).toBeVisible()
     expect(screen.getAllByText(/Healthy/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Reconnect required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Auth required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Revoked/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Permission changed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Degraded/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Failing/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Operator action required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/credential_handle_missing/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Audit evt-connection/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Diagnostics diag-/i)[0]).toBeVisible()
+    expect(
+      screen.getAllByText(/Reconnect unavailable: Reconnect is unavailable/i)[0]
+    ).toBeVisible()
     expect(screen.getAllByText(/value hidden/i)[0]).toBeVisible()
     expect(
       screen.getAllByRole('link', { name: /View details/i })[0]
@@ -275,6 +286,13 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Safe metadata summary/i)).toBeVisible()
     expect(screen.getByText(/Status and health/i)).toBeVisible()
     expect(screen.getByText(/Secret material state/i)).toBeVisible()
+    expect(screen.getByText(/Lifecycle status/i)).toBeVisible()
+    expect(screen.getByText(/Connected/i)).toBeVisible()
+    expect(
+      screen.getByText(/Metadata checks and test resolve are current/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Audit evt-connection-001/i)).toBeVisible()
+    expect(screen.getByText(/Diagnostics diag-broker-api/i)).toBeVisible()
     expect(screen.getByText(/Presence: Present/i)).toBeVisible()
     expect(screen.getByText(/Raw value: hidden/i)).toBeVisible()
     expect(screen.getByText(/Copy value: unavailable/i)).toBeVisible()
@@ -324,6 +342,7 @@ describe('Secrets Broker setup wizard', () => {
     degraded.unmount()
     await renderRoute('/secrets-broker/aws-backup-worker')
     expect(screen.getByText(/Missing credentials/i)).toBeVisible()
+    expect(screen.getAllByText(/Reconnect required/i)[0]).toBeVisible()
     expect(screen.getAllByText(/credential_handle_missing/i)[0]).toBeVisible()
     expect(screen.getByText(/Add a scoped AWS profile/i)).toBeVisible()
     expect(
