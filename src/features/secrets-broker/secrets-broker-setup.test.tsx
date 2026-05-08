@@ -6,6 +6,10 @@ import {
   filterSecretsBrokerAuditEvents,
   secretsBrokerAuditEvents,
 } from './audit-events'
+import {
+  backupKeyStatusHasSecretMaterial,
+  secretsBrokerBackupKeyStatus,
+} from './backup-key-management'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
 import {
   providerConnectionHasSecretValue,
@@ -120,6 +124,50 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByText(/Confirm operation, policy decision, and audit reason/i)
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
+  })
+
+  it('renders backup restore and key-management metadata without raw material', async () => {
+    await renderRoute('/secrets-broker')
+
+    expect(
+      screen.getByText(/Backup, restore, and key management/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Backup stale/i)).toBeVisible()
+    expect(screen.getByText(/Recovery risk/i)).toBeVisible()
+    expect(screen.getByText(/Last backup/i)).toBeVisible()
+    expect(screen.getAllByText(/Restore readiness/i)[0]).toBeVisible()
+    expect(screen.getByText(/key version v4/i)).toBeVisible()
+    expect(screen.getByText(/mkid_7f3a…9c21/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Create encrypted backup/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Verify restore readiness/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Restore from backup/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Rotate master key/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Confirm artifact path/i)).toBeVisible()
+    expect(screen.getByText(/never paste key material/i)).toBeVisible()
+    expect(screen.getByText(/Recent backup\/key audit metadata/i)).toBeVisible()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/portable-master-key-value/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/generated-secret-value/i)
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps backup and key-management fixtures free of secret material', () => {
+    expect(backupKeyStatusHasSecretMaterial(secretsBrokerBackupKeyStatus)).toBe(
+      false
+    )
   })
 
   it('renders secret sources and backends with warning states and metadata-only test results', async () => {
