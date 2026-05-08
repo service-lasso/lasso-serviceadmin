@@ -31,6 +31,7 @@ import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedSupportBundleIndexRouteImport } from './routes/_authenticated/support-bundle/index'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
+import { Route as AuthenticatedSecretsPolicySimulationIndexRouteImport } from './routes/_authenticated/secrets-policy-simulation/index'
 import { Route as AuthenticatedSecretsBrokerIndexRouteImport } from './routes/_authenticated/secrets-broker/index'
 import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authenticated/runtime/index'
 import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
@@ -162,6 +163,12 @@ const AuthenticatedServicesIndexRoute =
   AuthenticatedServicesIndexRouteImport.update({
     id: '/services/',
     path: '/services/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsPolicySimulationIndexRoute =
+  AuthenticatedSecretsPolicySimulationIndexRouteImport.update({
+    id: '/secrets-policy-simulation/',
+    path: '/secrets-policy-simulation/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSecretsBrokerIndexRoute =
@@ -314,6 +321,7 @@ export interface FileRoutesByFullPath {
   '/network/': typeof AuthenticatedNetworkIndexRoute
   '/runtime/': typeof AuthenticatedRuntimeIndexRoute
   '/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
+  '/secrets-policy-simulation/': typeof AuthenticatedSecretsPolicySimulationIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/support-bundle/': typeof AuthenticatedSupportBundleIndexRoute
@@ -354,6 +362,7 @@ export interface FileRoutesByTo {
   '/network': typeof AuthenticatedNetworkIndexRoute
   '/runtime': typeof AuthenticatedRuntimeIndexRoute
   '/secrets-broker': typeof AuthenticatedSecretsBrokerIndexRoute
+  '/secrets-policy-simulation': typeof AuthenticatedSecretsPolicySimulationIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/support-bundle': typeof AuthenticatedSupportBundleIndexRoute
@@ -399,6 +408,7 @@ export interface FileRoutesById {
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
   '/_authenticated/runtime/': typeof AuthenticatedRuntimeIndexRoute
   '/_authenticated/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
+  '/_authenticated/secrets-policy-simulation/': typeof AuthenticatedSecretsPolicySimulationIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/support-bundle/': typeof AuthenticatedSupportBundleIndexRoute
@@ -442,6 +452,7 @@ export interface FileRouteTypes {
     | '/network/'
     | '/runtime/'
     | '/secrets-broker/'
+    | '/secrets-policy-simulation/'
     | '/services/'
     | '/settings/'
     | '/support-bundle/'
@@ -482,6 +493,7 @@ export interface FileRouteTypes {
     | '/network'
     | '/runtime'
     | '/secrets-broker'
+    | '/secrets-policy-simulation'
     | '/services'
     | '/settings'
     | '/support-bundle'
@@ -526,6 +538,7 @@ export interface FileRouteTypes {
     | '/_authenticated/network/'
     | '/_authenticated/runtime/'
     | '/_authenticated/secrets-broker/'
+    | '/_authenticated/secrets-policy-simulation/'
     | '/_authenticated/services/'
     | '/_authenticated/settings/'
     | '/_authenticated/support-bundle/'
@@ -703,6 +716,13 @@ declare module '@tanstack/react-router' {
       path: '/services'
       fullPath: '/services/'
       preLoaderRoute: typeof AuthenticatedServicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-policy-simulation/': {
+      id: '/_authenticated/secrets-policy-simulation/'
+      path: '/secrets-policy-simulation'
+      fullPath: '/secrets-policy-simulation/'
+      preLoaderRoute: typeof AuthenticatedSecretsPolicySimulationIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/secrets-broker/': {
@@ -887,6 +907,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
   AuthenticatedRuntimeIndexRoute: typeof AuthenticatedRuntimeIndexRoute
   AuthenticatedSecretsBrokerIndexRoute: typeof AuthenticatedSecretsBrokerIndexRoute
+  AuthenticatedSecretsPolicySimulationIndexRoute: typeof AuthenticatedSecretsPolicySimulationIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
   AuthenticatedSupportBundleIndexRoute: typeof AuthenticatedSupportBundleIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
@@ -911,6 +932,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,
   AuthenticatedRuntimeIndexRoute: AuthenticatedRuntimeIndexRoute,
   AuthenticatedSecretsBrokerIndexRoute: AuthenticatedSecretsBrokerIndexRoute,
+  AuthenticatedSecretsPolicySimulationIndexRoute:
+    AuthenticatedSecretsPolicySimulationIndexRoute,
   AuthenticatedServicesIndexRoute: AuthenticatedServicesIndexRoute,
   AuthenticatedSupportBundleIndexRoute: AuthenticatedSupportBundleIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
