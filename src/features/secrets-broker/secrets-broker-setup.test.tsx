@@ -12,7 +12,10 @@ import {
 } from './backup-key-management'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
 import {
+  buildProviderReconnectPlan,
   providerConnectionHasSecretValue,
+  providerReconnectPlanHasSecretValue,
+  providerReconnectWorkflowStates,
   secretsBrokerProviderConnections,
 } from './provider-connections'
 import {
@@ -587,7 +590,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Authentication required/i)).toBeVisible()
     expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
     expect(screen.getByText(/Reconnect the Vault CLI session/i)).toBeVisible()
-    expect(screen.getByRole('button', { name: /Reconnect/i })).toBeVisible()
+    expect(screen.getByRole('button', { name: /^Reconnect$/i })).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Replace\/rotate secret material/i })
     ).toBeDisabled()
@@ -605,6 +608,92 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByRole('button', { name: /Clear\/revoke secret material/i })
     ).toBeDisabled()
     expect(screen.getByText(/No material is present/i)).toBeVisible()
+  })
+
+  it('covers provider reconnect workflow states and safe affected metadata', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/github-actions-refresh-failed')
+
+    expect(screen.getByText(/Provider reconnect workflow/i)).toBeVisible()
+    expect(
+      screen.getByText(/Metadata-only reconnect entry point/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Refresh failed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/provider_refresh_failed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/release-serviceadmin/i)[0]).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Retry reconnect/i })
+    ).toBeEnabled()
+
+    const scenarios = [
+      ['healthy', /No reconnect required/i, /Reconnect disabled/i, false],
+      [
+        'auth-required',
+        /Provider authorization required/i,
+        /Start reconnect/i,
+        true,
+      ],
+      ['expired', /Provider handle expired/i, /Start reconnect/i, true],
+      [
+        'refresh-failed',
+        /The last refresh\/test failed/i,
+        /Retry reconnect/i,
+        true,
+      ],
+      [
+        'revoked',
+        /Provider grant revoked/i,
+        /Reconnect with replacement grant/i,
+        true,
+      ],
+      [
+        'unsupported',
+        /Provider capability unsupported/i,
+        /Reconnect unsupported/i,
+        false,
+      ],
+      ['pending', /Reconnect pending/i, /Reconnect pending/i, false],
+      ['success', /Reconnect success/i, /Reconnect complete/i, false],
+      [
+        'failure',
+        /Reconnect failure/i,
+        /Retry reconnect after diagnostics/i,
+        true,
+      ],
+    ] as const
+
+    for (const [state, statusCopy, buttonName, enabled] of scenarios) {
+      await user.selectOptions(
+        screen.getByLabelText(/Reconnect scenario/i),
+        state
+      )
+      expect(screen.getAllByText(statusCopy)[0]).toBeVisible()
+      const button = screen.getByRole('button', { name: buttonName })
+      if (enabled) expect(button).toBeEnabled()
+      else expect(button).toBeDisabled()
+      expect(screen.getByText(/No credential input/i)).toBeVisible()
+      expect(
+        screen.getByText(/Fail closed unsupported providers/i)
+      ).toBeVisible()
+      expect(
+        screen.queryByText(/fixture-provider-credential-value/i)
+      ).not.toBeInTheDocument()
+    }
+  }, 10000)
+
+  it('keeps provider reconnect plans free of raw credential material', () => {
+    const connection =
+      secretsBrokerProviderConnections.find(
+        (item) => item.id === 'github-actions-refresh-failed'
+      ) ?? secretsBrokerProviderConnections[0]
+
+    for (const { value } of providerReconnectWorkflowStates) {
+      expect(
+        providerReconnectPlanHasSecretValue(
+          buildProviderReconnectPlan(connection, value)
+        )
+      ).toBe(false)
+    }
   })
 
   it('keeps provider connection detail fixtures free of secret values', () => {

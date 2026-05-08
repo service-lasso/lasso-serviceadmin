@@ -10,6 +10,7 @@ export type SecretsBrokerProviderLifecycleStatus =
   | 'expiring'
   | 'auth-required'
   | 'reconnect-required'
+  | 'refresh-failed'
   | 'revoked'
   | 'permission-changed'
   | 'degraded'
@@ -20,6 +21,31 @@ export type SecretsBrokerSecretMaterialState =
   | 'expired'
   | 'rotation-due'
   | 'revoked'
+
+export type SecretsBrokerProviderReconnectWorkflowState =
+  | 'healthy'
+  | 'auth-required'
+  | 'expired'
+  | 'refresh-failed'
+  | 'revoked'
+  | 'unsupported'
+  | 'pending'
+  | 'success'
+  | 'failure'
+
+export type SecretsBrokerProviderReconnectPlan = {
+  state: SecretsBrokerProviderReconnectWorkflowState
+  title: string
+  status: string
+  actionLabel: string
+  actionEnabled: boolean
+  outcome: 'available' | 'blocked' | 'pending' | 'success' | 'failure'
+  connectionHandle: string
+  safeAuditEvent: string
+  affectedRefs: string[]
+  affectedServices: string[]
+  affectedWorkflows: string[]
+}
 
 export type SecretsBrokerProviderConnectionAction = {
   id:
@@ -573,6 +599,101 @@ export const secretsBrokerProviderConnections: SecretsBrokerProviderConnectionDe
         },
       ],
     },
+
+    {
+      id: 'github-actions-refresh-failed',
+      title: 'GitHub Actions release connection',
+      provider: 'github',
+      source: '@secretsbroker/external/github-actions',
+      connectionRef: 'secret://provider/github/actions',
+      state: 'failed',
+      lifecycle: {
+        status: 'refresh-failed',
+        label: 'Refresh failed',
+        summary:
+          'The last metadata-only refresh failed; reconnect is required before release workflows can resolve refs.',
+        lastCheckedAt: '2026-05-08T18:58:00Z',
+        lastRefreshError: 'provider_refresh_failed',
+        auditEventRef: 'evt-connection-009',
+        diagnosticRef: 'diag-provider-refresh-failed',
+      },
+      health: {
+        label: 'Refresh failed',
+        checkedAt: '2026-05-08T18:58:00Z',
+        nextAction:
+          'Start the reconnect flow with the provider handle, then retry a metadata-only test.',
+        failureReason: 'provider_refresh_failed',
+      },
+      metadata: [
+        { label: 'Installation', value: 'service-lasso/release-workflows' },
+        { label: 'Auth mode', value: 'GitHub app installation handle' },
+        { label: 'Values', value: 'hidden / refresh payload not rendered' },
+      ],
+      scopes: [
+        { label: 'release workflows read repo refs', decision: 'review' },
+        { label: 'admin org hooks', decision: 'denied' },
+      ],
+      secretMaterial: {
+        presence: 'expired',
+        valueAvailable: false,
+        safeDescriptor:
+          'Provider handle exists, but refresh failed; no token payload is loaded into Service Admin.',
+        version: 'github-installation-handle-v1',
+        updatedAt: '2026-05-08T17:45:00Z',
+        expiresAt: '2026-05-08T18:45:00Z',
+        refreshWindow: 'Reconnect before release workflow dispatch.',
+      },
+      usage: {
+        lastSuccessfulResolve: '2026-05-08T17:50:00Z',
+        lastFailure: '2026-05-08T18:58:00Z � provider_refresh_failed',
+        linkedServices: ['@serviceadmin'],
+        linkedWorkflows: ['release-serviceadmin'],
+        linkedRuns: ['run-20260508-185800'],
+      },
+      recentAuditEvents: [
+        {
+          id: 'evt-connection-009',
+          type: 'refresh failed',
+          outcome: 'failure',
+          at: '2026-05-08T18:58:00Z',
+          actor: 'service:@secretsbroker',
+          reason: 'provider_refresh_failed',
+        },
+      ],
+      actions: [
+        { id: 'reconnect', label: 'Reconnect', state: 'available' },
+        {
+          id: 'refresh-test-now',
+          label: 'Refresh/test now',
+          state: 'disabled',
+          disabledReason: 'Reconnect before retrying refresh/test.',
+        },
+        {
+          id: 'replace-rotate-secret-material',
+          label: 'Replace/rotate secret material',
+          state: 'available',
+        },
+        {
+          id: 'clear-revoke-secret-material',
+          label: 'Clear/revoke secret material',
+          state: 'danger',
+          confirmationCopy:
+            'Revoke GitHub Actions provider metadata. Dependent release workflows will remain blocked until reconnected.',
+        },
+        {
+          id: 'disable-enable',
+          label: 'Disable connection',
+          state: 'available',
+        },
+        {
+          id: 'delete-connection',
+          label: 'Delete connection',
+          state: 'danger',
+          confirmationCopy:
+            'Delete GitHub Actions release connection metadata only; provider tokens are never displayed.',
+        },
+      ],
+    },
     {
       id: 'docker-mounted-secrets',
       title: 'Docker mounted secrets source',
@@ -683,6 +804,155 @@ export function providerConnectionHasSecretValue(
   connection: SecretsBrokerProviderConnectionDetail
 ) {
   const joined = JSON.stringify(connection)
+  return /hunter2|correct-horse|plain\s*text\s*secret|supersecret|sk-[a-z0-9_-]{12,}|ghp_[a-z0-9_]{12,}|AKIA[0-9A-Z]{16}|password\s*=|token\s*=/i.test(
+    joined
+  )
+}
+
+export const providerReconnectWorkflowStates: Array<{
+  value: SecretsBrokerProviderReconnectWorkflowState
+  label: string
+}> = [
+  { value: 'healthy', label: 'Healthy / no reconnect required' },
+  { value: 'auth-required', label: 'Auth required' },
+  { value: 'expired', label: 'Expired provider handle' },
+  { value: 'refresh-failed', label: 'Refresh failed' },
+  { value: 'revoked', label: 'Revoked grant' },
+  { value: 'unsupported', label: 'Unsupported provider capability' },
+  { value: 'pending', label: 'Reconnect pending' },
+  { value: 'success', label: 'Reconnect success' },
+  { value: 'failure', label: 'Reconnect failure' },
+]
+
+const reconnectStateCopy: Record<
+  SecretsBrokerProviderReconnectWorkflowState,
+  Omit<
+    SecretsBrokerProviderReconnectPlan,
+    | 'state'
+    | 'connectionHandle'
+    | 'affectedRefs'
+    | 'affectedServices'
+    | 'affectedWorkflows'
+  >
+> = {
+  healthy: {
+    title: 'No reconnect required',
+    status:
+      'Connection metadata is healthy; use refresh/test for a metadata-only check.',
+    actionLabel: 'Reconnect disabled',
+    actionEnabled: false,
+    outcome: 'blocked',
+    safeAuditEvent: 'reconnect_not_required',
+  },
+  'auth-required': {
+    title: 'Provider authorization required',
+    status:
+      'Reconnect can start with the existing provider handle; no plaintext credential input is accepted.',
+    actionLabel: 'Start reconnect',
+    actionEnabled: true,
+    outcome: 'available',
+    safeAuditEvent: 'reconnect_start_auth_required',
+  },
+  expired: {
+    title: 'Provider handle expired',
+    status:
+      'Existing handle metadata is expired and dependent resolves should remain blocked until reconnect succeeds.',
+    actionLabel: 'Start reconnect',
+    actionEnabled: true,
+    outcome: 'available',
+    safeAuditEvent: 'reconnect_start_expired',
+  },
+  'refresh-failed': {
+    title: 'Refresh failed',
+    status:
+      'The last refresh/test failed; retry through reconnect before enabling dependent workflows.',
+    actionLabel: 'Retry reconnect',
+    actionEnabled: true,
+    outcome: 'failure',
+    safeAuditEvent: 'reconnect_refresh_failed',
+  },
+  revoked: {
+    title: 'Provider grant revoked',
+    status:
+      'Reconnect needs a replacement provider-side grant; in-place refresh is disabled.',
+    actionLabel: 'Reconnect with replacement grant',
+    actionEnabled: true,
+    outcome: 'available',
+    safeAuditEvent: 'reconnect_start_revoked',
+  },
+  unsupported: {
+    title: 'Provider capability unsupported',
+    status:
+      'This provider is managed outside Service Admin; use provider documentation and retry metadata check afterward.',
+    actionLabel: 'Reconnect unsupported',
+    actionEnabled: false,
+    outcome: 'blocked',
+    safeAuditEvent: 'reconnect_unsupported',
+  },
+  pending: {
+    title: 'Reconnect pending',
+    status:
+      'Provider authorization is in progress; keep dependent services blocked until a success audit event arrives.',
+    actionLabel: 'Reconnect pending',
+    actionEnabled: false,
+    outcome: 'pending',
+    safeAuditEvent: 'reconnect_pending',
+  },
+  success: {
+    title: 'Reconnect success',
+    status:
+      'Provider metadata refreshed successfully; dependent refs can be retried without exposing provider credentials.',
+    actionLabel: 'Reconnect complete',
+    actionEnabled: false,
+    outcome: 'success',
+    safeAuditEvent: 'reconnect_success',
+  },
+  failure: {
+    title: 'Reconnect failure',
+    status:
+      'Reconnect failed closed; inspect diagnostics and keep affected refs/services blocked.',
+    actionLabel: 'Retry reconnect after diagnostics',
+    actionEnabled: true,
+    outcome: 'failure',
+    safeAuditEvent: 'reconnect_failure',
+  },
+}
+
+export function deriveReconnectWorkflowState(
+  connection: SecretsBrokerProviderConnectionDetail
+): SecretsBrokerProviderReconnectWorkflowState {
+  if (connection.lifecycle.status === 'connected') return 'healthy'
+  if (connection.lifecycle.status === 'auth-required') return 'auth-required'
+  if (connection.lifecycle.status === 'expiring') return 'expired'
+  if (connection.lifecycle.status === 'refresh-failed') return 'refresh-failed'
+  if (connection.lifecycle.status === 'revoked') return 'revoked'
+  if (connection.actions.some((action) => action.state === 'unsupported'))
+    return 'unsupported'
+  if (connection.secretMaterial.presence === 'expired') return 'expired'
+  return 'auth-required'
+}
+
+export function buildProviderReconnectPlan(
+  connection: SecretsBrokerProviderConnectionDetail,
+  state: SecretsBrokerProviderReconnectWorkflowState = deriveReconnectWorkflowState(
+    connection
+  )
+): SecretsBrokerProviderReconnectPlan {
+  const copy = reconnectStateCopy[state]
+  return {
+    state,
+    ...copy,
+    connectionHandle: connection.connectionRef,
+    affectedRefs: [connection.connectionRef],
+    affectedServices: [...connection.usage.linkedServices],
+    affectedWorkflows: [...connection.usage.linkedWorkflows],
+  }
+}
+
+export function providerReconnectPlanHasSecretValue(
+  plan: SecretsBrokerProviderReconnectPlan
+) {
+  const joined = JSON.stringify(plan)
   return /hunter2|correct-horse|plain\s*text\s*secret|supersecret|sk-[a-z0-9_-]{12,}|ghp_[a-z0-9_]{12,}|AKIA[0-9A-Z]{16}|password\s*=|token\s*=/i.test(
     joined
   )
