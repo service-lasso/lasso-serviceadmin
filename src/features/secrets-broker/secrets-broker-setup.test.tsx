@@ -16,6 +16,10 @@ import {
   secretsBrokerProviderConnections,
 } from './provider-connections'
 import {
+  buildSingleConnectionRotationPlan,
+  singleConnectionRotationPlanHasSecretValue,
+} from './single-connection-rotation'
+import {
   revealFixtureLooksLikeProviderCredential,
   revealSafeSurfacesIncludeRawValue,
   singleSecretRevealReference,
@@ -450,6 +454,15 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByText(/Existing services may need restart/i)
     ).toBeVisible()
     expect(
+      screen.getByText(/Single-connection edit and rotation workflow/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Dry-run preview ready/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/single-rotation-preview-2026-05-08-ready/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Dry-run before apply/i)).toBeVisible()
+    expect(screen.getByText(/No bulk mutation/i)).toBeVisible()
+    expect(
       screen.getByRole('button', { name: /Delete connection/i })
     ).toBeVisible()
     expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
@@ -465,6 +478,107 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.queryByRole('button', { name: /Copy secret/i })
     ).not.toBeInTheDocument()
+  })
+
+  it('covers single-connection edit rotation dry-run and apply states safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/local-default')
+
+    expect(screen.getAllByText(/Dry-run preview ready/i)[0]).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /Apply blocked until dry-run, audit reason, and exact connection confirmation/i,
+      })
+    ).toBeDisabled()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'dry-run-denied'
+    )
+    expect(screen.getByText(/Dry-run denied by policy/i)).toBeVisible()
+    expect(screen.getByText(/Policy denied the proposed/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'auth-required'
+    )
+    expect(screen.getByText(/Provider auth required/i)).toBeVisible()
+    expect(
+      screen.getByText(/Reconnect provider through a safe credential ref/i)
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'backend-unavailable'
+    )
+    expect(
+      screen.getByText(/Backend unavailable or unsupported/i)
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'audit-unavailable'
+    )
+    expect(
+      screen.getAllByText(/Audit unavailable \/ apply blocked/i)[0]
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'apply-ready'
+    )
+    await user.type(
+      screen.getByLabelText(/Audit reason/i),
+      'rotate after approval'
+    )
+    await user.type(
+      screen.getByLabelText(/Confirm connection id/i),
+      'local-default'
+    )
+    expect(
+      screen.getByRole('button', { name: /Apply single-connection rotation/i })
+    ).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: /Cancel operation/i }))
+    expect(screen.getByText(/Operation cancelled/i)).toBeVisible()
+    expect(screen.getByText(/no provider metadata changed/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'apply-success'
+    )
+    expect(screen.getAllByText(/Apply success/i)[0]).toBeVisible()
+    await user.selectOptions(
+      screen.getByLabelText(/Workflow state/i),
+      'apply-failed'
+    )
+    expect(
+      screen.getAllByText(/Apply failure status feedback/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.queryByText(/DETERMINISTIC_FAKE_ROTATION_VALUE_81/i)
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps single-connection rotation plans free of raw material', () => {
+    const connection = secretsBrokerProviderConnections[0]
+    for (const state of [
+      'dry-run-ready',
+      'dry-run-denied',
+      'auth-required',
+      'backend-unavailable',
+      'audit-unavailable',
+      'cancelled',
+      'apply-ready',
+      'apply-success',
+      'apply-failed',
+    ] as const) {
+      expect(
+        singleConnectionRotationPlanHasSecretValue(
+          buildSingleConnectionRotationPlan(connection, state)
+        )
+      ).toBe(false)
+    }
   })
 
   it('explains degraded and missing provider connection next actions', async () => {

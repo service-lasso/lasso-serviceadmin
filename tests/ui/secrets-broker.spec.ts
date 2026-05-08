@@ -355,6 +355,36 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Secret material state/i)).toBeVisible()
     await expect(page.getByText(/Raw value: hidden/i)).toBeVisible()
     await expect(page.getByText(/Copy value: unavailable/i)).toBeVisible()
+    await expect(
+      page.getByText(/Single-connection edit and rotation workflow/i)
+    ).toBeVisible()
+    await page.getByLabel(/Workflow state/i).selectOption('dry-run-denied')
+    await expect(page.getByText(/Dry-run denied by policy/i)).toBeVisible()
+    await page.getByLabel(/Workflow state/i).selectOption('auth-required')
+    await expect(page.getByText(/Provider auth required/i)).toBeVisible()
+    await page.getByLabel(/Workflow state/i).selectOption('backend-unavailable')
+    await expect(
+      page.getByText(/Backend unavailable or unsupported/i)
+    ).toBeVisible()
+    await page.getByLabel(/Workflow state/i).selectOption('audit-unavailable')
+    await expect(
+      page.getByText(/Audit unavailable \/ apply blocked/i).last()
+    ).toBeVisible()
+    await page.getByLabel(/Workflow state/i).selectOption('apply-ready')
+    await page.getByLabel(/Audit reason/i).fill('rotate after approval')
+    await page.getByLabel(/Confirm connection id/i).fill('local-default')
+    await expect(
+      page.getByRole('button', { name: /Apply single-connection rotation/i })
+    ).toBeEnabled()
+    await page.getByRole('button', { name: /Cancel operation/i }).click()
+    await expect(page.getByText(/Operation cancelled/i)).toBeVisible()
+    await page.getByLabel(/Workflow state/i).selectOption('apply-failed')
+    await expect(
+      page.getByText(/Apply failure status feedback/i).last()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/DETERMINISTIC_FAKE_ROTATION_VALUE_81/i)
+    ).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })
