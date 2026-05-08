@@ -16,6 +16,10 @@ import {
   sourceBackendHasSecretValue,
 } from './source-backends'
 import { buildSecretsBrokerTopology, topologyHasSecretValue } from './topology'
+import {
+  workflowAuthoringBoundaries,
+  workflowAuthoringHasSecretValue,
+} from './workflow-authoring'
 
 describe('Secrets Broker setup wizard', () => {
   it('shows the safe setup contract without plaintext values', async () => {
@@ -24,7 +28,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       await screen.findByRole('heading', { name: /Secrets Broker setup/i })
     ).toBeVisible()
-    expect(screen.getByText(/Values hidden/i)).toBeVisible()
+    expect(screen.getAllByText(/Values hidden/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Local encrypted vault/i)[0]).toBeVisible()
     expect(screen.getAllByText(/OpenClaw exec adapter/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Generated secret write-back/i)[0]).toBeVisible()
@@ -284,6 +288,72 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       secretsBrokerProviderConnections.some(providerConnectionHasSecretValue)
     ).toBe(false)
+  })
+
+  it('renders workflow authoring boundary with safe validation and snippets', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getByText(/Workflow authoring boundary/i)).toBeVisible()
+    expect(screen.getByText(/No Dagu editor/i)).toBeVisible()
+    expect(screen.getByText(/SecretRefs only/i)).toBeVisible()
+    expect(screen.getByText(/metadata-only validation/i)).toBeVisible()
+    expect(screen.getAllByText(/Service start bootstrap/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/Service Admin session signing secret/i)
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/secret:\/\/local\/default\/.*SESSION_SECRET/i)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Generated safe snippet/i)).toBeVisible()
+    expect(screen.getAllByText(/values hidden/i)[0]).toBeVisible()
+    expect(screen.getByText(/revealValues: false/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Authoring scenario/i),
+      'deploy-payments-api'
+    )
+
+    expect(screen.getAllByText(/Deploy payments API/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/policy denies this workflow identity/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Ref metadata is missing/i)).toBeVisible()
+    expect(screen.getAllByText(/Denied/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Missing/i)[0]).toBeVisible()
+    expect(screen.getByText(/blockOn: \[missing, denied\]/i)).toBeVisible()
+    expect(
+      screen.getByText(/Missing or denied refs should block save\/run handoff/i)
+    ).toBeVisible()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/ghp_ex…oken/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/sk-thi…nder/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps workflow authoring fixtures and generated snippets secret-safe', () => {
+    expect(workflowAuthoringHasSecretValue()).toBe(false)
+    expect(
+      workflowAuthoringBoundaries.every((workflow) =>
+        workflow.snippet.includes('revealValues: false')
+      )
+    ).toBe(true)
+    expect(
+      workflowAuthoringBoundaries.some((workflow) =>
+        workflow.refs.some((ref) => ref.status === 'denied')
+      )
+    ).toBe(true)
+    expect(
+      workflowAuthoringBoundaries.some((workflow) =>
+        workflow.refs.some((ref) => ref.status === 'missing')
+      )
+    ).toBe(true)
+    expect(
+      workflowAuthoringBoundaries
+        .flatMap((workflow) => workflow.refs)
+        .every((ref) => ref.ref.startsWith('secret://'))
+    ).toBe(true)
   })
 
   it('renders Secrets Broker topology graph and accessible relationship fallback', async () => {
