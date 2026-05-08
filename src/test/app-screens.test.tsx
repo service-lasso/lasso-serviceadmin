@@ -59,6 +59,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Setup',
   },
   {
+    path: '/secret-inventory',
+    heading: /^Secret inventory$/i,
+    title: 'Service Admin - Secret Inventory',
+  },
+  {
     path: '/secrets-policy-simulation',
     heading: /^Secrets Broker policy simulation$/i,
     title: 'Service Admin - Secrets Policy Simulation',
