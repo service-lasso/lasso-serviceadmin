@@ -1,5 +1,6 @@
 import {
   Boxes,
+  Building2,
   Command,
   GitBranch,
   Globe,
@@ -44,6 +45,11 @@ export const sidebarData: SidebarData = {
           title: 'Services',
           url: '/services',
           icon: Boxes,
+        },
+        {
+          title: 'Fleet Overview',
+          url: '/fleet-overview',
+          icon: Building2,
         },
         {
           title: 'Dependencies',
