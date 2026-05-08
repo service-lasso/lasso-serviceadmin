@@ -53,6 +53,7 @@ import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_a
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedServicesServiceIdRouteImport } from './routes/_authenticated/services.$serviceId'
 import { Route as AuthenticatedSecretsBrokerSecretsRouteImport } from './routes/_authenticated/secrets-broker/secrets'
+import { Route as AuthenticatedSecretsBrokerConfigurationRouteImport } from './routes/_authenticated/secrets-broker/configuration'
 import { Route as AuthenticatedSecretsBrokerConnectionIdRouteImport } from './routes/_authenticated/secrets-broker.$connectionId'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 
@@ -295,6 +296,12 @@ const AuthenticatedSecretsBrokerSecretsRoute =
     path: '/secrets-broker/secrets',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSecretsBrokerConfigurationRoute =
+  AuthenticatedSecretsBrokerConfigurationRouteImport.update({
+    id: '/secrets-broker/configuration',
+    path: '/secrets-broker/configuration',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecretsBrokerConnectionIdRoute =
   AuthenticatedSecretsBrokerConnectionIdRouteImport.update({
     id: '/secrets-broker/$connectionId',
@@ -324,6 +331,7 @@ export interface FileRoutesByFullPath {
   '/503': typeof errors503Route
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
   '/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -368,6 +376,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
   '/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -417,6 +426,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/_authenticated/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
   '/_authenticated/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
   '/_authenticated/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -464,6 +474,7 @@ export interface FileRouteTypes {
     | '/503'
     | '/errors/$error'
     | '/secrets-broker/$connectionId'
+    | '/secrets-broker/configuration'
     | '/secrets-broker/secrets'
     | '/services/$serviceId'
     | '/settings/account'
@@ -508,6 +519,7 @@ export interface FileRouteTypes {
     | '/'
     | '/errors/$error'
     | '/secrets-broker/$connectionId'
+    | '/secrets-broker/configuration'
     | '/secrets-broker/secrets'
     | '/services/$serviceId'
     | '/settings/account'
@@ -556,6 +568,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/errors/$error'
     | '/_authenticated/secrets-broker/$connectionId'
+    | '/_authenticated/secrets-broker/configuration'
     | '/_authenticated/secrets-broker/secrets'
     | '/_authenticated/services/$serviceId'
     | '/_authenticated/settings/account'
@@ -911,6 +924,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecretsBrokerSecretsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/secrets-broker/configuration': {
+      id: '/_authenticated/secrets-broker/configuration'
+      path: '/secrets-broker/configuration'
+      fullPath: '/secrets-broker/configuration'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerConfigurationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/secrets-broker/$connectionId': {
       id: '/_authenticated/secrets-broker/$connectionId'
       path: '/secrets-broker/$connectionId'
@@ -956,6 +976,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedSecretsBrokerConnectionIdRoute: typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  AuthenticatedSecretsBrokerConfigurationRoute: typeof AuthenticatedSecretsBrokerConfigurationRoute
   AuthenticatedSecretsBrokerSecretsRoute: typeof AuthenticatedSecretsBrokerSecretsRoute
   AuthenticatedServicesServiceIdRoute: typeof AuthenticatedServicesServiceIdRoute
   AuthenticatedAppsIndexRoute: typeof AuthenticatedAppsIndexRoute
@@ -984,6 +1005,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedSecretsBrokerConnectionIdRoute:
     AuthenticatedSecretsBrokerConnectionIdRoute,
+  AuthenticatedSecretsBrokerConfigurationRoute:
+    AuthenticatedSecretsBrokerConfigurationRoute,
   AuthenticatedSecretsBrokerSecretsRoute:
     AuthenticatedSecretsBrokerSecretsRoute,
   AuthenticatedServicesServiceIdRoute: AuthenticatedServicesServiceIdRoute,

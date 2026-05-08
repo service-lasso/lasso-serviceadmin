@@ -99,6 +99,7 @@ test.describe('Secrets Broker browser coverage', () => {
     const navLinks = [
       ['Overview / Setup', /\/secrets-broker$/],
       ['Secrets', /\/secrets-broker\/secrets$/],
+      ['Configuration', /\/secrets-broker\/configuration$/],
       ['Sources / Backends', /\/secrets-broker#secret-sources$/],
       ['Provider Connections', /\/secrets-broker#provider-connections$/],
       ['Single Reveal', /\/secrets-broker#privileged-secret-reveal$/],
@@ -172,6 +173,66 @@ test.describe('Secrets Broker browser coverage', () => {
       })
     ).toBeDisabled()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('covers the Configuration sub-page provider and migration states', async ({
+    page,
+  }) => {
+    await page.goto('/secrets-broker/configuration')
+    await expectNoBlankScreen(page)
+    await expect(
+      page.getByRole('heading', { name: /^Configuration$/ })
+    ).toBeVisible()
+    await expect(page.getByText(/Handles only · dry-run first/i)).toBeVisible()
+    await expect(page.getByText(/Credential values shown/i)).toBeVisible()
+
+    await page.getByLabel(/Provider state scenario/i).selectOption('healthy')
+    await expect(
+      page.getByText(/Provider configuration validated/i)
+    ).toBeVisible()
+    await page
+      .getByLabel(/Provider state scenario/i)
+      .selectOption('auth-required')
+    await expect(
+      page.getByText(/Provider requires credential ref refresh/i)
+    ).toBeVisible()
+    await page
+      .getByLabel(/Provider state scenario/i)
+      .selectOption('unsupported')
+    await expect(page.getByText(/cannot be a migration target/i)).toBeVisible()
+    await page
+      .getByLabel(/Provider state scenario/i)
+      .selectOption('validation-failed')
+    await expect(page.getByText(/Validation failed closed/i)).toBeVisible()
+
+    await page
+      .getByLabel(/Migration state scenario/i)
+      .selectOption('dry-run-partial')
+    await expect(
+      page.getByText(/Migration dry-run partial denial/i)
+    ).toBeVisible()
+    await expect(page.getByText(/partial_failure/i)).toBeVisible()
+    await page
+      .getByLabel(/Migration state scenario/i)
+      .selectOption('apply-ready')
+    await page.getByLabel(/Audit reason/i).fill('approved migration')
+    await page.getByRole('button', { name: /Record confirmation/i }).click()
+    await expect(
+      page.getByRole('button', { name: /Migration apply ready/i })
+    ).toBeEnabled()
+    await page
+      .getByLabel(/Migration state scenario/i)
+      .selectOption('apply-partial')
+    await expect(
+      page.getByText(/Migration partial failure/i).last()
+    ).toBeVisible()
+    await expect(page.getByText(/Provider credentials hidden/i)).toBeVisible()
+    await expect(
+      page.getByText(/fixture-provider-credential-value/i)
+    ).toHaveCount(0)
+    await expect(page.getByText(/fixture-managed-secret-value/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })

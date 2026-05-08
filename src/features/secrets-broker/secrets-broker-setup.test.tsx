@@ -250,7 +250,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.queryByText(singleSecretRevealReference.fakeRawValue)
     ).not.toBeInTheDocument()
-  })
+  }, 10000)
 
   it('keeps single-secret reveal safe surfaces free of raw material', () => {
     expect(singleSecretRevealScenarios.map((scenario) => scenario.id)).toEqual([

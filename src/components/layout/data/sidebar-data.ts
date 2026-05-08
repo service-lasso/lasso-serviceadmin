@@ -116,6 +116,11 @@ export const sidebarData: SidebarData = {
               icon: DatabaseZap,
             },
             {
+              title: 'Configuration',
+              url: '/secrets-broker/configuration',
+              icon: Settings,
+            },
+            {
               title: 'Sources / Backends',
               url: '/secrets-broker#secret-sources',
               icon: DatabaseZap,
