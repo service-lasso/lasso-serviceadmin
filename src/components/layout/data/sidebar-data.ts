@@ -6,6 +6,7 @@ import {
   KeyRound,
   LifeBuoy,
   LockKeyhole,
+  Scale,
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
@@ -73,6 +74,11 @@ export const sidebarData: SidebarData = {
           title: 'Secrets Broker',
           url: '/secrets-broker',
           icon: KeyRound,
+        },
+        {
+          title: 'Policy Simulation',
+          url: '/secrets-policy-simulation',
+          icon: Scale,
         },
         {
           title: 'ZITADEL Session',
