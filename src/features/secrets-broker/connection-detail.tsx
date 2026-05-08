@@ -28,11 +28,14 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
+  buildProviderReconnectPlan,
   getSecretsBrokerProviderConnectionDetail,
+  providerReconnectWorkflowStates,
   secretsBrokerProviderConnections,
   type SecretsBrokerProviderConnectionAction,
   type SecretsBrokerProviderConnectionDetail,
   type SecretsBrokerProviderConnectionState,
+  type SecretsBrokerProviderReconnectWorkflowState,
   type SecretsBrokerProviderLifecycleStatus,
   type SecretsBrokerSecretMaterialState,
 } from './provider-connections'
@@ -80,6 +83,7 @@ const lifecycleStatusCopy: Record<
   expiring: 'Expiring',
   'auth-required': 'Auth required',
   'reconnect-required': 'Reconnect required',
+  'refresh-failed': 'Refresh failed',
   revoked: 'Revoked',
   'permission-changed': 'Permission changed',
   degraded: 'Degraded',
@@ -93,6 +97,7 @@ const lifecycleStatusVariant: Record<
   expiring: 'secondary',
   'auth-required': 'destructive',
   'reconnect-required': 'secondary',
+  'refresh-failed': 'destructive',
   revoked: 'destructive',
   'permission-changed': 'secondary',
   degraded: 'secondary',
@@ -335,6 +340,132 @@ function SingleConnectionEditRotationWorkflow({
           <Badge variant='secondary'>Dry-run before apply</Badge>
           <Badge variant='outline'>Audit required</Badge>
           <Badge variant='outline'>No bulk mutation</Badge>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProviderReconnectWorkflow({
+  connection,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+}) {
+  const [workflowState, setWorkflowState] =
+    useState<SecretsBrokerProviderReconnectWorkflowState>(
+      buildProviderReconnectPlan(connection).state
+    )
+  const plan = useMemo(
+    () => buildProviderReconnectPlan(connection, workflowState),
+    [connection, workflowState]
+  )
+
+  return (
+    <Card id='provider-reconnect-workflow'>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <KeyRound className='size-4' /> Provider reconnect workflow
+        </CardTitle>
+        <CardDescription>
+          Metadata-only reconnect entry point for Secrets Broker sources. This
+          surface uses provider handles/statuses only; it never accepts or
+          renders plaintext provider credentials.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-4 text-sm'>
+        <div className='grid gap-4 lg:grid-cols-[0.7fr_1.3fr]'>
+          <div className='space-y-2'>
+            <label
+              htmlFor='provider-reconnect-state'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Reconnect scenario
+            </label>
+            <select
+              id='provider-reconnect-state'
+              className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+              value={workflowState}
+              onChange={(event) =>
+                setWorkflowState(
+                  event.target
+                    .value as SecretsBrokerProviderReconnectWorkflowState
+                )
+              }
+            >
+              {providerReconnectWorkflowStates.map((state) => (
+                <option key={state.value} value={state.value}>
+                  {state.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='mb-2 flex flex-wrap items-center gap-2'>
+              <Badge
+                variant={
+                  plan.outcome === 'success'
+                    ? 'default'
+                    : plan.outcome === 'failure' || plan.outcome === 'blocked'
+                      ? 'destructive'
+                      : 'secondary'
+                }
+              >
+                {plan.outcome}
+              </Badge>
+              <Badge variant='outline'>Audit {plan.safeAuditEvent}</Badge>
+              <Badge variant='outline'>Handle only</Badge>
+            </div>
+            <div className='font-medium'>{plan.title}</div>
+            <p className='mt-1 text-muted-foreground'>{plan.status}</p>
+            <div className='mt-2 break-all text-muted-foreground'>
+              Connection handle: {plan.connectionHandle}
+            </div>
+          </div>
+        </div>
+
+        <div className='grid gap-3 md:grid-cols-3'>
+          <div className='rounded-lg border p-3'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected refs
+            </div>
+            {plan.affectedRefs.map((ref) => (
+              <Badge key={ref} variant='outline' className='mt-2 break-all'>
+                {ref}
+              </Badge>
+            ))}
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected services
+            </div>
+            <div className='mt-2 flex flex-wrap gap-1'>
+              {plan.affectedServices.map((service) => (
+                <Badge key={service} variant='outline'>
+                  {service}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected workflows
+            </div>
+            <div className='mt-2 flex flex-wrap gap-1'>
+              {plan.affectedWorkflows.map((workflow) => (
+                <Badge key={workflow} variant='outline'>
+                  {workflow}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className='flex flex-wrap gap-2'>
+          <Button type='button' disabled={!plan.actionEnabled}>
+            {plan.actionLabel}
+          </Button>
+          <Badge variant='secondary'>No credential input</Badge>
+          <Badge variant='outline'>Fail closed unsupported providers</Badge>
         </div>
       </CardContent>
     </Card>
@@ -723,6 +854,8 @@ export function SecretsBrokerProviderConnectionDetailPage({
             ))}
           </CardContent>
         </Card>
+
+        <ProviderReconnectWorkflow connection={connection} />
 
         <SingleConnectionEditRotationWorkflow connection={connection} />
 
