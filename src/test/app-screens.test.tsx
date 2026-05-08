@@ -25,6 +25,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Service - Service Admin UI',
   },
   {
+    path: '/fleet-overview',
+    heading: /^Fleet overview planning$/i,
+    title: 'Service Admin - Fleet Overview',
+  },
+  {
     path: '/dependencies',
     heading: /^Dependencies$/i,
     title: 'Service Admin - Dependencies',

@@ -38,6 +38,7 @@ import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
 import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authenticated/installed/index'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
+import { Route as AuthenticatedFleetOverviewIndexRouteImport } from './routes/_authenticated/fleet-overview/index'
 import { Route as AuthenticatedDependenciesIndexRouteImport } from './routes/_authenticated/dependencies/index'
 import { Route as AuthenticatedChatsIndexRouteImport } from './routes/_authenticated/chats/index'
 import { Route as AuthenticatedAuthSessionIndexRouteImport } from './routes/_authenticated/auth-session/index'
@@ -206,6 +207,12 @@ const AuthenticatedHelpCenterIndexRoute =
     path: '/help-center/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedFleetOverviewIndexRoute =
+  AuthenticatedFleetOverviewIndexRouteImport.update({
+    id: '/fleet-overview/',
+    path: '/fleet-overview/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDependenciesIndexRoute =
   AuthenticatedDependenciesIndexRouteImport.update({
     id: '/dependencies/',
@@ -315,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/auth-session/': typeof AuthenticatedAuthSessionIndexRoute
   '/chats/': typeof AuthenticatedChatsIndexRoute
   '/dependencies/': typeof AuthenticatedDependenciesIndexRoute
+  '/fleet-overview/': typeof AuthenticatedFleetOverviewIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/installed/': typeof AuthenticatedInstalledIndexRoute
   '/logs/': typeof AuthenticatedLogsIndexRoute
@@ -356,6 +364,7 @@ export interface FileRoutesByTo {
   '/auth-session': typeof AuthenticatedAuthSessionIndexRoute
   '/chats': typeof AuthenticatedChatsIndexRoute
   '/dependencies': typeof AuthenticatedDependenciesIndexRoute
+  '/fleet-overview': typeof AuthenticatedFleetOverviewIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
   '/installed': typeof AuthenticatedInstalledIndexRoute
   '/logs': typeof AuthenticatedLogsIndexRoute
@@ -402,6 +411,7 @@ export interface FileRoutesById {
   '/_authenticated/auth-session/': typeof AuthenticatedAuthSessionIndexRoute
   '/_authenticated/chats/': typeof AuthenticatedChatsIndexRoute
   '/_authenticated/dependencies/': typeof AuthenticatedDependenciesIndexRoute
+  '/_authenticated/fleet-overview/': typeof AuthenticatedFleetOverviewIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/_authenticated/installed/': typeof AuthenticatedInstalledIndexRoute
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
@@ -446,6 +456,7 @@ export interface FileRouteTypes {
     | '/auth-session/'
     | '/chats/'
     | '/dependencies/'
+    | '/fleet-overview/'
     | '/help-center/'
     | '/installed/'
     | '/logs/'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/auth-session'
     | '/chats'
     | '/dependencies'
+    | '/fleet-overview'
     | '/help-center'
     | '/installed'
     | '/logs'
@@ -532,6 +544,7 @@ export interface FileRouteTypes {
     | '/_authenticated/auth-session/'
     | '/_authenticated/chats/'
     | '/_authenticated/dependencies/'
+    | '/_authenticated/fleet-overview/'
     | '/_authenticated/help-center/'
     | '/_authenticated/installed/'
     | '/_authenticated/logs/'
@@ -767,6 +780,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHelpCenterIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/fleet-overview/': {
+      id: '/_authenticated/fleet-overview/'
+      path: '/fleet-overview'
+      fullPath: '/fleet-overview/'
+      preLoaderRoute: typeof AuthenticatedFleetOverviewIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dependencies/': {
       id: '/_authenticated/dependencies/'
       path: '/dependencies'
@@ -901,6 +921,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuthSessionIndexRoute: typeof AuthenticatedAuthSessionIndexRoute
   AuthenticatedChatsIndexRoute: typeof AuthenticatedChatsIndexRoute
   AuthenticatedDependenciesIndexRoute: typeof AuthenticatedDependenciesIndexRoute
+  AuthenticatedFleetOverviewIndexRoute: typeof AuthenticatedFleetOverviewIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
   AuthenticatedInstalledIndexRoute: typeof AuthenticatedInstalledIndexRoute
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
@@ -926,6 +947,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuthSessionIndexRoute: AuthenticatedAuthSessionIndexRoute,
   AuthenticatedChatsIndexRoute: AuthenticatedChatsIndexRoute,
   AuthenticatedDependenciesIndexRoute: AuthenticatedDependenciesIndexRoute,
+  AuthenticatedFleetOverviewIndexRoute: AuthenticatedFleetOverviewIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
   AuthenticatedInstalledIndexRoute: AuthenticatedInstalledIndexRoute,
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
