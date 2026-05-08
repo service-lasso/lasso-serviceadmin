@@ -53,6 +53,7 @@ import {
   secretsBrokerProviderConnections,
   type SecretsBrokerProviderConnectionDetail,
   type SecretsBrokerProviderConnectionState,
+  type SecretsBrokerProviderLifecycleStatus,
 } from './provider-connections'
 import {
   countSourceBackendsByState,
@@ -463,6 +464,32 @@ const providerConnectionStatusVariant: Record<
   missing: 'destructive',
 }
 
+const providerLifecycleStatusCopy: Record<
+  SecretsBrokerProviderLifecycleStatus,
+  string
+> = {
+  connected: 'Connected',
+  expiring: 'Expiring',
+  'auth-required': 'Auth required',
+  'reconnect-required': 'Reconnect required',
+  revoked: 'Revoked',
+  'permission-changed': 'Permission changed',
+  degraded: 'Degraded',
+}
+
+const providerLifecycleStatusVariant: Record<
+  SecretsBrokerProviderLifecycleStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  connected: 'default',
+  expiring: 'secondary',
+  'auth-required': 'destructive',
+  'reconnect-required': 'secondary',
+  revoked: 'destructive',
+  'permission-changed': 'secondary',
+  degraded: 'secondary',
+}
+
 const providerConnectionStates = Array.from(
   new Set(
     secretsBrokerProviderConnections.map((connection) => connection.state)
@@ -514,6 +541,9 @@ function filterProviderConnections(
         connection.source,
         connection.connectionRef,
         connection.health.label,
+        connection.lifecycle.label,
+        connection.lifecycle.status,
+        connection.lifecycle.lastRefreshError ?? '',
       ]
         .join(' ')
         .toLowerCase()
@@ -1536,9 +1566,10 @@ export function SecretsBrokerSetupWizard() {
                       <th className='p-3 font-medium'>Connection label</th>
                       <th className='p-3 font-medium'>Auth method</th>
                       <th className='p-3 font-medium'>Status</th>
+                      <th className='p-3 font-medium'>Lifecycle</th>
                       <th className='p-3 font-medium'>Secret material</th>
                       <th className='p-3 font-medium'>Expiry / refresh</th>
-                      <th className='p-3 font-medium'>Last used/error</th>
+                      <th className='p-3 font-medium'>Last check/error</th>
                       <th className='p-3 font-medium'>Actions</th>
                     </tr>
                   </thead>
@@ -1579,6 +1610,24 @@ export function SecretsBrokerSetupWizard() {
                           ) : null}
                         </td>
                         <td className='p-3'>
+                          <Badge
+                            variant={
+                              providerLifecycleStatusVariant[
+                                connection.lifecycle.status
+                              ]
+                            }
+                          >
+                            {
+                              providerLifecycleStatusCopy[
+                                connection.lifecycle.status
+                              ]
+                            }
+                          </Badge>
+                          <div className='mt-2 text-xs text-muted-foreground'>
+                            {connection.lifecycle.summary}
+                          </div>
+                        </td>
+                        <td className='p-3'>
                           <div>{connection.secretMaterial.presence}</div>
                           <div className='text-xs text-muted-foreground'>
                             value hidden
@@ -1592,15 +1641,36 @@ export function SecretsBrokerSetupWizard() {
                           </div>
                         </td>
                         <td className='p-3'>
-                          <div>
-                            {connection.usage.lastSuccessfulResolve ??
-                              'no successful resolve yet'}
-                          </div>
-                          {connection.usage.lastFailure ? (
+                          <div>{connection.lifecycle.lastCheckedAt}</div>
+                          {connection.lifecycle.lastRefreshError ? (
                             <div className='text-xs text-destructive'>
-                              {connection.usage.lastFailure}
+                              {connection.lifecycle.lastRefreshError}
                             </div>
-                          ) : null}
+                          ) : (
+                            <div className='text-xs text-muted-foreground'>
+                              last resolve:{' '}
+                              {connection.usage.lastSuccessfulResolve ??
+                                'not recorded'}
+                            </div>
+                          )}
+                          <div className='mt-2 flex flex-wrap gap-1 text-xs'>
+                            {connection.lifecycle.auditEventRef ? (
+                              <a
+                                href='#audit-events'
+                                className='text-primary underline-offset-4 hover:underline'
+                              >
+                                Audit {connection.lifecycle.auditEventRef}
+                              </a>
+                            ) : null}
+                            {connection.lifecycle.diagnosticRef ? (
+                              <a
+                                href='#diagnostics'
+                                className='text-primary underline-offset-4 hover:underline'
+                              >
+                                Diagnostics {connection.lifecycle.diagnosticRef}
+                              </a>
+                            ) : null}
+                          </div>
                         </td>
                         <td className='p-3'>
                           <div className='flex flex-wrap gap-2'>
@@ -1618,9 +1688,20 @@ export function SecretsBrokerSetupWizard() {
                                   type='button'
                                   size='sm'
                                   variant='outline'
-                                  disabled={action.state === 'disabled'}
+                                  disabled={
+                                    action.state === 'disabled' ||
+                                    action.state === 'unsupported'
+                                  }
+                                  title={
+                                    action.state === 'unsupported'
+                                      ? action.disabledReason
+                                      : undefined
+                                  }
                                 >
                                   {action.label}
+                                  {action.state === 'unsupported'
+                                    ? ' unavailable'
+                                    : ''}
                                 </Button>
                               ))}
                             <Button asChild size='sm' variant='secondary'>
@@ -1635,6 +1716,21 @@ export function SecretsBrokerSetupWizard() {
                               View audit
                             </Button>
                           </div>
+                          {connection.actions
+                            .filter(
+                              (action) =>
+                                action.state === 'unsupported' &&
+                                action.disabledReason
+                            )
+                            .map((action) => (
+                              <div
+                                key={`${action.id}-unsupported-reason`}
+                                className='mt-2 text-xs text-muted-foreground'
+                              >
+                                {action.label} unavailable:{' '}
+                                {action.disabledReason}
+                              </div>
+                            ))}
                         </td>
                       </tr>
                     ))}
