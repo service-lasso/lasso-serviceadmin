@@ -1,5 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
+const fakeRevealValue = 'DEMO_REVEAL_VALUE_42'
+
 const forbiddenSecretMaterialPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
   /\bAKIA[0-9A-Z]{16}\b/,
@@ -47,6 +49,9 @@ test.describe('Secrets Broker browser coverage', () => {
         body: consoleErrors.join('\n') || '(none)',
         contentType: 'text/plain',
       })
+      if ((await page.locator('body').innerText()).includes(fakeRevealValue)) {
+        await page.goto('/secrets-broker')
+      }
       await testInfo.attach('failure-screenshot', {
         body: await page.screenshot({ fullPage: true }),
         contentType: 'image/png',
@@ -95,6 +100,7 @@ test.describe('Secrets Broker browser coverage', () => {
       ['Overview / Setup', /\/secrets-broker$/],
       ['Sources / Backends', /\/secrets-broker#secret-sources$/],
       ['Provider Connections', /\/secrets-broker#provider-connections$/],
+      ['Single Reveal', /\/secrets-broker#privileged-secret-reveal$/],
       ['Backup / Keys', /\/secrets-broker#backup-key-management$/],
       ['Workflow Boundaries', /\/secrets-broker#workflow-authoring-boundary$/],
       ['Topology', /\/secrets-broker#secrets-topology$/],
@@ -153,10 +159,68 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
+  test('reveals one broker secret only after explicit action and re-hides safely', async ({
+    page,
+  }) => {
+    await page.goto('/secrets-broker#privileged-secret-reveal')
+    await expectNoBlankScreen(page)
+    await expect(
+      page.getByText(/Privileged single-secret reveal/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Value hidden by default/i)).toBeVisible()
+    await expect(
+      page.getByText('SESSION_SIGNING_KEY', { exact: true })
+    ).toBeVisible()
+    await expect(page.getByText(fakeRevealValue)).toHaveCount(0)
+    await expect(
+      page.getByRole('button', { name: /Reveal secret value/i })
+    ).toBeDisabled()
+
+    const revealState = page.locator('#single-secret-reveal-state')
+    for (const state of [
+      'auth-required',
+      'policy-denied',
+      'broker-offline',
+      'unconfigured',
+      'audit-unavailable',
+    ]) {
+      await revealState.selectOption(state)
+      await expect(
+        page.getByRole('button', { name: /Reveal secret value/i })
+      ).toBeDisabled()
+      await expect(page.getByText(fakeRevealValue)).toHaveCount(0)
+    }
+
+    await revealState.selectOption('allowed')
+    await expect(
+      page.getByRole('button', { name: /Reveal secret value/i })
+    ).toBeEnabled()
+    await page.getByRole('button', { name: /Reveal secret value/i }).click()
+    await expect(page.getByText(fakeRevealValue)).toBeVisible()
+    await expect(
+      page.getByText(/Audit event recorded: audit-reveal-001/i)
+    ).toBeVisible()
+    await expect(page).toHaveURL(/\/secrets-broker#privileged-secret-reveal$/)
+    expect(page.url()).not.toContain(fakeRevealValue)
+    expect(consoleErrors.join('\n')).not.toContain(fakeRevealValue)
+    await expect(
+      page.getByRole('button', { name: /Copy secret/i })
+    ).toHaveCount(0)
+
+    await page.getByRole('button', { name: /Expire reveal window/i }).click()
+    await expect(
+      page.getByText(/Reveal window expired; value re-hidden/i)
+    ).toBeVisible()
+    await expect(page.getByText(fakeRevealValue)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
   test('deep-links to broker surfaces and provider detail with safe metadata only', async ({
     page,
   }) => {
     const sections = [
+      ['privileged-secret-reveal', /Privileged single-secret reveal/i],
       ['secret-sources', /Secret Sources \/ Backends/i],
       ['provider-connections', /Provider Connections/i],
       ['backup-key-management', /Backup, restore, and key management/i],

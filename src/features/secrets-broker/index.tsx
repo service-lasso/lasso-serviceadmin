@@ -56,6 +56,11 @@ import {
   type SecretsBrokerProviderLifecycleStatus,
 } from './provider-connections'
 import {
+  singleSecretRevealReference,
+  singleSecretRevealScenarios,
+  type SingleSecretRevealState,
+} from './single-secret-reveal'
+import {
   countSourceBackendsByState,
   secretsBrokerSourceBackends,
   type SecretsBrokerSourceBackend,
@@ -1059,6 +1064,202 @@ function DiagnosticCard({
   )
 }
 
+function PrivilegedSecretRevealPanel({
+  scenarioId,
+  revealed,
+  onScenarioChange,
+  onReveal,
+  onHide,
+}: {
+  scenarioId: SingleSecretRevealState
+  revealed: boolean
+  onScenarioChange: (state: SingleSecretRevealState) => void
+  onReveal: () => void
+  onHide: (state: SingleSecretRevealState) => void
+}) {
+  const scenario =
+    singleSecretRevealScenarios.find((item) => item.id === scenarioId) ??
+    singleSecretRevealScenarios[0]
+  const ref = singleSecretRevealReference
+  const showValue = scenario.id === 'allowed' && revealed
+
+  return (
+    <Card id='privileged-secret-reveal'>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle className='flex items-center gap-2'>
+              <LockKeyhole className='size-4' /> Privileged single-secret reveal
+            </CardTitle>
+            <CardDescription>
+              Controlled Service Admin to Secrets Broker reveal flow for one
+              selected ref. Default state is redacted; reveal is explicit,
+              short-lived, fail-closed, and auditable.
+            </CardDescription>
+          </div>
+          <Badge variant={scenario.canReveal ? 'default' : 'outline'}>
+            {scenario.badge}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='max-w-xs'>
+          <label
+            htmlFor='single-secret-reveal-state'
+            className='mb-1 block text-xs text-muted-foreground'
+          >
+            Reveal workflow state
+          </label>
+          <select
+            id='single-secret-reveal-state'
+            className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+            value={scenarioId}
+            onChange={(event) =>
+              onScenarioChange(event.target.value as SingleSecretRevealState)
+            }
+          >
+            {singleSecretRevealScenarios.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className='grid gap-4 lg:grid-cols-[1.1fr_0.9fr]'>
+          <div className='rounded-lg border p-4 text-sm'>
+            <div className='mb-3 flex items-center gap-2 font-medium'>
+              <KeyRound className='size-4' /> Selected safe metadata
+            </div>
+            <div className='grid gap-3 sm:grid-cols-2'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Ref
+                </div>
+                <div className='break-all'>{ref.ref}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Secret name
+                </div>
+                <div>{ref.name}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Owning service
+                </div>
+                <div>{ref.owningService}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Provider / source
+                </div>
+                <div>
+                  {ref.provider} � {ref.source}
+                </div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Last updated
+                </div>
+                <div>{ref.lastUpdatedAt}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Policy
+                </div>
+                <div className='break-all'>{ref.policy}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className='rounded-lg border p-4 text-sm'>
+            <div className='mb-3 flex items-center gap-2 font-medium'>
+              <ShieldCheck className='size-4' /> Reveal control
+            </div>
+            <div className='space-y-3'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Status
+                </div>
+                <div>{scenario.status}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Raw value
+                </div>
+                {showValue ? (
+                  <div
+                    className='mt-1 rounded-md border border-destructive/40 bg-destructive/10 p-2 font-mono text-sm'
+                    aria-live='polite'
+                  >
+                    {ref.fakeRawValue}
+                  </div>
+                ) : (
+                  <div className='mt-1 rounded-md border bg-muted/50 p-2 font-mono text-sm'>
+                    ������������
+                  </div>
+                )}
+              </div>
+              <p className='text-muted-foreground'>{scenario.reason}</p>
+              <div className='rounded-md bg-muted/40 p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Audit/status feedback
+                </div>
+                <div>
+                  {showValue
+                    ? `Audit event recorded: ${ref.auditEventId}`
+                    : scenario.auditStatus}
+                </div>
+              </div>
+              {showValue ? (
+                <div className='text-xs text-muted-foreground'>
+                  Reveal window expires in 60 seconds. The value re-hides on
+                  timeout, cancel, navigation away, or refresh. Copy/export is
+                  disabled for this story.
+                </div>
+              ) : (
+                <div className='text-xs text-muted-foreground'>
+                  {scenario.nextAction}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className='flex flex-wrap gap-2'>
+          <Button
+            type='button'
+            disabled={!scenario.canReveal || revealed}
+            onClick={onReveal}
+          >
+            Reveal secret value
+          </Button>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={!revealed}
+            onClick={() => onHide('cancelled')}
+          >
+            Cancel reveal
+          </Button>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={!revealed}
+            onClick={() => onHide('expired')}
+          >
+            Expire reveal window
+          </Button>
+          <Badge variant='secondary'>Bulk reveal disabled</Badge>
+          <Badge variant='outline'>Copy disabled</Badge>
+          <Badge variant='outline'>No route/query value material</Badge>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function SecretsBrokerSetupWizard() {
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Setup',
@@ -1090,6 +1291,9 @@ export function SecretsBrokerSetupWizard() {
   const [connectionQueryFilter, setConnectionQueryFilter] = useState('')
   const [overviewScenarioId, setOverviewScenarioId] =
     useState<SecretsBrokerOverviewState>('healthy')
+  const [singleSecretRevealState, setSingleSecretRevealState] =
+    useState<SingleSecretRevealState>('hidden')
+  const [singleSecretRevealed, setSingleSecretRevealed] = useState(false)
   const [selectedWorkflowBoundaryId, setSelectedWorkflowBoundaryId] = useState(
     workflowAuthoringBoundaries[0].id
   )
@@ -1405,6 +1609,20 @@ export function SecretsBrokerSetupWizard() {
             </CardContent>
           </Card>
         </div>
+
+        <PrivilegedSecretRevealPanel
+          scenarioId={singleSecretRevealState}
+          revealed={singleSecretRevealed}
+          onScenarioChange={(state) => {
+            setSingleSecretRevealState(state)
+            setSingleSecretRevealed(false)
+          }}
+          onReveal={() => setSingleSecretRevealed(true)}
+          onHide={(state) => {
+            setSingleSecretRevealState(state)
+            setSingleSecretRevealed(false)
+          }}
+        />
 
         <BackupKeyManagementPanel />
 
