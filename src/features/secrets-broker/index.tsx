@@ -36,6 +36,7 @@ import {
   type SecretsBrokerAuditEvent,
   type SecretsBrokerAuditEventType,
   type SecretsBrokerAuditOutcome,
+  type SecretsBrokerAuditTamperEvidenceStatus,
 } from './audit-events'
 import {
   secretsBrokerBackupKeyStatus,
@@ -409,6 +410,24 @@ const auditOutcomeVariant: Record<
   revoked: 'outline',
 }
 
+const auditTamperEvidenceCopy: Record<
+  SecretsBrokerAuditTamperEvidenceStatus,
+  string
+> = {
+  verified: 'Tamper evidence verified',
+  broken: 'Tamper evidence broken',
+  unavailable: 'Tamper evidence unavailable',
+}
+
+const auditTamperEvidenceVariant: Record<
+  SecretsBrokerAuditTamperEvidenceStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  verified: 'default',
+  broken: 'destructive',
+  unavailable: 'outline',
+}
+
 const sourceStateCopy: Record<SecretsBrokerSourceState, string> = {
   configured: 'Configured',
   'not-configured': 'Not configured',
@@ -568,6 +587,9 @@ const auditOutcomes = Array.from(
 )
 const auditProviders = Array.from(
   new Set(secretsBrokerAuditEvents.map((event) => event.provider))
+)
+const auditTamperEvidenceStates = Array.from(
+  new Set(secretsBrokerAuditEvents.map((event) => event.tamperEvidence.status))
 )
 
 function BackupKeyActionButton({
@@ -916,9 +938,16 @@ function AuditEventDetail({ event }: { event: SecretsBrokerAuditEvent }) {
             <CardTitle className='text-base'>Event detail</CardTitle>
             <CardDescription>{event.id}</CardDescription>
           </div>
-          <Badge variant={auditOutcomeVariant[event.outcome]}>
-            {event.outcome}
-          </Badge>
+          <div className='flex flex-wrap gap-2'>
+            <Badge variant={auditOutcomeVariant[event.outcome]}>
+              {event.outcome}
+            </Badge>
+            <Badge
+              variant={auditTamperEvidenceVariant[event.tamperEvidence.status]}
+            >
+              {event.tamperEvidence.status}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className='space-y-4 text-sm'>
@@ -970,6 +999,32 @@ function AuditEventDetail({ event }: { event: SecretsBrokerAuditEvent }) {
           </div>
           <div className='font-mono break-all'>{event.ref}</div>
         </div>
+        <div className='grid gap-3 md:grid-cols-2'>
+          <div className='rounded-md bg-muted/40 p-2'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected refs
+            </div>
+            <div className='mt-1 flex flex-wrap gap-1'>
+              {event.affectedRefs.map((ref) => (
+                <Badge key={ref} variant='outline'>
+                  {ref}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className='rounded-md bg-muted/40 p-2'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected services/workflows
+            </div>
+            <div className='mt-1 flex flex-wrap gap-1'>
+              {event.affectedServices.map((service) => (
+                <Badge key={service} variant='outline'>
+                  {service}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className='rounded-md bg-muted/40 p-2'>
           <div className='text-xs font-medium text-muted-foreground uppercase'>
             Policy decision
@@ -979,9 +1034,49 @@ function AuditEventDetail({ event }: { event: SecretsBrokerAuditEvent }) {
         </div>
         <div>
           <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Audit reason
+          </div>
+          <p className='text-muted-foreground'>{event.auditReason}</p>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
             Normalized reason
           </div>
           <p className='text-muted-foreground'>{event.normalizedReason}</p>
+        </div>
+        <div className='rounded-md bg-muted/40 p-2'>
+          <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Tamper-evidence status
+            </div>
+            <Badge
+              variant={auditTamperEvidenceVariant[event.tamperEvidence.status]}
+            >
+              {auditTamperEvidenceCopy[event.tamperEvidence.status]}
+            </Badge>
+          </div>
+          <div className='grid gap-2 text-xs md:grid-cols-2'>
+            <span>chain: {event.tamperEvidence.chainId}</span>
+            <span>
+              sequence:{' '}
+              {event.tamperEvidence.sequence === null
+                ? 'unavailable'
+                : event.tamperEvidence.sequence}
+            </span>
+            <span>
+              previous hash:{' '}
+              {event.tamperEvidence.previousHashRef ?? 'unavailable'}
+            </span>
+            <span>
+              entry hash: {event.tamperEvidence.entryHashRef ?? 'unavailable'}
+            </span>
+            <span>
+              checked: {event.tamperEvidence.checkedAt ?? 'not checked'}
+            </span>
+          </div>
+          <p className='mt-2 text-xs text-muted-foreground'>
+            {event.tamperEvidence.note}
+          </p>
         </div>
         <div className='flex gap-3 rounded-lg border p-3'>
           <ShieldCheck className='mt-0.5 size-4 shrink-0' />
@@ -1279,6 +1374,9 @@ export function SecretsBrokerSetupWizard() {
   const [auditProviderFilter, setAuditProviderFilter] = useState<
     SecretsBrokerAuditEvent['provider'] | 'all'
   >('all')
+  const [auditTamperEvidenceFilter, setAuditTamperEvidenceFilter] = useState<
+    SecretsBrokerAuditTamperEvidenceStatus | 'all'
+  >('all')
   const [auditQueryFilter, setAuditQueryFilter] = useState('')
   const [auditSinceFilter, setAuditSinceFilter] = useState('')
   const [auditUntilFilter, setAuditUntilFilter] = useState('')
@@ -1350,6 +1448,7 @@ export function SecretsBrokerSetupWizard() {
         type: auditTypeFilter,
         outcome: auditOutcomeFilter,
         provider: auditProviderFilter,
+        tamperEvidence: auditTamperEvidenceFilter,
         query: auditQueryFilter,
         since: auditSinceFilter,
         until: auditUntilFilter,
@@ -1358,6 +1457,7 @@ export function SecretsBrokerSetupWizard() {
       auditOutcomeFilter,
       auditProviderFilter,
       auditQueryFilter,
+      auditTamperEvidenceFilter,
       auditSinceFilter,
       auditTypeFilter,
       auditUntilFilter,
@@ -2317,7 +2417,7 @@ export function SecretsBrokerSetupWizard() {
             </div>
           </CardHeader>
           <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-6'>
+            <div className='grid gap-3 md:grid-cols-7'>
               <div>
                 <label
                   htmlFor='secret-audit-type'
@@ -2397,6 +2497,33 @@ export function SecretsBrokerSetupWizard() {
               </div>
               <div>
                 <label
+                  htmlFor='secret-audit-tamper-evidence'
+                  className='mb-1 block text-xs text-muted-foreground'
+                >
+                  Tamper evidence
+                </label>
+                <select
+                  id='secret-audit-tamper-evidence'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={auditTamperEvidenceFilter}
+                  onChange={(event) =>
+                    setAuditTamperEvidenceFilter(
+                      event.target.value as
+                        | SecretsBrokerAuditTamperEvidenceStatus
+                        | 'all'
+                    )
+                  }
+                >
+                  <option value='all'>all</option>
+                  {auditTamperEvidenceStates.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
                   htmlFor='secret-audit-query'
                   className='mb-1 block text-xs text-muted-foreground'
                 >
@@ -2463,14 +2590,26 @@ export function SecretsBrokerSetupWizard() {
                             {event.source}
                           </div>
                         </div>
-                        <Badge variant={auditOutcomeVariant[event.outcome]}>
-                          {event.outcome}
-                        </Badge>
+                        <div className='flex flex-wrap gap-2'>
+                          <Badge variant={auditOutcomeVariant[event.outcome]}>
+                            {event.outcome}
+                          </Badge>
+                          <Badge
+                            variant={
+                              auditTamperEvidenceVariant[
+                                event.tamperEvidence.status
+                              ]
+                            }
+                          >
+                            {event.tamperEvidence.status}
+                          </Badge>
+                        </div>
                       </div>
                       <div className='grid gap-2 text-xs text-muted-foreground md:grid-cols-3'>
                         <span>ref: {event.ref}</span>
                         <span>actor: {event.actorId}</span>
                         <span>target: {event.serviceOrWorkflow}</span>
+                        <span>audit reason: {event.auditReason}</span>
                       </div>
                     </button>
                   ))
