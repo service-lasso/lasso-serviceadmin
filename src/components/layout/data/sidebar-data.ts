@@ -2,6 +2,7 @@ import {
   Boxes,
   Building2,
   Command,
+  DatabaseZap,
   GitBranch,
   Globe,
   KeyRound,
@@ -80,6 +81,11 @@ export const sidebarData: SidebarData = {
           title: 'Secrets Broker',
           url: '/secrets-broker',
           icon: KeyRound,
+        },
+        {
+          title: 'Secret Inventory',
+          url: '/secret-inventory',
+          icon: DatabaseZap,
         },
         {
           title: 'Policy Simulation',

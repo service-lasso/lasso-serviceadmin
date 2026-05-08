@@ -33,6 +33,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
 import { Route as AuthenticatedSecretsPolicySimulationIndexRouteImport } from './routes/_authenticated/secrets-policy-simulation/index'
 import { Route as AuthenticatedSecretsBrokerIndexRouteImport } from './routes/_authenticated/secrets-broker/index'
+import { Route as AuthenticatedSecretInventoryIndexRouteImport } from './routes/_authenticated/secret-inventory/index'
 import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authenticated/runtime/index'
 import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
@@ -176,6 +177,12 @@ const AuthenticatedSecretsBrokerIndexRoute =
   AuthenticatedSecretsBrokerIndexRouteImport.update({
     id: '/secrets-broker/',
     path: '/secrets-broker/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretInventoryIndexRoute =
+  AuthenticatedSecretInventoryIndexRouteImport.update({
+    id: '/secret-inventory/',
+    path: '/secret-inventory/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedRuntimeIndexRoute =
@@ -328,6 +335,7 @@ export interface FileRoutesByFullPath {
   '/logs/': typeof AuthenticatedLogsIndexRoute
   '/network/': typeof AuthenticatedNetworkIndexRoute
   '/runtime/': typeof AuthenticatedRuntimeIndexRoute
+  '/secret-inventory/': typeof AuthenticatedSecretInventoryIndexRoute
   '/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
   '/secrets-policy-simulation/': typeof AuthenticatedSecretsPolicySimulationIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
@@ -370,6 +378,7 @@ export interface FileRoutesByTo {
   '/logs': typeof AuthenticatedLogsIndexRoute
   '/network': typeof AuthenticatedNetworkIndexRoute
   '/runtime': typeof AuthenticatedRuntimeIndexRoute
+  '/secret-inventory': typeof AuthenticatedSecretInventoryIndexRoute
   '/secrets-broker': typeof AuthenticatedSecretsBrokerIndexRoute
   '/secrets-policy-simulation': typeof AuthenticatedSecretsPolicySimulationIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
@@ -417,6 +426,7 @@ export interface FileRoutesById {
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
   '/_authenticated/runtime/': typeof AuthenticatedRuntimeIndexRoute
+  '/_authenticated/secret-inventory/': typeof AuthenticatedSecretInventoryIndexRoute
   '/_authenticated/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
   '/_authenticated/secrets-policy-simulation/': typeof AuthenticatedSecretsPolicySimulationIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/logs/'
     | '/network/'
     | '/runtime/'
+    | '/secret-inventory/'
     | '/secrets-broker/'
     | '/secrets-policy-simulation/'
     | '/services/'
@@ -504,6 +515,7 @@ export interface FileRouteTypes {
     | '/logs'
     | '/network'
     | '/runtime'
+    | '/secret-inventory'
     | '/secrets-broker'
     | '/secrets-policy-simulation'
     | '/services'
@@ -550,6 +562,7 @@ export interface FileRouteTypes {
     | '/_authenticated/logs/'
     | '/_authenticated/network/'
     | '/_authenticated/runtime/'
+    | '/_authenticated/secret-inventory/'
     | '/_authenticated/secrets-broker/'
     | '/_authenticated/secrets-policy-simulation/'
     | '/_authenticated/services/'
@@ -745,6 +758,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecretsBrokerIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/secret-inventory/': {
+      id: '/_authenticated/secret-inventory/'
+      path: '/secret-inventory'
+      fullPath: '/secret-inventory/'
+      preLoaderRoute: typeof AuthenticatedSecretInventoryIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/runtime/': {
       id: '/_authenticated/runtime/'
       path: '/runtime'
@@ -927,6 +947,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
   AuthenticatedRuntimeIndexRoute: typeof AuthenticatedRuntimeIndexRoute
+  AuthenticatedSecretInventoryIndexRoute: typeof AuthenticatedSecretInventoryIndexRoute
   AuthenticatedSecretsBrokerIndexRoute: typeof AuthenticatedSecretsBrokerIndexRoute
   AuthenticatedSecretsPolicySimulationIndexRoute: typeof AuthenticatedSecretsPolicySimulationIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
@@ -953,6 +974,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,
   AuthenticatedRuntimeIndexRoute: AuthenticatedRuntimeIndexRoute,
+  AuthenticatedSecretInventoryIndexRoute:
+    AuthenticatedSecretInventoryIndexRoute,
   AuthenticatedSecretsBrokerIndexRoute: AuthenticatedSecretsBrokerIndexRoute,
   AuthenticatedSecretsPolicySimulationIndexRoute:
     AuthenticatedSecretsPolicySimulationIndexRoute,
