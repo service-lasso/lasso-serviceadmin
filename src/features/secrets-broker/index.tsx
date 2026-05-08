@@ -38,6 +38,12 @@ import {
   type SecretsBrokerAuditOutcome,
 } from './audit-events'
 import {
+  secretsBrokerBackupKeyStatus,
+  type SecretsBrokerBackupKeyAction,
+  type SecretsBrokerBackupState,
+  type SecretsBrokerRotationState,
+} from './backup-key-management'
+import {
   countDiagnosticsByStatus,
   secretsBrokerDiagnostics,
   type SecretsBrokerDiagnostic,
@@ -327,6 +333,40 @@ const brokerOverviewStateCopy: Record<SecretsBrokerOverviewState, string> = {
   unconfigured: 'Setup needed',
 }
 
+const backupStateCopy: Record<SecretsBrokerBackupState, string> = {
+  ready: 'Ready',
+  missing: 'Missing backup',
+  stale: 'Backup stale',
+  blocked: 'Blocked',
+}
+
+const backupStateVariant: Record<
+  SecretsBrokerBackupState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  missing: 'destructive',
+  stale: 'secondary',
+  blocked: 'destructive',
+}
+
+const rotationStateCopy: Record<SecretsBrokerRotationState, string> = {
+  current: 'Current',
+  'rotation-due': 'Rotation due',
+  'recovery-risk': 'Recovery risk',
+  blocked: 'Blocked',
+}
+
+const rotationStateVariant: Record<
+  SecretsBrokerRotationState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  current: 'default',
+  'rotation-due': 'secondary',
+  'recovery-risk': 'destructive',
+  blocked: 'destructive',
+}
+
 const brokerOverviewStateVariant: Record<
   SecretsBrokerOverviewState,
   'default' | 'secondary' | 'destructive' | 'outline'
@@ -492,6 +532,176 @@ const auditOutcomes = Array.from(
 const auditProviders = Array.from(
   new Set(secretsBrokerAuditEvents.map((event) => event.provider))
 )
+
+function BackupKeyActionButton({
+  action,
+}: {
+  action: SecretsBrokerBackupKeyAction
+}) {
+  return (
+    <div className='rounded-lg border p-3 text-sm'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <Button
+          type='button'
+          size='sm'
+          variant={action.state === 'danger' ? 'destructive' : 'outline'}
+          disabled={action.state === 'disabled'}
+        >
+          {action.label}
+        </Button>
+        <Badge variant={action.state === 'danger' ? 'destructive' : 'outline'}>
+          {action.state}
+        </Badge>
+      </div>
+      {action.confirmationCopy ? (
+        <p className='mt-2 text-xs text-muted-foreground'>
+          Confirmation required: {action.confirmationCopy}
+        </p>
+      ) : null}
+      {action.disabledReason ? (
+        <p className='mt-2 text-xs text-muted-foreground'>
+          {action.disabledReason}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function BackupKeyManagementPanel() {
+  const status = secretsBrokerBackupKeyStatus
+
+  return (
+    <Card id='backup-key-management'>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle className='flex items-center gap-2'>
+              <FileKey2 className='size-4' /> Backup, restore, and key
+              management
+            </CardTitle>
+            <CardDescription>
+              Safe operator view for encrypted backup status, restore readiness,
+              portable master-key posture, and key rotation actions. Metadata
+              only: raw secret values and key material are never rendered.
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Badge variant={backupStateVariant[status.backup.state]}>
+              {backupStateCopy[status.backup.state]}
+            </Badge>
+            <Badge variant={rotationStateVariant[status.key.state]}>
+              {rotationStateCopy[status.key.state]}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <div className='rounded-lg border p-4 text-sm'>
+            <div className='mb-2 flex items-center gap-2 font-medium'>
+              <ClipboardCheck className='size-4' /> Backup status
+            </div>
+            <div className='grid gap-3 sm:grid-cols-2'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Last backup
+                </div>
+                <div>{status.backup.lastBackupAt ?? 'not available'}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Artifact
+                </div>
+                <div>{status.backup.artifact}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Storage location
+                </div>
+                <div>{status.backup.location}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Restore readiness
+                </div>
+                <div>{status.backup.restoreReadiness}</div>
+                <div className='text-xs text-muted-foreground'>
+                  verified {status.backup.restoreLastVerifiedAt ?? 'never'}
+                </div>
+              </div>
+            </div>
+            {status.backup.warning ? (
+              <div className='mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive'>
+                {status.backup.warning}
+              </div>
+            ) : null}
+          </div>
+
+          <div className='rounded-lg border p-4 text-sm'>
+            <div className='mb-2 flex items-center gap-2 font-medium'>
+              <KeyRound className='size-4' /> Portable master-key status
+            </div>
+            <div className='grid gap-3 sm:grid-cols-2'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Key version
+                </div>
+                <div>{status.key.keyVersion}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Key id
+                </div>
+                <div>{status.key.keyId}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Rotation status
+                </div>
+                <div>{status.key.rotationStatus}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Recovery material
+                </div>
+                <div>{status.key.recoveryMaterial}</div>
+              </div>
+            </div>
+            {status.key.warning ? (
+              <div className='mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive'>
+                {status.key.warning}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+          {status.actions.map((action) => (
+            <BackupKeyActionButton key={action.id} action={action} />
+          ))}
+        </div>
+
+        <div className='rounded-lg border p-4 text-sm'>
+          <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+            <div className='font-medium'>Recent backup/key audit metadata</div>
+            <Badge variant='secondary'>No values or key material</Badge>
+          </div>
+          <div className='grid gap-3 lg:grid-cols-3'>
+            {status.audit.map((event) => (
+              <div key={event.id} className='rounded-md bg-muted/40 p-3'>
+                <div className='font-medium'>{event.operation}</div>
+                <div className='text-xs text-muted-foreground'>
+                  {event.at} · {event.outcome}
+                </div>
+                <div className='mt-2'>{event.metadata}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 function SourceIcon({ source }: { source: WizardSource }) {
   if (source.id === 'local-vault') return <LockKeyhole className='size-4' />
@@ -1165,6 +1375,8 @@ export function SecretsBrokerSetupWizard() {
             </CardContent>
           </Card>
         </div>
+
+        <BackupKeyManagementPanel />
 
         <Card id='secret-sources'>
           <CardHeader>
