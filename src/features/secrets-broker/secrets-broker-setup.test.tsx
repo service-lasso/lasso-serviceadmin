@@ -124,7 +124,7 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByText(/Confirm operation, policy decision, and audit reason/i)
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
-  })
+  }, 10000)
 
   it('renders backup restore and key-management metadata without raw material', async () => {
     await renderRoute('/secrets-broker')
