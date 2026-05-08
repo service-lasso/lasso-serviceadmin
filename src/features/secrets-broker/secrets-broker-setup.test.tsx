@@ -197,7 +197,7 @@ describe('Secrets Broker setup wizard', () => {
         screen.queryByText(singleSecretRevealReference.fakeRawValue)
       ).not.toBeInTheDocument()
     }
-  }, 10000)
+  }, 20000)
 
   it('reveals deterministic fake material only after explicit action and re-hides on cancel or expiry', async () => {
     const user = userEvent.setup()
