@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -19,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -34,6 +36,11 @@ import {
   type SecretsBrokerProviderLifecycleStatus,
   type SecretsBrokerSecretMaterialState,
 } from './provider-connections'
+import {
+  buildSingleConnectionRotationPlan,
+  singleConnectionWorkflowStates,
+  type SingleConnectionWorkflowState,
+} from './single-connection-rotation'
 
 const connectionStateCopy: Record<
   SecretsBrokerProviderConnectionState,
@@ -156,6 +163,181 @@ function MetadataGrid({
         </div>
       ))}
     </div>
+  )
+}
+
+function SingleConnectionEditRotationWorkflow({
+  connection,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+}) {
+  const [workflowState, setWorkflowState] =
+    useState<SingleConnectionWorkflowState>('dry-run-ready')
+  const [auditReason, setAuditReason] = useState('')
+  const [confirmedConnectionId, setConfirmedConnectionId] = useState('')
+  const [cancelled, setCancelled] = useState(false)
+
+  const plan = useMemo(
+    () =>
+      buildSingleConnectionRotationPlan(
+        connection,
+        cancelled ? 'cancelled' : workflowState
+      ),
+    [cancelled, connection, workflowState]
+  )
+  const applyReady =
+    plan.applyEnabled &&
+    auditReason.trim().length > 0 &&
+    confirmedConnectionId === connection.id
+
+  return (
+    <Card id='single-connection-edit-rotation'>
+      <CardHeader>
+        <CardTitle>Single-connection edit and rotation workflow</CardTitle>
+        <CardDescription>
+          Focused dry-run/preview/apply surface for one provider connection.
+          Bulk mutation is intentionally out of scope for #81.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-4 lg:grid-cols-3'>
+          <div className='space-y-2'>
+            <label
+              htmlFor='single-connection-workflow-state'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Workflow state
+            </label>
+            <select
+              id='single-connection-workflow-state'
+              className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+              value={workflowState}
+              onChange={(event) => {
+                setCancelled(false)
+                setWorkflowState(
+                  event.target.value as SingleConnectionWorkflowState
+                )
+              }}
+            >
+              {singleConnectionWorkflowStates.map((state) => (
+                <option key={state.value} value={state.value}>
+                  {state.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className='space-y-2'>
+            <label
+              htmlFor='single-connection-audit-reason'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Audit reason
+            </label>
+            <Input
+              id='single-connection-audit-reason'
+              value={auditReason}
+              onChange={(event) => setAuditReason(event.target.value)}
+              placeholder='Required before apply'
+            />
+          </div>
+          <div className='space-y-2'>
+            <label
+              htmlFor='single-connection-confirmation'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Confirm connection id
+            </label>
+            <Input
+              id='single-connection-confirmation'
+              value={confirmedConnectionId}
+              onChange={(event) => setConfirmedConnectionId(event.target.value)}
+              placeholder={connection.id}
+            />
+          </div>
+        </div>
+
+        <div className='rounded-lg border p-3 text-sm'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Badge variant='secondary'>{plan.outcome}</Badge>
+            <Badge variant='outline'>Operation {plan.operationId}</Badge>
+            <Badge variant='outline'>Raw values hidden</Badge>
+          </div>
+          <div className='mt-3 font-medium'>{plan.title}</div>
+          <p className='mt-1 text-muted-foreground'>{plan.status}</p>
+          <div className='mt-3 grid gap-2 md:grid-cols-2'>
+            <div>
+              <span className='text-muted-foreground'>Connection:</span>{' '}
+              {plan.connectionId}
+            </div>
+            <div>
+              <span className='text-muted-foreground'>Ref:</span>{' '}
+              {plan.connectionRef}
+            </div>
+            <div>
+              <span className='text-muted-foreground'>Next action:</span>{' '}
+              {plan.nextAction}
+            </div>
+            <div>
+              <span className='text-muted-foreground'>Recovery:</span>{' '}
+              {plan.recovery}
+            </div>
+          </div>
+        </div>
+
+        <div className='space-y-2'>
+          {plan.changes.map((change) => (
+            <div
+              key={`${plan.state}-${change.field}`}
+              className='grid gap-2 rounded-lg border p-3 text-sm lg:grid-cols-[1fr_1fr_auto]'
+            >
+              <div>
+                <div className='font-medium'>{change.field}</div>
+                <div className='break-all text-muted-foreground'>
+                  Current: {change.current}
+                </div>
+                <div className='break-all text-muted-foreground'>
+                  Proposed: {change.proposed}
+                </div>
+              </div>
+              <div>
+                <div>Policy: {change.policy}</div>
+                <div>Risk: {change.risk}</div>
+                <div>Status: {change.status}</div>
+              </div>
+              <Badge
+                variant={
+                  change.status === 'blocked' || change.status === 'failed'
+                    ? 'destructive'
+                    : change.status === 'applied'
+                      ? 'default'
+                      : 'secondary'
+                }
+              >
+                {change.status}
+              </Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className='flex flex-wrap gap-2'>
+          <Button type='button' disabled={!applyReady}>
+            {applyReady
+              ? 'Apply single-connection rotation'
+              : 'Apply blocked until dry-run, audit reason, and exact connection confirmation'}
+          </Button>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => setCancelled(true)}
+          >
+            Cancel operation
+          </Button>
+          <Badge variant='secondary'>Dry-run before apply</Badge>
+          <Badge variant='outline'>Audit required</Badge>
+          <Badge variant='outline'>No bulk mutation</Badge>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -541,6 +723,8 @@ export function SecretsBrokerProviderConnectionDetailPage({
             ))}
           </CardContent>
         </Card>
+
+        <SingleConnectionEditRotationWorkflow connection={connection} />
 
         <Card>
           <CardHeader>
