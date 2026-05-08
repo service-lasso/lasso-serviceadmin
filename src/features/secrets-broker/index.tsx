@@ -58,6 +58,11 @@ import {
   buildSecretsBrokerTopology,
   toReactFlowSecretsBrokerTopology,
 } from './topology'
+import {
+  countWorkflowRefStatuses,
+  workflowAuthoringBoundaries,
+  type WorkflowSecretRefStatus,
+} from './workflow-authoring'
 
 type WizardSource = {
   id: string
@@ -428,6 +433,23 @@ const providerConnectionProviders = Array.from(
     secretsBrokerProviderConnections.map((connection) => connection.provider)
   )
 )
+
+const workflowRefStatusCopy: Record<WorkflowSecretRefStatus, string> = {
+  valid: 'Valid',
+  missing: 'Missing',
+  denied: 'Denied',
+  warning: 'Needs retest',
+}
+
+const workflowRefStatusVariant: Record<
+  WorkflowSecretRefStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  valid: 'default',
+  missing: 'destructive',
+  denied: 'destructive',
+  warning: 'secondary',
+}
 
 function filterProviderConnections(
   connections: SecretsBrokerProviderConnectionDetail[],
@@ -828,6 +850,9 @@ export function SecretsBrokerSetupWizard() {
   const [connectionQueryFilter, setConnectionQueryFilter] = useState('')
   const [overviewScenarioId, setOverviewScenarioId] =
     useState<SecretsBrokerOverviewState>('healthy')
+  const [selectedWorkflowBoundaryId, setSelectedWorkflowBoundaryId] = useState(
+    workflowAuthoringBoundaries[0].id
+  )
   const brokerOverview =
     brokerOverviewScenarios.find(
       (scenario) => scenario.id === overviewScenarioId
@@ -861,6 +886,18 @@ export function SecretsBrokerSetupWizard() {
     secretsBrokerProviderConnections.filter((connection) =>
       ['degraded', 'failed', 'missing'].includes(connection.state)
     ).length
+  const selectedWorkflowBoundary =
+    workflowAuthoringBoundaries.find(
+      (workflow) => workflow.id === selectedWorkflowBoundaryId
+    ) ?? workflowAuthoringBoundaries[0]
+  const workflowRefCounts = countWorkflowRefStatuses()
+  const workflowRefsNeedingAction =
+    workflowRefCounts.denied +
+    workflowRefCounts.missing +
+    workflowRefCounts.warning
+  const selectedWorkflowBlocksSave = selectedWorkflowBoundary.refs.some((ref) =>
+    ['denied', 'missing'].includes(ref.status)
+  )
   const filteredAuditEvents = useMemo(
     () =>
       filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
@@ -1393,6 +1430,196 @@ export function SecretsBrokerSetupWizard() {
                 </table>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card id='workflow-authoring-boundary'>
+          <CardHeader>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <TerminalSquare className='size-4' /> Workflow authoring
+                  boundary
+                </CardTitle>
+                <CardDescription>
+                  Metadata-only guidance for authors wiring Secrets Broker refs
+                  into workflows. This panel validates refs and generates safe
+                  snippets without becoming a Dagu editor or resolving secret
+                  values.
+                </CardDescription>
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <Badge variant='secondary'>No Dagu editor</Badge>
+                <Badge variant='outline'>SecretRefs only</Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-3 md:grid-cols-4'>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Workflows</div>
+                <div className='text-2xl font-bold'>
+                  {workflowAuthoringBoundaries.length}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Valid refs</div>
+                <div className='text-2xl font-bold'>
+                  {workflowRefCounts.valid}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>Need action</div>
+                <div className='text-2xl font-bold'>
+                  {workflowRefsNeedingAction}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs text-muted-foreground'>
+                  Value policy
+                </div>
+                <div className='mt-1'>metadata-only validation</div>
+              </div>
+            </div>
+
+            <div className='grid gap-4 lg:grid-cols-[0.9fr_1.1fr]'>
+              <div className='space-y-3'>
+                <div>
+                  <label
+                    htmlFor='workflow-authoring-scenario'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Authoring scenario
+                  </label>
+                  <select
+                    id='workflow-authoring-scenario'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={selectedWorkflowBoundaryId}
+                    onChange={(event) =>
+                      setSelectedWorkflowBoundaryId(event.target.value)
+                    }
+                  >
+                    {workflowAuthoringBoundaries.map((workflow) => (
+                      <option key={workflow.id} value={workflow.id}>
+                        {workflow.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className='rounded-lg border p-4 text-sm'>
+                  <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
+                    <div>
+                      <div className='font-medium'>
+                        {selectedWorkflowBoundary.title}
+                      </div>
+                      <div className='text-xs text-muted-foreground'>
+                        {selectedWorkflowBoundary.owner} ·{' '}
+                        {selectedWorkflowBoundary.targetRuntime}
+                      </div>
+                    </div>
+                    <Badge
+                      variant={
+                        selectedWorkflowBoundary.status === 'ready'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                    >
+                      {selectedWorkflowBoundary.status === 'ready'
+                        ? 'Ready to save'
+                        : 'Needs action'}
+                    </Badge>
+                  </div>
+                  <p className='text-muted-foreground'>
+                    {selectedWorkflowBoundary.summary}
+                  </p>
+                  {selectedWorkflowBlocksSave ? (
+                    <div className='mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive'>
+                      Missing or denied refs should block save/run handoff until
+                      policy and metadata issues are resolved.
+                    </div>
+                  ) : (
+                    <div className='mt-3 rounded-md border p-3 text-muted-foreground'>
+                      Ref checks are metadata-valid. Continue to provider tests
+                      before any execution handoff.
+                    </div>
+                  )}
+                </div>
+
+                <div className='rounded-lg border p-4 text-sm'>
+                  <div className='font-medium'>Boundary guardrails</div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {selectedWorkflowBoundary.guardrails.map((guardrail) => (
+                      <li key={guardrail}>{guardrail}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className='space-y-4'>
+                <div className='overflow-x-auto rounded-lg border'>
+                  <table className='w-full text-sm'>
+                    <thead className='bg-muted/50 text-left'>
+                      <tr>
+                        <th className='p-3 font-medium'>SecretRef</th>
+                        <th className='p-3 font-medium'>Provider</th>
+                        <th className='p-3 font-medium'>Status</th>
+                        <th className='p-3 font-medium'>Save/run guidance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedWorkflowBoundary.refs.map((ref) => (
+                        <tr key={ref.id} className='border-t align-top'>
+                          <td className='p-3'>
+                            <div className='font-medium'>{ref.label}</div>
+                            <div className='font-mono text-xs break-all text-muted-foreground'>
+                              {ref.ref}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <div>{ref.provider}</div>
+                            <div className='text-xs text-muted-foreground'>
+                              {ref.connection}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <Badge
+                              variant={workflowRefStatusVariant[ref.status]}
+                            >
+                              {workflowRefStatusCopy[ref.status]}
+                            </Badge>
+                            <div className='mt-2 text-xs text-muted-foreground'>
+                              {ref.policyDecision}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <div>{ref.message}</div>
+                            <div className='mt-1 text-xs text-muted-foreground'>
+                              {ref.suggestedFix}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className='rounded-lg border p-4'>
+                  <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
+                    <div className='font-medium'>Generated safe snippet</div>
+                    <Badge variant='secondary'>values hidden</Badge>
+                  </div>
+                  <pre className='overflow-x-auto rounded-md bg-muted/60 p-3 text-xs'>
+                    {selectedWorkflowBoundary.snippet}
+                  </pre>
+                  <p className='mt-2 text-xs text-muted-foreground'>
+                    Snippets are authoring aids only. They contain SecretRef
+                    identifiers and validation flags, never resolved/plaintext
+                    secret values or raw provider command output.
+                  </p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
