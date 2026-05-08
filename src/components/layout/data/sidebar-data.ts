@@ -4,6 +4,7 @@ import {
   GitBranch,
   Globe,
   KeyRound,
+  LockKeyhole,
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
@@ -71,6 +72,11 @@ export const sidebarData: SidebarData = {
           title: 'Secrets Broker',
           url: '/secrets-broker',
           icon: KeyRound,
+        },
+        {
+          title: 'ZITADEL Session',
+          url: '/auth-session',
+          icon: LockKeyhole,
         },
         {
           title: 'Network',

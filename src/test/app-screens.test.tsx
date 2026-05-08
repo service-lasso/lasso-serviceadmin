@@ -54,6 +54,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Setup',
   },
   {
+    path: '/auth-session',
+    heading: /^ZITADEL session and roles$/i,
+    title: 'Service Admin - ZITADEL Session',
+  },
+  {
     path: '/network',
     heading: /^Network$/i,
     title: 'Service Admin - Network',

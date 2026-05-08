@@ -38,6 +38,7 @@ import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
 import { Route as AuthenticatedDependenciesIndexRouteImport } from './routes/_authenticated/dependencies/index'
 import { Route as AuthenticatedChatsIndexRouteImport } from './routes/_authenticated/chats/index'
+import { Route as AuthenticatedAuthSessionIndexRouteImport } from './routes/_authenticated/auth-session/index'
 import { Route as AuthenticatedAppsIndexRouteImport } from './routes/_authenticated/apps/index'
 import { Route as ClerkAuthenticatedUserManagementRouteImport } from './routes/clerk/_authenticated/user-management'
 import { Route as ClerkauthSignUpRouteImport } from './routes/clerk/(auth)/sign-up'
@@ -202,6 +203,12 @@ const AuthenticatedChatsIndexRoute = AuthenticatedChatsIndexRouteImport.update({
   path: '/chats/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAuthSessionIndexRoute =
+  AuthenticatedAuthSessionIndexRouteImport.update({
+    id: '/auth-session/',
+    path: '/auth-session/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAppsIndexRoute = AuthenticatedAppsIndexRouteImport.update({
   id: '/apps/',
   path: '/apps/',
@@ -291,6 +298,7 @@ export interface FileRoutesByFullPath {
   '/clerk/sign-up': typeof ClerkauthSignUpRoute
   '/clerk/user-management': typeof ClerkAuthenticatedUserManagementRoute
   '/apps/': typeof AuthenticatedAppsIndexRoute
+  '/auth-session/': typeof AuthenticatedAuthSessionIndexRoute
   '/chats/': typeof AuthenticatedChatsIndexRoute
   '/dependencies/': typeof AuthenticatedDependenciesIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
@@ -329,6 +337,7 @@ export interface FileRoutesByTo {
   '/clerk/sign-up': typeof ClerkauthSignUpRoute
   '/clerk/user-management': typeof ClerkAuthenticatedUserManagementRoute
   '/apps': typeof AuthenticatedAppsIndexRoute
+  '/auth-session': typeof AuthenticatedAuthSessionIndexRoute
   '/chats': typeof AuthenticatedChatsIndexRoute
   '/dependencies': typeof AuthenticatedDependenciesIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
@@ -372,6 +381,7 @@ export interface FileRoutesById {
   '/clerk/(auth)/sign-up': typeof ClerkauthSignUpRoute
   '/clerk/_authenticated/user-management': typeof ClerkAuthenticatedUserManagementRoute
   '/_authenticated/apps/': typeof AuthenticatedAppsIndexRoute
+  '/_authenticated/auth-session/': typeof AuthenticatedAuthSessionIndexRoute
   '/_authenticated/chats/': typeof AuthenticatedChatsIndexRoute
   '/_authenticated/dependencies/': typeof AuthenticatedDependenciesIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
@@ -413,6 +423,7 @@ export interface FileRouteTypes {
     | '/clerk/sign-up'
     | '/clerk/user-management'
     | '/apps/'
+    | '/auth-session/'
     | '/chats/'
     | '/dependencies/'
     | '/help-center/'
@@ -451,6 +462,7 @@ export interface FileRouteTypes {
     | '/clerk/sign-up'
     | '/clerk/user-management'
     | '/apps'
+    | '/auth-session'
     | '/chats'
     | '/dependencies'
     | '/help-center'
@@ -493,6 +505,7 @@ export interface FileRouteTypes {
     | '/clerk/(auth)/sign-up'
     | '/clerk/_authenticated/user-management'
     | '/_authenticated/apps/'
+    | '/_authenticated/auth-session/'
     | '/_authenticated/chats/'
     | '/_authenticated/dependencies/'
     | '/_authenticated/help-center/'
@@ -728,6 +741,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/auth-session/': {
+      id: '/_authenticated/auth-session/'
+      path: '/auth-session'
+      fullPath: '/auth-session/'
+      preLoaderRoute: typeof AuthenticatedAuthSessionIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/apps/': {
       id: '/_authenticated/apps/'
       path: '/apps'
@@ -838,6 +858,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSecretsBrokerConnectionIdRoute: typeof AuthenticatedSecretsBrokerConnectionIdRoute
   AuthenticatedServicesServiceIdRoute: typeof AuthenticatedServicesServiceIdRoute
   AuthenticatedAppsIndexRoute: typeof AuthenticatedAppsIndexRoute
+  AuthenticatedAuthSessionIndexRoute: typeof AuthenticatedAuthSessionIndexRoute
   AuthenticatedChatsIndexRoute: typeof AuthenticatedChatsIndexRoute
   AuthenticatedDependenciesIndexRoute: typeof AuthenticatedDependenciesIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
@@ -860,6 +881,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedSecretsBrokerConnectionIdRoute,
   AuthenticatedServicesServiceIdRoute: AuthenticatedServicesServiceIdRoute,
   AuthenticatedAppsIndexRoute: AuthenticatedAppsIndexRoute,
+  AuthenticatedAuthSessionIndexRoute: AuthenticatedAuthSessionIndexRoute,
   AuthenticatedChatsIndexRoute: AuthenticatedChatsIndexRoute,
   AuthenticatedDependenciesIndexRoute: AuthenticatedDependenciesIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
