@@ -1,4 +1,9 @@
 import { renderRoute } from '@/test/render-route'
+import {
+  assertNoSecretMaterial,
+  collectBrowserLeakSurfaces,
+  serviceLassoSecretLeakSentinels,
+} from '@/test/secret-leak-harness'
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
@@ -57,6 +62,12 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Raw output scrubbed/i)).toBeVisible()
     expect(screen.queryByText('supersecret')).not.toBeInTheDocument()
     expect(screen.queryByText('plaintext secret')).not.toBeInTheDocument()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+    expect(() =>
+      assertNoSecretMaterial({
+        fixture: serviceLassoSecretLeakSentinels[0].value,
+      })
+    ).toThrow(/Secret material leak detected/)
   })
 
   it('renders broker overview healthy degraded offline and unconfigured states', async () => {
