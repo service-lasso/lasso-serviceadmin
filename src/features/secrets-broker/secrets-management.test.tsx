@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
+  buildStubSecretMutationPreview,
   filterManagedSecrets,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
@@ -19,7 +20,11 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/Secrets Broker management table/i)).toBeVisible()
     expect(screen.getByText(/Visible values/i)).toBeVisible()
-    expect(screen.getByText(/Metadata table · values hidden/i)).toBeVisible()
+    expect(screen.getByText(/Stub preview · values hidden/i)).toBeVisible()
+    expect(
+      screen.getByText(/Stub update\/reset\/reveal API preview/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Stub API · preview only/i)[0]).toBeVisible()
     expect(screen.getAllByText(/SESSION_SIGNING_KEY/i)[0]).toBeVisible()
     expect(screen.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
     expect(screen.getAllByText(/Controlled reveal/i)[0]).toBeVisible()
@@ -116,6 +121,74 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeDisabled()
   })
 
+  it('covers stub update reset reveal preview states and gated apply readiness', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    expect(
+      screen.getByText(/Stub update\/reset\/reveal API preview/i)
+    ).toBeVisible()
+    expect(screen.getByText(/audit reason required/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    ).toBeDisabled()
+
+    await user.type(
+      screen.getByLabelText(/Audit reason for stub preview/i),
+      'operator requested rotation preview'
+    )
+    await user.click(screen.getByLabelText(/I confirm this is a stub preview/i))
+    expect(screen.getByText(/Stub apply can be simulated/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    ).toBeEnabled()
+
+    await user.selectOptions(screen.getByLabelText(/Stub API state/i), 'denied')
+    expect(screen.getAllByText(/Policy denied/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/operator lacks single-secret mutation entitlement/i)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    ).toBeDisabled()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Stub API state/i),
+      'auth-required'
+    )
+    expect(screen.getAllByText(/Auth required/i)[0]).toBeVisible()
+    expect(screen.getByText(/fresh operator authentication/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Stub API state/i),
+      'unavailable'
+    )
+    expect(screen.getAllByText(/Broker unavailable/i)[0]).toBeVisible()
+    expect(screen.getByText(/failed closed/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Stub API state/i),
+      'success'
+    )
+    expect(screen.getAllByText(/Stub apply success/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/deterministic fake apply completed/i)
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Stub API state/i),
+      'failure'
+    )
+    expect(screen.getAllByText(/Stub apply failure/i)[0]).toBeVisible()
+    expect(screen.getByText(/deterministic fake apply failed/i)).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', { name: /Cancel stub preview/i })
+    )
+    expect(screen.getAllByText(/Cancelled/i)[0]).toBeVisible()
+    expect(screen.getByText(/cancelled by operator/i)).toBeVisible()
+  })
+
   it('keeps fixtures and modeled safe surfaces free of secret material', () => {
     expect(managedSecretsHaveSecretMaterial()).toBe(false)
     expect(managedSecretSafeSurfacesIncludeSecretMaterial()).toBe(false)
@@ -128,5 +201,23 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       valueSearchManagedSecrets(managedSecretRows, 'session', true)
     ).toHaveLength(1)
+    expect(
+      buildStubSecretMutationPreview(
+        managedSecretRows[0],
+        'edit',
+        'ready',
+        'operator requested safe preview',
+        true
+      ).canApply
+    ).toBe(true)
+    expect(
+      buildStubSecretMutationPreview(
+        managedSecretRows[0],
+        'edit',
+        'denied',
+        'operator requested safe preview',
+        true
+      ).canApply
+    ).toBe(false)
   })
 })

@@ -136,9 +136,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await page.goto('/secrets-broker/secrets')
     await expectNoBlankScreen(page)
     await expect(page.getByRole('heading', { name: /^Secrets$/ })).toBeVisible()
-    await expect(
-      page.getByText(/Metadata table · values hidden/i)
-    ).toBeVisible()
+    await expect(page.getByText(/Stub preview · values hidden/i)).toBeVisible()
     await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
     await expect(page.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
 
@@ -154,6 +152,9 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/Value search supported: 1 safe ref metadata match/i)
     ).toBeVisible()
+
+    await page.getByLabel(/Metadata search/i).fill('')
+    await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
 
     await page
       .getByRole('button', { name: /Controlled reveal/i })
@@ -172,6 +173,29 @@ test.describe('Secrets Broker browser coverage', () => {
         name: /Apply disabled until dry-run preview is accepted/i,
       })
     ).toBeDisabled()
+
+    await expect(
+      page.getByText(/Stub update\/reset\/reveal API preview/i)
+    ).toBeVisible()
+    await expect(page.getByText(/audit reason required/i)).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: /Simulate stub apply/i })
+    ).toBeDisabled()
+    await page
+      .getByLabel(/Audit reason for stub preview/i)
+      .fill('operator requested preview')
+    await page.getByLabel(/I confirm this is a stub preview/i).check()
+    await expect(page.getByText(/Stub apply can be simulated/i)).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: /Simulate stub apply/i })
+    ).toBeEnabled()
+    await page.getByLabel(/Stub API state/i).selectOption('success')
+    await expect(page.getByText(/Stub apply success/i).last()).toBeVisible()
+    await page.getByLabel(/Stub API state/i).selectOption('failure')
+    await expect(page.getByText(/Stub apply failure/i).last()).toBeVisible()
+    await page.getByRole('button', { name: /Cancel stub preview/i }).click()
+    await expect(page.getByText(/cancelled by operator/i)).toBeVisible()
+
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
