@@ -35,12 +35,15 @@ import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
   buildManagedSecretActionPreview,
+  buildStubSecretMutationPreview,
   filterManagedSecrets,
   managedSecretRows,
   managedSecretSafetyBoundaries,
+  stubSecretMutationStates,
   valueSearchManagedSecrets,
   type ManagedSecretAction,
   type ManagedSecretState,
+  type StubSecretMutationState,
 } from './secrets-management'
 
 const stateVariant: Record<
@@ -63,6 +66,9 @@ export function SecretsManagementPage() {
   const [selectedRowId, setSelectedRowId] = useState(managedSecretRows[0].id)
   const [selectedAction, setSelectedAction] =
     useState<ManagedSecretAction>('metadata')
+  const [stubState, setStubState] = useState<StubSecretMutationState>('ready')
+  const [auditReason, setAuditReason] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
 
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Secrets',
@@ -89,6 +95,15 @@ export function SecretsManagementPage() {
   const actionPreview = buildManagedSecretActionPreview(
     selectedRow,
     selectedAction
+  )
+  const stubMutationPreview = buildStubSecretMutationPreview(
+    selectedRow,
+    selectedAction === 'metadata' || selectedAction === 'policy'
+      ? 'edit'
+      : selectedAction,
+    stubState,
+    auditReason,
+    confirmed
   )
 
   function chooseAction(rowId: string, action: ManagedSecretAction) {
@@ -119,7 +134,7 @@ export function SecretsManagementPage() {
               Rows never render raw secret values.
             </p>
           </div>
-          <Badge variant='secondary'>Metadata table · values hidden</Badge>
+          <Badge variant='secondary'>Stub preview · values hidden</Badge>
         </div>
 
         <Alert>
@@ -130,7 +145,8 @@ export function SecretsManagementPage() {
             Broker-backed value search, when supported, returns matching
             refs/metadata only. Reveal delegates to the audited #38 pattern;
             edit, reset, and policy changes require dry-run/preview before
-            apply.
+            apply. The mutation API on this page is stubbed preview behavior
+            until the production Secrets Broker contract lands.
           </AlertDescription>
         </Alert>
 
@@ -419,6 +435,150 @@ export function SecretsManagementPage() {
               <Badge variant='secondary'>Raw values hidden</Badge>
               <Badge variant='outline'>No copy/export</Badge>
               <Badge variant='outline'>No bulk mutation</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Stub update/reset/reveal API preview</CardTitle>
+            <CardDescription>
+              Deterministic non-production status model for a single selected
+              secret. This previews the operator flow only; no secret material
+              is read, written, copied, exported, logged, or displayed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4 text-sm'>
+            <div className='grid gap-4 lg:grid-cols-3'>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Selected ref
+                </div>
+                <div className='mt-1 font-medium break-all'>
+                  {selectedRow.ref}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <label
+                  htmlFor='stub-state'
+                  className='text-xs font-medium text-muted-foreground uppercase'
+                >
+                  Stub API state
+                </label>
+                <select
+                  id='stub-state'
+                  className='mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={stubState}
+                  onChange={(event) =>
+                    setStubState(event.target.value as StubSecretMutationState)
+                  }
+                >
+                  {stubSecretMutationStates.map((state) => (
+                    <option key={state.id} value={state.id}>
+                      {state.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Apply readiness
+                </div>
+                <Badge
+                  className='mt-2'
+                  variant={
+                    stubMutationPreview.canApply ? 'default' : 'secondary'
+                  }
+                >
+                  {stubMutationPreview.canApply
+                    ? 'Stub apply can be simulated'
+                    : 'Stub apply blocked'}
+                </Badge>
+              </div>
+            </div>
+
+            <div className='grid gap-4 lg:grid-cols-2'>
+              <div className='space-y-2'>
+                <label
+                  htmlFor='audit-reason'
+                  className='text-sm font-medium text-muted-foreground'
+                >
+                  Audit reason for stub preview
+                </label>
+                <Input
+                  id='audit-reason'
+                  value={auditReason}
+                  onChange={(event) => setAuditReason(event.target.value)}
+                  placeholder='Required before simulated apply; no secret values'
+                />
+                <label className='flex items-center gap-2 text-sm'>
+                  <input
+                    type='checkbox'
+                    checked={confirmed}
+                    onChange={(event) => setConfirmed(event.target.checked)}
+                  />
+                  I confirm this is a stub preview and no production mutation
+                  will be performed.
+                </label>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='mb-2 flex flex-wrap items-center gap-2'>
+                  <Badge variant='outline'>{stubMutationPreview.badge}</Badge>
+                  <Badge variant='secondary'>Stub API · preview only</Badge>
+                </div>
+                <div className='font-medium'>{stubMutationPreview.title}</div>
+                <dl className='mt-3 grid gap-2 text-sm'>
+                  <div>
+                    <dt className='text-muted-foreground'>Dry-run status</dt>
+                    <dd>{stubMutationPreview.dryRunStatus}</dd>
+                  </div>
+                  <div>
+                    <dt className='text-muted-foreground'>Apply status</dt>
+                    <dd>{stubMutationPreview.applyStatus}</dd>
+                  </div>
+                  <div>
+                    <dt className='text-muted-foreground'>Policy decision</dt>
+                    <dd>{stubMutationPreview.policyDecision}</dd>
+                  </div>
+                  <div>
+                    <dt className='text-muted-foreground'>Audit requirement</dt>
+                    <dd>{stubMutationPreview.auditRequirement}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            <div className='rounded-lg border p-3'>
+              <div className='text-xs font-medium text-muted-foreground uppercase'>
+                Metadata-only dry-run diff
+              </div>
+              <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                {stubMutationPreview.safeDiff.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <div className='mt-3 rounded-md border bg-muted/40 p-3'>
+                {stubMutationPreview.nextStep}
+              </div>
+            </div>
+
+            <div className='flex flex-wrap gap-2'>
+              <Button type='button' disabled={!stubMutationPreview.canApply}>
+                Simulate stub apply
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => {
+                  setAuditReason('')
+                  setConfirmed(false)
+                  setStubState('cancelled')
+                }}
+              >
+                Cancel stub preview
+              </Button>
+              <Badge variant='outline'>No plaintext editing</Badge>
+              <Badge variant='outline'>Single-secret only</Badge>
             </div>
           </CardContent>
         </Card>
