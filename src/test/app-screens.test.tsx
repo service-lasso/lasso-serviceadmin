@@ -70,8 +70,8 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/auth-session',
-    heading: /^ZITADEL session and roles$/i,
-    title: 'Service Admin - ZITADEL Session',
+    heading: /^Trusted SSO identity context$/i,
+    title: 'Service Admin - Trusted SSO Identity',
   },
   {
     path: '/support-bundle',

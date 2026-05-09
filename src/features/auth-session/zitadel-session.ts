@@ -1,22 +1,32 @@
-export type ZitadelSessionState =
-  | 'signed-in'
-  | 'signed-out'
-  | 'setup-needed'
-  | 'permission-denied'
+export type TrustedIdentityState =
+  | 'authenticated'
+  | 'unauthenticated'
+  | 'expired'
+  | 'forbidden'
+  | 'workspace-mismatch'
+  | 'invalid'
 
-export type ZitadelPermissionDecision = 'allowed' | 'denied' | 'review'
+export type TrustedIdentityDecision = 'allowed' | 'denied' | 'review'
 
-export type ZitadelSessionScenario = {
+export type TrustedIdentityScenario = {
   id: string
   label: string
-  state: ZitadelSessionState
+  state: TrustedIdentityState
   summary: string
-  facade: {
+  identityContext: {
     workspaceId: string
     appId: string
     authProvider: 'zitadel' | 'not-configured'
+    deliveryBoundary: 'traefik-oidc-auth'
     sessionMode: string
     metadataUpdatedAt: string
+    trustStatus:
+      | 'trusted'
+      | 'missing'
+      | 'expired'
+      | 'denied'
+      | 'mismatch'
+      | 'invalid'
   }
   user?: {
     displayName: string
@@ -25,36 +35,52 @@ export type ZitadelSessionScenario = {
     organizationRef: string
     workspaceRole: string
   }
+  auditActor: {
+    kind: 'user' | 'anonymous' | 'denied-user'
+    id: string
+    label: string
+    workspaceId: string
+    source: 'trusted-route-boundary' | 'none'
+  }
   roles: string[]
   permissions: Array<{
     scope: string
-    decision: ZitadelPermissionDecision
+    decision: TrustedIdentityDecision
     reason: string
   }>
   requiredAction: string
   guardrails: string[]
 }
 
-export const zitadelSessionScenarios: ZitadelSessionScenario[] = [
+export const trustedIdentityScenarios: TrustedIdentityScenario[] = [
   {
-    id: 'signed-in-admin',
-    label: 'Signed-in admin',
-    state: 'signed-in',
+    id: 'authenticated-admin',
+    label: 'Authenticated admin',
+    state: 'authenticated',
     summary:
-      'Facade metadata reports an active ZITADEL-backed local session for this workspace.',
-    facade: {
+      'Trusted route-boundary metadata reports an active ZITADEL-backed user for this workspace.',
+    identityContext: {
       workspaceId: 'workspace:service-lasso/local-dev',
       appId: '@serviceadmin',
       authProvider: 'zitadel',
-      sessionMode: 'optional-auth-enabled',
-      metadataUpdatedAt: '2026-05-08T12:48:00Z',
+      deliveryBoundary: 'traefik-oidc-auth',
+      sessionMode: 'protected-route-authenticated',
+      metadataUpdatedAt: '2026-05-09T00:40:00Z',
+      trustStatus: 'trusted',
     },
     user: {
       displayName: 'Max Barrass',
-      email: 'max@service-lasso.local',
+      email: 'max@example.service-lasso.test',
       subjectRef: 'zitadel-subject://service-lasso/users/max',
       organizationRef: 'zitadel-org://service-lasso',
       workspaceRole: 'workspace-admin',
+    },
+    auditActor: {
+      kind: 'user',
+      id: 'audit-actor://zitadel/max',
+      label: 'Max Barrass via ZITADEL',
+      workspaceId: 'workspace:service-lasso/local-dev',
+      source: 'trusted-route-boundary',
     },
     roles: [
       'serviceadmin.viewer',
@@ -81,96 +107,125 @@ export const zitadelSessionScenarios: ZitadelSessionScenario[] = [
     requiredAction:
       'No login action required. Continue using metadata-only protected surfaces.',
     guardrails: [
-      'Session display is derived from facade metadata, not browser credential storage.',
+      'Identity display is derived from the protected route boundary, not browser credential storage.',
       'Subject and organization refs are stable identifiers, not bearer credentials.',
       'Denied sensitive permissions stay visible so operators know why an action is blocked.',
     ],
   },
   {
-    id: 'signed-out',
-    label: 'Signed out / login required',
-    state: 'signed-out',
+    id: 'unauthenticated',
+    label: 'Unauthenticated / login required',
+    state: 'unauthenticated',
     summary:
-      'ZITADEL is configured for this app, but no active local session metadata is available.',
-    facade: {
+      'The protected route did not provide trusted identity metadata for a signed-in user.',
+    identityContext: {
       workspaceId: 'workspace:service-lasso/local-dev',
       appId: '@serviceadmin',
       authProvider: 'zitadel',
+      deliveryBoundary: 'traefik-oidc-auth',
       sessionMode: 'login-required-for-protected-surfaces',
-      metadataUpdatedAt: '2026-05-08T12:49:00Z',
+      metadataUpdatedAt: '2026-05-09T00:41:00Z',
+      trustStatus: 'missing',
+    },
+    auditActor: {
+      kind: 'anonymous',
+      id: 'anonymous',
+      label: 'Unauthenticated request',
+      workspaceId: 'workspace:service-lasso/local-dev',
+      source: 'none',
     },
     roles: [],
     permissions: [
       {
         scope: 'serviceadmin:dashboard:read',
         decision: 'review',
-        reason: 'available after login handshake completes',
+        reason: 'available after the protected route login handshake completes',
       },
       {
         scope: 'serviceadmin:services:write',
         decision: 'denied',
-        reason: 'no active session metadata',
+        reason: 'no trusted identity metadata',
       },
     ],
     requiredAction:
-      'Start the ZITADEL login flow from the consumer app, then refresh session metadata.',
+      'Start the ZITADEL login flow through Traefik and traefik-oidc-auth, then retry the protected route.',
     guardrails: [
-      'Local development may continue without auth unless the app explicitly enables protected mode.',
-      'Login prompts should redirect through the consumer app facade, not store provider credentials in Service Admin.',
+      'Fail closed for protected surfaces when trusted identity metadata is absent.',
+      'Login prompts should redirect through the configured middleware and never collect provider credentials in Service Admin.',
     ],
   },
   {
-    id: 'setup-needed',
-    label: 'Setup needed',
-    state: 'setup-needed',
+    id: 'expired',
+    label: 'Expired session',
+    state: 'expired',
     summary:
-      'The consumer app has not enabled ZITADEL integration, so protected auth surfaces stay optional.',
-    facade: {
-      workspaceId: 'workspace:service-lasso/local-dev',
-      appId: '@serviceadmin',
-      authProvider: 'not-configured',
-      sessionMode: 'local-dev-open',
-      metadataUpdatedAt: '2026-05-08T12:50:00Z',
-    },
-    roles: ['local-dev-fallback'],
-    permissions: [
-      {
-        scope: 'serviceadmin:local-dev:read',
-        decision: 'allowed',
-        reason: 'auth integration is optional for local preview',
-      },
-      {
-        scope: 'serviceadmin:protected:write',
-        decision: 'review',
-        reason: 'requires consumer app/facade ZITADEL configuration',
-      },
-    ],
-    requiredAction:
-      'Configure the consumer app facade with ZITADEL issuer, client, and workspace mapping before enforcing auth.',
-    guardrails: [
-      'Do not force ZITADEL on existing local development flows without explicit app config.',
-      'Setup guidance references configuration metadata only and never asks operators to paste secrets into the UI.',
-    ],
-  },
-  {
-    id: 'permission-denied',
-    label: 'Permission denied',
-    state: 'permission-denied',
-    summary:
-      'The user is signed in, but the facade reports insufficient role grants for this protected surface.',
-    facade: {
+      'The route boundary reported identity metadata that is no longer valid for protected actions.',
+    identityContext: {
       workspaceId: 'workspace:service-lasso/local-dev',
       appId: '@serviceadmin',
       authProvider: 'zitadel',
+      deliveryBoundary: 'traefik-oidc-auth',
+      sessionMode: 'protected-route-expired',
+      metadataUpdatedAt: '2026-05-09T00:42:00Z',
+      trustStatus: 'expired',
+    },
+    user: {
+      displayName: 'Expired Operator',
+      email: 'expired@example.service-lasso.test',
+      subjectRef: 'zitadel-subject://service-lasso/users/expired-operator',
+      organizationRef: 'zitadel-org://service-lasso',
+      workspaceRole: 'workspace-operator',
+    },
+    auditActor: {
+      kind: 'denied-user',
+      id: 'audit-actor://zitadel/expired-operator',
+      label: 'Expired Operator (expired)',
+      workspaceId: 'workspace:service-lasso/local-dev',
+      source: 'trusted-route-boundary',
+    },
+    roles: ['serviceadmin.operator'],
+    permissions: [
+      {
+        scope: 'serviceadmin:services:read',
+        decision: 'denied',
+        reason: 'trusted identity context is expired',
+      },
+    ],
+    requiredAction:
+      'Re-authenticate through the protected route before continuing.',
+    guardrails: [
+      'Expired context is visible as state metadata only; session payloads are never rendered.',
+      'Protected actions remain blocked until fresh trusted metadata is supplied.',
+    ],
+  },
+  {
+    id: 'forbidden',
+    label: 'Forbidden role',
+    state: 'forbidden',
+    summary:
+      'The user is authenticated, but trusted route metadata does not grant this Service Admin surface.',
+    identityContext: {
+      workspaceId: 'workspace:service-lasso/local-dev',
+      appId: '@serviceadmin',
+      authProvider: 'zitadel',
+      deliveryBoundary: 'traefik-oidc-auth',
       sessionMode: 'protected-surface-denied',
-      metadataUpdatedAt: '2026-05-08T12:51:00Z',
+      metadataUpdatedAt: '2026-05-09T00:43:00Z',
+      trustStatus: 'denied',
     },
     user: {
       displayName: 'Readonly Operator',
-      email: 'readonly@service-lasso.local',
+      email: 'readonly@example.service-lasso.test',
       subjectRef: 'zitadel-subject://service-lasso/users/readonly-operator',
       organizationRef: 'zitadel-org://service-lasso',
       workspaceRole: 'workspace-viewer',
+    },
+    auditActor: {
+      kind: 'denied-user',
+      id: 'audit-actor://zitadel/readonly-operator',
+      label: 'Readonly Operator (denied)',
+      workspaceId: 'workspace:service-lasso/local-dev',
+      source: 'trusted-route-boundary',
     },
     roles: ['serviceadmin.viewer'],
     permissions: [
@@ -194,18 +249,105 @@ export const zitadelSessionScenarios: ZitadelSessionScenario[] = [
       'Ask a workspace admin to grant the least-privilege role required for this surface.',
     guardrails: [
       'Denied permissions are shown as policy metadata only.',
-      'Escalation guidance avoids displaying auth cookies, bearer material, or session secrets.',
+      'Escalation guidance avoids displaying cookies, bearer material, or session secrets.',
+    ],
+  },
+  {
+    id: 'workspace-mismatch',
+    label: 'Workspace mismatch',
+    state: 'workspace-mismatch',
+    summary:
+      'The trusted identity metadata points at a different workspace than the current Service Admin route.',
+    identityContext: {
+      workspaceId: 'workspace:service-lasso/other-dev',
+      appId: '@serviceadmin',
+      authProvider: 'zitadel',
+      deliveryBoundary: 'traefik-oidc-auth',
+      sessionMode: 'workspace-mismatch',
+      metadataUpdatedAt: '2026-05-09T00:44:00Z',
+      trustStatus: 'mismatch',
+    },
+    user: {
+      displayName: 'Workspace Visitor',
+      email: 'visitor@example.service-lasso.test',
+      subjectRef: 'zitadel-subject://service-lasso/users/workspace-visitor',
+      organizationRef: 'zitadel-org://service-lasso',
+      workspaceRole: 'workspace-viewer',
+    },
+    auditActor: {
+      kind: 'denied-user',
+      id: 'audit-actor://zitadel/workspace-visitor',
+      label: 'Workspace Visitor (workspace mismatch)',
+      workspaceId: 'workspace:service-lasso/other-dev',
+      source: 'trusted-route-boundary',
+    },
+    roles: ['serviceadmin.viewer'],
+    permissions: [
+      {
+        scope: 'serviceadmin:dashboard:read',
+        decision: 'denied',
+        reason: 'identity workspace does not match the active route workspace',
+      },
+    ],
+    requiredAction:
+      'Switch to the matching workspace route or sign in with an identity assigned to this workspace.',
+    guardrails: [
+      'Workspace mismatches fail closed before Service Admin actions run.',
+      'Audit metadata keeps only safe actor and workspace refs for investigation.',
+    ],
+  },
+  {
+    id: 'invalid',
+    label: 'Invalid identity context',
+    state: 'invalid',
+    summary:
+      'The protected route metadata is incomplete or fails the trusted context contract.',
+    identityContext: {
+      workspaceId: 'workspace:service-lasso/local-dev',
+      appId: '@serviceadmin',
+      authProvider: 'zitadel',
+      deliveryBoundary: 'traefik-oidc-auth',
+      sessionMode: 'invalid-context',
+      metadataUpdatedAt: '2026-05-09T00:45:00Z',
+      trustStatus: 'invalid',
+    },
+    auditActor: {
+      kind: 'anonymous',
+      id: 'invalid-context',
+      label: 'Invalid protected-route context',
+      workspaceId: 'workspace:service-lasso/local-dev',
+      source: 'none',
+    },
+    roles: [],
+    permissions: [
+      {
+        scope: 'serviceadmin:dashboard:read',
+        decision: 'denied',
+        reason: 'trusted identity context contract is incomplete',
+      },
+    ],
+    requiredAction:
+      'Check Traefik middleware and identity header mapping before retrying.',
+    guardrails: [
+      'Browser-supplied identity headers are not trusted by themselves.',
+      'Invalid context diagnostics stay metadata-only and do not echo raw headers.',
     ],
   },
 ]
 
-export function getZitadelSessionScenario(id: string) {
-  return zitadelSessionScenarios.find((scenario) => scenario.id === id)
+export function getTrustedIdentityScenario(id: string) {
+  return trustedIdentityScenarios.find((scenario) => scenario.id === id)
 }
 
-export function zitadelSessionHasSecretMaterial() {
-  const joined = JSON.stringify(zitadelSessionScenarios)
-  return /bearer\s+[a-z0-9_-]+\.[a-z0-9._-]+|id_token|access_token|refresh_token|session_secret|client_secret|password\s*=|token\s*=|secret\s*=/i.test(
+export function trustedIdentityHasSecretMaterial() {
+  const joined = JSON.stringify(trustedIdentityScenarios)
+  return /bearer\s+[a-z0-9_-]+\.[a-z0-9._-]+|id_token|access_token|refresh_token|session_secret|client_secret|password\s*=|token\s*=|secret\s*=|cookie\s*=/i.test(
     joined
   )
 }
+
+export const zitadelSessionScenarios = trustedIdentityScenarios
+export const zitadelSessionHasSecretMaterial = trustedIdentityHasSecretMaterial
+export type ZitadelSessionState = TrustedIdentityState
+export type ZitadelPermissionDecision = TrustedIdentityDecision
+export type ZitadelSessionScenario = TrustedIdentityScenario
