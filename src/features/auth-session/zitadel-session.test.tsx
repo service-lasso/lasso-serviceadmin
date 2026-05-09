@@ -3,23 +3,24 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
-  zitadelSessionHasSecretMaterial,
-  zitadelSessionScenarios,
+  trustedIdentityHasSecretMaterial,
+  trustedIdentityScenarios,
 } from './zitadel-session'
 
-describe('ZITADEL session and role surface', () => {
-  it('renders signed-in session metadata and role summaries without secret material', async () => {
+describe('Trusted SSO identity context surface', () => {
+  it('renders authenticated identity, workspace, roles, and audit actor without secret material', async () => {
     await renderRoute('/auth-session')
 
     expect(
       await screen.findByRole('heading', {
-        name: /ZITADEL session and roles/i,
+        name: /Trusted SSO identity context/i,
       })
     ).toBeVisible()
-    expect(screen.getAllByText(/Signed-in admin/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Signed in/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Authenticated admin/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Authenticated/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/traefik-oidc-auth/i)[0]).toBeVisible()
     expect(
-      screen.getByText(/workspace:service-lasso\/local-dev/i)
+      screen.getAllByText(/workspace:service-lasso\/local-dev/i)[0]
     ).toBeVisible()
     expect(
       screen.getByText(/zitadel-subject:\/\/service-lasso\/users\/max/i)
@@ -29,6 +30,8 @@ describe('ZITADEL session and role surface', () => {
       screen.getByText(/serviceadmin:secrets:values:reveal/i)
     ).toBeVisible()
     expect(screen.getByText(/raw secret reveal is not enabled/i)).toBeVisible()
+    expect(screen.getAllByText(/Audit actor metadata/i)[0]).toBeVisible()
+    expect(screen.getByText(/audit-actor:\/\/zitadel\/max/i)).toBeVisible()
     expect(screen.getByText(/Metadata only/i)).toBeVisible()
     expect(
       screen.queryByText(/access_token|refresh_token|id_token|session_secret/i)
@@ -38,37 +41,60 @@ describe('ZITADEL session and role surface', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('covers signed-out setup-needed and permission-denied states', async () => {
+  it('covers unauthenticated expired forbidden workspace-mismatch and invalid states', async () => {
     const user = userEvent.setup()
     await renderRoute('/auth-session')
 
     await user.selectOptions(
-      screen.getByLabelText(/Auth scenario/i),
-      'signed-out'
+      screen.getByLabelText(/Identity scenario/i),
+      'unauthenticated'
     )
     expect(screen.getAllByText(/Login required/i)[0]).toBeVisible()
-    expect(screen.getByText(/Start the ZITADEL login flow/i)).toBeVisible()
-    expect(screen.getByText(/No signed-in user metadata/i)).toBeVisible()
+    expect(screen.getByText(/No trusted user metadata/i)).toBeVisible()
     expect(screen.getByText(/none until login/i)).toBeVisible()
+    expect(screen.getByText(/no trusted identity metadata/i)).toBeVisible()
 
     await user.selectOptions(
-      screen.getByLabelText(/Auth scenario/i),
-      'setup-needed'
+      screen.getByLabelText(/Identity scenario/i),
+      'expired'
     )
-    expect(screen.getAllByText(/Setup needed/i)[0]).toBeVisible()
-    expect(screen.getByText(/not-configured/i)).toBeVisible()
-    expect(screen.getByText(/local-dev-open/i)).toBeVisible()
-    expect(screen.getByText(/Do not force ZITADEL/i)).toBeVisible()
+    expect(screen.getAllByText(/Expired/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/trusted identity context is expired/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Expired Operator \(expired\)/i)).toBeVisible()
 
     await user.selectOptions(
-      screen.getByLabelText(/Auth scenario/i),
-      'permission-denied'
+      screen.getByLabelText(/Identity scenario/i),
+      'forbidden'
     )
-    expect(screen.getAllByText(/Permission denied/i)[0]).toBeVisible()
-    expect(screen.getByText(/Readonly Operator/i)).toBeVisible()
+    expect(screen.getAllByText(/Forbidden/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Readonly Operator/i)[0]).toBeVisible()
     expect(screen.getByText(/workspace-viewer/i)).toBeVisible()
     expect(screen.getByText(/operator role is required/i)).toBeVisible()
     expect(screen.getByText(/least-privilege role/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Identity scenario/i),
+      'workspace-mismatch'
+    )
+    expect(screen.getAllByText(/Workspace mismatch/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/workspace:service-lasso\/other-dev/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/does not match the active route workspace/i)
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Identity scenario/i),
+      'invalid'
+    )
+    expect(screen.getAllByText(/Invalid context/i)[0]).toBeVisible()
+    expect(screen.getByText(/contract is incomplete/i)).toBeVisible()
+    expect(
+      screen.getByText(/Browser-supplied identity headers are not trusted/i)
+    ).toBeVisible()
   })
 
   it('renders permission decisions as metadata only', async () => {
@@ -82,12 +108,12 @@ describe('ZITADEL session and role surface', () => {
     expect(within(permissionTable).getAllByText(/denied/i)[0]).toBeVisible()
   })
 
-  it('keeps ZITADEL session fixtures free of secret material', () => {
-    expect(zitadelSessionHasSecretMaterial()).toBe(false)
-    expect(zitadelSessionScenarios).toHaveLength(4)
+  it('keeps trusted identity fixtures free of secret material', () => {
+    expect(trustedIdentityHasSecretMaterial()).toBe(false)
+    expect(trustedIdentityScenarios).toHaveLength(6)
     expect(
-      zitadelSessionScenarios.some(
-        (scenario) => scenario.state === 'permission-denied'
+      trustedIdentityScenarios.some(
+        (scenario) => scenario.state === 'workspace-mismatch'
       )
     ).toBe(true)
   })

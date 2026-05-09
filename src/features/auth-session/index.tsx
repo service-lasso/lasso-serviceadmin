@@ -22,30 +22,34 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
-  zitadelSessionScenarios,
-  type ZitadelPermissionDecision,
-  type ZitadelSessionState,
+  trustedIdentityScenarios,
+  type TrustedIdentityDecision,
+  type TrustedIdentityState,
 } from './zitadel-session'
 
-const stateCopy: Record<ZitadelSessionState, string> = {
-  'signed-in': 'Signed in',
-  'signed-out': 'Login required',
-  'setup-needed': 'Setup needed',
-  'permission-denied': 'Permission denied',
+const stateCopy: Record<TrustedIdentityState, string> = {
+  authenticated: 'Authenticated',
+  unauthenticated: 'Login required',
+  expired: 'Expired',
+  forbidden: 'Forbidden',
+  'workspace-mismatch': 'Workspace mismatch',
+  invalid: 'Invalid context',
 }
 
 const stateVariant: Record<
-  ZitadelSessionState,
+  TrustedIdentityState,
   'default' | 'secondary' | 'destructive' | 'outline'
 > = {
-  'signed-in': 'default',
-  'signed-out': 'secondary',
-  'setup-needed': 'outline',
-  'permission-denied': 'destructive',
+  authenticated: 'default',
+  unauthenticated: 'secondary',
+  expired: 'outline',
+  forbidden: 'destructive',
+  'workspace-mismatch': 'destructive',
+  invalid: 'destructive',
 }
 
 const permissionVariant: Record<
-  ZitadelPermissionDecision,
+  TrustedIdentityDecision,
   'default' | 'secondary' | 'destructive' | 'outline'
 > = {
   allowed: 'default',
@@ -53,21 +57,23 @@ const permissionVariant: Record<
   review: 'secondary',
 }
 
-function StateIcon({ state }: { state: ZitadelSessionState }) {
-  if (state === 'signed-in') return <UserCheck className='size-4' />
-  if (state === 'permission-denied') return <LockKeyhole className='size-4' />
+function StateIcon({ state }: { state: TrustedIdentityState }) {
+  if (state === 'authenticated') return <UserCheck className='size-4' />
+  if (state === 'forbidden' || state === 'workspace-mismatch') {
+    return <LockKeyhole className='size-4' />
+  }
   return <AlertTriangle className='size-4' />
 }
 
 export function AuthSessionPage() {
   const [selectedScenarioId, setSelectedScenarioId] = useState(
-    zitadelSessionScenarios[0].id
+    trustedIdentityScenarios[0].id
   )
   const selectedScenario = useMemo(
     () =>
-      zitadelSessionScenarios.find(
+      trustedIdentityScenarios.find(
         (scenario) => scenario.id === selectedScenarioId
-      ) ?? zitadelSessionScenarios[0],
+      ) ?? trustedIdentityScenarios[0],
     [selectedScenarioId]
   )
 
@@ -76,9 +82,9 @@ export function AuthSessionPage() {
   ).length
 
   usePageMetadata({
-    title: 'Service Admin - ZITADEL Session',
+    title: 'Service Admin - Trusted SSO Identity',
     description:
-      'Metadata-only ZITADEL login, session, role, and permission integration surface.',
+      'Metadata-only trusted SSO identity, workspace, role, and audit actor surface.',
   })
 
   return (
@@ -96,13 +102,13 @@ export function AuthSessionPage() {
         <div className='flex flex-wrap items-start justify-between gap-4'>
           <div>
             <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
-              <ShieldCheck className='size-5' /> ZITADEL session and roles
+              <ShieldCheck className='size-5' /> Trusted SSO identity context
             </h1>
             <p className='mt-1 text-muted-foreground'>
-              Service Admin auth integration preview for consumer apps that opt
-              into ZITADEL-backed sessions. This page renders facade metadata,
-              roles, and permission decisions only; provider credentials and
-              session secrets are never displayed.
+              Service Admin protected-route identity preview. This page renders
+              trusted route-boundary metadata, roles, workspace context, audit
+              actor metadata, and permission decisions only; provider
+              credentials and session secrets are never displayed.
             </p>
           </div>
           <Badge variant='secondary'>Metadata only</Badge>
@@ -110,27 +116,28 @@ export function AuthSessionPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Session state preview</CardTitle>
+            <CardTitle>Identity state preview</CardTitle>
             <CardDescription>
-              Choose the facade-reported state to inspect signed-in,
-              login-required, setup-needed, and permission-denied behaviour.
+              Choose the trusted identity state to inspect authenticated,
+              login-required, expired, forbidden, workspace-mismatch, and
+              invalid behaviour.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
             <div>
               <label
-                htmlFor='zitadel-session-scenario'
+                htmlFor='trusted-identity-scenario'
                 className='mb-1 block text-xs text-muted-foreground'
               >
-                Auth scenario
+                Identity scenario
               </label>
               <select
-                id='zitadel-session-scenario'
+                id='trusted-identity-scenario'
                 className='h-9 w-full rounded-md border bg-background px-3 text-sm md:w-[24rem]'
                 value={selectedScenarioId}
                 onChange={(event) => setSelectedScenarioId(event.target.value)}
               >
-                {zitadelSessionScenarios.map((scenario) => (
+                {trustedIdentityScenarios.map((scenario) => (
                   <option key={scenario.id} value={scenario.id}>
                     {scenario.label}
                   </option>
@@ -147,9 +154,9 @@ export function AuthSessionPage() {
                 </Badge>
               </div>
               <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Provider</div>
+                <div className='text-xs text-muted-foreground'>Boundary</div>
                 <div className='font-medium'>
-                  {selectedScenario.facade.authProvider}
+                  {selectedScenario.identityContext.deliveryBoundary}
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
@@ -182,35 +189,41 @@ export function AuthSessionPage() {
         <div className='grid gap-4 lg:grid-cols-2'>
           <Card>
             <CardHeader>
-              <CardTitle>Facade session metadata</CardTitle>
+              <CardTitle>Trusted identity metadata</CardTitle>
               <CardDescription>
-                Consumer app/facade integration fields. These are identifiers
-                and status metadata, not credential material.
+                Protected route-boundary fields. These are identifiers and
+                status metadata, not credential material.
               </CardDescription>
             </CardHeader>
             <CardContent className='grid gap-3 text-sm md:grid-cols-2'>
               <div className='rounded-lg border p-3'>
                 <div className='text-muted-foreground'>Workspace</div>
                 <div className='font-medium break-all'>
-                  {selectedScenario.facade.workspaceId}
+                  {selectedScenario.identityContext.workspaceId}
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
                 <div className='text-muted-foreground'>App</div>
                 <div className='font-medium'>
-                  {selectedScenario.facade.appId}
+                  {selectedScenario.identityContext.appId}
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
-                <div className='text-muted-foreground'>Session mode</div>
+                <div className='text-muted-foreground'>Trust mode</div>
                 <div className='font-medium'>
-                  {selectedScenario.facade.sessionMode}
+                  {selectedScenario.identityContext.sessionMode}
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
+                <div className='text-muted-foreground'>Trust status</div>
+                <div className='font-medium'>
+                  {selectedScenario.identityContext.trustStatus}
+                </div>
+              </div>
+              <div className='rounded-lg border p-3 md:col-span-2'>
                 <div className='text-muted-foreground'>Metadata updated</div>
                 <div className='font-medium'>
-                  {selectedScenario.facade.metadataUpdatedAt}
+                  {selectedScenario.identityContext.metadataUpdatedAt}
                 </div>
               </div>
             </CardContent>
@@ -262,7 +275,7 @@ export function AuthSessionPage() {
                 </div>
               ) : (
                 <div className='rounded-lg border border-dashed p-4 text-muted-foreground'>
-                  No signed-in user metadata is available for this scenario.
+                  No trusted user metadata is available for this scenario.
                 </div>
               )}
 
@@ -285,6 +298,42 @@ export function AuthSessionPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit actor metadata</CardTitle>
+            <CardDescription>
+              Service Admin and Secrets Broker actions receive safe actor and
+              workspace references only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 text-sm md:grid-cols-4'>
+            <div className='rounded-lg border p-3'>
+              <div className='text-muted-foreground'>Actor kind</div>
+              <div className='font-medium'>
+                {selectedScenario.auditActor.kind}
+              </div>
+            </div>
+            <div className='rounded-lg border p-3'>
+              <div className='text-muted-foreground'>Actor id</div>
+              <div className='font-medium break-all'>
+                {selectedScenario.auditActor.id}
+              </div>
+            </div>
+            <div className='rounded-lg border p-3'>
+              <div className='text-muted-foreground'>Actor label</div>
+              <div className='font-medium'>
+                {selectedScenario.auditActor.label}
+              </div>
+            </div>
+            <div className='rounded-lg border p-3'>
+              <div className='text-muted-foreground'>Source</div>
+              <div className='font-medium'>
+                {selectedScenario.auditActor.source}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -326,10 +375,11 @@ export function AuthSessionPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Optional ZITADEL integration guardrails</CardTitle>
+            <CardTitle>Trusted route-boundary guardrails</CardTitle>
             <CardDescription>
-              This UI depends on consumer app/facade integration. It should not
-              force authentication onto core local development by default.
+              This UI consumes trusted metadata from Traefik and
+              traefik-oidc-auth. It does not implement OIDC/session/token
+              mechanics.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-3'>
