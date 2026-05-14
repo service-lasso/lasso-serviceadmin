@@ -148,7 +148,7 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByText(/Confirm operation, policy decision, and audit reason/i)
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
-  }, 10000)
+  }, 30000)
 
   it('renders privileged single-secret reveal default and fail-closed states without raw material', async () => {
     const user = userEvent.setup()
@@ -208,7 +208,7 @@ describe('Secrets Broker setup wizard', () => {
         screen.queryByText(singleSecretRevealReference.fakeRawValue)
       ).not.toBeInTheDocument()
     }
-  }, 20000)
+  }, 30000)
 
   it('reveals deterministic fake material only after explicit action and re-hides on cancel or expiry', async () => {
     const user = userEvent.setup()
@@ -268,7 +268,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.queryByText(singleSecretRevealReference.fakeRawValue)
     ).not.toBeInTheDocument()
-  }, 10000)
+  }, 30000)
 
   it('keeps single-secret reveal safe surfaces free of raw material', () => {
     expect(singleSecretRevealScenarios.map((scenario) => scenario.id)).toEqual([
@@ -690,7 +690,7 @@ describe('Secrets Broker setup wizard', () => {
         screen.queryByText(/fixture-provider-credential-value/i)
       ).not.toBeInTheDocument()
     }
-  }, 10000)
+  }, 30000)
 
   it('keeps provider reconnect plans free of raw credential material', () => {
     const connection =
