@@ -5,6 +5,7 @@ import {
   fetchServices as fetchStubServices,
   runDashboardAction as runStubDashboardAction,
   serviceLassoApiBaseUrl,
+  stubDashboardDataEnabled,
 } from './stub'
 import type {
   DashboardAction,
@@ -29,7 +30,7 @@ function encodeServiceId(serviceId: string) {
 }
 
 function buildApiUrl(pathname: string) {
-  if (!serviceLassoApiBaseUrl) {
+  if (serviceLassoApiBaseUrl === null) {
     throw new Error('Service Lasso API base URL is not configured.')
   }
 
@@ -49,10 +50,6 @@ async function fetchRuntimeJson<T>(pathname: string, init?: RequestInit) {
   }
 
   return (await response.json()) as T
-}
-
-function hasRuntimeApi() {
-  return Boolean(serviceLassoApiBaseUrl)
 }
 
 async function fetchRuntimeDashboardSummary() {
@@ -126,7 +123,7 @@ async function runRuntimeDashboardAction(action: DashboardAction) {
 }
 
 export async function fetchDashboardSummary() {
-  if (!hasRuntimeApi()) {
+  if (stubDashboardDataEnabled) {
     return fetchStubDashboardSummary()
   }
 
@@ -134,7 +131,7 @@ export async function fetchDashboardSummary() {
 }
 
 export async function fetchServices() {
-  if (!hasRuntimeApi()) {
+  if (stubDashboardDataEnabled) {
     return fetchStubServices()
   }
 
@@ -142,7 +139,7 @@ export async function fetchServices() {
 }
 
 export async function fetchDashboardService(serviceId: string) {
-  if (!hasRuntimeApi()) {
+  if (stubDashboardDataEnabled) {
     return fetchStubDashboardService(serviceId)
   }
 
@@ -155,7 +152,7 @@ export function buildServiceLogUrl(
     type?: 'default' | 'access' | 'error'
   }
 ) {
-  if (!hasRuntimeApi()) {
+  if (stubDashboardDataEnabled) {
     return buildStubServiceLogUrl(serviceId, options)
   }
 
@@ -168,7 +165,7 @@ export function buildServiceLogUrl(
 }
 
 export async function runDashboardAction(action: DashboardAction) {
-  if (!hasRuntimeApi()) {
+  if (stubDashboardDataEnabled) {
     return runStubDashboardAction(action)
   }
 

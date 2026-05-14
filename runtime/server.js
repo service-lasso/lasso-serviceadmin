@@ -9,6 +9,11 @@ const root = path.resolve(__dirname, '..')
 const distDir = path.resolve(root, process.env.SERVICE_DIST_DIR || 'dist')
 const host = process.env.SERVICE_HOST || '127.0.0.1'
 const port = Number(process.env.SERVICE_PORT || '17700')
+const runtimeApiBaseUrl = (
+  process.env.SERVICE_LASSO_API_BASE_URL ||
+  process.env.SERVICE_LASSO_RUNTIME_API_BASE_URL ||
+  ''
+).replace(/\/$/, '')
 
 const mimeTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -51,8 +56,65 @@ function resolveRequestPath(urlPath) {
   return path.join(distDir, 'index.html')
 }
 
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    request.on('data', (chunk) => chunks.push(chunk))
+    request.on('end', () => resolve(Buffer.concat(chunks)))
+    request.on('error', reject)
+  })
+}
+
+async function proxyRuntimeApi(request, response) {
+  if (!runtimeApiBaseUrl) {
+    response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' })
+    response.end(JSON.stringify({
+      error: 'service_lasso_runtime_api_unconfigured',
+      message: 'Service Admin is running in production mode but SERVICE_LASSO_API_BASE_URL / SERVICE_LASSO_RUNTIME_API_BASE_URL is not configured.',
+    }))
+    return
+  }
+
+  const method = request.method || 'GET'
+  const targetUrl = new URL(request.url || '/', runtimeApiBaseUrl)
+  const headers = new Headers()
+  for (const [key, value] of Object.entries(request.headers)) {
+    if (value === undefined || key.toLowerCase() === 'host') continue
+    if (Array.isArray(value)) {
+      for (const entry of value) headers.append(key, entry)
+    } else {
+      headers.set(key, value)
+    }
+  }
+
+  try {
+    const body = ['GET', 'HEAD'].includes(method) ? undefined : await readRequestBody(request)
+    const upstream = await fetch(targetUrl, { method, headers, body })
+    response.writeHead(upstream.status, Object.fromEntries(upstream.headers.entries()))
+    if (method === 'HEAD') {
+      response.end()
+      return
+    }
+    const arrayBuffer = await upstream.arrayBuffer()
+    response.end(Buffer.from(arrayBuffer))
+  } catch (error) {
+    response.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
+    response.end(JSON.stringify({
+      error: 'service_lasso_runtime_api_unreachable',
+      message: error instanceof Error ? error.message : String(error),
+    }))
+  }
+}
+
 const server = http.createServer((request, response) => {
   const method = request.method || 'GET'
+  const requestPath = new URL(request.url || '/', 'http://127.0.0.1').pathname
+
+  if (requestPath.startsWith('/api/')) {
+    void proxyRuntimeApi(request, response)
+    return
+  }
+
   if (method !== 'GET' && method !== 'HEAD') {
     response.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' })
     response.end('Method Not Allowed')
