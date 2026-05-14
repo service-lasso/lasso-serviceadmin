@@ -99,7 +99,9 @@ describe('app screens', () => {
   it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
     await renderRoute(path)
 
-    expect(await screen.findByRole('heading', { name: heading })).toBeVisible()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: heading })).toBeVisible()
+    })
 
     if (title) {
       await waitFor(() => {
