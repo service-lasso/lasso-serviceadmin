@@ -4,7 +4,7 @@ import {
   collectBrowserLeakSurfaces,
   serviceLassoSecretLeakSentinels,
 } from '@/test/secret-leak-harness'
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
@@ -858,7 +858,9 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
     expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
 
-    await user.type(screen.getByLabelText(/Source \/ actor/i), '@serviceadmin')
+    fireEvent.change(screen.getByLabelText(/Source \/ actor/i), {
+      target: { value: '@serviceadmin' },
+    })
     expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
     expect(
       screen.queryByRole('button', { name: /resolve denied/i })

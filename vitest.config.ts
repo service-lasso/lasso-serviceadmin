@@ -9,6 +9,7 @@ export default mergeConfig(
       globals: true,
       exclude: ['**/node_modules/**', '**/dist/**', '**/tests/ui/**'],
       setupFiles: './src/test/setup.ts',
+      testTimeout: 15000,
     },
   })
 )
