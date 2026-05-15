@@ -67,6 +67,9 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
       <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
     )
   }
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
 }
@@ -74,7 +77,8 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
 const statusSortRank: Record<DashboardService['status'], number> = {
   degraded: 0,
   stopped: 1,
-  running: 2,
+  available: 2,
+  running: 3,
 }
 
 const columns: ColumnDef<DashboardService>[] = [
@@ -289,6 +293,7 @@ export function Runtime() {
                     title: 'Status',
                     options: [
                       { label: 'Running', value: 'running' },
+                      { label: 'Available', value: 'available' },
                       { label: 'Degraded', value: 'degraded' },
                       { label: 'Stopped', value: 'stopped' },
                     ],
@@ -358,3 +363,4 @@ export function Runtime() {
     </>
   )
 }
+

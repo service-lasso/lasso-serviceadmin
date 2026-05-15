@@ -1,4 +1,4 @@
-export type ServiceStatus = 'running' | 'stopped' | 'degraded'
+export type ServiceStatus = 'running' | 'available' | 'stopped' | 'degraded'
 
 export type ServiceLink = {
   label: string
@@ -106,6 +106,7 @@ export type DashboardSummary = {
   runtime: DashboardRuntime
   servicesTotal: number
   servicesRunning: number
+  servicesAvailable?: number
   servicesStopped: number
   servicesDegraded: number
   networkExposureCount: number

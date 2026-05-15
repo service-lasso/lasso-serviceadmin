@@ -67,6 +67,9 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
       <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
     )
   }
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
 }
@@ -723,3 +726,4 @@ export function Logs() {
     </>
   )
 }
+

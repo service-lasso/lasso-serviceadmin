@@ -29,6 +29,10 @@ function renderStatusBadge(status: DashboardService['status']) {
     )
   }
 
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
+
   if (status === 'degraded') {
     return <Badge variant='secondary'>Degraded</Badge>
   }
@@ -132,7 +136,8 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
 const statusSortRank: Record<DashboardService['status'], number> = {
   degraded: 0,
   stopped: 1,
-  running: 2,
+  available: 2,
+  running: 3,
 }
 
 export const servicesColumns: ColumnDef<DashboardService>[] = [
@@ -244,3 +249,4 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
     cell: DataTableRowActions,
   },
 ]
+

@@ -43,6 +43,10 @@ function StatusBadge({ status }: { status: ServiceStatus }) {
     )
   }
 
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
+
   if (status === 'degraded') {
     return <Badge variant='secondary'>Degraded</Badge>
   }
@@ -280,7 +284,7 @@ export function Dashboard() {
           <SummaryCard
             title='Services'
             value={`${summary.servicesRunning}/${summary.servicesTotal}`}
-            description={`${summary.servicesStopped} stopped, ${summary.servicesDegraded} degraded`}
+            description={`${summary.servicesAvailable ?? 0} available, ${summary.servicesStopped} stopped, ${summary.servicesDegraded} degraded`}
             icon={Boxes}
             action={
               <Button
@@ -371,3 +375,4 @@ export function Dashboard() {
     </>
   )
 }
+

@@ -647,7 +647,7 @@ function setServices(nextServices: DashboardService[]) {
 function serviceHealthForStatus(
   status: ServiceStatus
 ): DashboardService['runtimeHealth']['health'] {
-  if (status === 'running') return 'healthy'
+  if (status === 'running' || status === 'available') return 'healthy'
   if (status === 'degraded') return 'warning'
   return 'critical'
 }
@@ -683,6 +683,8 @@ function buildSummary(): DashboardSummary {
     },
     servicesTotal: services.length,
     servicesRunning: services.filter((service) => service.status === 'running')
+      .length,
+    servicesAvailable: services.filter((service) => service.status === 'available')
       .length,
     servicesStopped: services.filter((service) => service.status === 'stopped')
       .length,

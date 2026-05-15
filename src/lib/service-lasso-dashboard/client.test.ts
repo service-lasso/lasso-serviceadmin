@@ -14,20 +14,20 @@ function service(
     favorite: id === '@traefik' || id === '@serviceadmin',
     role: `${name} role`,
     note:
-      status === 'running'
+      status === 'running' || status === 'available'
         ? `${name} is verified by the runtime API.`
         : `${name} is not running.`,
     installed: true,
     links: [{ label: 'Local', url: 'http://127.0.0.1', kind: 'local' }],
     runtimeHealth: {
       state: status,
-      health: status === 'running' ? 'healthy' : 'critical',
+      health: status === 'running' || status === 'available' ? 'healthy' : 'critical',
       uptime: status === 'running' ? '3m' : '0m',
       lastCheckAt: '2026-04-16T16:00:03.000Z',
       lastRestartAt:
         status === 'running' ? '2026-04-16T16:00:00.000Z' : undefined,
       summary:
-        status === 'running'
+        status === 'running' || status === 'available'
           ? `${name} process and health check are up.`
           : `${name} process is stopped.`,
     },
@@ -75,7 +75,9 @@ function service(
 function summary(services: DashboardService[]): DashboardSummary {
   const favorites = services.filter((item) => item.favorite)
   const others = services.filter((item) => !item.favorite)
-  const problemServices = services.filter((item) => item.status !== 'running')
+  const problemServices = services.filter(
+    (item) => item.status !== 'running' && item.status !== 'available'
+  )
 
   return {
     runtime: {
@@ -85,6 +87,8 @@ function summary(services: DashboardService[]): DashboardSummary {
     },
     servicesTotal: services.length,
     servicesRunning: services.filter((item) => item.status === 'running')
+      .length,
+    servicesAvailable: services.filter((item) => item.status === 'available')
       .length,
     servicesStopped: services.filter((item) => item.status === 'stopped')
       .length,

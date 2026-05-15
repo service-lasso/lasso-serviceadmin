@@ -95,6 +95,7 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
             title: 'Status',
             options: [
               { label: 'Running', value: 'running' },
+              { label: 'Available', value: 'available' },
               { label: 'Degraded', value: 'degraded' },
               { label: 'Stopped', value: 'stopped' },
             ],

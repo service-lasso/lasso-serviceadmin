@@ -84,6 +84,10 @@ function StatusBadge({ status }: { status: ServiceStatus }) {
     )
   }
 
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
+
   if (status === 'degraded') {
     return <Badge variant='secondary'>Degraded</Badge>
   }
@@ -1145,3 +1149,4 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
     </>
   )
 }
+
