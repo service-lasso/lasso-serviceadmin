@@ -63,7 +63,6 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /^Secrets Broker$/ }).click()
     await page.getByRole('link', { name: 'Overview / Setup' }).click()
 
     await expect(page).toHaveURL(/\/secrets-broker$/)
@@ -94,25 +93,24 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /^Secrets Broker$/ }).click()
 
     const navLinks = [
       ['Overview / Setup', /\/secrets-broker$/],
       ['Secrets', /\/secrets-broker\/secrets$/],
       ['Configuration', /\/secrets-broker\/configuration$/],
-      ['Sources / Backends', /\/secrets-broker#secret-sources$/],
-      ['Provider Connections', /\/secrets-broker#provider-connections$/],
-      ['Single Reveal', /\/secrets-broker#privileged-secret-reveal$/],
-      ['Backup / Keys', /\/secrets-broker#backup-key-management$/],
-      ['Workflow Boundaries', /\/secrets-broker#workflow-authoring-boundary$/],
-      ['Topology', /\/secrets-broker#secrets-topology$/],
-      ['Audit / Events', /\/secrets-broker#audit-events$/],
-      ['Diagnostics', /\/secrets-broker#diagnostics$/],
+      ['Sources / Backends', /\/secrets-broker\/sources$/],
+      ['Provider Connections', /\/secrets-broker\/provider-connections$/],
+      ['Single Reveal', /\/secrets-broker\/single-reveal$/],
+      ['Backup / Keys', /\/secrets-broker\/backup-keys$/],
+      ['Workflow Boundaries', /\/secrets-broker\/workflow-boundaries$/],
+      ['Topology', /\/secrets-broker\/topology$/],
+      ['Audit / Events', /\/secrets-broker\/audit-events$/],
+      ['Diagnostics', /\/secrets-broker\/diagnostics$/],
     ] as const
 
     for (const [name, urlPattern] of navLinks) {
       await page
-        .locator('[data-sidebar="menu-sub-button"]')
+        .locator('[data-sidebar="menu-button"]')
         .filter({ hasText: name })
         .first()
         .click()
@@ -295,7 +293,7 @@ test.describe('Secrets Broker browser coverage', () => {
   test('reveals one broker secret only after explicit action and re-hides safely', async ({
     page,
   }) => {
-    await page.goto('/secrets-broker#privileged-secret-reveal')
+    await page.goto('/secrets-broker/single-reveal')
     await expectNoBlankScreen(page)
     await expect(
       page.getByText(/Privileged single-secret reveal/i)
@@ -333,7 +331,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/Audit event recorded: audit-reveal-001/i)
     ).toBeVisible()
-    await expect(page).toHaveURL(/\/secrets-broker#privileged-secret-reveal$/)
+    await expect(page).toHaveURL(/\/secrets-broker\/single-reveal$/)
     expect(page.url()).not.toContain(fakeRevealValue)
     expect(consoleErrors.join('\n')).not.toContain(fakeRevealValue)
     await expect(
@@ -353,18 +351,18 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     const sections = [
-      ['privileged-secret-reveal', /Privileged single-secret reveal/i],
-      ['secret-sources', /Secret Sources \/ Backends/i],
-      ['provider-connections', /Provider Connections/i],
-      ['backup-key-management', /Backup, restore, and key management/i],
-      ['workflow-authoring-boundary', /Workflow authoring boundary/i],
-      ['secrets-topology', /Secrets Broker topology/i],
-      ['audit-events', /Audit and events/i],
-      ['diagnostics', /Diagnostics and troubleshooting/i],
+      ['/secrets-broker/single-reveal', /Privileged single-secret reveal/i],
+      ['/secrets-broker/sources', /Secret Sources \/ Backends/i],
+      ['/secrets-broker/provider-connections', /Provider Connections/i],
+      ['/secrets-broker/backup-keys', /Backup, restore, and key management/i],
+      ['/secrets-broker/workflow-boundaries', /Workflow authoring boundary/i],
+      ['/secrets-broker/topology', /Secrets Broker topology/i],
+      ['/secrets-broker/audit-events', /Audit and events/i],
+      ['/secrets-broker/diagnostics', /Diagnostics and troubleshooting/i],
     ] as const
 
-    for (const [hash, label] of sections) {
-      await page.goto(`/secrets-broker#${hash}`)
+    for (const [path, label] of sections) {
+      await page.goto(path)
       await expectNoBlankScreen(page)
       await expect(page.getByText(label).first()).toBeVisible()
       await expectNoSecretMaterial(page)

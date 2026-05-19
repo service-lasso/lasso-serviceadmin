@@ -124,6 +124,60 @@ type SecretsBrokerOverviewScenario = {
   emptyState?: string
 }
 
+export type SecretsBrokerSectionFocus =
+  | 'overview'
+  | 'sources'
+  | 'provider-connections'
+  | 'single-reveal'
+  | 'backup-keys'
+  | 'workflow-boundaries'
+  | 'topology'
+  | 'audit-events'
+  | 'diagnostics'
+
+const secretsBrokerSectionMetadata: Record<
+  SecretsBrokerSectionFocus,
+  { title: string; description: string }
+> = {
+  overview: {
+    title: 'Service Admin - Secrets Broker Setup',
+    description: 'Configure sources, policies, and recovery safely.',
+  },
+  sources: {
+    title: 'Service Admin - Secrets Broker Sources',
+    description: 'Inspect configured source and backend metadata safely.',
+  },
+  'provider-connections': {
+    title: 'Service Admin - Secrets Broker Provider Connections',
+    description:
+      'Inspect provider connection health without credential values.',
+  },
+  'single-reveal': {
+    title: 'Service Admin - Secrets Broker Single Reveal',
+    description: 'Preview controlled reveal states without leaking values.',
+  },
+  'backup-keys': {
+    title: 'Service Admin - Secrets Broker Backup Keys',
+    description: 'Inspect backup, restore, and key management readiness.',
+  },
+  'workflow-boundaries': {
+    title: 'Service Admin - Secrets Broker Workflow Boundaries',
+    description: 'Review workflow authoring SecretRef guardrails.',
+  },
+  topology: {
+    title: 'Service Admin - Secrets Broker Topology',
+    description: 'Inspect safe service-to-secret relationship metadata.',
+  },
+  'audit-events': {
+    title: 'Service Admin - Secrets Broker Audit Events',
+    description: 'Inspect audit events and tamper-evidence metadata.',
+  },
+  diagnostics: {
+    title: 'Service Admin - Secrets Broker Diagnostics',
+    description: 'Inspect safe diagnostics and troubleshooting signals.',
+  },
+}
+
 const wizardSources: WizardSource[] = [
   {
     id: 'local-vault',
@@ -1357,11 +1411,16 @@ function PrivilegedSecretRevealPanel({
   )
 }
 
-export function SecretsBrokerSetupWizard() {
+export function SecretsBrokerSetupWizard({
+  focusSection = 'overview',
+}: {
+  focusSection?: SecretsBrokerSectionFocus
+} = {}) {
+  const pageMetadata = secretsBrokerSectionMetadata[focusSection]
+
   usePageMetadata({
-    title: 'Service Admin - Secrets Broker Setup',
-    description:
-      'Guided setup and diagnostics for local and external Secrets Broker sources.',
+    title: pageMetadata.title,
+    description: pageMetadata.description,
   })
 
   const [selectedId, setSelectedId] = useState(wizardSources[0].id)
@@ -1661,16 +1720,18 @@ export function SecretsBrokerSetupWizard() {
 
             <div className='flex flex-wrap gap-2'>
               <Button variant='outline' size='sm' asChild>
-                <a href='#provider-connections'>View provider connections</a>
+                <a href='/secrets-broker/provider-connections'>
+                  View provider connections
+                </a>
               </Button>
               <Button variant='outline' size='sm' asChild>
-                <a href='#secret-sources'>View secret sources</a>
+                <a href='/secrets-broker/sources'>View secret sources</a>
               </Button>
               <Button variant='outline' size='sm' asChild>
-                <a href='#audit-events'>View audit/events</a>
+                <a href='/secrets-broker/audit-events'>View audit/events</a>
               </Button>
               <Button variant='outline' size='sm' asChild>
-                <a href='#diagnostics'>View diagnostics</a>
+                <a href='/secrets-broker/diagnostics'>View diagnostics</a>
               </Button>
             </div>
           </CardContent>
@@ -1976,7 +2037,7 @@ export function SecretsBrokerSetupWizard() {
                           <div className='mt-2 flex flex-wrap gap-1 text-xs'>
                             {connection.lifecycle.auditEventRef ? (
                               <a
-                                href='#audit-events'
+                                href='/secrets-broker/audit-events'
                                 className='text-primary underline-offset-4 hover:underline'
                               >
                                 Audit {connection.lifecycle.auditEventRef}
@@ -1984,7 +2045,7 @@ export function SecretsBrokerSetupWizard() {
                             ) : null}
                             {connection.lifecycle.diagnosticRef ? (
                               <a
-                                href='#diagnostics'
+                                href='/secrets-broker/diagnostics'
                                 className='text-primary underline-offset-4 hover:underline'
                               >
                                 Diagnostics {connection.lifecycle.diagnosticRef}
