@@ -18,6 +18,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   Palette,
+  Route,
   ScrollText,
   Settings,
   TimerReset,
@@ -60,6 +61,11 @@ export const sidebarData: SidebarData = {
           title: 'Dependencies',
           url: '/dependencies',
           icon: GitBranch,
+        },
+        {
+          title: 'Routes',
+          url: '/service-routes',
+          icon: Route,
         },
         {
           title: 'Logs',
