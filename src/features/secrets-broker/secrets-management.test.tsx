@@ -22,7 +22,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/Visible values/i)).toBeVisible()
     expect(screen.getByText(/Stub preview · values hidden/i)).toBeVisible()
     expect(
-      screen.getByText(/Stub update\/reset\/reveal API preview/i)
+      screen.getByText(/Stub update\/reset\/delete\/reveal API preview/i)
     ).toBeVisible()
     expect(screen.getAllByText(/Stub API · preview only/i)[0]).toBeVisible()
     expect(screen.getAllByText(/SESSION_SIGNING_KEY/i)[0]).toBeVisible()
@@ -30,6 +30,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/Controlled reveal/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Edit\/update dry-run/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Reset\/rotate dry-run/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Delete dry-run/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Apply policy preview/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Raw values hidden/i)[0]).toBeVisible()
     expect(screen.getByText(/No bulk mutation/i)).toBeVisible()
@@ -72,7 +73,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
-  it('previews reveal edit reset and policy actions behind dry-run or confirmation gates', async () => {
+  it('previews reveal edit reset delete and policy actions behind dry-run or confirmation gates', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
 
@@ -106,6 +107,17 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
 
     await user.click(
+      screen.getAllByRole('button', { name: /Delete dry-run/i })[0]
+    )
+    expect(
+      screen.getByText(/Delete dry-run for SESSION_SIGNING_KEY/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/delete preview required before apply/i)
+    ).toBeVisible()
+    expect(screen.getByText(/recovery guidance/i)).toBeVisible()
+
+    await user.click(
       screen.getAllByRole('button', { name: /Apply policy preview/i })[0]
     )
     expect(
@@ -121,12 +133,12 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeDisabled()
   })
 
-  it('covers stub update reset reveal preview states and gated apply readiness', async () => {
+  it('covers stub update reset delete reveal preview states and gated apply readiness', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
 
     expect(
-      screen.getByText(/Stub update\/reset\/reveal API preview/i)
+      screen.getByText(/Stub update\/reset\/delete\/reveal API preview/i)
     ).toBeVisible()
     expect(screen.getByText(/audit reason required/i)).toBeVisible()
     expect(
@@ -204,7 +216,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       buildStubSecretMutationPreview(
         managedSecretRows[0],
-        'edit',
+        'delete',
         'ready',
         'operator requested safe preview',
         true
