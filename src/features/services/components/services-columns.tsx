@@ -249,4 +249,3 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
     cell: DataTableRowActions,
   },
 ]
-
