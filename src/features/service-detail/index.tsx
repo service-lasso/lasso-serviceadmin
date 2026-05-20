@@ -1149,4 +1149,3 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
     </>
   )
 }
-

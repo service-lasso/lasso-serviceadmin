@@ -684,8 +684,9 @@ function buildSummary(): DashboardSummary {
     servicesTotal: services.length,
     servicesRunning: services.filter((service) => service.status === 'running')
       .length,
-    servicesAvailable: services.filter((service) => service.status === 'available')
-      .length,
+    servicesAvailable: services.filter(
+      (service) => service.status === 'available'
+    ).length,
     servicesStopped: services.filter((service) => service.status === 'stopped')
       .length,
     servicesDegraded: services.filter(

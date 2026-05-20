@@ -21,7 +21,8 @@ function service(
     links: [{ label: 'Local', url: 'http://127.0.0.1', kind: 'local' }],
     runtimeHealth: {
       state: status,
-      health: status === 'running' || status === 'available' ? 'healthy' : 'critical',
+      health:
+        status === 'running' || status === 'available' ? 'healthy' : 'critical',
       uptime: status === 'running' ? '3m' : '0m',
       lastCheckAt: '2026-04-16T16:00:03.000Z',
       lastRestartAt:
