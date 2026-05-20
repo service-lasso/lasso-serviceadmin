@@ -1,5 +1,6 @@
 import { renderRoute } from '@/test/render-route'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
   buildLargeSecretInventoryFixture,
@@ -65,5 +66,28 @@ describe('secret inventory metadata view', () => {
     expect(largeRows[124].refId).toBe('secret://fixture/workspace-5/ref-125')
     expect(new Set(largeRows.map((row) => row.id)).size).toBe(125)
     expect(secretInventoryHasPlaintextMaterial(largeRows)).toBe(false)
+  })
+
+  it('supports shared data-table search and pagination for inventory refs', async () => {
+    const user = userEvent.setup()
+    const { router } = await renderRoute('/secret-inventory?pageSize=2')
+
+    expect(screen.getByPlaceholderText(/Search secret refs/i)).toBeVisible()
+    expect(screen.getByText('local/serviceadmin')).toBeVisible()
+    expect(screen.queryByText('file/runtime')).not.toBeInTheDocument()
+    expect(screen.getAllByText(/Page 1 of 3/i)[0]).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Go to next page/i }))
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ page: 2 })
+    })
+
+    await user.type(
+      screen.getByPlaceholderText(/Search secret refs/i),
+      'payments'
+    )
+    expect(screen.getByText('provider/payments')).toBeVisible()
+    expect(screen.queryByText('file/runtime')).not.toBeInTheDocument()
+    expect(router.state.location.search).toMatchObject({ ref: 'payments' })
   })
 })
