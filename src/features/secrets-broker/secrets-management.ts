@@ -63,6 +63,42 @@ export type StubSecretMutationPreview = {
   stubOnly: true
 }
 
+export type BulkSecretCampaignOperation =
+  | 'rotate-reset'
+  | 'update-edit'
+  | 'apply-policy'
+  | 'migrate-provider'
+  | 'mark-action-required'
+
+export type BulkSecretCampaignItem = {
+  id: string
+  ref: string
+  name: string
+  owningService: string
+  sourceProvider: string
+  targetProvider: string
+  targetPolicy: string
+  capabilityResult: string
+  policyResult: string
+  risk: 'low' | 'medium' | 'high'
+  auditRequirement: string
+  expectedAction: string
+  blockers: string[]
+}
+
+export type BulkSecretCampaignPlan = {
+  operation: BulkSecretCampaignOperation
+  selectedCount: number
+  applicableCount: number
+  deniedCount: number
+  unsupportedCount: number
+  authRequiredCount: number
+  missingProviderCount: number
+  highRiskCount: number
+  items: BulkSecretCampaignItem[]
+  applyAvailable: false
+}
+
 export const managedSecretRows: ManagedSecretRow[] = [
   {
     id: 'serviceadmin-session-signing',
@@ -160,6 +196,17 @@ export const stubSecretMutationStates: Array<{
   { id: 'failure', label: 'Stub apply failure' },
 ]
 
+export const bulkSecretCampaignOperations: Array<{
+  id: BulkSecretCampaignOperation
+  label: string
+}> = [
+  { id: 'rotate-reset', label: 'Rotate/reset selected refs' },
+  { id: 'update-edit', label: 'Update/edit selected refs' },
+  { id: 'apply-policy', label: 'Apply policy preview' },
+  { id: 'migrate-provider', label: 'Migrate/remap provider' },
+  { id: 'mark-action-required', label: 'Mark action required' },
+]
+
 export const managedSecretSafeSurfaces = {
   route: '/secrets-broker/secrets',
   pageTitle: 'Service Admin - Secrets Broker Secrets',
@@ -174,6 +221,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:action-preview',
     'secrets-management:stub-mutation-preview',
     'secrets-management:stub-mutation-apply-status',
+    'secrets-management:bulk-campaign-dry-run',
   ],
   persistedStorage: 'none',
 }
@@ -377,6 +425,118 @@ export function buildStubSecretMutationPreview(
   }
 }
 
+export function buildBulkSecretCampaignPlan(
+  rows: ManagedSecretRow[],
+  selectedIds: string[],
+  operation: BulkSecretCampaignOperation
+): BulkSecretCampaignPlan {
+  const selected = rows.filter((row) => selectedIds.includes(row.id))
+  const items = selected.map((row): BulkSecretCampaignItem => {
+    const blockers: string[] = []
+    let capabilityResult = 'supported: metadata dry-run only'
+    let policyResult = 'allow preview'
+    let risk: BulkSecretCampaignItem['risk'] = 'medium'
+    let expectedAction = 'Generate campaign dry-run metadata; do not apply.'
+
+    if (operation === 'mark-action-required') {
+      risk = 'low'
+      expectedAction = 'Mark ref for follow-up only; no provider mutation.'
+    }
+
+    if (
+      operation === 'rotate-reset' ||
+      operation === 'update-edit' ||
+      operation === 'migrate-provider'
+    ) {
+      risk = 'high'
+    }
+
+    if (row.policy.includes('readonly')) {
+      policyResult = 'denied: policy is readonly for this ref'
+      blockers.push('policy denied')
+    }
+
+    if (row.state === 'missing') {
+      capabilityResult = 'missing provider/source'
+      blockers.push('provider/source missing')
+      expectedAction = 'Skip until the provider/source is configured.'
+    } else if (
+      operation === 'rotate-reset' &&
+      !row.backendCapability.includes('reset dry-run')
+    ) {
+      capabilityResult = 'unsupported: reset dry-run unavailable'
+      blockers.push('unsupported capability')
+      expectedAction = 'Skip this ref or choose an edit/policy preview.'
+    } else if (
+      operation === 'update-edit' &&
+      !row.backendCapability.includes('edit dry-run')
+    ) {
+      capabilityResult = 'unsupported: edit dry-run unavailable'
+      blockers.push('unsupported capability')
+      expectedAction = 'Skip this ref or choose a reset/policy preview.'
+    } else if (
+      operation === 'migrate-provider' &&
+      row.provider === 'file source'
+    ) {
+      capabilityResult = 'unsupported: file sources migrate outside broker'
+      blockers.push('unsupported capability')
+      expectedAction = 'Document external provider action only.'
+    } else if (
+      operation === 'rotate-reset' &&
+      row.safeTags.includes('provider')
+    ) {
+      capabilityResult = 'auth required: provider challenge before dry-run'
+      blockers.push('provider auth required')
+      expectedAction = 'Request provider auth, then rerun dry-run.'
+    }
+
+    return {
+      id: row.id,
+      ref: row.ref,
+      name: row.name,
+      owningService: row.owningService,
+      sourceProvider: `${row.provider} / ${row.source}`,
+      targetProvider:
+        operation === 'migrate-provider'
+          ? '@secretsbroker/local/default'
+          : row.source,
+      targetPolicy:
+        operation === 'apply-policy'
+          ? 'policy/openclaw/service-lasso/bulk-campaign-preview'
+          : row.policy,
+      capabilityResult,
+      policyResult,
+      risk,
+      auditRequirement:
+        risk === 'high'
+          ? 'campaign audit reason and fresh dry-run required before apply'
+          : 'campaign audit summary required',
+      expectedAction,
+      blockers,
+    }
+  })
+
+  return {
+    operation,
+    selectedCount: items.length,
+    applicableCount: items.filter((item) => item.blockers.length === 0).length,
+    deniedCount: items.filter((item) => item.policyResult.includes('denied'))
+      .length,
+    unsupportedCount: items.filter((item) =>
+      item.capabilityResult.includes('unsupported')
+    ).length,
+    authRequiredCount: items.filter((item) =>
+      item.capabilityResult.includes('auth required')
+    ).length,
+    missingProviderCount: items.filter((item) =>
+      item.capabilityResult.includes('missing provider')
+    ).length,
+    highRiskCount: items.filter((item) => item.risk === 'high').length,
+    items,
+    applyAvailable: false,
+  }
+}
+
 export function buildManagedSecretActionPreview(
   row: ManagedSecretRow,
   action: ManagedSecretAction
@@ -461,4 +621,10 @@ export function managedSecretsHaveSecretMaterial(rows = managedSecretRows) {
 
 export function managedSecretSafeSurfacesIncludeSecretMaterial() {
   return forbiddenSecretPattern.test(JSON.stringify(managedSecretSafeSurfaces))
+}
+
+export function managedSecretBulkPlanHasSecretMaterial(
+  plan: BulkSecretCampaignPlan
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(plan))
 }
