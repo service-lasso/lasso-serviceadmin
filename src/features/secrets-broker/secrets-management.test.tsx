@@ -3,8 +3,10 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
+  buildBulkSecretCampaignPlan,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
+  managedSecretBulkPlanHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretsHaveSecretMaterial,
@@ -69,6 +71,40 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/Value search supported: 1 safe ref metadata match/i)
     ).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('generates a non-mutating bulk dry-run plan for selected refs', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    expect(screen.getByText(/Bulk campaign dry-run planner/i)).toBeVisible()
+    expect(screen.getByText(/2 refs selected/i)).toBeVisible()
+
+    await user.click(
+      screen.getByLabelText(/Select NODE_REGISTRY_AUTH for bulk dry-run/i)
+    )
+    await user.click(
+      screen.getByLabelText(/Select PAYMENTS_SIGNING_REF for bulk dry-run/i)
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+
+    expect(screen.getByText(/supported: metadata dry-run only/i)).toBeVisible()
+    expect(
+      screen.getByText(/auth required: provider challenge before dry-run/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/unsupported: reset dry-run unavailable/i)
+    ).toBeVisible()
+    expect(screen.getByText('missing provider/source')).toBeVisible()
+    expect(
+      screen.getByText(/denied: policy is readonly for this ref/i)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Bulk apply unavailable in Stage 1/i })
+    ).toBeDisabled()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
@@ -219,5 +255,18 @@ describe('Secrets Broker secrets management page', () => {
         true
       ).canApply
     ).toBe(false)
+    const bulkPlan = buildBulkSecretCampaignPlan(
+      managedSecretRows,
+      managedSecretRows.map((row) => row.id),
+      'rotate-reset'
+    )
+    expect(bulkPlan.selectedCount).toBe(4)
+    expect(bulkPlan.applicableCount).toBe(1)
+    expect(bulkPlan.deniedCount).toBe(1)
+    expect(bulkPlan.unsupportedCount).toBe(1)
+    expect(bulkPlan.authRequiredCount).toBe(1)
+    expect(bulkPlan.missingProviderCount).toBe(1)
+    expect(bulkPlan.applyAvailable).toBe(false)
+    expect(managedSecretBulkPlanHasSecretMaterial(bulkPlan)).toBe(false)
   })
 })
