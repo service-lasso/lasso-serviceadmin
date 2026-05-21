@@ -1,6 +1,5 @@
 import {
   Boxes,
-  Building2,
   ClipboardCheck,
   Command,
   DatabaseZap,
@@ -11,7 +10,6 @@ import {
   LifeBuoy,
   LockKeyhole,
   Network,
-  Scale,
   ShieldCheck,
   SlidersHorizontal,
   HardDrive,
@@ -53,11 +51,6 @@ export const sidebarData: SidebarData = {
           icon: Boxes,
         },
         {
-          title: 'Fleet Overview',
-          url: '/fleet-overview',
-          icon: Building2,
-        },
-        {
           title: 'Dependencies',
           url: '/dependencies',
           icon: GitBranch,
@@ -86,11 +79,6 @@ export const sidebarData: SidebarData = {
           title: 'Variables',
           url: '/variables',
           icon: SlidersHorizontal,
-        },
-        {
-          title: 'ZITADEL Session',
-          url: '/auth-session',
-          icon: LockKeyhole,
         },
         {
           title: 'Support Bundle',
@@ -172,11 +160,6 @@ export const sidebarData: SidebarData = {
           title: 'Secret Inventory',
           url: '/secret-inventory',
           icon: DatabaseZap,
-        },
-        {
-          title: 'Policy Simulation',
-          url: '/secrets-policy-simulation',
-          icon: Scale,
         },
       ],
     },
