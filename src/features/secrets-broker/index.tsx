@@ -52,6 +52,15 @@ import {
   type SecretsBrokerDiagnosticStatus,
 } from './diagnostics'
 import {
+  filterOperationalControlEvents,
+  operationalControlEvents,
+  operationalControlLockouts,
+  operationalControlMetrics,
+  operationalControlPolicies,
+  type OperationalControlOutcome,
+  type OperationalControlSeverity,
+} from './operational-controls'
+import {
   secretsBrokerProviderConnections,
   type SecretsBrokerProviderConnectionDetail,
   type SecretsBrokerProviderConnectionState,
@@ -544,6 +553,26 @@ const workflowRefStatusVariant: Record<
   missing: 'destructive',
   denied: 'destructive',
   warning: 'secondary',
+}
+
+const operationalControlSeverityVariant: Record<
+  OperationalControlSeverity,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  info: 'default',
+  warning: 'secondary',
+  critical: 'destructive',
+}
+
+const operationalControlOutcomeVariant: Record<
+  OperationalControlOutcome,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  allowed: 'default',
+  recorded: 'default',
+  warning: 'secondary',
+  blocked: 'destructive',
+  denied: 'destructive',
 }
 
 function filterProviderConnections(
@@ -1163,6 +1192,424 @@ function DiagnosticCard({
   )
 }
 
+function OperationalControlsPanel() {
+  const [serviceFilter, setServiceFilter] = useState('all')
+  const [providerFilter, setProviderFilter] = useState('all')
+  const [operationFilter, setOperationFilter] = useState('all')
+  const [outcomeFilter, setOutcomeFilter] = useState<
+    OperationalControlOutcome | 'all'
+  >('all')
+  const [severityFilter, setSeverityFilter] = useState<
+    OperationalControlSeverity | 'all'
+  >('all')
+  const [sinceFilter, setSinceFilter] = useState('')
+  const [untilFilter, setUntilFilter] = useState('')
+
+  const services = Array.from(
+    new Set(operationalControlEvents.map((event) => event.serviceId))
+  )
+  const providers = Array.from(
+    new Set(operationalControlEvents.map((event) => event.providerId))
+  )
+  const operations = Array.from(
+    new Set(operationalControlEvents.map((event) => event.operation))
+  )
+  const outcomes = Array.from(
+    new Set(operationalControlEvents.map((event) => event.outcome))
+  )
+  const severities = Array.from(
+    new Set(operationalControlEvents.map((event) => event.severity))
+  )
+  const filteredEvents = filterOperationalControlEvents(
+    operationalControlEvents,
+    {
+      serviceId: serviceFilter,
+      providerId: providerFilter,
+      operation: operationFilter,
+      outcome: outcomeFilter,
+      severity: severityFilter,
+      since: sinceFilter,
+      until: untilFilter,
+    }
+  )
+
+  return (
+    <Card id='operational-controls'>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle className='flex items-center gap-2'>
+              <ShieldCheck className='size-4' /> Operational controls
+            </CardTitle>
+            <CardDescription>
+              Policy, audit, telemetry, event filtering, and lockout posture for
+              Secrets Broker operations. The surface shows refs, scopes,
+              counters, and outcomes only.
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Badge variant='secondary'>Metadata only</Badge>
+            <Badge variant='outline'>Raw values hidden</Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-3 md:grid-cols-4'>
+          {operationalControlMetrics.map((metric) => (
+            <div key={metric.label} className='rounded-lg border p-3'>
+              <div className='flex items-center justify-between gap-2'>
+                <div className='text-xs text-muted-foreground'>
+                  {metric.label}
+                </div>
+                <Badge
+                  variant={operationalControlSeverityVariant[metric.status]}
+                >
+                  {metric.status}
+                </Badge>
+              </div>
+              <div className='mt-1 text-xl font-bold'>{metric.value}</div>
+              <div className='mt-1 text-xs text-muted-foreground'>
+                {metric.detail}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
+          <div className='rounded-lg border p-4'>
+            <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+              <div>
+                <div className='font-medium'>Effective service policy</div>
+                <div className='text-xs text-muted-foreground'>
+                  Service manifest scopes and fail-closed decision state.
+                </div>
+              </div>
+              <Badge variant='outline'>no value material</Badge>
+            </div>
+            <div className='space-y-3'>
+              {operationalControlPolicies.map((policy) => (
+                <div
+                  key={policy.serviceId}
+                  className='rounded-md border p-3 text-sm'
+                >
+                  <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='font-medium'>{policy.serviceId}</div>
+                    <Badge
+                      variant={
+                        policy.decision === 'allowed'
+                          ? 'default'
+                          : policy.decision === 'denied'
+                            ? 'destructive'
+                            : 'secondary'
+                      }
+                    >
+                      {policy.decision}
+                    </Badge>
+                  </div>
+                  <div className='mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3'>
+                    <div>
+                      <div className='font-medium text-foreground'>Resolve</div>
+                      {policy.resolveScopes.join(', ') || 'none'}
+                    </div>
+                    <div>
+                      <div className='font-medium text-foreground'>
+                        Writeback
+                      </div>
+                      {policy.writebackScopes.join(', ') || 'none'}
+                    </div>
+                    <div>
+                      <div className='font-medium text-foreground'>Manage</div>
+                      {policy.manageScopes.join(', ') || 'none'}
+                    </div>
+                  </div>
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    {policy.blocker}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className='rounded-lg border p-4'>
+            <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+              <div>
+                <div className='font-medium'>Scoped lockouts</div>
+                <div className='text-xs text-muted-foreground'>
+                  Affected scopes, retry windows, and audited-clear support.
+                </div>
+              </div>
+              <Badge variant='outline'>secret-bearing actions only</Badge>
+            </div>
+            <div className='space-y-3'>
+              {operationalControlLockouts.map((lockout) => (
+                <div key={lockout.id} className='rounded-md border p-3 text-sm'>
+                  <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='font-medium'>{lockout.scope}</div>
+                    <Badge
+                      variant={
+                        lockout.status === 'active'
+                          ? 'destructive'
+                          : 'secondary'
+                      }
+                    >
+                      {lockout.status}
+                    </Badge>
+                  </div>
+                  <div className='mt-2 text-muted-foreground'>
+                    {lockout.affected}
+                  </div>
+                  <div className='mt-2 grid gap-2 text-xs sm:grid-cols-2'>
+                    <div>Retry after: {lockout.retryAfterSeconds}s</div>
+                    <div>
+                      Audited clear:{' '}
+                      {lockout.auditedClearSupported ? 'supported' : 'blocked'}
+                    </div>
+                  </div>
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    {lockout.reason}
+                  </div>
+                  <Button
+                    className='mt-3'
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={!lockout.auditedClearSupported}
+                  >
+                    Request audited clear
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className='rounded-lg border p-4'>
+          <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+            <div>
+              <div className='font-medium'>Operational events</div>
+              <div className='text-xs text-muted-foreground'>
+                Filters cover service, provider, operation, outcome, severity,
+                and time window.
+              </div>
+            </div>
+            <Button type='button' size='sm' variant='outline'>
+              Export audit metadata
+            </Button>
+          </div>
+
+          <div className='grid gap-3 md:grid-cols-7'>
+            <div>
+              <label
+                htmlFor='operational-control-service'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control service
+              </label>
+              <select
+                id='operational-control-service'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={serviceFilter}
+                onChange={(event) => setServiceFilter(event.target.value)}
+              >
+                <option value='all'>all</option>
+                {services.map((service) => (
+                  <option key={service} value={service}>
+                    {service}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor='operational-control-provider'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control provider
+              </label>
+              <select
+                id='operational-control-provider'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={providerFilter}
+                onChange={(event) => setProviderFilter(event.target.value)}
+              >
+                <option value='all'>all</option>
+                {providers.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {provider}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor='operational-control-operation'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control operation
+              </label>
+              <select
+                id='operational-control-operation'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={operationFilter}
+                onChange={(event) => setOperationFilter(event.target.value)}
+              >
+                <option value='all'>all</option>
+                {operations.map((operation) => (
+                  <option key={operation} value={operation}>
+                    {operation}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor='operational-control-outcome'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control result
+              </label>
+              <select
+                id='operational-control-outcome'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={outcomeFilter}
+                onChange={(event) =>
+                  setOutcomeFilter(
+                    event.target.value as OperationalControlOutcome | 'all'
+                  )
+                }
+              >
+                <option value='all'>all</option>
+                {outcomes.map((outcome) => (
+                  <option key={outcome} value={outcome}>
+                    {outcome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor='operational-control-severity'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control urgency
+              </label>
+              <select
+                id='operational-control-severity'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={severityFilter}
+                onChange={(event) =>
+                  setSeverityFilter(
+                    event.target.value as OperationalControlSeverity | 'all'
+                  )
+                }
+              >
+                <option value='all'>all</option>
+                {severities.map((severity) => (
+                  <option key={severity} value={severity}>
+                    {severity}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor='operational-control-since'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control since
+              </label>
+              <Input
+                id='operational-control-since'
+                value={sinceFilter}
+                onChange={(event) => setSinceFilter(event.target.value)}
+                placeholder='2026-05-22T04:00:00Z'
+              />
+            </div>
+            <div>
+              <label
+                htmlFor='operational-control-until'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Control until
+              </label>
+              <Input
+                id='operational-control-until'
+                value={untilFilter}
+                onChange={(event) => setUntilFilter(event.target.value)}
+                placeholder='2026-05-22T04:10:00Z'
+              />
+            </div>
+          </div>
+
+          <div className='mt-4 overflow-x-auto rounded-lg border'>
+            <table className='w-full text-sm'>
+              <thead className='bg-muted/50 text-left'>
+                <tr>
+                  <th className='p-3 font-medium'>Event</th>
+                  <th className='p-3 font-medium'>Service / provider</th>
+                  <th className='p-3 font-medium'>Outcome</th>
+                  <th className='p-3 font-medium'>Scope</th>
+                  <th className='p-3 font-medium'>Next action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEvents.map((event) => (
+                  <tr key={event.id} className='border-t align-top'>
+                    <td className='p-3'>
+                      <div className='font-medium'>{event.operation}</div>
+                      <div className='text-xs text-muted-foreground'>
+                        {event.family} · {event.timestamp}
+                      </div>
+                    </td>
+                    <td className='p-3'>
+                      <div>{event.serviceId}</div>
+                      <div className='text-xs text-muted-foreground'>
+                        {event.providerId}
+                      </div>
+                    </td>
+                    <td className='p-3'>
+                      <div className='flex flex-wrap gap-2'>
+                        <Badge
+                          variant={
+                            operationalControlOutcomeVariant[event.outcome]
+                          }
+                        >
+                          {event.outcome}
+                        </Badge>
+                        <Badge
+                          variant={
+                            operationalControlSeverityVariant[event.severity]
+                          }
+                        >
+                          {event.severity}
+                        </Badge>
+                      </div>
+                      <div className='mt-2 text-xs text-muted-foreground'>
+                        {event.summary}
+                      </div>
+                    </td>
+                    <td className='p-3 font-mono text-xs break-all'>
+                      {event.refScope}
+                    </td>
+                    <td className='p-3'>{event.nextAction}</td>
+                  </tr>
+                ))}
+                {!filteredEvents.length ? (
+                  <tr>
+                    <td className='p-3 text-muted-foreground' colSpan={5}>
+                      No operational events match these filters.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function PrivilegedSecretRevealPanel({
   scenarioId,
   revealed,
@@ -1677,6 +2124,9 @@ export function SecretsBrokerSetupWizard() {
                 <a href='#audit-events'>View audit/events</a>
               </Button>
               <Button variant='outline' size='sm' asChild>
+                <a href='#operational-controls'>Operational controls</a>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
                 <a href='#diagnostics'>View diagnostics</a>
               </Button>
             </div>
@@ -1718,6 +2168,8 @@ export function SecretsBrokerSetupWizard() {
             </CardContent>
           </Card>
         </div>
+
+        <OperationalControlsPanel />
 
         <PrivilegedSecretRevealPanel
           scenarioId={singleSecretRevealState}

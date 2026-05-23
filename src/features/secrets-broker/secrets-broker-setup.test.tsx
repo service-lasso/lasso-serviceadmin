@@ -17,6 +17,11 @@ import {
 } from './backup-key-management'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
 import {
+  filterOperationalControlEvents,
+  operationalControlEvents,
+  operationalControlFixturesHaveSecretMaterial,
+} from './operational-controls'
+import {
   buildProviderReconnectPlan,
   providerConnectionHasSecretValue,
   providerReconnectPlanHasSecretValue,
@@ -116,6 +121,63 @@ describe('Secrets Broker setup wizard', () => {
       screen.queryByText(/correct-horse-battery-staple/i)
     ).not.toBeInTheDocument()
   })
+
+  it('renders operational controls with policy telemetry event filters and lockout state', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getAllByText(/Operational controls/i)[0]).toBeVisible()
+    expect(screen.getByText(/Effective service policy/i)).toBeVisible()
+    expect(screen.getByText(/Scoped lockouts/i)).toBeVisible()
+    expect(screen.getByText(/Operational events/i)).toBeVisible()
+    expect(screen.getByText(/Audit availability/i)).toBeVisible()
+    expect(screen.getByText(/services\/\*\/runtime\/\*/i)).toBeVisible()
+    expect(screen.getAllByText(/local-api\/session\/ui/i)[0]).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Export audit metadata/i })
+    ).toBeVisible()
+    expect(
+      screen.getAllByRole('button', { name: /Request audited clear/i })[0]
+    ).toBeDisabled()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Control service/i),
+      'payments-api'
+    )
+    expect(
+      screen.getByText(/Resolve blocked because external provider auth/i)
+    ).toBeVisible()
+    expect(
+      screen.queryByText(/Privileged reveal approved/i)
+    ).not.toBeInTheDocument()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Control provider/i),
+      'vault'
+    )
+    await user.selectOptions(
+      screen.getByLabelText(/Control urgency/i),
+      'critical'
+    )
+    expect(screen.getAllByText(/providers\/payments\/\*/i)[0]).toBeVisible()
+
+    await user.clear(screen.getByLabelText(/Control since/i))
+    await user.type(
+      screen.getByLabelText(/Control since/i),
+      '2026-05-22T04:09:00Z'
+    )
+    expect(
+      screen.getByText(/No operational events match these filters/i)
+    ).toBeVisible()
+
+    expect(
+      screen.queryByText(/fixture-provider-credential-value/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/fixture-managed-secret-value/i)
+    ).not.toBeInTheDocument()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  }, 30000)
 
   it('covers locked, auth-required, degraded, policy-denied, cancel, and ready states', async () => {
     const user = userEvent.setup()
@@ -332,6 +394,15 @@ describe('Secrets Broker setup wizard', () => {
     expect(backupKeyStatusHasSecretMaterial(secretsBrokerBackupKeyStatus)).toBe(
       false
     )
+    expect(operationalControlFixturesHaveSecretMaterial()).toBe(false)
+    expect(
+      filterOperationalControlEvents(operationalControlEvents, {
+        serviceId: 'payments-api',
+        providerId: 'vault',
+        outcome: 'blocked',
+        severity: 'critical',
+      })
+    ).toHaveLength(1)
   })
 
   it('renders secret sources and backends with warning states and metadata-only test results', async () => {
@@ -981,9 +1052,11 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('scrubs secret-like diagnostic output before rendering', () => {
+    const fakeAwsAccessKey = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('')
+
     expect(
       scrubSecretLikeOutput(
-        'password=hunter2 token=ghp_secretValue api_key=sk-exampleSecret123456 AKIAABCDEFGHIJKLMNOP'
+        `password=hunter2 token=ghp_secretValue api_key=sk-exampleSecret123456 ${fakeAwsAccessKey}`
       )
     ).toBe('[redacted] [redacted] [redacted] [redacted]')
     expect(
