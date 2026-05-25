@@ -406,6 +406,68 @@ export function toReactFlowSecretsBrokerTopology(
   return { nodes, edges }
 }
 
+function topologySearchMatches(
+  query: string,
+  values: Array<string | undefined>
+) {
+  return values.some((value) => value?.toLowerCase().includes(query))
+}
+
+export function filterSecretsBrokerTopology(
+  topology: SecretsBrokerTopology,
+  query: string
+): SecretsBrokerTopology {
+  const normalizedQuery = query.trim().toLowerCase()
+
+  if (!normalizedQuery) return topology
+
+  const nodesById = new Map(topology.nodes.map((node) => [node.id, node]))
+  const directlyMatchedNodeIds = new Set(
+    topology.nodes
+      .filter((node) =>
+        topologySearchMatches(normalizedQuery, [
+          node.id,
+          node.label,
+          node.kind,
+          node.summary,
+        ])
+      )
+      .map((node) => node.id)
+  )
+  const visibleNodeIds = new Set(directlyMatchedNodeIds)
+  const visibleEdgeIds = new Set<string>()
+
+  topology.edges.forEach((edge) => {
+    const sourceNode = nodesById.get(edge.source)
+    const targetNode = nodesById.get(edge.target)
+    const edgeMatches = topologySearchMatches(normalizedQuery, [
+      edge.id,
+      edge.label,
+      edge.kind,
+      edge.status,
+      sourceNode?.label,
+      sourceNode?.kind,
+      targetNode?.label,
+      targetNode?.kind,
+    ])
+
+    if (
+      edgeMatches ||
+      directlyMatchedNodeIds.has(edge.source) ||
+      directlyMatchedNodeIds.has(edge.target)
+    ) {
+      visibleEdgeIds.add(edge.id)
+      visibleNodeIds.add(edge.source)
+      visibleNodeIds.add(edge.target)
+    }
+  })
+
+  return {
+    nodes: topology.nodes.filter((node) => visibleNodeIds.has(node.id)),
+    edges: topology.edges.filter((edge) => visibleEdgeIds.has(edge.id)),
+  }
+}
+
 export function topologyHasSecretValue(topology: SecretsBrokerTopology) {
   const joined = [
     ...topology.nodes.flatMap((node) => [node.id, node.label, node.summary]),

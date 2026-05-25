@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { getRouteApi } from '@tanstack/react-router'
 import { DatabaseZap, ShieldCheck } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -10,14 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -28,20 +20,14 @@ import {
   countSecretInventoryByState,
   secretInventoryBoundaries,
   secretInventoryRows,
-  type SecretInventoryState,
 } from './secret-inventory'
+import { SecretInventoryTable } from './secret-inventory-table'
 
-const stateVariant: Record<
-  SecretInventoryState,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  present: 'default',
-  missing: 'destructive',
-  stale: 'secondary',
-  'rotation-due': 'outline',
-}
+const route = getRouteApi('/_authenticated/secret-inventory/')
 
 export function SecretInventoryPage() {
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
   const counts = countSecretInventoryByState()
 
   usePageMetadata({
@@ -134,95 +120,11 @@ export function SecretInventoryPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className='overflow-x-auto rounded-md border'>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Namespace / ref</TableHead>
-                    <TableHead>Source / backend</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>State</TableHead>
-                    <TableHead>Key / rotation</TableHead>
-                    <TableHead>Last updated / used</TableHead>
-                    <TableHead>Metadata links</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {secretInventoryRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className='min-w-72 align-top'>
-                        <div className='font-medium'>{row.namespace}</div>
-                        <div className='text-sm break-all text-muted-foreground'>
-                          {row.refId}
-                        </div>
-                        <div className='mt-2 text-xs text-muted-foreground'>
-                          {row.safeNotes}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-56 align-top'>
-                        <Badge variant='outline'>{row.source}</Badge>
-                        <div className='mt-2 text-sm text-muted-foreground'>
-                          {row.backend}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-44 align-top'>
-                        <div className='font-medium'>{row.owningService}</div>
-                        <div className='text-sm text-muted-foreground'>
-                          {row.workspace}
-                        </div>
-                      </TableCell>
-                      <TableCell className='align-top'>
-                        <Badge variant={stateVariant[row.presenceState]}>
-                          {row.presenceState}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className='min-w-48 align-top'>
-                        <div>{row.keyVersion}</div>
-                        <div className='text-sm text-muted-foreground'>
-                          {row.rotationStatus}
-                        </div>
-                        <div className='text-xs text-muted-foreground'>
-                          Expiry: {row.expiry}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-52 align-top text-sm'>
-                        <div>Updated: {row.lastUpdated}</div>
-                        <div className='text-muted-foreground'>
-                          Used: {row.lastUsed}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-48 align-top'>
-                        <div className='space-y-1 text-sm'>
-                          {row.providerConnectionUrl ? (
-                            <Link
-                              to={row.providerConnectionUrl}
-                              className='block text-primary underline-offset-4 hover:underline'
-                            >
-                              provider metadata
-                            </Link>
-                          ) : null}
-                          <Link
-                            to={row.refUsageUrl}
-                            className='block text-primary underline-offset-4 hover:underline'
-                          >
-                            ref usage
-                          </Link>
-                          <Link
-                            to={row.auditUrl}
-                            className='block text-primary underline-offset-4 hover:underline'
-                          >
-                            audit events
-                          </Link>
-                        </div>
-                        <div className='mt-2 text-xs text-muted-foreground'>
-                          Unavailable: {row.unavailableActions.join(', ')}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <SecretInventoryTable
+              data={secretInventoryRows}
+              search={search}
+              navigate={navigate}
+            />
           </CardContent>
         </Card>
 

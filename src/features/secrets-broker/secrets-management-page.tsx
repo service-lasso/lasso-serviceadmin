@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   DatabaseZap,
   Eye,
+  ListChecks,
   RotateCcw,
   SearchIcon,
   ShieldCheck,
@@ -34,13 +35,16 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
+  buildBulkSecretCampaignPlan,
   buildManagedSecretActionPreview,
   buildStubSecretMutationPreview,
+  bulkSecretCampaignOperations,
   filterManagedSecrets,
   managedSecretRows,
   managedSecretSafetyBoundaries,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
+  type BulkSecretCampaignOperation,
   type ManagedSecretAction,
   type ManagedSecretState,
   type StubSecretMutationState,
@@ -69,6 +73,13 @@ export function SecretsManagementPage() {
   const [stubState, setStubState] = useState<StubSecretMutationState>('ready')
   const [auditReason, setAuditReason] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([
+    managedSecretRows[0].id,
+    managedSecretRows[1].id,
+  ])
+  const [bulkOperation, setBulkOperation] =
+    useState<BulkSecretCampaignOperation>('rotate-reset')
+  const [bulkPlanGenerated, setBulkPlanGenerated] = useState(false)
 
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Secrets',
@@ -105,10 +116,33 @@ export function SecretsManagementPage() {
     auditReason,
     confirmed
   )
+  const bulkPlan = useMemo(
+    () =>
+      buildBulkSecretCampaignPlan(
+        managedSecretRows,
+        bulkSelectedIds,
+        bulkOperation
+      ),
+    [bulkOperation, bulkSelectedIds]
+  )
 
   function chooseAction(rowId: string, action: ManagedSecretAction) {
     setSelectedRowId(rowId)
     setSelectedAction(action)
+  }
+
+  function toggleBulkSelection(rowId: string, checked: boolean) {
+    setBulkPlanGenerated(false)
+    setBulkSelectedIds((current) =>
+      checked
+        ? [...new Set([...current, rowId])]
+        : current.filter((id) => id !== rowId)
+    )
+  }
+
+  function setOperation(operation: BulkSecretCampaignOperation) {
+    setBulkPlanGenerated(false)
+    setBulkOperation(operation)
   }
 
   return (
@@ -284,7 +318,8 @@ export function SecretsManagementPage() {
           <CardHeader>
             <CardTitle>Secrets management table</CardTitle>
             <CardDescription>
-              Searchable safe metadata rows with controlled row actions. Apply
+              Searchable safe metadata rows with controlled row actions and
+              multi-ref selection for non-mutating campaign planning. Apply
               controls are represented as dry-run/preview states, not direct
               mutation.
             </CardDescription>
@@ -294,6 +329,7 @@ export function SecretsManagementPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className='w-12'>Plan</TableHead>
                     <TableHead>Secret ref</TableHead>
                     <TableHead>Owner / provider</TableHead>
                     <TableHead>Status</TableHead>
@@ -304,6 +340,16 @@ export function SecretsManagementPage() {
                 <TableBody>
                   {filteredRows.map((row) => (
                     <TableRow key={row.id}>
+                      <TableCell className='align-top'>
+                        <input
+                          type='checkbox'
+                          aria-label={`Select ${row.name} for bulk dry-run`}
+                          checked={bulkSelectedIds.includes(row.id)}
+                          onChange={(event) =>
+                            toggleBulkSelection(row.id, event.target.checked)
+                          }
+                        />
+                      </TableCell>
                       <TableCell className='min-w-80 align-top'>
                         <div className='font-medium'>{row.name}</div>
                         <div className='text-sm break-all text-muted-foreground'>
@@ -392,6 +438,197 @@ export function SecretsManagementPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <ListChecks className='size-4' /> Bulk campaign dry-run planner
+            </CardTitle>
+            <CardDescription>
+              Stage 1 campaign planning only. The plan evaluates selected refs,
+              capability, policy, risk, audit needs, and blockers without
+              reading or writing raw secret material.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4 text-sm'>
+            <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]'>
+              <div className='space-y-2'>
+                <label
+                  htmlFor='bulk-operation'
+                  className='text-sm font-medium text-muted-foreground'
+                >
+                  Campaign operation
+                </label>
+                <select
+                  id='bulk-operation'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={bulkOperation}
+                  onChange={(event) =>
+                    setOperation(
+                      event.target.value as BulkSecretCampaignOperation
+                    )
+                  }
+                >
+                  {bulkSecretCampaignOperations.map((operation) => (
+                    <option key={operation.id} value={operation.id}>
+                      {operation.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className='flex items-end'>
+                <Button
+                  type='button'
+                  disabled={bulkSelectedIds.length === 0}
+                  onClick={() => setBulkPlanGenerated(true)}
+                >
+                  Generate bulk dry-run plan
+                </Button>
+              </div>
+            </div>
+
+            <div className='grid gap-3 md:grid-cols-3 xl:grid-cols-6'>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs text-muted-foreground uppercase'>
+                  Selected
+                </div>
+                <div className='text-2xl font-semibold'>
+                  {bulkPlan.selectedCount}
+                </div>
+              </div>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs text-muted-foreground uppercase'>
+                  Applicable
+                </div>
+                <div className='text-2xl font-semibold'>
+                  {bulkPlan.applicableCount}
+                </div>
+              </div>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs text-muted-foreground uppercase'>
+                  Denied
+                </div>
+                <div className='text-2xl font-semibold'>
+                  {bulkPlan.deniedCount}
+                </div>
+              </div>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs text-muted-foreground uppercase'>
+                  Unsupported
+                </div>
+                <div className='text-2xl font-semibold'>
+                  {bulkPlan.unsupportedCount}
+                </div>
+              </div>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs text-muted-foreground uppercase'>
+                  Auth required
+                </div>
+                <div className='text-2xl font-semibold'>
+                  {bulkPlan.authRequiredCount}
+                </div>
+              </div>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs text-muted-foreground uppercase'>
+                  High risk
+                </div>
+                <div className='text-2xl font-semibold'>
+                  {bulkPlan.highRiskCount}
+                </div>
+              </div>
+            </div>
+
+            {bulkSelectedIds.length === 0 ? (
+              <div className='rounded-md border bg-muted/40 p-3'>
+                No refs selected. Select at least one metadata row before
+                generating a campaign dry-run plan.
+              </div>
+            ) : bulkPlanGenerated ? (
+              <div className='overflow-x-auto rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ref</TableHead>
+                      <TableHead>Provider / target</TableHead>
+                      <TableHead>Capability / policy</TableHead>
+                      <TableHead>Risk / audit</TableHead>
+                      <TableHead>Expected action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bulkPlan.items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className='min-w-72 align-top'>
+                          <div className='font-medium'>{item.name}</div>
+                          <div className='text-sm break-all text-muted-foreground'>
+                            {item.ref}
+                          </div>
+                          <div className='text-xs text-muted-foreground'>
+                            {item.owningService}
+                          </div>
+                        </TableCell>
+                        <TableCell className='min-w-56 align-top'>
+                          <div>{item.sourceProvider}</div>
+                          <div className='mt-2 text-xs text-muted-foreground'>
+                            Target: {item.targetProvider}
+                          </div>
+                          <div className='text-xs break-all text-muted-foreground'>
+                            {item.targetPolicy}
+                          </div>
+                        </TableCell>
+                        <TableCell className='min-w-64 align-top'>
+                          <div>{item.capabilityResult}</div>
+                          <div className='mt-2 text-muted-foreground'>
+                            {item.policyResult}
+                          </div>
+                          {item.blockers.length > 0 ? (
+                            <div className='mt-2 flex flex-wrap gap-1'>
+                              {item.blockers.map((blocker) => (
+                                <Badge key={blocker} variant='outline'>
+                                  {blocker}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className='min-w-56 align-top'>
+                          <Badge
+                            variant={
+                              item.risk === 'high' ? 'destructive' : 'outline'
+                            }
+                          >
+                            {item.risk} risk
+                          </Badge>
+                          <div className='mt-2 text-muted-foreground'>
+                            {item.auditRequirement}
+                          </div>
+                        </TableCell>
+                        <TableCell className='min-w-56 align-top'>
+                          {item.expectedAction}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className='rounded-md border bg-muted/40 p-3'>
+                {bulkPlan.selectedCount} refs selected. Generate dry-run to
+                calculate capability, policy, risk, audit, and blocker metadata.
+              </div>
+            )}
+
+            <div className='flex flex-wrap gap-2'>
+              <Button type='button' disabled>
+                Bulk apply unavailable in Stage 1
+              </Button>
+              <Badge variant='secondary'>Dry-run only</Badge>
+              <Badge variant='outline'>No raw values</Badge>
+              <Badge variant='outline'>No provider credentials</Badge>
+              <Badge variant='outline'>No export</Badge>
             </div>
           </CardContent>
         </Card>

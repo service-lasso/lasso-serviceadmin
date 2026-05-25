@@ -37,7 +37,11 @@ import {
   secretsBrokerSourceBackends,
   sourceBackendHasSecretValue,
 } from './source-backends'
-import { buildSecretsBrokerTopology, topologyHasSecretValue } from './topology'
+import {
+  buildSecretsBrokerTopology,
+  filterSecretsBrokerTopology,
+  topologyHasSecretValue,
+} from './topology'
 import {
   workflowAuthoringBoundaries,
   workflowAuthoringHasSecretValue,
@@ -783,6 +787,7 @@ describe('Secrets Broker setup wizard', () => {
     await renderRoute('/secrets-broker')
 
     const topology = buildSecretsBrokerTopology()
+    const postgresTopology = filterSecretsBrokerTopology(topology, 'postgres')
 
     expect(screen.getByText(/Secrets Broker topology/i)).toBeVisible()
     expect(screen.getAllByText(/Safe metadata only/i)[0]).toBeVisible()
@@ -795,6 +800,17 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.getAllByRole('link', { name: /Diagnostics/i })[0]
     ).toBeVisible()
+    const topologySearch = screen.getByLabelText(/Search topology/i)
+    await userEvent.type(topologySearch, 'postgres')
+    expect(topologySearch).toHaveValue('postgres')
+    expect(
+      screen.getByText(
+        new RegExp(
+          `Showing ${postgresTopology.nodes.length} of ${topology.nodes.length} nodes and ${postgresTopology.edges.length} of ${topology.edges.length} relationships\\.`
+        )
+      )
+    ).toBeVisible()
+    expect(screen.getAllByText(/postgres/i)[0]).toBeVisible()
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)
     ).not.toBeInTheDocument()
@@ -805,6 +821,28 @@ describe('Secrets Broker setup wizard', () => {
       screen.queryByText(/sk-this-value-must-not-render/i)
     ).not.toBeInTheDocument()
     expect(topology.edges.length).toBeGreaterThan(0)
+  })
+
+  it('filters topology search results without orphaning visible edges', () => {
+    const topology = buildSecretsBrokerTopology()
+    const filteredTopology = filterSecretsBrokerTopology(topology, 'postgres')
+    const filteredNodeIds = new Set(
+      filteredTopology.nodes.map((node) => node.id)
+    )
+
+    expect(filteredTopology.nodes.length).toBeGreaterThan(0)
+    expect(filteredTopology.nodes.length).toBeLessThan(topology.nodes.length)
+    expect(filteredTopology.edges.length).toBeGreaterThan(0)
+    expect(
+      filteredTopology.nodes.some((node) => node.label === 'postgres')
+    ).toBe(true)
+    expect(
+      filteredTopology.edges.every(
+        (edge) =>
+          filteredNodeIds.has(edge.source) && filteredNodeIds.has(edge.target)
+      )
+    ).toBe(true)
+    expect(topologyHasSecretValue(filteredTopology)).toBe(false)
   })
 
   it('builds topology from the same safe metadata used by list and audit views', () => {

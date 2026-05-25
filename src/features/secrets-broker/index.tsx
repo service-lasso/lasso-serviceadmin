@@ -10,6 +10,7 @@ import {
   Network,
   ShieldCheck,
   TerminalSquare,
+  X,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { Badge } from '@/components/ui/badge'
@@ -69,6 +70,7 @@ import {
 } from './source-backends'
 import {
   buildSecretsBrokerTopology,
+  filterSecretsBrokerTopology,
   toReactFlowSecretsBrokerTopology,
 } from './topology'
 import {
@@ -1439,6 +1441,7 @@ export function SecretsBrokerSetupWizard({
   const [auditQueryFilter, setAuditQueryFilter] = useState('')
   const [auditSinceFilter, setAuditSinceFilter] = useState('')
   const [auditUntilFilter, setAuditUntilFilter] = useState('')
+  const [topologySearchQuery, setTopologySearchQuery] = useState('')
   const [selectedAuditEventId, setSelectedAuditEventId] = useState(
     secretsBrokerAuditEvents[0].id
   )
@@ -1527,11 +1530,15 @@ export function SecretsBrokerSetupWizard({
     filteredAuditEvents[0] ??
     secretsBrokerAuditEvents[0]
   const secretsTopology = useMemo(() => buildSecretsBrokerTopology(), [])
-  const reactFlowSecretsTopology = useMemo(
-    () => toReactFlowSecretsBrokerTopology(secretsTopology),
-    [secretsTopology]
+  const filteredSecretsTopology = useMemo(
+    () => filterSecretsBrokerTopology(secretsTopology, topologySearchQuery),
+    [secretsTopology, topologySearchQuery]
   )
-  const topologyProblemEdges = secretsTopology.edges.filter((edge) =>
+  const reactFlowSecretsTopology = useMemo(
+    () => toReactFlowSecretsBrokerTopology(filteredSecretsTopology),
+    [filteredSecretsTopology]
+  )
+  const topologyProblemEdges = filteredSecretsTopology.edges.filter((edge) =>
     ['failed', 'denied', 'missing', 'warning'].includes(edge.status)
   )
 
@@ -2337,13 +2344,13 @@ export function SecretsBrokerSetupWizard({
               <div className='rounded-lg border p-3'>
                 <div className='text-xs text-muted-foreground'>Graph nodes</div>
                 <div className='text-2xl font-bold'>
-                  {secretsTopology.nodes.length}
+                  {filteredSecretsTopology.nodes.length}
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
                 <div className='text-xs text-muted-foreground'>Graph edges</div>
                 <div className='text-2xl font-bold'>
-                  {secretsTopology.edges.length}
+                  {filteredSecretsTopology.edges.length}
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
@@ -2360,6 +2367,41 @@ export function SecretsBrokerSetupWizard({
                 </div>
                 <div className='mt-1'>hidden / never rendered</div>
               </div>
+            </div>
+
+            <div className='grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
+              <div>
+                <label
+                  htmlFor='secrets-topology-search'
+                  className='mb-1 block text-xs font-medium text-muted-foreground'
+                >
+                  Search topology
+                </label>
+                <Input
+                  id='secrets-topology-search'
+                  value={topologySearchQuery}
+                  onChange={(event) =>
+                    setTopologySearchQuery(event.target.value)
+                  }
+                  placeholder='Search service, workflow, provider, ref, or status'
+                />
+                <div className='mt-2 text-xs text-muted-foreground'>
+                  Showing {filteredSecretsTopology.nodes.length} of{' '}
+                  {secretsTopology.nodes.length} nodes and{' '}
+                  {filteredSecretsTopology.edges.length} of{' '}
+                  {secretsTopology.edges.length} relationships.
+                </div>
+              </div>
+              {topologySearchQuery ? (
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={() => setTopologySearchQuery('')}
+                >
+                  <X className='size-4' />
+                  Clear
+                </Button>
+              ) : null}
             </div>
 
             <DependencyGraphCanvas
@@ -2400,11 +2442,11 @@ export function SecretsBrokerSetupWizard({
                   </tr>
                 </thead>
                 <tbody>
-                  {secretsTopology.edges.map((edge) => {
-                    const sourceNode = secretsTopology.nodes.find(
+                  {filteredSecretsTopology.edges.map((edge) => {
+                    const sourceNode = filteredSecretsTopology.nodes.find(
                       (node) => node.id === edge.source
                     )
-                    const targetNode = secretsTopology.nodes.find(
+                    const targetNode = filteredSecretsTopology.nodes.find(
                       (node) => node.id === edge.target
                     )
 
@@ -2455,6 +2497,13 @@ export function SecretsBrokerSetupWizard({
                       </tr>
                     )
                   })}
+                  {!filteredSecretsTopology.edges.length ? (
+                    <tr>
+                      <td className='p-3 text-muted-foreground' colSpan={5}>
+                        No topology relationships match the current search.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>

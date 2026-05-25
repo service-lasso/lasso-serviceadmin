@@ -34,6 +34,11 @@ const appScreens: ScreenCase[] = [
     heading: /^Dependencies$/i,
     title: 'Service Admin - Dependencies',
   },
+  {
+    path: '/service-routes',
+    heading: /^Service routes$/i,
+    title: 'Service Admin - Service Routes',
+  },
   { path: '/apps', heading: /^App Integrations$/i },
   { path: '/chats', heading: /^Inbox$/i },
   { path: '/tasks', heading: /^Tasks$/i },
