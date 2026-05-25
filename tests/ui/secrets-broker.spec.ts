@@ -126,7 +126,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'Policy Simulation' })
-    ).toBeVisible()
+    ).toHaveCount(0)
     expect(consoleErrors).toEqual([])
   })
 
