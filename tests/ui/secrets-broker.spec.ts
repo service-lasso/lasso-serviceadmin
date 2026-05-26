@@ -173,9 +173,19 @@ test.describe('Secrets Broker browser coverage', () => {
         name: /Apply disabled until dry-run preview is accepted/i,
       })
     ).toBeDisabled()
+    await page
+      .getByRole('button', { name: /Delete dry-run/i })
+      .first()
+      .click()
+    await expect(
+      page.getByText(/Delete dry-run for SESSION_SIGNING_KEY/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/delete preview required before apply/i)
+    ).toBeVisible()
 
     await expect(
-      page.getByText(/Stub update\/reset\/reveal API preview/i)
+      page.getByText(/Stub update\/reset\/delete\/reveal API preview/i)
     ).toBeVisible()
     await expect(page.getByText(/audit reason required/i)).toBeVisible()
     await expect(
