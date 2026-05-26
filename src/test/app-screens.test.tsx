@@ -64,6 +64,46 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Setup',
   },
   {
+    path: '/secrets-broker/sources',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Sources',
+  },
+  {
+    path: '/secrets-broker/provider-connections',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Provider Connections',
+  },
+  {
+    path: '/secrets-broker/single-reveal',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Single Reveal',
+  },
+  {
+    path: '/secrets-broker/backup-keys',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Backup Keys',
+  },
+  {
+    path: '/secrets-broker/workflow-boundaries',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Workflow Boundaries',
+  },
+  {
+    path: '/secrets-broker/topology',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Topology',
+  },
+  {
+    path: '/secrets-broker/audit-events',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Audit Events',
+  },
+  {
+    path: '/secrets-broker/diagnostics',
+    heading: /^Secrets Broker setup$/i,
+    title: 'Service Admin - Secrets Broker Diagnostics',
+  },
+  {
     path: '/secret-inventory',
     heading: /^Secret inventory$/i,
     title: 'Service Admin - Secret Inventory',

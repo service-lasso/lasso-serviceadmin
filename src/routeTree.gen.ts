@@ -53,8 +53,16 @@ import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_auth
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedServicesServiceIdRouteImport } from './routes/_authenticated/services.$serviceId'
+import { Route as AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport } from './routes/_authenticated/secrets-broker/workflow-boundaries'
+import { Route as AuthenticatedSecretsBrokerTopologyRouteImport } from './routes/_authenticated/secrets-broker/topology'
+import { Route as AuthenticatedSecretsBrokerSourcesRouteImport } from './routes/_authenticated/secrets-broker/sources'
+import { Route as AuthenticatedSecretsBrokerSingleRevealRouteImport } from './routes/_authenticated/secrets-broker/single-reveal'
 import { Route as AuthenticatedSecretsBrokerSecretsRouteImport } from './routes/_authenticated/secrets-broker/secrets'
+import { Route as AuthenticatedSecretsBrokerProviderConnectionsRouteImport } from './routes/_authenticated/secrets-broker/provider-connections'
+import { Route as AuthenticatedSecretsBrokerDiagnosticsRouteImport } from './routes/_authenticated/secrets-broker/diagnostics'
 import { Route as AuthenticatedSecretsBrokerConfigurationRouteImport } from './routes/_authenticated/secrets-broker/configuration'
+import { Route as AuthenticatedSecretsBrokerBackupKeysRouteImport } from './routes/_authenticated/secrets-broker/backup-keys'
+import { Route as AuthenticatedSecretsBrokerAuditEventsRouteImport } from './routes/_authenticated/secrets-broker/audit-events'
 import { Route as AuthenticatedSecretsBrokerConnectionIdRouteImport } from './routes/_authenticated/secrets-broker.$connectionId'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 
@@ -297,16 +305,64 @@ const AuthenticatedServicesServiceIdRoute =
     path: '/services/$serviceId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSecretsBrokerWorkflowBoundariesRoute =
+  AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport.update({
+    id: '/secrets-broker/workflow-boundaries',
+    path: '/secrets-broker/workflow-boundaries',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerTopologyRoute =
+  AuthenticatedSecretsBrokerTopologyRouteImport.update({
+    id: '/secrets-broker/topology',
+    path: '/secrets-broker/topology',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerSourcesRoute =
+  AuthenticatedSecretsBrokerSourcesRouteImport.update({
+    id: '/secrets-broker/sources',
+    path: '/secrets-broker/sources',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerSingleRevealRoute =
+  AuthenticatedSecretsBrokerSingleRevealRouteImport.update({
+    id: '/secrets-broker/single-reveal',
+    path: '/secrets-broker/single-reveal',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecretsBrokerSecretsRoute =
   AuthenticatedSecretsBrokerSecretsRouteImport.update({
     id: '/secrets-broker/secrets',
     path: '/secrets-broker/secrets',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSecretsBrokerProviderConnectionsRoute =
+  AuthenticatedSecretsBrokerProviderConnectionsRouteImport.update({
+    id: '/secrets-broker/provider-connections',
+    path: '/secrets-broker/provider-connections',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerDiagnosticsRoute =
+  AuthenticatedSecretsBrokerDiagnosticsRouteImport.update({
+    id: '/secrets-broker/diagnostics',
+    path: '/secrets-broker/diagnostics',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecretsBrokerConfigurationRoute =
   AuthenticatedSecretsBrokerConfigurationRouteImport.update({
     id: '/secrets-broker/configuration',
     path: '/secrets-broker/configuration',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerBackupKeysRoute =
+  AuthenticatedSecretsBrokerBackupKeysRouteImport.update({
+    id: '/secrets-broker/backup-keys',
+    path: '/secrets-broker/backup-keys',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerAuditEventsRoute =
+  AuthenticatedSecretsBrokerAuditEventsRouteImport.update({
+    id: '/secrets-broker/audit-events',
+    path: '/secrets-broker/audit-events',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSecretsBrokerConnectionIdRoute =
@@ -338,8 +394,16 @@ export interface FileRoutesByFullPath {
   '/503': typeof errors503Route
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
   '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
+  '/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   '/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
+  '/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  '/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
+  '/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
@@ -384,8 +448,16 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
   '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
+  '/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   '/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
+  '/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  '/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
+  '/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
@@ -435,8 +507,16 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/_authenticated/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  '/_authenticated/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
   '/_authenticated/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
+  '/_authenticated/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/_authenticated/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   '/_authenticated/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
+  '/_authenticated/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  '/_authenticated/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
+  '/_authenticated/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/_authenticated/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/_authenticated/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
@@ -484,8 +564,16 @@ export interface FileRouteTypes {
     | '/503'
     | '/errors/$error'
     | '/secrets-broker/$connectionId'
+    | '/secrets-broker/audit-events'
+    | '/secrets-broker/backup-keys'
     | '/secrets-broker/configuration'
+    | '/secrets-broker/diagnostics'
+    | '/secrets-broker/provider-connections'
     | '/secrets-broker/secrets'
+    | '/secrets-broker/single-reveal'
+    | '/secrets-broker/sources'
+    | '/secrets-broker/topology'
+    | '/secrets-broker/workflow-boundaries'
     | '/services/$serviceId'
     | '/settings/account'
     | '/settings/appearance'
@@ -530,8 +618,16 @@ export interface FileRouteTypes {
     | '/'
     | '/errors/$error'
     | '/secrets-broker/$connectionId'
+    | '/secrets-broker/audit-events'
+    | '/secrets-broker/backup-keys'
     | '/secrets-broker/configuration'
+    | '/secrets-broker/diagnostics'
+    | '/secrets-broker/provider-connections'
     | '/secrets-broker/secrets'
+    | '/secrets-broker/single-reveal'
+    | '/secrets-broker/sources'
+    | '/secrets-broker/topology'
+    | '/secrets-broker/workflow-boundaries'
     | '/services/$serviceId'
     | '/settings/account'
     | '/settings/appearance'
@@ -580,8 +676,16 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/errors/$error'
     | '/_authenticated/secrets-broker/$connectionId'
+    | '/_authenticated/secrets-broker/audit-events'
+    | '/_authenticated/secrets-broker/backup-keys'
     | '/_authenticated/secrets-broker/configuration'
+    | '/_authenticated/secrets-broker/diagnostics'
+    | '/_authenticated/secrets-broker/provider-connections'
     | '/_authenticated/secrets-broker/secrets'
+    | '/_authenticated/secrets-broker/single-reveal'
+    | '/_authenticated/secrets-broker/sources'
+    | '/_authenticated/secrets-broker/topology'
+    | '/_authenticated/secrets-broker/workflow-boundaries'
     | '/_authenticated/services/$serviceId'
     | '/_authenticated/settings/account'
     | '/_authenticated/settings/appearance'
@@ -937,6 +1041,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedServicesServiceIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/secrets-broker/workflow-boundaries': {
+      id: '/_authenticated/secrets-broker/workflow-boundaries'
+      path: '/secrets-broker/workflow-boundaries'
+      fullPath: '/secrets-broker/workflow-boundaries'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/topology': {
+      id: '/_authenticated/secrets-broker/topology'
+      path: '/secrets-broker/topology'
+      fullPath: '/secrets-broker/topology'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerTopologyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/sources': {
+      id: '/_authenticated/secrets-broker/sources'
+      path: '/secrets-broker/sources'
+      fullPath: '/secrets-broker/sources'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerSourcesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/single-reveal': {
+      id: '/_authenticated/secrets-broker/single-reveal'
+      path: '/secrets-broker/single-reveal'
+      fullPath: '/secrets-broker/single-reveal'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerSingleRevealRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/secrets-broker/secrets': {
       id: '/_authenticated/secrets-broker/secrets'
       path: '/secrets-broker/secrets'
@@ -944,11 +1076,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecretsBrokerSecretsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/secrets-broker/provider-connections': {
+      id: '/_authenticated/secrets-broker/provider-connections'
+      path: '/secrets-broker/provider-connections'
+      fullPath: '/secrets-broker/provider-connections'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerProviderConnectionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/diagnostics': {
+      id: '/_authenticated/secrets-broker/diagnostics'
+      path: '/secrets-broker/diagnostics'
+      fullPath: '/secrets-broker/diagnostics'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerDiagnosticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/secrets-broker/configuration': {
       id: '/_authenticated/secrets-broker/configuration'
       path: '/secrets-broker/configuration'
       fullPath: '/secrets-broker/configuration'
       preLoaderRoute: typeof AuthenticatedSecretsBrokerConfigurationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/backup-keys': {
+      id: '/_authenticated/secrets-broker/backup-keys'
+      path: '/secrets-broker/backup-keys'
+      fullPath: '/secrets-broker/backup-keys'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerBackupKeysRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/audit-events': {
+      id: '/_authenticated/secrets-broker/audit-events'
+      path: '/secrets-broker/audit-events'
+      fullPath: '/secrets-broker/audit-events'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerAuditEventsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/secrets-broker/$connectionId': {
@@ -996,8 +1156,16 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedSecretsBrokerConnectionIdRoute: typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  AuthenticatedSecretsBrokerAuditEventsRoute: typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  AuthenticatedSecretsBrokerBackupKeysRoute: typeof AuthenticatedSecretsBrokerBackupKeysRoute
   AuthenticatedSecretsBrokerConfigurationRoute: typeof AuthenticatedSecretsBrokerConfigurationRoute
+  AuthenticatedSecretsBrokerDiagnosticsRoute: typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  AuthenticatedSecretsBrokerProviderConnectionsRoute: typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   AuthenticatedSecretsBrokerSecretsRoute: typeof AuthenticatedSecretsBrokerSecretsRoute
+  AuthenticatedSecretsBrokerSingleRevealRoute: typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  AuthenticatedSecretsBrokerSourcesRoute: typeof AuthenticatedSecretsBrokerSourcesRoute
+  AuthenticatedSecretsBrokerTopologyRoute: typeof AuthenticatedSecretsBrokerTopologyRoute
+  AuthenticatedSecretsBrokerWorkflowBoundariesRoute: typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   AuthenticatedServicesServiceIdRoute: typeof AuthenticatedServicesServiceIdRoute
   AuthenticatedAppsIndexRoute: typeof AuthenticatedAppsIndexRoute
   AuthenticatedAuthSessionIndexRoute: typeof AuthenticatedAuthSessionIndexRoute
@@ -1026,10 +1194,26 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedSecretsBrokerConnectionIdRoute:
     AuthenticatedSecretsBrokerConnectionIdRoute,
+  AuthenticatedSecretsBrokerAuditEventsRoute:
+    AuthenticatedSecretsBrokerAuditEventsRoute,
+  AuthenticatedSecretsBrokerBackupKeysRoute:
+    AuthenticatedSecretsBrokerBackupKeysRoute,
   AuthenticatedSecretsBrokerConfigurationRoute:
     AuthenticatedSecretsBrokerConfigurationRoute,
+  AuthenticatedSecretsBrokerDiagnosticsRoute:
+    AuthenticatedSecretsBrokerDiagnosticsRoute,
+  AuthenticatedSecretsBrokerProviderConnectionsRoute:
+    AuthenticatedSecretsBrokerProviderConnectionsRoute,
   AuthenticatedSecretsBrokerSecretsRoute:
     AuthenticatedSecretsBrokerSecretsRoute,
+  AuthenticatedSecretsBrokerSingleRevealRoute:
+    AuthenticatedSecretsBrokerSingleRevealRoute,
+  AuthenticatedSecretsBrokerSourcesRoute:
+    AuthenticatedSecretsBrokerSourcesRoute,
+  AuthenticatedSecretsBrokerTopologyRoute:
+    AuthenticatedSecretsBrokerTopologyRoute,
+  AuthenticatedSecretsBrokerWorkflowBoundariesRoute:
+    AuthenticatedSecretsBrokerWorkflowBoundariesRoute,
   AuthenticatedServicesServiceIdRoute: AuthenticatedServicesServiceIdRoute,
   AuthenticatedAppsIndexRoute: AuthenticatedAppsIndexRoute,
   AuthenticatedAuthSessionIndexRoute: AuthenticatedAuthSessionIndexRoute,

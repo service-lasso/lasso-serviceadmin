@@ -616,7 +616,7 @@ export function SecretsBrokerProviderConnectionDetailPage({
                 ) : null}
                 {connection.lifecycle.diagnosticRef ? (
                   <Button asChild size='sm' variant='outline'>
-                    <a href='/secrets-broker#diagnostics'>
+                    <a href='/secrets-broker/diagnostics'>
                       Diagnostics {connection.lifecycle.diagnosticRef}
                     </a>
                   </Button>

@@ -96,70 +96,64 @@ export const sidebarData: SidebarData = {
       title: 'Secrets Broker',
       items: [
         {
-          title: 'Secrets Broker',
+          title: 'Overview / Setup',
+          url: '/secrets-broker',
+          icon: ShieldCheck,
+        },
+        {
+          title: 'Secrets',
+          url: '/secrets-broker/secrets',
+          icon: DatabaseZap,
+        },
+        {
+          title: 'Configuration',
+          url: '/secrets-broker/configuration',
+          icon: Settings,
+        },
+        {
+          title: 'Sources / Backends',
+          url: '/secrets-broker/sources',
+          icon: DatabaseZap,
+        },
+        {
+          title: 'Provider Connections',
+          url: '/secrets-broker/provider-connections',
           icon: KeyRound,
-          items: [
-            {
-              title: 'Overview / Setup',
-              url: '/secrets-broker',
-              icon: ShieldCheck,
-            },
-            {
-              title: 'Secrets',
-              url: '/secrets-broker/secrets',
-              icon: DatabaseZap,
-            },
-            {
-              title: 'Configuration',
-              url: '/secrets-broker/configuration',
-              icon: Settings,
-            },
-            {
-              title: 'Sources / Backends',
-              url: '/secrets-broker#secret-sources',
-              icon: DatabaseZap,
-            },
-            {
-              title: 'Provider Connections',
-              url: '/secrets-broker#provider-connections',
-              icon: KeyRound,
-            },
-            {
-              title: 'Single Reveal',
-              url: '/secrets-broker#privileged-secret-reveal',
-              icon: LockKeyhole,
-            },
-            {
-              title: 'Backup / Keys',
-              url: '/secrets-broker#backup-key-management',
-              icon: FileKey2,
-            },
-            {
-              title: 'Operational Controls',
-              url: '/secrets-broker#operational-controls',
-              icon: ShieldCheck,
-            },
-            {
-              title: 'Workflow Boundaries',
-              url: '/secrets-broker#workflow-authoring-boundary',
-              icon: ClipboardCheck,
-            },
-            {
-              title: 'Topology',
-              url: '/secrets-broker#secrets-topology',
-              icon: Network,
-            },
-            {
-              title: 'Audit / Events',
-              url: '/secrets-broker#audit-events',
-              icon: GitBranch,
-            },
-            {
-              title: 'Diagnostics',
-              url: '/secrets-broker#diagnostics',
-              icon: LifeBuoy,
-            },
-          ],
+        },
+        {
+          title: 'Single Reveal',
+          url: '/secrets-broker/single-reveal',
+          icon: LockKeyhole,
+        },
+        {
+          title: 'Backup / Keys',
+          url: '/secrets-broker/backup-keys',
+          icon: FileKey2,
+        },
+        {
+          title: 'Operational Controls',
+          url: '/secrets-broker#operational-controls',
+          icon: ShieldCheck,
+        },
+        {
+          title: 'Workflow Boundaries',
+          url: '/secrets-broker/workflow-boundaries',
+          icon: ClipboardCheck,
+        },
+        {
+          title: 'Topology',
+          url: '/secrets-broker/topology',
+          icon: Network,
+        },
+        {
+          title: 'Audit / Events',
+          url: '/secrets-broker/audit-events',
+          icon: GitBranch,
+        },
+        {
+          title: 'Diagnostics',
+          url: '/secrets-broker/diagnostics',
+          icon: LifeBuoy,
         },
         {
           title: 'Secret Inventory',

@@ -63,8 +63,8 @@ function serviceNode(id: string): SecretsBrokerTopologyNode {
     kind: 'service',
     summary: 'Service using broker refs or broker metadata.',
     detailHref: `/services/${encodeURIComponent(id)}`,
-    auditHref: `/secrets-broker#audit-events`,
-    diagnosticHref: `/secrets-broker#diagnostics`,
+    auditHref: `/secrets-broker/audit-events`,
+    diagnosticHref: `/secrets-broker/diagnostics`,
   }
 }
 
@@ -75,8 +75,8 @@ function workflowNode(id: string): SecretsBrokerTopologyNode {
     kind: 'workflow',
     summary: 'Workflow using broker refs through an audited run identity.',
     detailHref: `/dependencies?service=${encodeURIComponent(id)}`,
-    auditHref: `/secrets-broker#audit-events`,
-    diagnosticHref: `/secrets-broker#diagnostics`,
+    auditHref: `/secrets-broker/audit-events`,
+    diagnosticHref: `/secrets-broker/diagnostics`,
   }
 }
 
@@ -86,9 +86,9 @@ function runNode(id: string): SecretsBrokerTopologyNode {
     label: id,
     kind: 'run',
     summary: 'Audited workflow/service run context with safe metadata only.',
-    detailHref: `/secrets-broker#audit-events`,
-    auditHref: `/secrets-broker#audit-events`,
-    diagnosticHref: `/secrets-broker#diagnostics`,
+    detailHref: `/secrets-broker/audit-events`,
+    auditHref: `/secrets-broker/audit-events`,
+    diagnosticHref: `/secrets-broker/diagnostics`,
   }
 }
 
@@ -102,9 +102,9 @@ function refNode(ref: string): SecretsBrokerTopologyNode {
     label: ref,
     kind: 'ref',
     summary: 'SecretRef identifier only; resolved value is hidden.',
-    detailHref: `/secrets-broker#audit-events`,
-    auditHref: `/secrets-broker#audit-events`,
-    diagnosticHref: `/secrets-broker#diagnostics`,
+    detailHref: `/secrets-broker/audit-events`,
+    auditHref: `/secrets-broker/audit-events`,
+    diagnosticHref: `/secrets-broker/diagnostics`,
   }
 }
 
@@ -138,8 +138,8 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
     summary:
       'Broker service mediating secret refs, providers, policies, and audit.',
     detailHref: '/secrets-broker',
-    auditHref: '/secrets-broker#audit-events',
-    diagnosticHref: '/secrets-broker#diagnostics',
+    auditHref: '/secrets-broker/audit-events',
+    diagnosticHref: '/secrets-broker/diagnostics',
   })
 
   secretsBrokerSourceBackends.forEach((source) => {
@@ -148,9 +148,9 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
       label: source.title,
       kind: 'source',
       summary: `${source.provider} source · ${source.state} · ${source.mode}`,
-      detailHref: '/secrets-broker#secret-sources',
-      auditHref: '/secrets-broker#audit-events',
-      diagnosticHref: '/secrets-broker#diagnostics',
+      detailHref: '/secrets-broker/sources',
+      auditHref: '/secrets-broker/audit-events',
+      diagnosticHref: '/secrets-broker/diagnostics',
     }
     nodes.set(sourceNode.id, sourceNode)
     edges.push({
@@ -165,9 +165,9 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
           : source.state === 'not-configured'
             ? 'missing'
             : 'ok',
-      detailHref: '/secrets-broker#secret-sources',
-      auditHref: '/secrets-broker#audit-events',
-      diagnosticHref: '/secrets-broker#diagnostics',
+      detailHref: '/secrets-broker/sources',
+      auditHref: '/secrets-broker/audit-events',
+      diagnosticHref: '/secrets-broker/diagnostics',
     })
 
     source.exampleRefs.forEach((ref) => {
@@ -185,9 +185,9 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
             : source.testResult.outcome === 'not-run'
               ? 'warning'
               : 'ok',
-        detailHref: '/secrets-broker#secret-sources',
-        auditHref: '/secrets-broker#audit-events',
-        diagnosticHref: '/secrets-broker#diagnostics',
+        detailHref: '/secrets-broker/sources',
+        auditHref: '/secrets-broker/audit-events',
+        diagnosticHref: '/secrets-broker/diagnostics',
       })
     })
   })
@@ -199,8 +199,8 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
       kind: 'connection',
       summary: `${connection.provider} connection · ${connection.state} · ${connection.secretMaterial.presence}`,
       detailHref: `/secrets-broker/${connection.id}`,
-      auditHref: '/secrets-broker#audit-events',
-      diagnosticHref: '/secrets-broker#diagnostics',
+      auditHref: '/secrets-broker/audit-events',
+      diagnosticHref: '/secrets-broker/diagnostics',
     }
     nodes.set(connectionNode.id, connectionNode)
     edges.push({
@@ -218,8 +218,8 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
               ? 'failed'
               : 'warning',
       detailHref: `/secrets-broker/${connection.id}`,
-      auditHref: '/secrets-broker#audit-events',
-      diagnosticHref: '/secrets-broker#diagnostics',
+      auditHref: '/secrets-broker/audit-events',
+      diagnosticHref: '/secrets-broker/diagnostics',
     })
 
     connection.usage.linkedServices.forEach((service) => {
@@ -244,8 +244,8 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
               ? 'missing'
               : 'warning',
         detailHref: `/secrets-broker/${connection.id}`,
-        auditHref: '/secrets-broker#audit-events',
-        diagnosticHref: '/secrets-broker#diagnostics',
+        auditHref: '/secrets-broker/audit-events',
+        diagnosticHref: '/secrets-broker/diagnostics',
       })
     })
 
@@ -260,8 +260,8 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
         kind: 'uses',
         status: connection.state === 'healthy' ? 'ok' : 'warning',
         detailHref: `/secrets-broker/${connection.id}`,
-        auditHref: '/secrets-broker#audit-events',
-        diagnosticHref: '/secrets-broker#diagnostics',
+        auditHref: '/secrets-broker/audit-events',
+        diagnosticHref: '/secrets-broker/diagnostics',
       })
     })
 
@@ -276,8 +276,8 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
         kind: 'run-uses',
         status: connection.state === 'healthy' ? 'ok' : 'warning',
         detailHref: `/secrets-broker/${connection.id}`,
-        auditHref: '/secrets-broker#audit-events',
-        diagnosticHref: '/secrets-broker#diagnostics',
+        auditHref: '/secrets-broker/audit-events',
+        diagnosticHref: '/secrets-broker/diagnostics',
       })
     })
   })
@@ -317,11 +317,11 @@ export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
       label: event.type.replace(/_/g, ' '),
       kind: edgeKindFromEvent(event),
       status: edgeStatusFromOutcome(event.outcome),
-      detailHref: `/secrets-broker#audit-events`,
-      auditHref: `/secrets-broker#audit-events`,
+      detailHref: `/secrets-broker/audit-events`,
+      auditHref: `/secrets-broker/audit-events`,
       diagnosticHref:
         event.outcome === 'failure' || event.outcome === 'denied'
-          ? '/secrets-broker#diagnostics'
+          ? '/secrets-broker/diagnostics'
           : undefined,
     })
   })
