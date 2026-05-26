@@ -7,6 +7,7 @@ import {
   SearchIcon,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -164,8 +165,8 @@ export function SecretsManagementPage() {
             </h1>
             <p className='mt-1 text-muted-foreground'>
               Secrets Broker management table for safe metadata search,
-              controlled reveal entry, and dry-run edit/reset/policy actions.
-              Rows never render raw secret values.
+              controlled reveal entry, and dry-run edit/reset/delete/policy
+              actions. Rows never render raw secret values.
             </p>
           </div>
           <Badge variant='secondary'>Stub preview · values hidden</Badge>
@@ -178,9 +179,9 @@ export function SecretsManagementPage() {
             Metadata search is local over safe refs and labels only.
             Broker-backed value search, when supported, returns matching
             refs/metadata only. Reveal delegates to the audited #38 pattern;
-            edit, reset, and policy changes require dry-run/preview before
-            apply. The mutation API on this page is stubbed preview behavior
-            until the production Secrets Broker contract lands.
+            edit, reset, delete, and policy changes require dry-run/preview
+            before apply. The mutation API on this page is stubbed preview
+            behavior until the production Secrets Broker contract lands.
           </AlertDescription>
         </Alert>
 
@@ -202,7 +203,7 @@ export function SecretsManagementPage() {
           <Card>
             <CardHeader className='pb-2'>
               <CardDescription>Dry-run actions</CardDescription>
-              <CardTitle className='text-3xl'>3</CardTitle>
+              <CardTitle className='text-3xl'>4</CardTitle>
             </CardHeader>
           </Card>
           <Card>
@@ -428,6 +429,14 @@ export function SecretsManagementPage() {
                             type='button'
                             size='sm'
                             variant='outline'
+                            onClick={() => chooseAction(row.id, 'delete')}
+                          >
+                            Delete dry-run
+                          </Button>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
                             onClick={() => chooseAction(row.id, 'policy')}
                           >
                             Apply policy preview
@@ -640,6 +649,8 @@ export function SecretsManagementPage() {
                 <Eye className='size-4' />
               ) : actionPreview.action === 'reset' ? (
                 <RotateCcw className='size-4' />
+              ) : actionPreview.action === 'delete' ? (
+                <Trash2 className='size-4' />
               ) : (
                 <SlidersHorizontal className='size-4' />
               )}
@@ -678,7 +689,7 @@ export function SecretsManagementPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Stub update/reset/reveal API preview</CardTitle>
+            <CardTitle>Stub update/reset/delete/reveal API preview</CardTitle>
             <CardDescription>
               Deterministic non-production status model for a single selected
               secret. This previews the operator flow only; no secret material

@@ -9,6 +9,7 @@ export type ManagedSecretAction =
   | 'reveal'
   | 'edit'
   | 'reset'
+  | 'delete'
   | 'policy'
 
 export type ManagedSecretRow = {
@@ -114,7 +115,8 @@ export const managedSecretRows: ManagedSecretRow[] = [
     rotationStatus: 'healthy',
     policy: 'policy/openclaw/service-lasso/read-single-secret',
     auditStatus: 'audit available',
-    backendCapability: 'reveal, edit dry-run, reset dry-run, policy preview',
+    backendCapability:
+      'reveal, edit dry-run, reset dry-run, delete dry-run, policy preview',
     valueSearch: 'supported',
     safeTags: ['startup', 'session', 'local'],
   },
@@ -132,7 +134,7 @@ export const managedSecretRows: ManagedSecretRow[] = [
     rotationStatus: 'due within 7 days',
     policy: 'policy/openclaw/service-lasso/provider-read',
     auditStatus: 'audit available',
-    backendCapability: 'metadata, reveal challenge, reset dry-run',
+    backendCapability: 'metadata, reveal challenge, reset dry-run, delete dry-run',
     valueSearch: 'supported',
     safeTags: ['identity', 'provider', 'rotation'],
   },
@@ -179,8 +181,8 @@ export const managedSecretSafetyBoundaries = [
   'Metadata search filters refs/tags/provider/owner locally; it does not index raw secret values.',
   'Broker-backed value search is represented as supported or unsupported and returns ref metadata only.',
   'Reveal delegates to the controlled #38 pattern: explicit action, audit status, timeout, and value hidden by default.',
-  'Edit, reset, and policy actions require dry-run/preview before apply and never use spreadsheet-style plaintext editing.',
-  'The update/reset/reveal API shown here is a deterministic stub preview until the Secrets Broker production mutation contract lands.',
+  'Edit, reset, delete, and policy actions require dry-run/preview before apply and never use spreadsheet-style plaintext editing.',
+  'The update/reset/delete/reveal API shown here is a deterministic stub preview until the Secrets Broker production mutation contract lands.',
 ]
 
 export const stubSecretMutationStates: Array<{
@@ -221,6 +223,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:action-preview',
     'secrets-management:stub-mutation-preview',
     'secrets-management:stub-mutation-apply-status',
+    'secrets-management:stub-delete-preview',
     'secrets-management:bulk-campaign-dry-run',
   ],
   persistedStorage: 'none',
@@ -279,6 +282,8 @@ export function buildStubSecretMutationPreview(
   const actionLabel =
     action === 'reset'
       ? 'reset/rotate'
+      : action === 'delete'
+        ? 'delete'
       : action === 'reveal'
         ? 'reveal'
         : 'update'
@@ -584,6 +589,22 @@ export function buildManagedSecretActionPreview(
           'Preview checks backend support, policy, affected service restart notes, and audit status without generating or displaying raw material in Service Admin.',
         nextStep:
           'Run reset/rotate preview first; apply remains disabled until preview and audit reason are accepted.',
+        requiresConfirmation: true,
+      }
+    case 'delete':
+      return {
+        action,
+        title: `Delete dry-run for ${row.name}`,
+        status:
+          row.state === 'missing'
+            ? 'blocked: ref already missing'
+            : 'delete preview required before apply',
+        preview:
+          'Preview checks delete capability, policy, affected service references, audit readiness, and recovery guidance without reading or exporting the current value.',
+        nextStep:
+          row.state === 'missing'
+            ? 'No delete can be applied until the provider/source reports an existing ref.'
+            : 'Run delete preview first; apply remains disabled until preview, audit reason, and explicit confirmation are accepted.',
         requiresConfirmation: true,
       }
     case 'policy':
