@@ -131,6 +131,11 @@ export const sidebarData: SidebarData = {
           icon: FileKey2,
         },
         {
+          title: 'Operational Controls',
+          url: '/secrets-broker#operational-controls',
+          icon: ShieldCheck,
+        },
+        {
           title: 'Workflow Boundaries',
           url: '/secrets-broker/workflow-boundaries',
           icon: ClipboardCheck,
