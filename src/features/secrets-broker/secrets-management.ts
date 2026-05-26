@@ -134,7 +134,8 @@ export const managedSecretRows: ManagedSecretRow[] = [
     rotationStatus: 'due within 7 days',
     policy: 'policy/openclaw/service-lasso/provider-read',
     auditStatus: 'audit available',
-    backendCapability: 'metadata, reveal challenge, reset dry-run, delete dry-run',
+    backendCapability:
+      'metadata, reveal challenge, reset dry-run, delete dry-run',
     valueSearch: 'supported',
     safeTags: ['identity', 'provider', 'rotation'],
   },
@@ -284,9 +285,9 @@ export function buildStubSecretMutationPreview(
       ? 'reset/rotate'
       : action === 'delete'
         ? 'delete'
-      : action === 'reveal'
-        ? 'reveal'
-        : 'update'
+        : action === 'reveal'
+          ? 'reveal'
+          : 'update'
   const hasAuditReason = auditReason.trim().length >= 8
   const base = {
     state,
