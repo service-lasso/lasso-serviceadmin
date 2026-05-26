@@ -33,3 +33,4 @@ dist-ssr
 **/Thumbs.db
 
 .tmp*
+.work-agent/
