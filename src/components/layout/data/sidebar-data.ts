@@ -38,7 +38,7 @@ export const sidebarData: SidebarData = {
   ],
   navGroups: [
     {
-      title: 'Operations',
+      title: 'Service Admin',
       items: [
         {
           title: 'Dashboard',
@@ -133,6 +133,11 @@ export const sidebarData: SidebarData = {
               title: 'Backup / Keys',
               url: '/secrets-broker#backup-key-management',
               icon: FileKey2,
+            },
+            {
+              title: 'Operational Controls',
+              url: '/secrets-broker#operational-controls',
+              icon: ShieldCheck,
             },
             {
               title: 'Workflow Boundaries',
