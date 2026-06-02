@@ -9,10 +9,12 @@ import {
 
 describe('Secrets Broker audit event viewer', () => {
   it('renders audit event metadata, detail, and tamper-evidence status safely', async () => {
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/audit-events')
 
     expect(
-      await screen.findByRole('heading', { name: /Secrets Broker setup/i })
+      await screen.findByRole('heading', {
+        name: /Secrets Broker audit events/i,
+      })
     ).toBeVisible()
     expect(screen.getByText(/Audit and events/i)).toBeVisible()
     expect(screen.getByText(/Values never rendered/i)).toBeVisible()
@@ -81,7 +83,7 @@ describe('Secrets Broker audit event viewer', () => {
       })
     ).toHaveLength(1)
 
-    const { container } = await renderRoute('/secrets-broker')
+    const { container } = await renderRoute('/secrets-broker/audit-events')
     expect(container).not.toHaveTextContent(/DEMO_REVEAL_VALUE_42/i)
     expect(container).not.toHaveTextContent(/ACTUAL_SECRET/i)
     expect(container).not.toHaveTextContent(/BEGIN PRIVATE KEY/i)

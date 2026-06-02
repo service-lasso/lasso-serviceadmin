@@ -65,10 +65,25 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getAllByText(/Generated secret write-back/i)[0]).toBeVisible()
     expect(screen.getByText(/SecretRef:/i)).toBeVisible()
     expect(screen.getAllByText(/value hidden/i)[0]).toBeVisible()
-    expect(screen.getByText(/Audit and events/i)).toBeVisible()
-    expect(screen.getByText(/Values never rendered/i)).toBeVisible()
-    expect(screen.getByText(/Diagnostics and troubleshooting/i)).toBeVisible()
-    expect(screen.getByText(/Raw output scrubbed/i)).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: /View audit\/events/i })
+    ).toHaveAttribute('href', '/secrets-broker/audit-events')
+    expect(
+      screen.getByRole('link', { name: /View diagnostics/i })
+    ).toHaveAttribute('href', '/secrets-broker/diagnostics')
+    expect(
+      screen.queryByRole('heading', { name: /Secret Sources \/ Backends/i })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', {
+        name: /Privileged single-secret reveal/i,
+      })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', {
+        name: /Backup, restore, and key management/i,
+      })
+    ).not.toBeInTheDocument()
     expect(screen.queryByText('supersecret')).not.toBeInTheDocument()
     expect(screen.queryByText('plaintext secret')).not.toBeInTheDocument()
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
@@ -218,7 +233,7 @@ describe('Secrets Broker setup wizard', () => {
 
   it('renders privileged single-secret reveal default and fail-closed states without raw material', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/single-reveal')
 
     expect(screen.getByText(/Privileged single-secret reveal/i)).toBeVisible()
     expect(screen.getByText(/Selected safe metadata/i)).toBeVisible()
@@ -278,7 +293,7 @@ describe('Secrets Broker setup wizard', () => {
 
   it('reveals deterministic fake material only after explicit action and re-hides on cancel or expiry', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/single-reveal')
 
     await user.selectOptions(
       screen.getByLabelText(/Reveal workflow state/i),
@@ -353,10 +368,15 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('renders backup restore and key-management metadata without raw material', async () => {
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/backup-keys')
 
     expect(
-      screen.getByText(/Backup, restore, and key management/i)
+      screen.getByRole('heading', {
+        name: /Secrets Broker backup keys/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/Backup, restore, and key management/i)[0]
     ).toBeVisible()
     expect(screen.getByText(/Backup stale/i)).toBeVisible()
     expect(screen.getByText(/Recovery risk/i)).toBeVisible()
@@ -406,7 +426,7 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('renders secret sources and backends with warning states and metadata-only test results', async () => {
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/sources')
 
     expect(screen.getByText(/Secret Sources \/ Backends/i)).toBeVisible()
     expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
@@ -446,7 +466,7 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('renders provider connections list with status badges and safe material state', async () => {
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/provider-connections')
 
     expect(screen.getAllByText(/Provider Connections/i)[0]).toBeVisible()
     expect(
@@ -482,7 +502,7 @@ describe('Secrets Broker setup wizard', () => {
 
   it('filters provider connections by provider status and label with empty state', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/provider-connections')
 
     await user.selectOptions(
       screen.getByLabelText(/Connection provider/i),
@@ -790,7 +810,7 @@ describe('Secrets Broker setup wizard', () => {
 
   it('renders workflow authoring boundary with safe validation and snippets', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/workflow-boundaries')
 
     expect(screen.getByText(/Workflow authoring boundary/i)).toBeVisible()
     expect(screen.getByText(/No runner editor/i)).toBeVisible()
@@ -855,12 +875,14 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('renders Secrets Broker topology graph and accessible relationship fallback', async () => {
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/topology')
 
     const topology = buildSecretsBrokerTopology()
     const postgresTopology = filterSecretsBrokerTopology(topology, 'postgres')
 
-    expect(screen.getByText(/Secrets Broker topology/i)).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: /Secrets Broker topology/i })
+    ).toBeVisible()
     expect(screen.getAllByText(/Safe metadata only/i)[0]).toBeVisible()
     expect(screen.getByText(/List fallback included/i)).toBeVisible()
     expect(screen.getByText(/Actionable relationship fallback/i)).toBeVisible()
@@ -881,7 +903,7 @@ describe('Secrets Broker setup wizard', () => {
         )
       )
     ).toBeVisible()
-    expect(screen.getAllByText(/postgres/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/postgres/i).length).toBeGreaterThan(0)
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)
     ).not.toBeInTheDocument()
@@ -946,7 +968,7 @@ describe('Secrets Broker setup wizard', () => {
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/audit-events')
 
     expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
@@ -1018,7 +1040,7 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('covers diagnostic failure categories and suggested fixes without raw secret output', async () => {
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/diagnostics')
 
     expect(screen.getByText(/Broker API reachable/i)).toBeVisible()
     expect(screen.getByText(/Local vault readable/i)).toBeVisible()

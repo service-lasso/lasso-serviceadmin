@@ -148,43 +148,52 @@ export type SecretsBrokerSectionFocus =
 
 const secretsBrokerSectionMetadata: Record<
   SecretsBrokerSectionFocus,
-  { title: string; description: string }
+  { title: string; heading: string; description: string }
 > = {
   overview: {
     title: 'Service Admin - Secrets Broker Setup',
+    heading: 'Secrets Broker setup',
     description: 'Configure sources, policies, and recovery safely.',
   },
   sources: {
     title: 'Service Admin - Secrets Broker Sources',
+    heading: 'Secrets Broker sources',
     description: 'Inspect configured source and backend metadata safely.',
   },
   'provider-connections': {
     title: 'Service Admin - Secrets Broker Provider Connections',
+    heading: 'Secrets Broker provider connections',
     description:
       'Inspect provider connection health without credential values.',
   },
   'single-reveal': {
     title: 'Service Admin - Secrets Broker Single Reveal',
+    heading: 'Secrets Broker single reveal',
     description: 'Preview controlled reveal states without leaking values.',
   },
   'backup-keys': {
     title: 'Service Admin - Secrets Broker Backup Keys',
+    heading: 'Secrets Broker backup keys',
     description: 'Inspect backup, restore, and key management readiness.',
   },
   'workflow-boundaries': {
     title: 'Service Admin - Secrets Broker Workflow Boundaries',
+    heading: 'Secrets Broker workflow boundaries',
     description: 'Review workflow authoring SecretRef guardrails.',
   },
   topology: {
     title: 'Service Admin - Secrets Broker Topology',
+    heading: 'Secrets Broker topology',
     description: 'Inspect safe service-to-secret relationship metadata.',
   },
   'audit-events': {
     title: 'Service Admin - Secrets Broker Audit Events',
+    heading: 'Secrets Broker audit events',
     description: 'Inspect audit events and tamper-evidence metadata.',
   },
   diagnostics: {
     title: 'Service Admin - Secrets Broker Diagnostics',
+    heading: 'Secrets Broker diagnostics',
     description: 'Inspect safe diagnostics and troubleshooting signals.',
   },
 }
@@ -2004,12 +2013,9 @@ export function SecretsBrokerSetupWizard({
         <div className='flex flex-wrap items-end justify-between gap-3'>
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>
-              Secrets Broker setup
+              {pageMetadata.heading}
             </h2>
-            <p className='text-muted-foreground'>
-              Configure and test local, file, exec, and external secret sources
-              without revealing secret values.
-            </p>
+            <p className='text-muted-foreground'>{pageMetadata.description}</p>
           </div>
           <div className='flex flex-wrap gap-2'>
             <Button variant='outline' size='sm' asChild>
@@ -2021,1344 +2027,1416 @@ export function SecretsBrokerSetupWizard({
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <ShieldCheck className='size-4' /> @secretsbroker overview
-                </CardTitle>
-                <CardDescription>
-                  Broker health, API reachability, backend state, keystore
-                  posture, and operator action summary. This overview uses safe
-                  metadata only and never renders resolved secret values.
-                </CardDescription>
-              </div>
-              <Badge
-                variant={
-                  brokerOverviewStateVariant[brokerOverview.health.state]
-                }
-              >
-                {brokerOverviewStateCopy[brokerOverview.health.state]}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='max-w-xs'>
-              <label
-                htmlFor='broker-overview-scenario'
-                className='mb-1 block text-xs text-muted-foreground'
-              >
-                Preview state
-              </label>
-              <select
-                id='broker-overview-scenario'
-                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                value={overviewScenarioId}
-                onChange={(event) =>
-                  setOverviewScenarioId(
-                    event.target.value as SecretsBrokerOverviewState
-                  )
-                }
-              >
-                {brokerOverviewScenarios.map((scenario) => (
-                  <option key={scenario.id} value={scenario.id}>
-                    {scenario.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className='grid gap-4 lg:grid-cols-[1.2fr_1fr]'>
-              <div className='rounded-lg border p-4'>
-                <div className='mb-2 flex flex-wrap items-center gap-2'>
-                  {brokerOverview.health.apiReachable ? (
-                    <CheckCircle2 className='size-4 text-primary' />
-                  ) : (
-                    <AlertTriangle className='size-4 text-destructive' />
-                  )}
-                  <div className='font-medium'>
-                    {brokerOverview.health.title}
-                  </div>
-                </div>
-                <p className='text-sm text-muted-foreground'>
-                  {brokerOverview.health.summary}
-                </p>
-                <div className='mt-3 grid gap-3 text-sm md:grid-cols-2'>
+        {focusSection === 'overview' ? (
+          <>
+            <Card>
+              <CardHeader>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
                   <div>
-                    <div className='text-xs font-medium text-muted-foreground uppercase'>
-                      API reachable
-                    </div>
-                    <div>
-                      {brokerOverview.health.apiReachable ? 'yes' : 'no'}
-                    </div>
+                    <CardTitle className='flex items-center gap-2'>
+                      <ShieldCheck className='size-4' /> @secretsbroker overview
+                    </CardTitle>
+                    <CardDescription>
+                      Broker health, API reachability, backend state, keystore
+                      posture, and operator action summary. This overview uses
+                      safe metadata only and never renders resolved secret
+                      values.
+                    </CardDescription>
                   </div>
-                  <div>
-                    <div className='text-xs font-medium text-muted-foreground uppercase'>
-                      Last health check
-                    </div>
-                    <div>{brokerOverview.health.lastCheckedAt}</div>
-                  </div>
-                </div>
-                {brokerOverview.emptyState ? (
-                  <div className='mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
-                    {brokerOverview.emptyState}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-1'>
-                <div className='rounded-lg border p-3 text-sm'>
-                  <div className='text-xs font-medium text-muted-foreground uppercase'>
-                    Storage / backend summary
-                  </div>
-                  <div className='mt-1'>
-                    {brokerOverview.storage.localStore}
-                  </div>
-                  <div className='text-muted-foreground'>
-                    {brokerOverview.storage.externalSource}
-                  </div>
-                  <Badge className='mt-2' variant='outline'>
-                    {brokerOverview.storage.backendState}
-                  </Badge>
-                </div>
-                <div className='rounded-lg border p-3 text-sm'>
-                  <div className='text-xs font-medium text-muted-foreground uppercase'>
-                    Keystore / master key
-                  </div>
-                  <div className='mt-1'>{brokerOverview.keystore.state}</div>
-                  <div className='text-muted-foreground'>
-                    {brokerOverview.keystore.version}
-                  </div>
-                  <div className='mt-1 text-xs text-muted-foreground'>
-                    {brokerOverview.keystore.warning}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className='grid gap-3 md:grid-cols-4'>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Reconnect required
-                </div>
-                <div className='text-2xl font-bold'>
-                  {brokerOverview.operations.reconnectRequired}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Recent resolve failures
-                </div>
-                <div className='text-2xl font-bold'>
-                  {brokerOverview.operations.recentResolveFailures}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Recent denied requests
-                </div>
-                <div className='text-2xl font-bold'>
-                  {brokerOverview.operations.recentDeniedRequests}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Last audit event
-                </div>
-                <div className='text-sm font-medium'>
-                  {brokerOverview.operations.lastAuditEvent}
-                </div>
-              </div>
-            </div>
-
-            <div className='flex flex-wrap gap-2'>
-              <Button variant='outline' size='sm' asChild>
-                <a href='/secrets-broker/provider-connections'>
-                  View provider connections
-                </a>
-              </Button>
-              <Button variant='outline' size='sm' asChild>
-                <a href='/secrets-broker/sources'>View secret sources</a>
-              </Button>
-              <Button variant='outline' size='sm' asChild>
-                <a href='/secrets-broker/audit-events'>View audit/events</a>
-              </Button>
-              <Button variant='outline' size='sm' asChild>
-                <a href='#operational-controls'>Operational controls</a>
-              </Button>
-              <Button variant='outline' size='sm' asChild>
-                <a href='#diagnostics'>View diagnostics</a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className='grid gap-4 md:grid-cols-3'>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-base'>Ready sources</CardTitle>
-              <CardDescription>
-                Sources that can be saved or retried safely.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='text-3xl font-bold'>
-              {readyCount}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-base'>Needs operator action</CardTitle>
-              <CardDescription>
-                Locked, degraded, denied, or auth-required states.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='text-3xl font-bold'>
-              {blockedCount}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-base'>Value handling</CardTitle>
-              <CardDescription>
-                No setup test renders resolved plaintext secrets.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Badge variant='secondary'>Values hidden</Badge>
-            </CardContent>
-          </Card>
-        </div>
-
-        <OperationalControlsPanel />
-
-        <PrivilegedSecretRevealPanel
-          scenarioId={singleSecretRevealState}
-          revealed={singleSecretRevealed}
-          onScenarioChange={(state) => {
-            setSingleSecretRevealState(state)
-            setSingleSecretRevealed(false)
-          }}
-          onReveal={() => setSingleSecretRevealed(true)}
-          onHide={(state) => {
-            setSingleSecretRevealState(state)
-            setSingleSecretRevealed(false)
-          }}
-        />
-
-        <BackupKeyManagementPanel />
-
-        <Card id='secret-sources'>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <FileKey2 className='size-4' /> Secret Sources / Backends
-                </CardTitle>
-                <CardDescription>
-                  Inspect local and external Secrets Broker sources, source test
-                  results, safe example refs/config, and security warnings
-                  without displaying returned secret values.
-                </CardDescription>
-              </div>
-              <Badge variant='secondary'>Metadata only</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-4'>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Reachable</div>
-                <div className='text-2xl font-bold'>
-                  {sourceCounts.reachable}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Configured</div>
-                <div className='text-2xl font-bold'>
-                  {sourceCounts.configured}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Failing/untested
-                </div>
-                <div className='text-2xl font-bold'>
-                  {sourceCounts.failing + sourceCounts.untested}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Warnings</div>
-                <div className='text-2xl font-bold'>{sourceWarningCount}</div>
-              </div>
-            </div>
-
-            <div className='grid gap-4 lg:grid-cols-2'>
-              {secretsBrokerSourceBackends.map((source) => (
-                <SourceBackendCard key={source.id} source={source} />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id='provider-connections'>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <KeyRound className='size-4' /> Provider Connections
-                </CardTitle>
-                <CardDescription>
-                  Search and filter external provider connections by provider,
-                  status, and label. Secret material shows presence/status only,
-                  never raw values.
-                </CardDescription>
-              </div>
-              <div className='flex flex-wrap gap-2'>
-                <Badge variant='secondary'>No raw values</Badge>
-                <Badge variant='outline'>
-                  {providerConnectionsNeedingAction} need action
-                </Badge>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-3'>
-              <div>
-                <label
-                  htmlFor='provider-connection-search'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Search label
-                </label>
-                <Input
-                  id='provider-connection-search'
-                  value={connectionQueryFilter}
-                  onChange={(event) =>
-                    setConnectionQueryFilter(event.target.value)
-                  }
-                  placeholder='label, source, provider'
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor='provider-connection-provider'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Connection provider
-                </label>
-                <select
-                  id='provider-connection-provider'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={connectionProviderFilter}
-                  onChange={(event) =>
-                    setConnectionProviderFilter(event.target.value)
-                  }
-                >
-                  <option value='all'>all</option>
-                  {providerConnectionProviders.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor='provider-connection-status'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Connection status
-                </label>
-                <select
-                  id='provider-connection-status'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={connectionStatusFilter}
-                  onChange={(event) =>
-                    setConnectionStatusFilter(
-                      event.target.value as
-                        | SecretsBrokerProviderConnectionState
-                        | 'all'
-                    )
-                  }
-                >
-                  <option value='all'>all</option>
-                  {providerConnectionStates.map((status) => (
-                    <option key={status} value={status}>
-                      {providerConnectionStatusCopy[status]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {filteredProviderConnections.length === 0 ? (
-              <div className='rounded-lg border border-dashed p-6 text-sm text-muted-foreground'>
-                No provider connections match these filters. Add a source or
-                connection from Secret Sources / Backends, then test the
-                connection before using it in services.
-              </div>
-            ) : (
-              <div className='overflow-x-auto rounded-lg border'>
-                <table className='w-full text-sm'>
-                  <thead className='bg-muted/50 text-left'>
-                    <tr>
-                      <th className='p-3 font-medium'>Provider</th>
-                      <th className='p-3 font-medium'>Connection label</th>
-                      <th className='p-3 font-medium'>Auth method</th>
-                      <th className='p-3 font-medium'>Status</th>
-                      <th className='p-3 font-medium'>Lifecycle</th>
-                      <th className='p-3 font-medium'>Secret material</th>
-                      <th className='p-3 font-medium'>Expiry / refresh</th>
-                      <th className='p-3 font-medium'>Last check/error</th>
-                      <th className='p-3 font-medium'>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProviderConnections.map((connection) => (
-                      <tr key={connection.id} className='border-t align-top'>
-                        <td className='p-3 font-medium'>
-                          {connection.provider}
-                        </td>
-                        <td className='p-3'>
-                          <div className='font-medium'>{connection.title}</div>
-                          <div className='text-xs text-muted-foreground'>
-                            {connection.source}
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          {connection.metadata.find(
-                            (item) =>
-                              item.label === 'Auth mode' ||
-                              item.label === 'Mode' ||
-                              item.label === 'Profile'
-                          )?.value ?? 'metadata-only auth'}
-                        </td>
-                        <td className='p-3'>
-                          <Badge
-                            variant={
-                              providerConnectionStatusVariant[connection.state]
-                            }
-                          >
-                            {providerConnectionStatusCopy[connection.state]}
-                          </Badge>
-                          {['degraded', 'failed', 'missing'].includes(
-                            connection.state
-                          ) ? (
-                            <div className='mt-2 text-xs font-medium text-destructive'>
-                              Operator action required
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className='p-3'>
-                          <Badge
-                            variant={
-                              providerLifecycleStatusVariant[
-                                connection.lifecycle.status
-                              ]
-                            }
-                          >
-                            {
-                              providerLifecycleStatusCopy[
-                                connection.lifecycle.status
-                              ]
-                            }
-                          </Badge>
-                          <div className='mt-2 text-xs text-muted-foreground'>
-                            {connection.lifecycle.summary}
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          <div>{connection.secretMaterial.presence}</div>
-                          <div className='text-xs text-muted-foreground'>
-                            value hidden
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          {connection.secretMaterial.expiresAt ?? 'not set'}
-                          <div className='text-xs text-muted-foreground'>
-                            {connection.secretMaterial.refreshWindow ??
-                              connection.health.nextAction}
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          <div>{connection.lifecycle.lastCheckedAt}</div>
-                          {connection.lifecycle.lastRefreshError ? (
-                            <div className='text-xs text-destructive'>
-                              {connection.lifecycle.lastRefreshError}
-                            </div>
-                          ) : (
-                            <div className='text-xs text-muted-foreground'>
-                              last resolve:{' '}
-                              {connection.usage.lastSuccessfulResolve ??
-                                'not recorded'}
-                            </div>
-                          )}
-                          <div className='mt-2 flex flex-wrap gap-1 text-xs'>
-                            {connection.lifecycle.auditEventRef ? (
-                              <a
-                                href='/secrets-broker/audit-events'
-                                className='text-primary underline-offset-4 hover:underline'
-                              >
-                                Audit {connection.lifecycle.auditEventRef}
-                              </a>
-                            ) : null}
-                            {connection.lifecycle.diagnosticRef ? (
-                              <a
-                                href='/secrets-broker/diagnostics'
-                                className='text-primary underline-offset-4 hover:underline'
-                              >
-                                Diagnostics {connection.lifecycle.diagnosticRef}
-                              </a>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          <div className='flex flex-wrap gap-2'>
-                            {connection.actions
-                              .filter((action) =>
-                                [
-                                  'reconnect',
-                                  'refresh-test-now',
-                                  'disable-enable',
-                                ].includes(action.id)
-                              )
-                              .map((action) => (
-                                <Button
-                                  key={action.id}
-                                  type='button'
-                                  size='sm'
-                                  variant='outline'
-                                  disabled={
-                                    action.state === 'disabled' ||
-                                    action.state === 'unsupported'
-                                  }
-                                  title={
-                                    action.state === 'unsupported'
-                                      ? action.disabledReason
-                                      : undefined
-                                  }
-                                >
-                                  {action.label}
-                                  {action.state === 'unsupported'
-                                    ? ' unavailable'
-                                    : ''}
-                                </Button>
-                              ))}
-                            <Button asChild size='sm' variant='secondary'>
-                              <Link
-                                to='/secrets-broker/$connectionId'
-                                params={{ connectionId: connection.id }}
-                              >
-                                View details
-                              </Link>
-                            </Button>
-                            <Button type='button' size='sm' variant='outline'>
-                              View audit
-                            </Button>
-                          </div>
-                          {connection.actions
-                            .filter(
-                              (action) =>
-                                action.state === 'unsupported' &&
-                                action.disabledReason
-                            )
-                            .map((action) => (
-                              <div
-                                key={`${action.id}-unsupported-reason`}
-                                className='mt-2 text-xs text-muted-foreground'
-                              >
-                                {action.label} unavailable:{' '}
-                                {action.disabledReason}
-                              </div>
-                            ))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card id='workflow-authoring-boundary'>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <TerminalSquare className='size-4' /> Workflow authoring
-                  boundary
-                </CardTitle>
-                <CardDescription>
-                  Metadata-only guidance for authors wiring Secrets Broker refs
-                  into workflows. This panel validates refs and generates safe
-                  snippets without becoming a runner editor or resolving secret
-                  values.
-                </CardDescription>
-              </div>
-              <div className='flex flex-wrap gap-2'>
-                <Badge variant='secondary'>No runner editor</Badge>
-                <Badge variant='outline'>SecretRefs only</Badge>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-4'>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Workflows</div>
-                <div className='text-2xl font-bold'>
-                  {workflowAuthoringBoundaries.length}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Valid refs</div>
-                <div className='text-2xl font-bold'>
-                  {workflowRefCounts.valid}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Need action</div>
-                <div className='text-2xl font-bold'>
-                  {workflowRefsNeedingAction}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Value policy
-                </div>
-                <div className='mt-1'>metadata-only validation</div>
-              </div>
-            </div>
-
-            <div className='grid gap-4 lg:grid-cols-[0.9fr_1.1fr]'>
-              <div className='space-y-3'>
-                <div>
-                  <label
-                    htmlFor='workflow-authoring-scenario'
-                    className='mb-1 block text-xs text-muted-foreground'
-                  >
-                    Authoring scenario
-                  </label>
-                  <select
-                    id='workflow-authoring-scenario'
-                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                    value={selectedWorkflowBoundaryId}
-                    onChange={(event) =>
-                      setSelectedWorkflowBoundaryId(event.target.value)
+                  <Badge
+                    variant={
+                      brokerOverviewStateVariant[brokerOverview.health.state]
                     }
                   >
-                    {workflowAuthoringBoundaries.map((workflow) => (
-                      <option key={workflow.id} value={workflow.id}>
-                        {workflow.title}
+                    {brokerOverviewStateCopy[brokerOverview.health.state]}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className='space-y-4'>
+                <div className='max-w-xs'>
+                  <label
+                    htmlFor='broker-overview-scenario'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Preview state
+                  </label>
+                  <select
+                    id='broker-overview-scenario'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={overviewScenarioId}
+                    onChange={(event) =>
+                      setOverviewScenarioId(
+                        event.target.value as SecretsBrokerOverviewState
+                      )
+                    }
+                  >
+                    {brokerOverviewScenarios.map((scenario) => (
+                      <option key={scenario.id} value={scenario.id}>
+                        {scenario.label}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div className='rounded-lg border p-4 text-sm'>
-                  <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
-                    <div>
+                <div className='grid gap-4 lg:grid-cols-[1.2fr_1fr]'>
+                  <div className='rounded-lg border p-4'>
+                    <div className='mb-2 flex flex-wrap items-center gap-2'>
+                      {brokerOverview.health.apiReachable ? (
+                        <CheckCircle2 className='size-4 text-primary' />
+                      ) : (
+                        <AlertTriangle className='size-4 text-destructive' />
+                      )}
                       <div className='font-medium'>
-                        {selectedWorkflowBoundary.title}
-                      </div>
-                      <div className='text-xs text-muted-foreground'>
-                        {selectedWorkflowBoundary.owner} ·{' '}
-                        {selectedWorkflowBoundary.targetRuntime}
+                        {brokerOverview.health.title}
                       </div>
                     </div>
-                    <Badge
-                      variant={
-                        selectedWorkflowBoundary.status === 'ready'
-                          ? 'default'
-                          : 'secondary'
-                      }
-                    >
-                      {selectedWorkflowBoundary.status === 'ready'
-                        ? 'Ready to save'
-                        : 'Needs action'}
-                    </Badge>
+                    <p className='text-sm text-muted-foreground'>
+                      {brokerOverview.health.summary}
+                    </p>
+                    <div className='mt-3 grid gap-3 text-sm md:grid-cols-2'>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          API reachable
+                        </div>
+                        <div>
+                          {brokerOverview.health.apiReachable ? 'yes' : 'no'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Last health check
+                        </div>
+                        <div>{brokerOverview.health.lastCheckedAt}</div>
+                      </div>
+                    </div>
+                    {brokerOverview.emptyState ? (
+                      <div className='mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+                        {brokerOverview.emptyState}
+                      </div>
+                    ) : null}
                   </div>
-                  <p className='text-muted-foreground'>
-                    {selectedWorkflowBoundary.summary}
-                  </p>
-                  {selectedWorkflowBlocksSave ? (
-                    <div className='mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive'>
-                      Missing or denied refs should block save/run handoff until
-                      policy and metadata issues are resolved.
+
+                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-1'>
+                    <div className='rounded-lg border p-3 text-sm'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Storage / backend summary
+                      </div>
+                      <div className='mt-1'>
+                        {brokerOverview.storage.localStore}
+                      </div>
+                      <div className='text-muted-foreground'>
+                        {brokerOverview.storage.externalSource}
+                      </div>
+                      <Badge className='mt-2' variant='outline'>
+                        {brokerOverview.storage.backendState}
+                      </Badge>
                     </div>
-                  ) : (
-                    <div className='mt-3 rounded-md border p-3 text-muted-foreground'>
-                      Ref checks are metadata-valid. Continue to provider tests
-                      before any execution handoff.
+                    <div className='rounded-lg border p-3 text-sm'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Keystore / master key
+                      </div>
+                      <div className='mt-1'>
+                        {brokerOverview.keystore.state}
+                      </div>
+                      <div className='text-muted-foreground'>
+                        {brokerOverview.keystore.version}
+                      </div>
+                      <div className='mt-1 text-xs text-muted-foreground'>
+                        {brokerOverview.keystore.warning}
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                <div className='rounded-lg border p-4 text-sm'>
-                  <div className='font-medium'>Boundary guardrails</div>
-                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
-                    {selectedWorkflowBoundary.guardrails.map((guardrail) => (
-                      <li key={guardrail}>{guardrail}</li>
-                    ))}
-                  </ul>
+                <div className='grid gap-3 md:grid-cols-4'>
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-xs text-muted-foreground'>
+                      Reconnect required
+                    </div>
+                    <div className='text-2xl font-bold'>
+                      {brokerOverview.operations.reconnectRequired}
+                    </div>
+                  </div>
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-xs text-muted-foreground'>
+                      Recent resolve failures
+                    </div>
+                    <div className='text-2xl font-bold'>
+                      {brokerOverview.operations.recentResolveFailures}
+                    </div>
+                  </div>
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-xs text-muted-foreground'>
+                      Recent denied requests
+                    </div>
+                    <div className='text-2xl font-bold'>
+                      {brokerOverview.operations.recentDeniedRequests}
+                    </div>
+                  </div>
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-xs text-muted-foreground'>
+                      Last audit event
+                    </div>
+                    <div className='text-sm font-medium'>
+                      {brokerOverview.operations.lastAuditEvent}
+                    </div>
+                  </div>
+                </div>
+
+                <div className='flex flex-wrap gap-2'>
+                  <Button variant='outline' size='sm' asChild>
+                    <Link to='/secrets-broker/provider-connections'>
+                      View provider connections
+                    </Link>
+                  </Button>
+                  <Button variant='outline' size='sm' asChild>
+                    <Link to='/secrets-broker/sources'>
+                      View secret sources
+                    </Link>
+                  </Button>
+                  <Button variant='outline' size='sm' asChild>
+                    <Link to='/secrets-broker/audit-events'>
+                      View audit/events
+                    </Link>
+                  </Button>
+                  <Button variant='outline' size='sm' asChild>
+                    <Link to='/secrets-broker/diagnostics'>
+                      View diagnostics
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className='grid gap-4 md:grid-cols-3'>
+              <Card>
+                <CardHeader className='pb-2'>
+                  <CardTitle className='text-base'>Ready sources</CardTitle>
+                  <CardDescription>
+                    Sources that can be saved or retried safely.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='text-3xl font-bold'>
+                  {readyCount}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className='pb-2'>
+                  <CardTitle className='text-base'>
+                    Needs operator action
+                  </CardTitle>
+                  <CardDescription>
+                    Locked, degraded, denied, or auth-required states.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='text-3xl font-bold'>
+                  {blockedCount}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className='pb-2'>
+                  <CardTitle className='text-base'>Value handling</CardTitle>
+                  <CardDescription>
+                    No setup test renders resolved plaintext secrets.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Badge variant='secondary'>Values hidden</Badge>
+                </CardContent>
+              </Card>
+            </div>
+
+            <OperationalControlsPanel />
+          </>
+        ) : null}
+
+        {focusSection === 'single-reveal' ? (
+          <PrivilegedSecretRevealPanel
+            scenarioId={singleSecretRevealState}
+            revealed={singleSecretRevealed}
+            onScenarioChange={(state) => {
+              setSingleSecretRevealState(state)
+              setSingleSecretRevealed(false)
+            }}
+            onReveal={() => setSingleSecretRevealed(true)}
+            onHide={(state) => {
+              setSingleSecretRevealState(state)
+              setSingleSecretRevealed(false)
+            }}
+          />
+        ) : null}
+
+        {focusSection === 'backup-keys' ? <BackupKeyManagementPanel /> : null}
+
+        {focusSection === 'sources' ? (
+          <Card id='secret-sources'>
+            <CardHeader>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <CardTitle className='flex items-center gap-2'>
+                    <FileKey2 className='size-4' /> Secret Sources / Backends
+                  </CardTitle>
+                  <CardDescription>
+                    Inspect local and external Secrets Broker sources, source
+                    test results, safe example refs/config, and security
+                    warnings without displaying returned secret values.
+                  </CardDescription>
+                </div>
+                <Badge variant='secondary'>Metadata only</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-3 md:grid-cols-4'>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>Reachable</div>
+                  <div className='text-2xl font-bold'>
+                    {sourceCounts.reachable}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Configured
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {sourceCounts.configured}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Failing/untested
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {sourceCounts.failing + sourceCounts.untested}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>Warnings</div>
+                  <div className='text-2xl font-bold'>{sourceWarningCount}</div>
                 </div>
               </div>
 
-              <div className='space-y-4'>
+              <div className='grid gap-4 lg:grid-cols-2'>
+                {secretsBrokerSourceBackends.map((source) => (
+                  <SourceBackendCard key={source.id} source={source} />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {focusSection === 'provider-connections' ? (
+          <Card id='provider-connections'>
+            <CardHeader>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <CardTitle className='flex items-center gap-2'>
+                    <KeyRound className='size-4' /> Provider Connections
+                  </CardTitle>
+                  <CardDescription>
+                    Search and filter external provider connections by provider,
+                    status, and label. Secret material shows presence/status
+                    only, never raw values.
+                  </CardDescription>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  <Badge variant='secondary'>No raw values</Badge>
+                  <Badge variant='outline'>
+                    {providerConnectionsNeedingAction} need action
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-3 md:grid-cols-3'>
+                <div>
+                  <label
+                    htmlFor='provider-connection-search'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Search label
+                  </label>
+                  <Input
+                    id='provider-connection-search'
+                    value={connectionQueryFilter}
+                    onChange={(event) =>
+                      setConnectionQueryFilter(event.target.value)
+                    }
+                    placeholder='label, source, provider'
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor='provider-connection-provider'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Connection provider
+                  </label>
+                  <select
+                    id='provider-connection-provider'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={connectionProviderFilter}
+                    onChange={(event) =>
+                      setConnectionProviderFilter(event.target.value)
+                    }
+                  >
+                    <option value='all'>all</option>
+                    {providerConnectionProviders.map((provider) => (
+                      <option key={provider} value={provider}>
+                        {provider}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor='provider-connection-status'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Connection status
+                  </label>
+                  <select
+                    id='provider-connection-status'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={connectionStatusFilter}
+                    onChange={(event) =>
+                      setConnectionStatusFilter(
+                        event.target.value as
+                          | SecretsBrokerProviderConnectionState
+                          | 'all'
+                      )
+                    }
+                  >
+                    <option value='all'>all</option>
+                    {providerConnectionStates.map((status) => (
+                      <option key={status} value={status}>
+                        {providerConnectionStatusCopy[status]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {filteredProviderConnections.length === 0 ? (
+                <div className='rounded-lg border border-dashed p-6 text-sm text-muted-foreground'>
+                  No provider connections match these filters. Add a source or
+                  connection from Secret Sources / Backends, then test the
+                  connection before using it in services.
+                </div>
+              ) : (
                 <div className='overflow-x-auto rounded-lg border'>
                   <table className='w-full text-sm'>
                     <thead className='bg-muted/50 text-left'>
                       <tr>
-                        <th className='p-3 font-medium'>SecretRef</th>
                         <th className='p-3 font-medium'>Provider</th>
+                        <th className='p-3 font-medium'>Connection label</th>
+                        <th className='p-3 font-medium'>Auth method</th>
                         <th className='p-3 font-medium'>Status</th>
-                        <th className='p-3 font-medium'>Save/run guidance</th>
+                        <th className='p-3 font-medium'>Lifecycle</th>
+                        <th className='p-3 font-medium'>Secret material</th>
+                        <th className='p-3 font-medium'>Expiry / refresh</th>
+                        <th className='p-3 font-medium'>Last check/error</th>
+                        <th className='p-3 font-medium'>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedWorkflowBoundary.refs.map((ref) => (
-                        <tr key={ref.id} className='border-t align-top'>
+                      {filteredProviderConnections.map((connection) => (
+                        <tr key={connection.id} className='border-t align-top'>
+                          <td className='p-3 font-medium'>
+                            {connection.provider}
+                          </td>
                           <td className='p-3'>
-                            <div className='font-medium'>{ref.label}</div>
-                            <div className='font-mono text-xs break-all text-muted-foreground'>
-                              {ref.ref}
+                            <div className='font-medium'>
+                              {connection.title}
+                            </div>
+                            <div className='text-xs text-muted-foreground'>
+                              {connection.source}
                             </div>
                           </td>
                           <td className='p-3'>
-                            <div>{ref.provider}</div>
-                            <div className='text-xs text-muted-foreground'>
-                              {ref.connection}
-                            </div>
+                            {connection.metadata.find(
+                              (item) =>
+                                item.label === 'Auth mode' ||
+                                item.label === 'Mode' ||
+                                item.label === 'Profile'
+                            )?.value ?? 'metadata-only auth'}
                           </td>
                           <td className='p-3'>
                             <Badge
-                              variant={workflowRefStatusVariant[ref.status]}
+                              variant={
+                                providerConnectionStatusVariant[
+                                  connection.state
+                                ]
+                              }
                             >
-                              {workflowRefStatusCopy[ref.status]}
+                              {providerConnectionStatusCopy[connection.state]}
+                            </Badge>
+                            {['degraded', 'failed', 'missing'].includes(
+                              connection.state
+                            ) ? (
+                              <div className='mt-2 text-xs font-medium text-destructive'>
+                                Operator action required
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className='p-3'>
+                            <Badge
+                              variant={
+                                providerLifecycleStatusVariant[
+                                  connection.lifecycle.status
+                                ]
+                              }
+                            >
+                              {
+                                providerLifecycleStatusCopy[
+                                  connection.lifecycle.status
+                                ]
+                              }
                             </Badge>
                             <div className='mt-2 text-xs text-muted-foreground'>
-                              {ref.policyDecision}
+                              {connection.lifecycle.summary}
                             </div>
                           </td>
                           <td className='p-3'>
-                            <div>{ref.message}</div>
-                            <div className='mt-1 text-xs text-muted-foreground'>
-                              {ref.suggestedFix}
+                            <div>{connection.secretMaterial.presence}</div>
+                            <div className='text-xs text-muted-foreground'>
+                              value hidden
                             </div>
+                          </td>
+                          <td className='p-3'>
+                            {connection.secretMaterial.expiresAt ?? 'not set'}
+                            <div className='text-xs text-muted-foreground'>
+                              {connection.secretMaterial.refreshWindow ??
+                                connection.health.nextAction}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <div>{connection.lifecycle.lastCheckedAt}</div>
+                            {connection.lifecycle.lastRefreshError ? (
+                              <div className='text-xs text-destructive'>
+                                {connection.lifecycle.lastRefreshError}
+                              </div>
+                            ) : (
+                              <div className='text-xs text-muted-foreground'>
+                                last resolve:{' '}
+                                {connection.usage.lastSuccessfulResolve ??
+                                  'not recorded'}
+                              </div>
+                            )}
+                            <div className='mt-2 flex flex-wrap gap-1 text-xs'>
+                              {connection.lifecycle.auditEventRef ? (
+                                <a
+                                  href='/secrets-broker/audit-events'
+                                  className='text-primary underline-offset-4 hover:underline'
+                                >
+                                  Audit {connection.lifecycle.auditEventRef}
+                                </a>
+                              ) : null}
+                              {connection.lifecycle.diagnosticRef ? (
+                                <a
+                                  href='/secrets-broker/diagnostics'
+                                  className='text-primary underline-offset-4 hover:underline'
+                                >
+                                  Diagnostics{' '}
+                                  {connection.lifecycle.diagnosticRef}
+                                </a>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <div className='flex flex-wrap gap-2'>
+                              {connection.actions
+                                .filter((action) =>
+                                  [
+                                    'reconnect',
+                                    'refresh-test-now',
+                                    'disable-enable',
+                                  ].includes(action.id)
+                                )
+                                .map((action) => (
+                                  <Button
+                                    key={action.id}
+                                    type='button'
+                                    size='sm'
+                                    variant='outline'
+                                    disabled={
+                                      action.state === 'disabled' ||
+                                      action.state === 'unsupported'
+                                    }
+                                    title={
+                                      action.state === 'unsupported'
+                                        ? action.disabledReason
+                                        : undefined
+                                    }
+                                  >
+                                    {action.label}
+                                    {action.state === 'unsupported'
+                                      ? ' unavailable'
+                                      : ''}
+                                  </Button>
+                                ))}
+                              <Button asChild size='sm' variant='secondary'>
+                                <Link
+                                  to='/secrets-broker/$connectionId'
+                                  params={{ connectionId: connection.id }}
+                                >
+                                  View details
+                                </Link>
+                              </Button>
+                              <Button type='button' size='sm' variant='outline'>
+                                View audit
+                              </Button>
+                            </div>
+                            {connection.actions
+                              .filter(
+                                (action) =>
+                                  action.state === 'unsupported' &&
+                                  action.disabledReason
+                              )
+                              .map((action) => (
+                                <div
+                                  key={`${action.id}-unsupported-reason`}
+                                  className='mt-2 text-xs text-muted-foreground'
+                                >
+                                  {action.label} unavailable:{' '}
+                                  {action.disabledReason}
+                                </div>
+                              ))}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
-                <div className='rounded-lg border p-4'>
-                  <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
-                    <div className='font-medium'>Generated safe snippet</div>
-                    <Badge variant='secondary'>values hidden</Badge>
+        {focusSection === 'workflow-boundaries' ? (
+          <Card id='workflow-authoring-boundary'>
+            <CardHeader>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <CardTitle className='flex items-center gap-2'>
+                    <TerminalSquare className='size-4' /> Workflow authoring
+                    boundary
+                  </CardTitle>
+                  <CardDescription>
+                    Metadata-only guidance for authors wiring Secrets Broker
+                    refs into workflows. This panel validates refs and generates
+                    safe snippets without becoming a runner editor or resolving
+                    secret values.
+                  </CardDescription>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  <Badge variant='secondary'>No runner editor</Badge>
+                  <Badge variant='outline'>SecretRefs only</Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-3 md:grid-cols-4'>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>Workflows</div>
+                  <div className='text-2xl font-bold'>
+                    {workflowAuthoringBoundaries.length}
                   </div>
-                  <pre className='overflow-x-auto rounded-md bg-muted/60 p-3 text-xs'>
-                    {selectedWorkflowBoundary.snippet}
-                  </pre>
-                  <p className='mt-2 text-xs text-muted-foreground'>
-                    Snippets are authoring aids only. They contain SecretRef
-                    identifiers and validation flags, never resolved/plaintext
-                    secret values or raw provider command output.
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Valid refs
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {workflowRefCounts.valid}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Need action
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {workflowRefsNeedingAction}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Value policy
+                  </div>
+                  <div className='mt-1'>metadata-only validation</div>
+                </div>
+              </div>
+
+              <div className='grid gap-4 lg:grid-cols-[0.9fr_1.1fr]'>
+                <div className='space-y-3'>
+                  <div>
+                    <label
+                      htmlFor='workflow-authoring-scenario'
+                      className='mb-1 block text-xs text-muted-foreground'
+                    >
+                      Authoring scenario
+                    </label>
+                    <select
+                      id='workflow-authoring-scenario'
+                      className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                      value={selectedWorkflowBoundaryId}
+                      onChange={(event) =>
+                        setSelectedWorkflowBoundaryId(event.target.value)
+                      }
+                    >
+                      {workflowAuthoringBoundaries.map((workflow) => (
+                        <option key={workflow.id} value={workflow.id}>
+                          {workflow.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className='rounded-lg border p-4 text-sm'>
+                    <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
+                      <div>
+                        <div className='font-medium'>
+                          {selectedWorkflowBoundary.title}
+                        </div>
+                        <div className='text-xs text-muted-foreground'>
+                          {selectedWorkflowBoundary.owner} ·{' '}
+                          {selectedWorkflowBoundary.targetRuntime}
+                        </div>
+                      </div>
+                      <Badge
+                        variant={
+                          selectedWorkflowBoundary.status === 'ready'
+                            ? 'default'
+                            : 'secondary'
+                        }
+                      >
+                        {selectedWorkflowBoundary.status === 'ready'
+                          ? 'Ready to save'
+                          : 'Needs action'}
+                      </Badge>
+                    </div>
+                    <p className='text-muted-foreground'>
+                      {selectedWorkflowBoundary.summary}
+                    </p>
+                    {selectedWorkflowBlocksSave ? (
+                      <div className='mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive'>
+                        Missing or denied refs should block save/run handoff
+                        until policy and metadata issues are resolved.
+                      </div>
+                    ) : (
+                      <div className='mt-3 rounded-md border p-3 text-muted-foreground'>
+                        Ref checks are metadata-valid. Continue to provider
+                        tests before any execution handoff.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className='rounded-lg border p-4 text-sm'>
+                    <div className='font-medium'>Boundary guardrails</div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {selectedWorkflowBoundary.guardrails.map((guardrail) => (
+                        <li key={guardrail}>{guardrail}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className='space-y-4'>
+                  <div className='overflow-x-auto rounded-lg border'>
+                    <table className='w-full text-sm'>
+                      <thead className='bg-muted/50 text-left'>
+                        <tr>
+                          <th className='p-3 font-medium'>SecretRef</th>
+                          <th className='p-3 font-medium'>Provider</th>
+                          <th className='p-3 font-medium'>Status</th>
+                          <th className='p-3 font-medium'>Save/run guidance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedWorkflowBoundary.refs.map((ref) => (
+                          <tr key={ref.id} className='border-t align-top'>
+                            <td className='p-3'>
+                              <div className='font-medium'>{ref.label}</div>
+                              <div className='font-mono text-xs break-all text-muted-foreground'>
+                                {ref.ref}
+                              </div>
+                            </td>
+                            <td className='p-3'>
+                              <div>{ref.provider}</div>
+                              <div className='text-xs text-muted-foreground'>
+                                {ref.connection}
+                              </div>
+                            </td>
+                            <td className='p-3'>
+                              <Badge
+                                variant={workflowRefStatusVariant[ref.status]}
+                              >
+                                {workflowRefStatusCopy[ref.status]}
+                              </Badge>
+                              <div className='mt-2 text-xs text-muted-foreground'>
+                                {ref.policyDecision}
+                              </div>
+                            </td>
+                            <td className='p-3'>
+                              <div>{ref.message}</div>
+                              <div className='mt-1 text-xs text-muted-foreground'>
+                                {ref.suggestedFix}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className='rounded-lg border p-4'>
+                    <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
+                      <div className='font-medium'>Generated safe snippet</div>
+                      <Badge variant='secondary'>values hidden</Badge>
+                    </div>
+                    <pre className='overflow-x-auto rounded-md bg-muted/60 p-3 text-xs'>
+                      {selectedWorkflowBoundary.snippet}
+                    </pre>
+                    <p className='mt-2 text-xs text-muted-foreground'>
+                      Snippets are authoring aids only. They contain SecretRef
+                      identifiers and validation flags, never resolved/plaintext
+                      secret values or raw provider command output.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {focusSection === 'topology' ? (
+          <Card id='secrets-topology'>
+            <CardHeader>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <CardTitle className='flex items-center gap-2'>
+                    <Network className='size-4' /> Secrets Broker topology
+                  </CardTitle>
+                  <CardDescription>
+                    Safe topology graph for services, workflows, runs,
+                    SecretRefs, broker sources, and provider connections. Graph
+                    labels and fallback rows use the same safe metadata and
+                    never render resolved secret values.
+                  </CardDescription>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  <Badge variant='secondary'>Safe metadata only</Badge>
+                  <Badge variant='outline'>List fallback included</Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-3 md:grid-cols-4'>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Graph nodes
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {filteredSecretsTopology.nodes.length}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Graph edges
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {filteredSecretsTopology.edges.length}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Action edges
+                  </div>
+                  <div className='text-2xl font-bold'>
+                    {topologyProblemEdges.length}
+                  </div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-xs text-muted-foreground'>
+                    Value policy
+                  </div>
+                  <div className='mt-1'>hidden / never rendered</div>
+                </div>
+              </div>
+
+              <div className='grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
+                <div>
+                  <label
+                    htmlFor='secrets-topology-search'
+                    className='mb-1 block text-xs font-medium text-muted-foreground'
+                  >
+                    Search topology
+                  </label>
+                  <Input
+                    id='secrets-topology-search'
+                    value={topologySearchQuery}
+                    onChange={(event) =>
+                      setTopologySearchQuery(event.target.value)
+                    }
+                    placeholder='Search service, workflow, provider, ref, or status'
+                  />
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    Showing {filteredSecretsTopology.nodes.length} of{' '}
+                    {secretsTopology.nodes.length} nodes and{' '}
+                    {filteredSecretsTopology.edges.length} of{' '}
+                    {secretsTopology.edges.length} relationships.
+                  </div>
+                </div>
+                {topologySearchQuery ? (
+                  <Button
+                    type='button'
+                    variant='outline'
+                    onClick={() => setTopologySearchQuery('')}
+                  >
+                    <X className='size-4' />
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+
+              <DependencyGraphCanvas
+                nodes={reactFlowSecretsTopology.nodes}
+                edges={reactFlowSecretsTopology.edges}
+                height={480}
+                draggable={false}
+                selectable={false}
+                showMiniMap={false}
+                legendItems={[
+                  { label: 'ok', color: '#16a34a' },
+                  {
+                    label: 'warning / missing',
+                    color: '#f59e0b',
+                    dashed: true,
+                  },
+                  { label: 'failed', color: '#dc2626', dashed: true },
+                  { label: 'denied', color: '#991b1b', dashed: true },
+                ]}
+              />
+
+              <div className='rounded-lg border p-3 text-sm'>
+                <div className='font-medium'>
+                  Actionable relationship fallback
+                </div>
+                <p className='text-muted-foreground'>
+                  This list mirrors the graph relationships for accessibility
+                  and troubleshooting. Each edge links to detail, audit, or
+                  diagnostic context instead of relying on decorative graph-only
+                  state.
+                </p>
+              </div>
+
+              <div className='overflow-x-auto rounded-lg border'>
+                <table className='w-full text-sm'>
+                  <thead className='bg-muted/50 text-left'>
+                    <tr>
+                      <th className='p-3 font-medium'>Relationship</th>
+                      <th className='p-3 font-medium'>From</th>
+                      <th className='p-3 font-medium'>To</th>
+                      <th className='p-3 font-medium'>Status</th>
+                      <th className='p-3 font-medium'>Context</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSecretsTopology.edges.map((edge) => {
+                      const sourceNode = filteredSecretsTopology.nodes.find(
+                        (node) => node.id === edge.source
+                      )
+                      const targetNode = filteredSecretsTopology.nodes.find(
+                        (node) => node.id === edge.target
+                      )
+
+                      return (
+                        <tr key={edge.id} className='border-t align-top'>
+                          <td className='p-3 font-medium'>{edge.label}</td>
+                          <td className='p-3'>
+                            <div>{sourceNode?.label ?? edge.source}</div>
+                            <div className='text-xs text-muted-foreground'>
+                              {sourceNode?.kind}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <div>{targetNode?.label ?? edge.target}</div>
+                            <div className='text-xs text-muted-foreground'>
+                              {targetNode?.kind}
+                            </div>
+                          </td>
+                          <td className='p-3'>
+                            <Badge
+                              variant={
+                                edge.status === 'ok'
+                                  ? 'default'
+                                  : edge.status === 'failed' ||
+                                      edge.status === 'denied'
+                                    ? 'destructive'
+                                    : 'secondary'
+                              }
+                            >
+                              {edge.status}
+                            </Badge>
+                          </td>
+                          <td className='p-3'>
+                            <div className='flex flex-wrap gap-2'>
+                              <Button asChild size='sm' variant='outline'>
+                                <a href={edge.detailHref}>Detail</a>
+                              </Button>
+                              <Button asChild size='sm' variant='outline'>
+                                <a href={edge.auditHref}>Audit</a>
+                              </Button>
+                              {edge.diagnosticHref ? (
+                                <Button asChild size='sm' variant='outline'>
+                                  <a href={edge.diagnosticHref}>Diagnostics</a>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {!filteredSecretsTopology.edges.length ? (
+                      <tr>
+                        <td className='p-3 text-muted-foreground' colSpan={5}>
+                          No topology relationships match the current search.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {focusSection === 'audit-events' ? (
+          <Card id='audit-events'>
+            <CardHeader>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <CardTitle className='flex items-center gap-2'>
+                    <ClipboardCheck className='size-4' /> Audit and events
+                  </CardTitle>
+                  <CardDescription>
+                    Inspect Secrets Broker operations by type, outcome,
+                    provider, source/backend, connection, service/workflow/run,
+                    actor, and timestamp without exposing secret values.
+                  </CardDescription>
+                </div>
+                <Badge variant='secondary'>Values never rendered</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-3 md:grid-cols-7'>
+                <div>
+                  <label
+                    htmlFor='secret-audit-type'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Event type
+                  </label>
+                  <select
+                    id='secret-audit-type'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={auditTypeFilter}
+                    onChange={(event) =>
+                      setAuditTypeFilter(
+                        event.target.value as
+                          | SecretsBrokerAuditEventType
+                          | 'all'
+                      )
+                    }
+                  >
+                    <option value='all'>all</option>
+                    {auditTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {auditEventTypeLabel(type)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor='secret-audit-outcome'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Outcome
+                  </label>
+                  <select
+                    id='secret-audit-outcome'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={auditOutcomeFilter}
+                    onChange={(event) =>
+                      setAuditOutcomeFilter(
+                        event.target.value as SecretsBrokerAuditOutcome | 'all'
+                      )
+                    }
+                  >
+                    <option value='all'>all</option>
+                    {auditOutcomes.map((outcome) => (
+                      <option key={outcome} value={outcome}>
+                        {outcome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor='secret-audit-provider'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Audit provider
+                  </label>
+                  <select
+                    id='secret-audit-provider'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={auditProviderFilter}
+                    onChange={(event) =>
+                      setAuditProviderFilter(
+                        event.target.value as
+                          | SecretsBrokerAuditEvent['provider']
+                          | 'all'
+                      )
+                    }
+                  >
+                    <option value='all'>all</option>
+                    {auditProviders.map((provider) => (
+                      <option key={provider} value={provider}>
+                        {provider}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor='secret-audit-tamper-evidence'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Tamper evidence
+                  </label>
+                  <select
+                    id='secret-audit-tamper-evidence'
+                    className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                    value={auditTamperEvidenceFilter}
+                    onChange={(event) =>
+                      setAuditTamperEvidenceFilter(
+                        event.target.value as
+                          | SecretsBrokerAuditTamperEvidenceStatus
+                          | 'all'
+                      )
+                    }
+                  >
+                    <option value='all'>all</option>
+                    {auditTamperEvidenceStates.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor='secret-audit-query'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Source / actor
+                  </label>
+                  <Input
+                    id='secret-audit-query'
+                    value={auditQueryFilter}
+                    onChange={(event) =>
+                      setAuditQueryFilter(event.target.value)
+                    }
+                    placeholder='source, connection, target, actor'
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor='secret-audit-since'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Since
+                  </label>
+                  <Input
+                    id='secret-audit-since'
+                    type='datetime-local'
+                    value={auditSinceFilter}
+                    onChange={(event) =>
+                      setAuditSinceFilter(event.target.value)
+                    }
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor='secret-audit-until'
+                    className='mb-1 block text-xs text-muted-foreground'
+                  >
+                    Until
+                  </label>
+                  <Input
+                    id='secret-audit-until'
+                    type='datetime-local'
+                    value={auditUntilFilter}
+                    onChange={(event) =>
+                      setAuditUntilFilter(event.target.value)
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className='grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]'>
+                <div className='space-y-2'>
+                  {filteredAuditEvents.length ? (
+                    filteredAuditEvents.map((event) => (
+                      <button
+                        key={event.id}
+                        type='button'
+                        className={`w-full rounded-lg border p-3 text-left text-sm transition hover:border-primary ${
+                          selectedAuditEvent.id === event.id
+                            ? 'border-primary bg-muted/60'
+                            : 'bg-card'
+                        }`}
+                        onClick={() => setSelectedAuditEventId(event.id)}
+                      >
+                        <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
+                          <div>
+                            <div className='font-medium'>
+                              {auditEventTypeLabel(event.type)}
+                            </div>
+                            <div className='text-xs text-muted-foreground'>
+                              {event.timestamp} · {event.provider} ·{' '}
+                              {event.source}
+                            </div>
+                          </div>
+                          <div className='flex flex-wrap gap-2'>
+                            <Badge variant={auditOutcomeVariant[event.outcome]}>
+                              {event.outcome}
+                            </Badge>
+                            <Badge
+                              variant={
+                                auditTamperEvidenceVariant[
+                                  event.tamperEvidence.status
+                                ]
+                              }
+                            >
+                              {event.tamperEvidence.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className='grid gap-2 text-xs text-muted-foreground md:grid-cols-3'>
+                          <span>ref: {event.ref}</span>
+                          <span>actor: {event.actorId}</span>
+                          <span>target: {event.serviceOrWorkflow}</span>
+                          <span>audit reason: {event.auditReason}</span>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+                      No audit events match the current filters.
+                    </div>
+                  )}
+                </div>
+                <AuditEventDetail event={selectedAuditEvent} />
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {focusSection === 'diagnostics' ? (
+          <Card id='diagnostics'>
+            <CardHeader>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <CardTitle className='flex items-center gap-2'>
+                    <AlertTriangle className='size-4' /> Diagnostics and
+                    troubleshooting
+                  </CardTitle>
+                  <CardDescription>
+                    Normalized, secret-safe checks for broker lifecycle,
+                    provider, auth, policy, and workflow runtime failures.
+                  </CardDescription>
+                </div>
+                <Badge variant='secondary'>Raw output scrubbed</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-3 md:grid-cols-3'>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-2xl font-bold'>
+                    {diagnosticCounts.pass}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    passing checks
+                  </p>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-2xl font-bold'>
+                    {diagnosticCounts.warning}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    degraded checks
+                  </p>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-2xl font-bold'>
+                    {diagnosticCounts.fail}
+                  </div>
+                  <p className='text-xs text-muted-foreground'>failed checks</p>
+                </div>
+              </div>
+              <div className='grid gap-3 lg:grid-cols-2'>
+                {secretsBrokerDiagnostics.map((diagnostic) => (
+                  <DiagnosticCard key={diagnostic.id} diagnostic={diagnostic} />
+                ))}
+              </div>
+              <div className='flex gap-3 rounded-lg border p-3 text-sm'>
+                <ShieldCheck className='mt-0.5 size-4 shrink-0' />
+                <div>
+                  <div className='font-medium'>
+                    Secret-safe diagnostics only
+                  </div>
+                  <p className='text-muted-foreground'>
+                    Checks show normalized codes, source labels, affected refs,
+                    affected services or workflows, and suggested fixes. Raw
+                    command stdout/stderr and resolved secret values are never
+                    rendered.
                   </p>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id='secrets-topology'>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <Network className='size-4' /> Secrets Broker topology
-                </CardTitle>
-                <CardDescription>
-                  Safe topology graph for services, workflows, runs, SecretRefs,
-                  broker sources, and provider connections. Graph labels and
-                  fallback rows use the same safe metadata and never render
-                  resolved secret values.
-                </CardDescription>
-              </div>
-              <div className='flex flex-wrap gap-2'>
-                <Badge variant='secondary'>Safe metadata only</Badge>
-                <Badge variant='outline'>List fallback included</Badge>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-4'>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Graph nodes</div>
-                <div className='text-2xl font-bold'>
-                  {filteredSecretsTopology.nodes.length}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>Graph edges</div>
-                <div className='text-2xl font-bold'>
-                  {filteredSecretsTopology.edges.length}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Action edges
-                </div>
-                <div className='text-2xl font-bold'>
-                  {topologyProblemEdges.length}
-                </div>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-xs text-muted-foreground'>
-                  Value policy
-                </div>
-                <div className='mt-1'>hidden / never rendered</div>
-              </div>
-            </div>
-
-            <div className='grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
-              <div>
-                <label
-                  htmlFor='secrets-topology-search'
-                  className='mb-1 block text-xs font-medium text-muted-foreground'
-                >
-                  Search topology
-                </label>
-                <Input
-                  id='secrets-topology-search'
-                  value={topologySearchQuery}
-                  onChange={(event) =>
-                    setTopologySearchQuery(event.target.value)
-                  }
-                  placeholder='Search service, workflow, provider, ref, or status'
-                />
-                <div className='mt-2 text-xs text-muted-foreground'>
-                  Showing {filteredSecretsTopology.nodes.length} of{' '}
-                  {secretsTopology.nodes.length} nodes and{' '}
-                  {filteredSecretsTopology.edges.length} of{' '}
-                  {secretsTopology.edges.length} relationships.
-                </div>
-              </div>
-              {topologySearchQuery ? (
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => setTopologySearchQuery('')}
-                >
-                  <X className='size-4' />
-                  Clear
-                </Button>
-              ) : null}
-            </div>
-
-            <DependencyGraphCanvas
-              nodes={reactFlowSecretsTopology.nodes}
-              edges={reactFlowSecretsTopology.edges}
-              height={480}
-              draggable={false}
-              selectable={false}
-              showMiniMap={false}
-              legendItems={[
-                { label: 'ok', color: '#16a34a' },
-                { label: 'warning / missing', color: '#f59e0b', dashed: true },
-                { label: 'failed', color: '#dc2626', dashed: true },
-                { label: 'denied', color: '#991b1b', dashed: true },
-              ]}
-            />
-
-            <div className='rounded-lg border p-3 text-sm'>
-              <div className='font-medium'>
-                Actionable relationship fallback
-              </div>
-              <p className='text-muted-foreground'>
-                This list mirrors the graph relationships for accessibility and
-                troubleshooting. Each edge links to detail, audit, or diagnostic
-                context instead of relying on decorative graph-only state.
-              </p>
-            </div>
-
-            <div className='overflow-x-auto rounded-lg border'>
-              <table className='w-full text-sm'>
-                <thead className='bg-muted/50 text-left'>
-                  <tr>
-                    <th className='p-3 font-medium'>Relationship</th>
-                    <th className='p-3 font-medium'>From</th>
-                    <th className='p-3 font-medium'>To</th>
-                    <th className='p-3 font-medium'>Status</th>
-                    <th className='p-3 font-medium'>Context</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSecretsTopology.edges.map((edge) => {
-                    const sourceNode = filteredSecretsTopology.nodes.find(
-                      (node) => node.id === edge.source
-                    )
-                    const targetNode = filteredSecretsTopology.nodes.find(
-                      (node) => node.id === edge.target
-                    )
-
-                    return (
-                      <tr key={edge.id} className='border-t align-top'>
-                        <td className='p-3 font-medium'>{edge.label}</td>
-                        <td className='p-3'>
-                          <div>{sourceNode?.label ?? edge.source}</div>
-                          <div className='text-xs text-muted-foreground'>
-                            {sourceNode?.kind}
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          <div>{targetNode?.label ?? edge.target}</div>
-                          <div className='text-xs text-muted-foreground'>
-                            {targetNode?.kind}
-                          </div>
-                        </td>
-                        <td className='p-3'>
-                          <Badge
-                            variant={
-                              edge.status === 'ok'
-                                ? 'default'
-                                : edge.status === 'failed' ||
-                                    edge.status === 'denied'
-                                  ? 'destructive'
-                                  : 'secondary'
-                            }
-                          >
-                            {edge.status}
-                          </Badge>
-                        </td>
-                        <td className='p-3'>
-                          <div className='flex flex-wrap gap-2'>
-                            <Button asChild size='sm' variant='outline'>
-                              <a href={edge.detailHref}>Detail</a>
-                            </Button>
-                            <Button asChild size='sm' variant='outline'>
-                              <a href={edge.auditHref}>Audit</a>
-                            </Button>
-                            {edge.diagnosticHref ? (
-                              <Button asChild size='sm' variant='outline'>
-                                <a href={edge.diagnosticHref}>Diagnostics</a>
-                              </Button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {!filteredSecretsTopology.edges.length ? (
-                    <tr>
-                      <td className='p-3 text-muted-foreground' colSpan={5}>
-                        No topology relationships match the current search.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id='audit-events'>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <ClipboardCheck className='size-4' /> Audit and events
-                </CardTitle>
-                <CardDescription>
-                  Inspect Secrets Broker operations by type, outcome, provider,
-                  source/backend, connection, service/workflow/run, actor, and
-                  timestamp without exposing secret values.
-                </CardDescription>
-              </div>
-              <Badge variant='secondary'>Values never rendered</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-7'>
-              <div>
-                <label
-                  htmlFor='secret-audit-type'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Event type
-                </label>
-                <select
-                  id='secret-audit-type'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={auditTypeFilter}
-                  onChange={(event) =>
-                    setAuditTypeFilter(
-                      event.target.value as SecretsBrokerAuditEventType | 'all'
-                    )
-                  }
-                >
-                  <option value='all'>all</option>
-                  {auditTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {auditEventTypeLabel(type)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor='secret-audit-outcome'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Outcome
-                </label>
-                <select
-                  id='secret-audit-outcome'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={auditOutcomeFilter}
-                  onChange={(event) =>
-                    setAuditOutcomeFilter(
-                      event.target.value as SecretsBrokerAuditOutcome | 'all'
-                    )
-                  }
-                >
-                  <option value='all'>all</option>
-                  {auditOutcomes.map((outcome) => (
-                    <option key={outcome} value={outcome}>
-                      {outcome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor='secret-audit-provider'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Audit provider
-                </label>
-                <select
-                  id='secret-audit-provider'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={auditProviderFilter}
-                  onChange={(event) =>
-                    setAuditProviderFilter(
-                      event.target.value as
-                        | SecretsBrokerAuditEvent['provider']
-                        | 'all'
-                    )
-                  }
-                >
-                  <option value='all'>all</option>
-                  {auditProviders.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor='secret-audit-tamper-evidence'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Tamper evidence
-                </label>
-                <select
-                  id='secret-audit-tamper-evidence'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={auditTamperEvidenceFilter}
-                  onChange={(event) =>
-                    setAuditTamperEvidenceFilter(
-                      event.target.value as
-                        | SecretsBrokerAuditTamperEvidenceStatus
-                        | 'all'
-                    )
-                  }
-                >
-                  <option value='all'>all</option>
-                  {auditTamperEvidenceStates.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor='secret-audit-query'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Source / actor
-                </label>
-                <Input
-                  id='secret-audit-query'
-                  value={auditQueryFilter}
-                  onChange={(event) => setAuditQueryFilter(event.target.value)}
-                  placeholder='source, connection, target, actor'
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor='secret-audit-since'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Since
-                </label>
-                <Input
-                  id='secret-audit-since'
-                  type='datetime-local'
-                  value={auditSinceFilter}
-                  onChange={(event) => setAuditSinceFilter(event.target.value)}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor='secret-audit-until'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  Until
-                </label>
-                <Input
-                  id='secret-audit-until'
-                  type='datetime-local'
-                  value={auditUntilFilter}
-                  onChange={(event) => setAuditUntilFilter(event.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className='grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]'>
-              <div className='space-y-2'>
-                {filteredAuditEvents.length ? (
-                  filteredAuditEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      type='button'
-                      className={`w-full rounded-lg border p-3 text-left text-sm transition hover:border-primary ${
-                        selectedAuditEvent.id === event.id
-                          ? 'border-primary bg-muted/60'
-                          : 'bg-card'
-                      }`}
-                      onClick={() => setSelectedAuditEventId(event.id)}
-                    >
-                      <div className='mb-2 flex flex-wrap items-start justify-between gap-2'>
-                        <div>
-                          <div className='font-medium'>
-                            {auditEventTypeLabel(event.type)}
-                          </div>
-                          <div className='text-xs text-muted-foreground'>
-                            {event.timestamp} · {event.provider} ·{' '}
-                            {event.source}
-                          </div>
-                        </div>
-                        <div className='flex flex-wrap gap-2'>
-                          <Badge variant={auditOutcomeVariant[event.outcome]}>
-                            {event.outcome}
-                          </Badge>
-                          <Badge
-                            variant={
-                              auditTamperEvidenceVariant[
-                                event.tamperEvidence.status
-                              ]
-                            }
-                          >
-                            {event.tamperEvidence.status}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className='grid gap-2 text-xs text-muted-foreground md:grid-cols-3'>
-                        <span>ref: {event.ref}</span>
-                        <span>actor: {event.actorId}</span>
-                        <span>target: {event.serviceOrWorkflow}</span>
-                        <span>audit reason: {event.auditReason}</span>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-                    No audit events match the current filters.
-                  </div>
-                )}
-              </div>
-              <AuditEventDetail event={selectedAuditEvent} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id='diagnostics'>
-          <CardHeader>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-              <div>
-                <CardTitle className='flex items-center gap-2'>
-                  <AlertTriangle className='size-4' /> Diagnostics and
-                  troubleshooting
-                </CardTitle>
-                <CardDescription>
-                  Normalized, secret-safe checks for broker lifecycle, provider,
-                  auth, policy, and workflow runtime failures.
-                </CardDescription>
-              </div>
-              <Badge variant='secondary'>Raw output scrubbed</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-3 md:grid-cols-3'>
-              <div className='rounded-lg border p-3'>
-                <div className='text-2xl font-bold'>
-                  {diagnosticCounts.pass}
-                </div>
-                <p className='text-xs text-muted-foreground'>passing checks</p>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-2xl font-bold'>
-                  {diagnosticCounts.warning}
-                </div>
-                <p className='text-xs text-muted-foreground'>degraded checks</p>
-              </div>
-              <div className='rounded-lg border p-3'>
-                <div className='text-2xl font-bold'>
-                  {diagnosticCounts.fail}
-                </div>
-                <p className='text-xs text-muted-foreground'>failed checks</p>
-              </div>
-            </div>
-            <div className='grid gap-3 lg:grid-cols-2'>
-              {secretsBrokerDiagnostics.map((diagnostic) => (
-                <DiagnosticCard key={diagnostic.id} diagnostic={diagnostic} />
-              ))}
-            </div>
-            <div className='flex gap-3 rounded-lg border p-3 text-sm'>
-              <ShieldCheck className='mt-0.5 size-4 shrink-0' />
-              <div>
-                <div className='font-medium'>Secret-safe diagnostics only</div>
-                <p className='text-muted-foreground'>
-                  Checks show normalized codes, source labels, affected refs,
-                  affected services or workflows, and suggested fixes. Raw
-                  command stdout/stderr and resolved secret values are never
-                  rendered.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]'>
-          <Card>
-            <CardHeader>
-              <CardTitle>Source setup paths</CardTitle>
-              <CardDescription>
-                Pick a source type to preview the safe setup contract and
-                current stubbed state.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='grid gap-3'>
-              {wizardSources.map((source) => (
-                <SourceCard
-                  key={source.id}
-                  source={source}
-                  selected={source.id === selectedSource.id}
-                  onSelect={() => setSelectedId(source.id)}
-                />
-              ))}
             </CardContent>
           </Card>
+        ) : null}
 
-          <Card>
-            <CardHeader>
-              <div className='flex items-start justify-between gap-3'>
-                <div>
-                  <CardTitle className='flex items-center gap-2'>
-                    <SourceIcon source={selectedSource} />
-                    {selectedSource.title}
-                  </CardTitle>
-                  <CardDescription>{selectedSource.kind}</CardDescription>
-                </div>
-                <Badge variant={statusVariant[selectedSource.status]}>
-                  {statusCopy[selectedSource.status]}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className='space-y-5'>
-              <section className='space-y-2'>
-                <h3 className='font-medium'>Safe example</h3>
-                <SafeExample value={selectedSource.safeExample} />
-                <p className='text-sm text-muted-foreground'>
-                  Examples intentionally use SecretRef-style identifiers and
-                  hidden generated values only.
-                </p>
-              </section>
+        {focusSection === 'overview' ? (
+          <>
+            <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]'>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Source setup paths</CardTitle>
+                  <CardDescription>
+                    Pick a source type to preview the safe setup contract and
+                    current stubbed state.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='grid gap-3'>
+                  {wizardSources.map((source) => (
+                    <SourceCard
+                      key={source.id}
+                      source={source}
+                      selected={source.id === selectedSource.id}
+                      onSelect={() => setSelectedId(source.id)}
+                    />
+                  ))}
+                </CardContent>
+              </Card>
 
-              <section className='space-y-2'>
-                <h3 className='font-medium'>Affected refs and services</h3>
-                <div className='flex flex-wrap gap-2'>
-                  {selectedSource.affected.map((item) => (
-                    <Badge key={item} variant='outline'>
-                      {item}
+              <Card>
+                <CardHeader>
+                  <div className='flex items-start justify-between gap-3'>
+                    <div>
+                      <CardTitle className='flex items-center gap-2'>
+                        <SourceIcon source={selectedSource} />
+                        {selectedSource.title}
+                      </CardTitle>
+                      <CardDescription>{selectedSource.kind}</CardDescription>
+                    </div>
+                    <Badge variant={statusVariant[selectedSource.status]}>
+                      {statusCopy[selectedSource.status]}
                     </Badge>
-                  ))}
-                </div>
-              </section>
+                  </div>
+                </CardHeader>
+                <CardContent className='space-y-5'>
+                  <section className='space-y-2'>
+                    <h3 className='font-medium'>Safe example</h3>
+                    <SafeExample value={selectedSource.safeExample} />
+                    <p className='text-sm text-muted-foreground'>
+                      Examples intentionally use SecretRef-style identifiers and
+                      hidden generated values only.
+                    </p>
+                  </section>
 
-              {selectedSource.warning ? (
-                <div className='flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100'>
-                  <AlertTriangle className='mt-0.5 size-4 shrink-0' />
-                  <span>{selectedSource.warning}</span>
-                </div>
-              ) : null}
+                  <section className='space-y-2'>
+                    <h3 className='font-medium'>Affected refs and services</h3>
+                    <div className='flex flex-wrap gap-2'>
+                      {selectedSource.affected.map((item) => (
+                        <Badge key={item} variant='outline'>
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  </section>
 
-              <section className='space-y-2'>
-                <h3 className='font-medium'>Next safe action</h3>
-                <p className='text-sm text-muted-foreground'>
-                  {selectedSource.nextAction}
-                </p>
-              </section>
+                  {selectedSource.warning ? (
+                    <div className='flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100'>
+                      <AlertTriangle className='mt-0.5 size-4 shrink-0' />
+                      <span>{selectedSource.warning}</span>
+                    </div>
+                  ) : null}
 
-              <div className='rounded-lg border p-3 text-sm'>
-                <div className='mb-2 flex items-center gap-2 font-medium'>
-                  <ShieldCheck className='size-4' /> Security gates
-                </div>
-                <ul className='list-disc space-y-1 pl-5 text-muted-foreground'>
-                  <li>Require preview before destructive or broad changes.</li>
-                  <li>
-                    Require explicit confirmation and an audit reason before
-                    save/write.
-                  </li>
-                  <li>Show policy decisions and audit links without values.</li>
-                </ul>
-              </div>
+                  <section className='space-y-2'>
+                    <h3 className='font-medium'>Next safe action</h3>
+                    <p className='text-sm text-muted-foreground'>
+                      {selectedSource.nextAction}
+                    </p>
+                  </section>
 
-              <div className='flex flex-wrap gap-2'>
-                <Button type='button'>Test selected source</Button>
-                <Button type='button' variant='outline'>
-                  Cancel setup
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  <div className='rounded-lg border p-3 text-sm'>
+                    <div className='mb-2 flex items-center gap-2 font-medium'>
+                      <ShieldCheck className='size-4' /> Security gates
+                    </div>
+                    <ul className='list-disc space-y-1 pl-5 text-muted-foreground'>
+                      <li>
+                        Require preview before destructive or broad changes.
+                      </li>
+                      <li>
+                        Require explicit confirmation and an audit reason before
+                        save/write.
+                      </li>
+                      <li>
+                        Show policy decisions and audit links without values.
+                      </li>
+                    </ul>
+                  </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className='flex items-center gap-2'>
-              <CheckCircle2 className='size-4' /> Covered setup states
-            </CardTitle>
-            <CardDescription>
-              This first slice makes the states visible before wiring live
-              Secrets Broker APIs.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-3'>
-            <div>Blank install: choose local/file/exec/external source.</div>
-            <div>Existing vault on new machine: import or re-wrap.</div>
-            <div>External auth required: show affected refs first.</div>
-            <div>Service dependency blocked: explain source/policy reason.</div>
-            <div>OpenClaw exec adapter: namespace and last check only.</div>
-            <div>
-              Generated secret write-back: policy and audit, value hidden.
+                  <div className='flex flex-wrap gap-2'>
+                    <Button type='button'>Test selected source</Button>
+                    <Button type='button' variant='outline'>
+                      Cancel setup
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className='flex items-center gap-2'>
+                  <CheckCircle2 className='size-4' /> Covered setup states
+                </CardTitle>
+                <CardDescription>
+                  This first slice makes the states visible before wiring live
+                  Secrets Broker APIs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-3'>
+                <div>
+                  Blank install: choose local/file/exec/external source.
+                </div>
+                <div>Existing vault on new machine: import or re-wrap.</div>
+                <div>External auth required: show affected refs first.</div>
+                <div>
+                  Service dependency blocked: explain source/policy reason.
+                </div>
+                <div>OpenClaw exec adapter: namespace and last check only.</div>
+                <div>
+                  Generated secret write-back: policy and audit, value hidden.
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
       </Main>
     </>
   )
