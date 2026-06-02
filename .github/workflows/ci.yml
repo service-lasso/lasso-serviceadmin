@@ -12,6 +12,7 @@ on:
 jobs:
   install-lint-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout code
@@ -42,12 +43,15 @@ jobs:
         run: npm run build
 
       - name: Install Playwright browser
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
 
       - name: Run browser UI tests
+        timeout-minutes: 10
         run: npm run test:ui
 
       - name: Run service template checks
+        timeout-minutes: 10
         shell: bash
         run: |
           bash ./scripts/test.sh
