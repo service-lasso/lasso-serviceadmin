@@ -9,7 +9,7 @@ import {
 
 describe('Secrets Broker policy simulation surface', () => {
   it('renders an allowed read dry-run without resolving secret values', async () => {
-    await renderRoute('/secrets-policy-simulation')
+    await renderRoute('/secrets-broker/policy-simulation')
 
     expect(
       await screen.findByRole('heading', {
@@ -36,7 +36,7 @@ describe('Secrets Broker policy simulation surface', () => {
 
   it('covers denied unknown locked and source-auth-required outcomes', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-policy-simulation')
+    await renderRoute('/secrets-broker/policy-simulation')
 
     await user.selectOptions(
       screen.getByLabelText(/Simulation scenario/i),
