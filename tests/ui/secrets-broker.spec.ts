@@ -105,6 +105,8 @@ test.describe('Secrets Broker browser coverage', () => {
       ['Topology', /\/secrets-broker\/topology$/],
       ['Audit / Events', /\/secrets-broker\/audit-events$/],
       ['Diagnostics', /\/secrets-broker\/diagnostics$/],
+      ['Secret Inventory', /\/secrets-broker\/secret-inventory$/],
+      ['Policy Simulation', /\/secrets-broker\/policy-simulation$/],
     ] as const
 
     for (const [name, urlPattern] of navLinks) {
@@ -118,12 +120,6 @@ test.describe('Secrets Broker browser coverage', () => {
       await expectNoSecretMaterial(page)
     }
 
-    await expect(
-      page.getByRole('link', { name: 'Secret Inventory' })
-    ).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: 'Policy Simulation' })
-    ).toHaveCount(0)
     expect(consoleErrors).toEqual([])
   })
 
@@ -368,6 +364,11 @@ test.describe('Secrets Broker browser coverage', () => {
       ['/secrets-broker/topology', /Secrets Broker topology/i],
       ['/secrets-broker/audit-events', /Audit and events/i],
       ['/secrets-broker/diagnostics', /Diagnostics and troubleshooting/i],
+      ['/secrets-broker/secret-inventory', /^Secret inventory$/i],
+      [
+        '/secrets-broker/policy-simulation',
+        /Secrets Broker policy\s+simulation/i,
+      ],
     ] as const
 
     for (const [path, label] of sections) {
