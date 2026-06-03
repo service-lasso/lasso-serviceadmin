@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const port = Number(process.env.UI_TEST_PORT ?? 4175)
+const chromiumChannel = process.env.PLAYWRIGHT_CHROMIUM_CHANNEL
 
 export default defineConfig({
   testDir: './tests/ui',
@@ -21,7 +22,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(chromiumChannel ? { channel: chromiumChannel } : {}),
+      },
     },
   ],
 })
