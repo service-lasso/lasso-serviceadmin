@@ -65,42 +65,42 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/secrets-broker/sources',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker sources$/i,
     title: 'Service Admin - Secrets Broker Sources',
   },
   {
     path: '/secrets-broker/provider-connections',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker provider connections$/i,
     title: 'Service Admin - Secrets Broker Provider Connections',
   },
   {
     path: '/secrets-broker/single-reveal',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker single reveal$/i,
     title: 'Service Admin - Secrets Broker Single Reveal',
   },
   {
     path: '/secrets-broker/backup-keys',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker backup keys$/i,
     title: 'Service Admin - Secrets Broker Backup Keys',
   },
   {
     path: '/secrets-broker/workflow-boundaries',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker workflow boundaries$/i,
     title: 'Service Admin - Secrets Broker Workflow Boundaries',
   },
   {
     path: '/secrets-broker/topology',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker topology$/i,
     title: 'Service Admin - Secrets Broker Topology',
   },
   {
     path: '/secrets-broker/audit-events',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker audit events$/i,
     title: 'Service Admin - Secrets Broker Audit Events',
   },
   {
     path: '/secrets-broker/diagnostics',
-    heading: /^Secrets Broker setup$/i,
+    heading: /^Secrets Broker diagnostics$/i,
     title: 'Service Admin - Secrets Broker Diagnostics',
   },
   {

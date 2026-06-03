@@ -39,4 +39,28 @@ describe('sidebar optional page classification', () => {
     expect(titles).not.toContain('ZITADEL Session')
     expect(titles).not.toContain('Policy Simulation')
   })
+
+  it('links visible Secrets Broker sub-items to route-backed pages only', () => {
+    const secretsBrokerGroup = sidebarData.navGroups.find(
+      (group) => group.title === 'Secrets Broker'
+    )
+
+    expect(secretsBrokerGroup?.items.map((item) => item.url)).toEqual([
+      '/secrets-broker',
+      '/secrets-broker/secrets',
+      '/secrets-broker/configuration',
+      '/secrets-broker/sources',
+      '/secrets-broker/provider-connections',
+      '/secrets-broker/single-reveal',
+      '/secrets-broker/backup-keys',
+      '/secrets-broker/workflow-boundaries',
+      '/secrets-broker/topology',
+      '/secrets-broker/audit-events',
+      '/secrets-broker/diagnostics',
+      '/secret-inventory',
+    ])
+    expect(
+      secretsBrokerGroup?.items.every((item) => !item.url?.includes('#'))
+    ).toBe(true)
+  })
 })

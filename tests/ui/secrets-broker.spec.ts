@@ -72,20 +72,19 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/@secretsbroker overview/i)).toBeVisible()
     await expect(
-      page.getByText('Secret Sources / Backends', { exact: true })
+      page.getByRole('link', { name: 'View provider connections' })
     ).toBeVisible()
     await expect(
-      page.locator('main').getByText('Provider Connections', { exact: true })
+      page.getByRole('link', { name: 'View secret sources' })
     ).toBeVisible()
     await expect(
-      page.getByText('Audit and events', { exact: true })
+      page.getByRole('link', { name: 'View audit/events' })
     ).toBeVisible()
     await expect(
-      page.getByText('Diagnostics and troubleshooting', { exact: true })
+      page.getByRole('link', { name: 'View diagnostics' })
     ).toBeVisible()
     await expectNoSecretMaterial(page)
-    await expect(page.getByText(/values hidden/i).first()).toBeVisible()
-    await expect(page.getByText(/raw output scrubbed/i).first()).toBeVisible()
+    await expect(page.getByText(/raw values hidden/i).first()).toBeVisible()
     expect(consoleErrors).toEqual([])
   })
 
