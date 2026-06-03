@@ -11,7 +11,7 @@ import {
 
 describe('secret inventory metadata view', () => {
   it('renders deterministic local fixture metadata without plaintext controls', async () => {
-    await renderRoute('/secret-inventory')
+    await renderRoute('/secrets-broker/secret-inventory')
 
     expect(
       await screen.findByRole('heading', { name: /^Secret inventory$/i })
@@ -33,7 +33,7 @@ describe('secret inventory metadata view', () => {
   })
 
   it('shows unavailable privileged actions as blocked text, not controls', async () => {
-    await renderRoute('/secret-inventory')
+    await renderRoute('/secrets-broker/secret-inventory')
 
     expect(screen.getAllByText(/show plaintext/i)[0]).toBeVisible()
     expect(screen.getAllByText(/copy value/i)[0]).toBeVisible()
@@ -70,7 +70,9 @@ describe('secret inventory metadata view', () => {
 
   it('supports shared data-table search and pagination for inventory refs', async () => {
     const user = userEvent.setup()
-    const { router } = await renderRoute('/secret-inventory?pageSize=2')
+    const { router } = await renderRoute(
+      '/secrets-broker/secret-inventory?pageSize=2'
+    )
 
     expect(screen.getByPlaceholderText(/Search secret refs/i)).toBeVisible()
     expect(screen.getByText('local/serviceadmin')).toBeVisible()

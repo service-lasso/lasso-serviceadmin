@@ -37,7 +37,7 @@ describe('sidebar optional page classification', () => {
     expect(titles).toContain('Support Bundle')
     expect(titles).not.toContain('Fleet Overview')
     expect(titles).not.toContain('ZITADEL Session')
-    expect(titles).not.toContain('Policy Simulation')
+    expect(titles).toContain('Policy Simulation')
   })
 
   it('links visible Secrets Broker sub-items to route-backed pages only', () => {
@@ -57,7 +57,8 @@ describe('sidebar optional page classification', () => {
       '/secrets-broker/topology',
       '/secrets-broker/audit-events',
       '/secrets-broker/diagnostics',
-      '/secret-inventory',
+      '/secrets-broker/secret-inventory',
+      '/secrets-broker/policy-simulation',
     ])
     expect(
       secretsBrokerGroup?.items.every((item) => !item.url?.includes('#'))

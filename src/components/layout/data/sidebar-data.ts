@@ -152,8 +152,13 @@ export const sidebarData: SidebarData = {
         },
         {
           title: 'Secret Inventory',
-          url: '/secret-inventory',
+          url: '/secrets-broker/secret-inventory',
           icon: DatabaseZap,
+        },
+        {
+          title: 'Policy Simulation',
+          url: '/secrets-broker/policy-simulation',
+          icon: ClipboardCheck,
         },
       ],
     },

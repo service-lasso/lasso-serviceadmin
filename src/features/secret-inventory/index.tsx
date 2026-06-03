@@ -23,7 +23,7 @@ import {
 } from './secret-inventory'
 import { SecretInventoryTable } from './secret-inventory-table'
 
-const route = getRouteApi('/_authenticated/secret-inventory/')
+const route = getRouteApi('/_authenticated/secrets-broker/secret-inventory')
 
 export function SecretInventoryPage() {
   const search = route.useSearch()

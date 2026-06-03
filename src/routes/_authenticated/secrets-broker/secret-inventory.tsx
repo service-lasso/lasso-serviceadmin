@@ -10,7 +10,9 @@ const secretInventorySearchSchema = z.object({
   source: z.array(z.string()).optional().catch(undefined),
 })
 
-export const Route = createFileRoute('/_authenticated/secret-inventory/')({
+export const Route = createFileRoute(
+  '/_authenticated/secrets-broker/secret-inventory'
+)({
   validateSearch: secretInventorySearchSchema,
   component: SecretInventoryPage,
 })
