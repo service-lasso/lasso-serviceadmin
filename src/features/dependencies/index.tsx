@@ -11,15 +11,10 @@ import {
   ArrowDown,
   ArrowRight,
   GitBranch,
-  KeyRound,
-  Link2,
-  Network,
   Save,
   Search,
-  ShieldCheck,
   Star,
   Undo2,
-  Workflow,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePageMetadata } from '@/lib/page-metadata'
@@ -59,12 +54,6 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search as GlobalSearch } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import {
-  buildSecretRefUsageRows,
-  groupSecretRefUsageByRef,
-  groupSecretRefUsageByService,
-  type SecretRefOutcome,
-} from './secret-ref-usage'
 
 const route = getRouteApi('/_authenticated/dependencies/')
 
@@ -120,24 +109,6 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
   return <Badge variant='outline'>Stopped</Badge>
 }
 
-function SecretRefOutcomeBadge({ outcome }: { outcome: SecretRefOutcome }) {
-  if (outcome === 'resolved') {
-    return (
-      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Resolved</Badge>
-    )
-  }
-
-  if (outcome === 'denied') {
-    return <Badge variant='destructive'>Denied</Badge>
-  }
-
-  if (outcome === 'missing') {
-    return <Badge variant='secondary'>Missing</Badge>
-  }
-
-  return <Badge variant='outline'>Unresolved</Badge>
-}
-
 function DependenciesLoading() {
   return (
     <div className='space-y-4'>
@@ -184,29 +155,6 @@ export function Dependencies() {
   const favoriteFeature = useFavoriteFeatureState()
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
-
-  const secretRefUsageRows = useMemo(
-    () => buildSecretRefUsageRows(services),
-    [services]
-  )
-
-  const secretRefUsageByService = useMemo(
-    () => groupSecretRefUsageByService(secretRefUsageRows),
-    [secretRefUsageRows]
-  )
-
-  const secretRefUsageByRef = useMemo(
-    () => groupSecretRefUsageByRef(secretRefUsageRows),
-    [secretRefUsageRows]
-  )
-
-  const blockedSecretRefRows = useMemo(
-    () =>
-      secretRefUsageRows.filter(
-        (row) => row.outcome === 'denied' || row.outcome === 'missing'
-      ),
-    [secretRefUsageRows]
-  )
 
   const availableCategories = useMemo(
     () => Array.from(new Set(services.map((service) => getCategory(service)))),
@@ -261,23 +209,6 @@ export function Dependencies() {
       .map((item) => byId.get(item.id))
       .filter((service): service is DashboardService => Boolean(service))
   }, [byId, selectedService])
-
-  const relationshipEdges = services.reduce(
-    (count, service) => count + service.dependencies.length,
-    0
-  )
-
-  const inferredApiUsageEdges = services.reduce(
-    (count, service) =>
-      count +
-      service.dependencies.filter((dependency) => {
-        const dependencyService = services.find(
-          (item) => item.id === dependency.id
-        )
-        return (dependencyService?.endpoints.length ?? 0) > 0
-      }).length,
-    0
-  )
 
   const autoLayoutMap = useMemo(() => {
     const map: GraphLayoutMap = {}
@@ -570,276 +501,6 @@ export function Dependencies() {
           <DependenciesLoading />
         ) : (
           <>
-            <div className='grid gap-4 md:grid-cols-4'>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Network className='size-4' /> Services in graph
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {filteredServices.length}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Visible services after filters.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <GitBranch className='size-4' /> Relationship edges
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>{relationshipEdges}</div>
-                  <p className='text-xs text-muted-foreground'>
-                    Structural dependency links.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Link2 className='size-4' /> API usage edges
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {inferredApiUsageEdges}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Inferred from endpoint-exposing dependencies.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Workflow className='size-4' /> Selected service
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {selectedService ? selectedService.name : 'None'}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Click a node in the graph to focus.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <div className='flex flex-wrap items-start justify-between gap-3'>
-                  <div>
-                    <CardTitle className='flex items-center gap-2'>
-                      <KeyRound className='size-4' /> Secrets Broker reference
-                      usage
-                    </CardTitle>
-                    <CardDescription>
-                      Safe metadata only: ref names, import direction, source,
-                      provider connection, last outcome, and affected services.
-                    </CardDescription>
-                  </div>
-                  <Badge variant='secondary'>Values hidden</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className='space-y-5'>
-                <div className='grid gap-3 md:grid-cols-4'>
-                  <div className='rounded-lg border p-3'>
-                    <div className='text-2xl font-bold'>
-                      {secretRefUsageRows.length}
-                    </div>
-                    <p className='text-xs text-muted-foreground'>
-                      tracked broker refs
-                    </p>
-                  </div>
-                  <div className='rounded-lg border p-3'>
-                    <div className='text-2xl font-bold'>
-                      {secretRefUsageByService.length}
-                    </div>
-                    <p className='text-xs text-muted-foreground'>
-                      consuming services/workflows
-                    </p>
-                  </div>
-                  <div className='rounded-lg border p-3'>
-                    <div className='text-2xl font-bold'>
-                      {secretRefUsageByRef.length}
-                    </div>
-                    <p className='text-xs text-muted-foreground'>
-                      ref-centric groups
-                    </p>
-                  </div>
-                  <div className='rounded-lg border p-3'>
-                    <div className='text-2xl font-bold'>
-                      {blockedSecretRefRows.length}
-                    </div>
-                    <p className='text-xs text-muted-foreground'>
-                      missing or denied refs
-                    </p>
-                  </div>
-                </div>
-
-                <div className='grid gap-4 lg:grid-cols-2'>
-                  <div className='space-y-3'>
-                    <div className='flex items-center gap-2 text-sm font-medium'>
-                      <Workflow className='size-4' /> By service/workflow
-                    </div>
-                    {secretRefUsageByService.length ? (
-                      secretRefUsageByService.map((group) => (
-                        <div
-                          key={group.serviceId}
-                          className='rounded-lg border p-3'
-                        >
-                          <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
-                            <div>
-                              <div className='font-medium'>
-                                {group.serviceName}
-                              </div>
-                              <div className='text-xs text-muted-foreground'>
-                                {group.serviceId}
-                              </div>
-                            </div>
-                            <Badge variant='outline'>
-                              {group.refs.length} imports
-                            </Badge>
-                          </div>
-                          <div className='space-y-2'>
-                            {group.refs.map((row) => (
-                              <div
-                                key={row.id}
-                                className='rounded-md bg-muted/40 p-2 text-sm'
-                              >
-                                <div className='mb-1 flex flex-wrap items-center gap-2'>
-                                  <span className='font-mono break-all'>
-                                    {row.ref}
-                                  </span>
-                                  <SecretRefOutcomeBadge
-                                    outcome={row.outcome}
-                                  />
-                                  {row.legacyGlobalEnv ? (
-                                    <Badge variant='secondary'>
-                                      globalenv legacy
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                                <div className='text-xs text-muted-foreground'>
-                                  {row.direction} from {row.source} via{' '}
-                                  {row.providerConnection}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-                        No Secrets Broker refs are recorded for the current
-                        services yet.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className='space-y-3'>
-                    <div className='flex items-center gap-2 text-sm font-medium'>
-                      <KeyRound className='size-4' /> By broker namespace/ref
-                    </div>
-                    {secretRefUsageByRef.length ? (
-                      secretRefUsageByRef.map((group) => (
-                        <div key={group.ref} className='rounded-lg border p-3'>
-                          <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
-                            <div>
-                              <div className='font-mono text-sm break-all'>
-                                {group.ref}
-                              </div>
-                              <div className='text-xs text-muted-foreground'>
-                                namespace: {group.namespace}
-                              </div>
-                            </div>
-                            <Badge variant='outline'>
-                              {group.services.length} consumers
-                            </Badge>
-                          </div>
-                          <div className='space-y-2'>
-                            {group.services.map((row) => (
-                              <div
-                                key={row.id}
-                                className='rounded-md bg-muted/40 p-2 text-sm'
-                              >
-                                <div className='mb-1 flex flex-wrap items-center gap-2'>
-                                  <Button
-                                    variant='link'
-                                    size='sm'
-                                    className='h-auto p-0'
-                                    asChild
-                                  >
-                                    <Link
-                                      to='/services/$serviceId'
-                                      params={{ serviceId: row.serviceId }}
-                                    >
-                                      {row.serviceName}
-                                    </Link>
-                                  </Button>
-                                  <SecretRefOutcomeBadge
-                                    outcome={row.outcome}
-                                  />
-                                </div>
-                                <div className='text-xs text-muted-foreground'>
-                                  last resolved:{' '}
-                                  {row.lastResolvedAt ?? 'not successful yet'}
-                                </div>
-                                {row.outcome === 'denied' ||
-                                row.outcome === 'missing' ? (
-                                  <div className='mt-2 flex flex-wrap gap-2'>
-                                    <Button variant='outline' size='sm' asChild>
-                                      <Link
-                                        to='/logs'
-                                        search={{ service: row.serviceId }}
-                                      >
-                                        Open diagnostics/logs
-                                      </Link>
-                                    </Button>
-                                    <Button variant='outline' size='sm' asChild>
-                                      <Link
-                                        to='/variables'
-                                        search={{ service: row.serviceId }}
-                                      >
-                                        Inspect safe variables
-                                      </Link>
-                                    </Button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-                        No broker namespace/ref metadata is available yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className='flex gap-3 rounded-lg border p-3 text-sm'>
-                  <ShieldCheck className='mt-0.5 size-4 shrink-0' />
-                  <div>
-                    <div className='font-medium'>No secret values rendered</div>
-                    <p className='text-muted-foreground'>
-                      This view intentionally shows only SecretRef identifiers,
-                      provider/source names, outcomes, and navigation links.
-                      Resolved plaintext never appears in table cells, badges,
-                      tooltips, or links.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle className='flex items-center gap-2'>
