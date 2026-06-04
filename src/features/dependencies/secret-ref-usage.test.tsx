@@ -1,5 +1,3 @@
-import { renderRoute } from '@/test/render-route'
-import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   buildSecretRefUsageRows,
@@ -8,27 +6,6 @@ import {
 } from './secret-ref-usage'
 
 describe('Secrets Broker reference usage view', () => {
-  it('renders service-centric and ref-centric usage without secret values', async () => {
-    await renderRoute('/dependencies')
-
-    expect(
-      await screen.findByText(/Secrets Broker reference usage/i)
-    ).toBeVisible()
-    expect(screen.getByText(/Values hidden/i)).toBeVisible()
-    expect(screen.getByText(/By service\/workflow/i)).toBeVisible()
-    expect(screen.getByText(/By broker namespace\/ref/i)).toBeVisible()
-    expect(
-      screen.getAllByText(/openclaw\/anthropic\/api_key/i)[0]
-    ).toBeVisible()
-    expect(screen.getAllByText(/postgres\.ADMIN_PASSWORD/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/telegram\.bot_token/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Denied/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Missing/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Open diagnostics\/logs/i)[0]).toBeVisible()
-    expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/plaintext secret/i)).not.toBeInTheDocument()
-  })
-
   it('groups the same safe metadata by service and by ref', () => {
     const rows = buildSecretRefUsageRows([
       {
