@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -906,6 +906,13 @@ function SafeExample({ value }: { value: string }) {
 }
 
 function SourceBackendCard({ source }: { source: SecretsBrokerSourceBackend }) {
+  const actionLinks: Partial<
+    Record<SecretsBrokerSourceBackend['supportedActions'][number], string>
+  > = {
+    'view-diagnostics': '/secrets-broker/diagnostics',
+    'edit-configuration': '/secrets-broker/configuration',
+  }
+
   return (
     <div className='rounded-lg border p-4 text-sm'>
       <div className='mb-3 flex flex-wrap items-start justify-between gap-3'>
@@ -1013,11 +1020,25 @@ function SourceBackendCard({ source }: { source: SecretsBrokerSourceBackend }) {
       )}
 
       <div className='mt-3 flex flex-wrap gap-2'>
-        {source.supportedActions.map((action) => (
-          <Button key={action} type='button' variant='outline' size='sm'>
-            {sourceActionCopy[action]}
-          </Button>
-        ))}
+        {source.supportedActions.map((action) => {
+          const href = actionLinks[action]
+
+          return href ? (
+            <Button
+              key={action}
+              type='button'
+              variant='outline'
+              size='sm'
+              asChild
+            >
+              <Link to={href}>{sourceActionCopy[action]}</Link>
+            </Button>
+          ) : (
+            <Button key={action} type='button' variant='outline' size='sm'>
+              {sourceActionCopy[action]}
+            </Button>
+          )
+        })}
       </div>
     </div>
   )
@@ -1874,7 +1895,18 @@ export function SecretsBrokerSetupWizard({
 }: {
   focusSection?: SecretsBrokerSectionFocus
 } = {}) {
+  const { hash } = useLocation()
+  const navigate = useNavigate()
   const pageMetadata = secretsBrokerSectionMetadata[focusSection]
+
+  useEffect(() => {
+    if (
+      focusSection === 'overview' &&
+      (hash === 'secret-sources' || hash === '#secret-sources')
+    ) {
+      void navigate({ to: '/secrets-broker/sources', replace: true })
+    }
+  }, [focusSection, hash, navigate])
 
   usePageMetadata({
     title: pageMetadata.title,
