@@ -4,7 +4,7 @@ import {
   collectBrowserLeakSurfaces,
   serviceLassoSecretLeakSentinels,
 } from '@/test/secret-leak-harness'
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
@@ -448,15 +448,43 @@ describe('Secrets Broker setup wizard', () => {
       screen.getAllByRole('button', { name: /Test source/i })[0]
     ).toBeVisible()
     expect(
-      screen.getAllByRole('button', { name: /View diagnostics/i })[0]
-    ).toBeVisible()
+      screen.getAllByRole('link', { name: /View diagnostics/i })[0]
+    ).toHaveAttribute('href', '/secrets-broker/diagnostics')
     expect(
-      screen.getAllByRole('button', { name: /Edit configuration/i })[0]
-    ).toBeVisible()
+      screen.getAllByRole('link', { name: /Edit configuration/i })[0]
+    ).toHaveAttribute('href', '/secrets-broker/configuration')
     expect(screen.getByText(/3 keys matched allowlist/i)).toBeVisible()
     expect(screen.getByText(/path policy denied/i)).toBeVisible()
     expect(screen.getByText(/command not executed/i)).toBeVisible()
     expect(screen.getAllByText(/value=hidden/i)[0]).toBeVisible()
+  })
+
+  it('routes the legacy secret-sources hash to the canonical sources page', async () => {
+    const { router } = await renderRoute('/secrets-broker#secret-sources')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Secrets Broker sources$/i })
+      ).toBeVisible()
+    })
+
+    expect(router.state.location.pathname).toBe('/secrets-broker/sources')
+    expect(
+      screen.queryByRole('heading', { name: /^Secrets Broker setup$/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('links source configuration actions to the dedicated configuration page', async () => {
+    await renderRoute('/secrets-broker/sources')
+
+    const configurationLinks = screen.getAllByRole('link', {
+      name: /Edit configuration/i,
+    })
+
+    expect(configurationLinks[0]).toHaveAttribute(
+      'href',
+      '/secrets-broker/configuration'
+    )
   })
 
   it('keeps source backend fixtures free of secret values', () => {
