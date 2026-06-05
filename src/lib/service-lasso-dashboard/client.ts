@@ -30,10 +30,6 @@ function encodeServiceId(serviceId: string) {
 }
 
 function buildApiUrl(pathname: string) {
-  if (serviceLassoApiBaseUrl === null) {
-    throw new Error('Service Lasso API base URL is not configured.')
-  }
-
   return `${serviceLassoApiBaseUrl}${pathname}`
 }
 

@@ -223,6 +223,57 @@ function DashboardLoading() {
   )
 }
 
+function DashboardUnavailable({ error }: { error: unknown }) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : 'Service Lasso runtime API is unavailable.'
+
+  return (
+    <>
+      <Header fixed>
+        <Search />
+        <div className='ms-auto flex items-center space-x-4'>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </div>
+      </Header>
+
+      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        <div>
+          <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
+          <p className='text-muted-foreground'>
+            Service Admin needs a live Service Lasso runtime API.
+          </p>
+        </div>
+        <Card className='border-amber-500/40'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <AlertTriangle className='h-4 w-4' />
+              Runtime API unavailable
+            </CardTitle>
+            <CardDescription>
+              No sample service data is loaded by default. Connect Service Admin
+              to Service Lasso or explicitly enable the dev fixture mode.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-3 text-sm'>
+            <div className='rounded-md border bg-muted/40 p-3 font-mono text-xs'>
+              {message}
+            </div>
+            <p className='text-muted-foreground'>
+              Set VITE_SERVICE_LASSO_API_BASE_URL for a separate runtime, or set
+              VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true only for local UI fixture
+              development.
+            </p>
+          </CardContent>
+        </Card>
+      </Main>
+    </>
+  )
+}
+
 export function Dashboard() {
   usePageMetadata({
     title: 'Service Admin - Dashboard',
@@ -233,8 +284,12 @@ export function Dashboard() {
   const summaryQuery = useDashboardSummary()
   const actionMutation = useDashboardAction()
 
-  if (summaryQuery.isLoading || !summaryQuery.data) {
+  if (summaryQuery.isLoading) {
     return <DashboardLoading />
+  }
+
+  if (summaryQuery.isError || !summaryQuery.data) {
+    return <DashboardUnavailable error={summaryQuery.error} />
   }
 
   const summary = summaryQuery.data
@@ -307,7 +362,7 @@ export function Dashboard() {
           <SummaryCard
             title='Installed'
             value={String(summary.installedCount)}
-            description='Installed services tracked by the stub'
+            description='Installed services tracked by Service Lasso'
             icon={PackageOpen}
           />
         </div>
@@ -332,7 +387,7 @@ export function Dashboard() {
                 Warnings and problem services
               </CardTitle>
               <CardDescription>
-                Current runtime warnings surfaced from the dashboard stub.
+                Current runtime warnings surfaced from Service Lasso.
               </CardDescription>
             </CardHeader>
             <CardContent>

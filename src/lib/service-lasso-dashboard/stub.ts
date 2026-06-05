@@ -7,17 +7,20 @@ import type {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-export const serviceLassoApiBaseUrl =
-  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') ??
-  (import.meta.env.PROD ? '' : null)
+const configuredServiceLassoApiBaseUrl =
+  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '')
 
-export const stubDashboardDataEnabled = serviceLassoApiBaseUrl === null
+export const serviceLassoApiBaseUrl = configuredServiceLassoApiBaseUrl ?? ''
+
+export const stubDashboardDataEnabled =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA === 'true'
 
 export const favoritesFeatureEnabled =
   import.meta.env.VITE_SERVICE_LASSO_FAVORITES_ENABLED === 'true'
 
 export const favoritesMutationEnabled =
-  favoritesFeatureEnabled && Boolean(serviceLassoApiBaseUrl)
+  favoritesFeatureEnabled && !stubDashboardDataEnabled
 
 type RemoteServiceMeta = {
   id: string
@@ -27,7 +30,7 @@ type RemoteServiceMeta = {
 }
 
 async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
-  if (serviceLassoApiBaseUrl === null) return null
+  if (!configuredServiceLassoApiBaseUrl) return null
 
   try {
     const response = await fetch(`${serviceLassoApiBaseUrl}/api/services/meta`)

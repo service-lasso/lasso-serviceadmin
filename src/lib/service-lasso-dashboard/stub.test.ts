@@ -7,6 +7,7 @@ async function loadStub() {
 
 describe('service lasso dashboard stub', () => {
   beforeEach(() => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
     vi.restoreAllMocks()
     window.localStorage.clear()
   })

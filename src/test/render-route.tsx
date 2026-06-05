@@ -6,11 +6,14 @@ import {
 } from '@tanstack/react-router'
 import { routeTree } from '@/routeTree.gen'
 import { act, render } from '@testing-library/react'
+import { vi } from 'vitest'
 import { DirectionProvider } from '@/context/direction-provider'
 import { FontProvider } from '@/context/font-provider'
 import { ThemeProvider } from '@/context/theme-provider'
 
 export async function renderRoute(path: string) {
+  vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },

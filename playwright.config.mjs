@@ -18,6 +18,10 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      VITE_SERVICE_LASSO_ENABLE_STUB_DATA:
+        process.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA ?? 'true',
+    },
   },
   projects: [
     {

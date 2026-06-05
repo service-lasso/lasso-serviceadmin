@@ -28,6 +28,7 @@ This admin UI discovers the Service Lasso runtime/API endpoint from environment,
 Current env contract:
 
 - `VITE_SERVICE_LASSO_API_BASE_URL`
+- `VITE_SERVICE_LASSO_ENABLE_STUB_DATA`
 - `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
 - `VITE_SERVICE_LASSO_LOGS_DEBUG`
 
@@ -40,10 +41,12 @@ VITE_SERVICE_LASSO_FAVORITES_ENABLED=true
 
 Current UI runtime behavior:
 
-- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, dashboard service status, health, runtime actions, and logs are read from the live Service Lasso runtime API
-- if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, the UI uses local demo stub data for development preview only
+- dashboard service status, health, runtime actions, and logs are read from the live Service Lasso runtime API by default
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, API calls target that runtime URL
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, API calls use same-origin `/api/*` so packaged Service Admin can proxy to the runtime API
+- local dashboard stub data is available only in Vite development mode when `VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true`
 - lifecycle and favorite changes are persisted in browser local storage during demo/stub development sessions
-- a configured but unavailable runtime API is treated as an error instead of falling back to demo status
+- a missing, misconfigured, or unavailable runtime API is treated as an error instead of falling back to sample status
 - favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
 - favorites are expected to load from `GET /api/services/meta`
 - favorites are expected to update through `PATCH /api/services/:serviceId/meta`
