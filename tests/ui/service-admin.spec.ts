@@ -135,7 +135,11 @@ test('runtime, network, installed, and variables tables render', async ({
 
   await page.goto('/network')
   await expect(page.getByRole('heading', { name: 'Network' })).toBeVisible()
-  await expect(page.getByText('Service endpoints')).toBeVisible()
+  await expect(page.getByText('Service endpoints')).toHaveCount(0)
+  await expect(
+    page.getByRole('columnheader', { name: /endpoint/i })
+  ).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /url/i })).toBeVisible()
   await expect(page.getByText('http://localhost:17700')).toBeVisible()
 
   await page.goto('/installed')
