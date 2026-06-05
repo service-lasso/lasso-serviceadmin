@@ -13,20 +13,13 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { Copy, ExternalLink, Network as NetworkIcon } from 'lucide-react'
+import { Copy, ExternalLink } from 'lucide-react'
 import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -56,15 +49,10 @@ type NetworkRow = {
 
 function NetworkLoading() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className='h-6 w-40' />
-        <Skeleton className='h-4 w-80' />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className='h-[420px] w-full' />
-      </CardContent>
-    </Card>
+    <div className='flex flex-1 flex-col gap-4'>
+      <Skeleton className='h-10 w-full max-w-md' />
+      <Skeleton className='min-h-[420px] w-full flex-1' />
+    </div>
   )
 }
 
@@ -199,6 +187,7 @@ export function Network() {
     [rows]
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<NetworkRow>({
     data: rows,
     columns,
@@ -248,91 +237,80 @@ export function Network() {
         {servicesQuery.isLoading ? (
           <NetworkLoading />
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center gap-2'>
-                <NetworkIcon className='size-4' /> Service endpoints
-              </CardTitle>
-              <CardDescription>
-                {table.getFilteredRowModel().rows.length} endpoints shown with
-                copy and open actions.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <DataTableToolbar
-                table={table}
-                searchPlaceholder='Search services, URLs, binds, ports, or exposure...'
-                searchKey='serviceName'
-                filters={[
-                  {
-                    columnId: 'exposure',
-                    title: 'Exposure',
-                    options: [
-                      { label: 'Local', value: 'local' },
-                      { label: 'LAN', value: 'lan' },
-                      { label: 'Public', value: 'public' },
-                    ],
-                  },
-                  {
-                    columnId: 'protocol',
-                    title: 'Protocol',
-                    options: protocols.map((protocol) => ({
-                      label: protocol,
-                      value: protocol,
-                    })),
-                  },
-                ]}
-              />
+          <div className='flex flex-1 flex-col gap-4'>
+            <DataTableToolbar
+              table={table}
+              searchPlaceholder='Search services, URLs, binds, ports, or exposure...'
+              searchKey='serviceName'
+              filters={[
+                {
+                  columnId: 'exposure',
+                  title: 'Exposure',
+                  options: [
+                    { label: 'Local', value: 'local' },
+                    { label: 'LAN', value: 'lan' },
+                    { label: 'Public', value: 'public' },
+                  ],
+                },
+                {
+                  columnId: 'protocol',
+                  title: 'Protocol',
+                  options: protocols.map((protocol) => ({
+                    label: protocol,
+                    value: protocol,
+                  })),
+                },
+              ]}
+            />
 
-              <div className='overflow-hidden rounded-md border'>
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id} colSpan={header.colSpan}>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
-                          </TableHead>
+            <div className='overflow-hidden rounded-md border'>
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} colSpan={header.colSpan}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </TableCell>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow key={row.id}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className='h-24 text-center'
-                        >
-                          No endpoints match the current filters.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className='h-24 text-center'
+                      >
+                        No endpoints match the current filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-              <DataTablePagination table={table} className='mt-auto' />
-            </CardContent>
-          </Card>
+            <DataTablePagination table={table} className='mt-auto' />
+          </div>
         )}
       </Main>
     </>
