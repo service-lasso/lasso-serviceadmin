@@ -142,6 +142,12 @@ test('runtime, network, installed, and variables tables render', async ({
   await expect(page.getByRole('heading', { name: 'Installed' })).toBeVisible()
   await expect(
     page.getByText('Installed services', { exact: true })
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('columnheader', { name: /service/i })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: /package/i })
   ).toBeVisible()
   await expect(
     page.getByRole('cell', { name: 'lasso-@serviceadmin', exact: true })
