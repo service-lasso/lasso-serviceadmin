@@ -13,19 +13,12 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { Copy, SlidersHorizontal } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -64,15 +57,11 @@ type VariableRow = {
 
 function VariablesLoading() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className='h-6 w-40' />
-        <Skeleton className='h-4 w-80' />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className='h-[420px] w-full' />
-      </CardContent>
-    </Card>
+    <div className='flex flex-1 flex-col gap-4'>
+      <Skeleton className='h-10 w-full max-w-xl' />
+      <Skeleton className='h-[420px] w-full' />
+      <Skeleton className='mt-auto h-9 w-full max-w-md' />
+    </div>
   )
 }
 
@@ -224,6 +213,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
     [rows]
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,
     columns,
@@ -273,98 +263,87 @@ export function Variables({ service, keyFilter }: VariablesProps) {
         {servicesQuery.isLoading ? (
           <VariablesLoading />
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center gap-2'>
-                <SlidersHorizontal className='size-4' /> Environment variables
-              </CardTitle>
-              <CardDescription>
-                {table.getFilteredRowModel().rows.length} variable rows shown
-                across all services.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <DataTableToolbar
-                table={table}
-                searchPlaceholder='Search variable keys, values, sources, or services...'
-                searchKey='key'
-                filters={[
-                  {
-                    columnId: 'scope',
-                    title: 'Scope',
-                    options: [
-                      { label: 'Global', value: 'global' },
-                      { label: 'Service', value: 'service' },
-                    ],
-                  },
-                  {
-                    columnId: 'source',
-                    title: 'Source',
-                    options: sources.map((source) => ({
-                      label: source,
-                      value: source,
-                    })),
-                  },
-                  {
-                    columnId: 'secret',
-                    title: 'Visibility',
-                    options: [
-                      { label: 'Secret', value: 'secret' },
-                      { label: 'Plain', value: 'plain' },
-                    ],
-                  },
-                ]}
-              />
+          <div className='flex flex-1 flex-col gap-4'>
+            <DataTableToolbar
+              table={table}
+              searchPlaceholder='Search variable keys, values, sources, or services...'
+              searchKey='key'
+              filters={[
+                {
+                  columnId: 'scope',
+                  title: 'Scope',
+                  options: [
+                    { label: 'Global', value: 'global' },
+                    { label: 'Service', value: 'service' },
+                  ],
+                },
+                {
+                  columnId: 'source',
+                  title: 'Source',
+                  options: sources.map((source) => ({
+                    label: source,
+                    value: source,
+                  })),
+                },
+                {
+                  columnId: 'secret',
+                  title: 'Visibility',
+                  options: [
+                    { label: 'Secret', value: 'secret' },
+                    { label: 'Plain', value: 'plain' },
+                  ],
+                },
+              ]}
+            />
 
-              <div className='overflow-hidden rounded-md border'>
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id} colSpan={header.colSpan}>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
-                          </TableHead>
+            <div className='overflow-hidden rounded-md border'>
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} colSpan={header.colSpan}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </TableCell>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow key={row.id}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className='h-24 text-center'
-                        >
-                          No variables match the current filters.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className='h-24 text-center'
+                      >
+                        No variables match the current filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-              <DataTablePagination table={table} className='mt-auto' />
-            </CardContent>
-          </Card>
+            <DataTablePagination table={table} className='mt-auto' />
+          </div>
         )}
       </Main>
     </>
