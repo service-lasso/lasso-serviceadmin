@@ -124,7 +124,13 @@ test('runtime, network, installed, and variables tables render', async ({
 }) => {
   await page.goto('/runtime')
   await expect(page.getByRole('heading', { name: 'Runtime' })).toBeVisible()
-  await expect(page.getByText('Runtime status')).toBeVisible()
+  await expect(page.getByText('Runtime status')).toHaveCount(0)
+  await expect(
+    page.getByRole('columnheader', { name: /service/i })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: /runtime/i })
+  ).toBeVisible()
   await expect(page.getByText('Service Admin UI')).toBeVisible()
 
   await page.goto('/network')
