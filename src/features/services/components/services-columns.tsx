@@ -70,9 +70,25 @@ function FavoriteCell({ service }: { service: DashboardService }) {
   )
 }
 
+export function hasLifecycleAction(
+  service: DashboardService,
+  action: 'start' | 'stop' | 'restart'
+) {
+  const isProvider =
+    service.role === 'provider' || service.metadata.serviceType === 'provider'
+
+  return (
+    !isProvider &&
+    service.actions.some((candidate) => candidate.kind === action)
+  )
+}
+
 function ServiceLifecycleControls({ service }: { service: DashboardService }) {
   const actionMutation = useDashboardAction()
   const disabled = actionMutation.isPending
+  const canStart = hasLifecycleAction(service, 'start')
+  const canStop = hasLifecycleAction(service, 'stop')
+  const canRestart = hasLifecycleAction(service, 'restart')
 
   const runAction = (action: 'start' | 'stop' | 'restart') => {
     actionMutation.mutate({
@@ -82,53 +98,70 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
     })
   }
 
+  if (!canStart && !canStop && !canRestart) {
+    return (
+      <Badge
+        variant='outline'
+        title='Provider services are installed/configured but are not daemon-started'
+      >
+        Provider
+      </Badge>
+    )
+  }
+
   return (
     <div className='flex items-center gap-1'>
-      <Button
-        type='button'
-        size='icon'
-        variant='outline'
-        className={lifecycleActionButtonClass('start', 'size-8')}
-        aria-label={`Start ${service.name}`}
-        title={`Start ${service.name}`}
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation()
-          runAction('start')
-        }}
-      >
-        <Play className='size-3.5' />
-      </Button>
-      <Button
-        type='button'
-        size='icon'
-        variant='outline'
-        className={lifecycleActionButtonClass('stop', 'size-8')}
-        aria-label={`Stop ${service.name}`}
-        title={`Stop ${service.name}`}
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation()
-          runAction('stop')
-        }}
-      >
-        <Square className='size-3.5' />
-      </Button>
-      <Button
-        type='button'
-        size='icon'
-        variant='outline'
-        className={lifecycleActionButtonClass('restart', 'size-8')}
-        aria-label={`Restart ${service.name}`}
-        title={`Restart ${service.name}`}
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation()
-          runAction('restart')
-        }}
-      >
-        <RotateCcw className='size-3.5' />
-      </Button>
+      {canStart ? (
+        <Button
+          type='button'
+          size='icon'
+          variant='outline'
+          className={lifecycleActionButtonClass('start', 'size-8')}
+          aria-label={`Start ${service.name}`}
+          title={`Start ${service.name}`}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            runAction('start')
+          }}
+        >
+          <Play className='size-3.5' />
+        </Button>
+      ) : null}
+      {canStop ? (
+        <Button
+          type='button'
+          size='icon'
+          variant='outline'
+          className={lifecycleActionButtonClass('stop', 'size-8')}
+          aria-label={`Stop ${service.name}`}
+          title={`Stop ${service.name}`}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            runAction('stop')
+          }}
+        >
+          <Square className='size-3.5' />
+        </Button>
+      ) : null}
+      {canRestart ? (
+        <Button
+          type='button'
+          size='icon'
+          variant='outline'
+          className={lifecycleActionButtonClass('restart', 'size-8')}
+          aria-label={`Restart ${service.name}`}
+          title={`Restart ${service.name}`}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            runAction('restart')
+          }}
+        >
+          <RotateCcw className='size-3.5' />
+        </Button>
+      ) : null}
     </div>
   )
 }
