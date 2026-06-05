@@ -93,7 +93,7 @@ test('services table filters and opens service detail', async ({ page }) => {
       name: 'Restart Service Admin UI',
       exact: true,
     })
-  ).toBeEnabled()
+  ).toHaveCount(0)
 
   await page.getByRole('link', { name: /details/i }).click()
   await expect(page).toHaveURL(/\/services\/%40serviceadmin$/)

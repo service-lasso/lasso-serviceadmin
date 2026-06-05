@@ -694,6 +694,13 @@ function ServiceActionButton({
     action.kind === 'stop' ||
     action.kind === 'restart'
   ) {
+    if (
+      service.role === 'provider' ||
+      service.metadata.serviceType === 'provider'
+    ) {
+      return null
+    }
+
     const lifecycleAction = action.kind
 
     return (
