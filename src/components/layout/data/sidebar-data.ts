@@ -81,11 +81,6 @@ export const sidebarData: SidebarData = {
           icon: SlidersHorizontal,
         },
         {
-          title: 'Support Bundle',
-          url: '/support-bundle',
-          icon: LifeBuoy,
-        },
-        {
           title: 'Network',
           url: '/network',
           icon: Globe,

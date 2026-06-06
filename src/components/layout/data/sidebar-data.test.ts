@@ -15,7 +15,6 @@ describe('sidebar navigation data', () => {
       '/runtime',
       '/installed',
       '/variables',
-      '/support-bundle',
       '/network',
     ])
   })
@@ -34,7 +33,7 @@ describe('sidebar optional page classification', () => {
   it('keeps only current optional pages in primary navigation', () => {
     const titles = collectNavTitles()
 
-    expect(titles).toContain('Support Bundle')
+    expect(titles).not.toContain('Support Bundle')
     expect(titles).not.toContain('Fleet Overview')
     expect(titles).not.toContain('ZITADEL Session')
     expect(titles).toContain('Policy Simulation')
