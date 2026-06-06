@@ -215,7 +215,7 @@ function RelationshipList({
         ))
       ) : (
         <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-          None recorded in the current stub.
+          None recorded by the runtime API.
         </div>
       )}
     </div>
@@ -694,6 +694,13 @@ function ServiceActionButton({
     action.kind === 'stop' ||
     action.kind === 'restart'
   ) {
+    if (
+      service.role === 'provider' ||
+      service.metadata.serviceType === 'provider'
+    ) {
+      return null
+    }
+
     const lifecycleAction = action.kind
 
     return (
@@ -819,7 +826,8 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
             <CardHeader>
               <CardTitle>Service not found</CardTitle>
               <CardDescription>
-                The requested service is not present in the current stub.
+                The requested service is not present in Service Lasso runtime
+                data.
               </CardDescription>
             </CardHeader>
             <CardContent>

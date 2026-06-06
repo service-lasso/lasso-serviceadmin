@@ -93,7 +93,7 @@ test('services table filters and opens service detail', async ({ page }) => {
       name: 'Restart Service Admin UI',
       exact: true,
     })
-  ).toBeEnabled()
+  ).toHaveCount(0)
 
   await page.getByRole('link', { name: /details/i }).click()
   await expect(page).toHaveURL(/\/services\/%40serviceadmin$/)
@@ -124,18 +124,34 @@ test('runtime, network, installed, and variables tables render', async ({
 }) => {
   await page.goto('/runtime')
   await expect(page.getByRole('heading', { name: 'Runtime' })).toBeVisible()
-  await expect(page.getByText('Runtime status')).toBeVisible()
+  await expect(page.getByText('Runtime status')).toHaveCount(0)
+  await expect(
+    page.getByRole('columnheader', { name: /service/i })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: /runtime/i })
+  ).toBeVisible()
   await expect(page.getByText('Service Admin UI')).toBeVisible()
 
   await page.goto('/network')
   await expect(page.getByRole('heading', { name: 'Network' })).toBeVisible()
-  await expect(page.getByText('Service endpoints')).toBeVisible()
+  await expect(page.getByText('Service endpoints')).toHaveCount(0)
+  await expect(
+    page.getByRole('columnheader', { name: /endpoint/i })
+  ).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /url/i })).toBeVisible()
   await expect(page.getByText('http://localhost:17700')).toBeVisible()
 
   await page.goto('/installed')
   await expect(page.getByRole('heading', { name: 'Installed' })).toBeVisible()
   await expect(
     page.getByText('Installed services', { exact: true })
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('columnheader', { name: /service/i })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: /package/i })
   ).toBeVisible()
   await expect(
     page.getByRole('cell', { name: 'lasso-@serviceadmin', exact: true })
@@ -143,6 +159,8 @@ test('runtime, network, installed, and variables tables render', async ({
 
   await page.goto('/variables')
   await expect(page.getByRole('heading', { name: 'Variables' })).toBeVisible()
-  await expect(page.getByText('Environment variables')).toBeVisible()
+  await expect(page.getByText('Environment variables')).toHaveCount(0)
+  await expect(page.getByRole('columnheader', { name: /key/i })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /value/i })).toBeVisible()
   await expect(page.getByText('SERVICE_LASSO_ROOT').first()).toBeVisible()
 })

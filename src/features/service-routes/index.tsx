@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { ExternalLink, Route, ShieldCheck } from 'lucide-react'
+import { ExternalLink, ShieldCheck } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type {
@@ -24,13 +24,7 @@ import { cn } from '@/lib/utils'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -281,35 +275,6 @@ function ServiceRoutesLoading() {
   )
 }
 
-function RouteSummary({ rows }: { rows: ServiceRouteRow[] }) {
-  const publicRoutes = rows.filter((row) => row.exposure === 'public').length
-  const lanRoutes = rows.filter((row) => row.exposure === 'lan').length
-  const localRoutes = rows.filter((row) => row.exposure === 'local').length
-
-  return (
-    <div className='grid gap-3 sm:grid-cols-3'>
-      <Card>
-        <CardHeader className='gap-2'>
-          <CardDescription>Traefik / public</CardDescription>
-          <CardTitle className='text-2xl'>{publicRoutes}</CardTitle>
-        </CardHeader>
-      </Card>
-      <Card>
-        <CardHeader className='gap-2'>
-          <CardDescription>LAN routes</CardDescription>
-          <CardTitle className='text-2xl'>{lanRoutes}</CardTitle>
-        </CardHeader>
-      </Card>
-      <Card>
-        <CardHeader className='gap-2'>
-          <CardDescription>Local endpoints</CardDescription>
-          <CardTitle className='text-2xl'>{localRoutes}</CardTitle>
-        </CardHeader>
-      </Card>
-    </div>
-  )
-}
-
 function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
   const search = route.useSearch()
   const navigate = route.useNavigate()
@@ -510,24 +475,7 @@ export function ServiceRoutes() {
         {servicesQuery.isLoading ? (
           <ServiceRoutesLoading />
         ) : (
-          <>
-            <RouteSummary rows={rows} />
-            <Card>
-              <CardHeader>
-                <CardTitle className='flex items-center gap-2'>
-                  <Route className='size-5' />
-                  Route inventory
-                </CardTitle>
-                <CardDescription>
-                  Runtime and stub data stay value-safe: no env values, tokens,
-                  or secret material are displayed on this page.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ServiceRoutesTable rows={rows} />
-              </CardContent>
-            </Card>
-          </>
+          <ServiceRoutesTable rows={rows} />
         )}
       </Main>
     </>

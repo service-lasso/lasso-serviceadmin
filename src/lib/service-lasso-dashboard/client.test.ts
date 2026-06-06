@@ -178,6 +178,44 @@ describe('service lasso dashboard runtime client', () => {
     )
   })
 
+  it('uses same-origin runtime API by default instead of dashboard stubs', async () => {
+    const services = [service('@archive', 'Archive Runtime', 'available')]
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/dashboard') {
+        return jsonResponse({ summary: summary(services) })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchDashboardSummary } = await import('./client')
+
+    const runtimeSummary = await fetchDashboardSummary()
+
+    expect(runtimeSummary.servicesTotal).toBe(1)
+    expect(runtimeSummary.servicesAvailable).toBe(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard', undefined)
+  })
+
+  it('uses dashboard stubs only when the explicit dev flag is enabled', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchDashboardSummary } = await import('./client')
+
+    const runtimeSummary = await fetchDashboardSummary()
+
+    expect(runtimeSummary.servicesTotal).toBe(4)
+    expect(runtimeSummary.problemServices.map((item) => item.id)).toEqual([
+      'zitadel',
+      'dagu',
+    ])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('runs bulk start through the runtime action API before refreshing dashboard status', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
 
