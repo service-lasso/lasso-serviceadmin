@@ -30,6 +30,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { SupportBundleDiagnosticsAction } from '../support-bundle'
 import {
   auditEventTypeLabel,
   filterSecretsBrokerAuditEvents,
@@ -3323,6 +3324,9 @@ export function SecretsBrokerSetupWizard({
                   <DiagnosticCard key={diagnostic.id} diagnostic={diagnostic} />
                 ))}
               </div>
+              <SupportBundleDiagnosticsAction
+                diagnostics={secretsBrokerDiagnostics}
+              />
               <div className='flex gap-3 rounded-lg border p-3 text-sm'>
                 <ShieldCheck className='mt-0.5 size-4 shrink-0' />
                 <div>

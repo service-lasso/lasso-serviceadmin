@@ -1,58 +1,60 @@
 import { renderRoute } from '@/test/render-route'
-import { screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { secretsBrokerDiagnostics } from '../secrets-broker/diagnostics'
 import {
-  buildSupportBundlePayload,
+  buildSupportBundleReview,
   redactDiagnosticText,
-  supportBundleHasSecretMaterial,
+  supportBundleReviewHasSecretMaterial,
 } from './support-bundle'
 
-describe('support bundle export surface', () => {
-  it('renders support bundle preview sections and warning before export', async () => {
-    await renderRoute('/support-bundle')
+describe('support bundle diagnostics action', () => {
+  it('renders as a compact diagnostics action instead of a standalone export page', async () => {
+    await renderRoute('/secrets-broker/diagnostics')
 
     expect(
-      await screen.findByRole('heading', { name: /Support bundle export/i })
-    ).toBeVisible()
-    expect(screen.getByText(/Review before sharing/i)).toBeVisible()
-    expect(screen.getByText(/Secret-safe diagnostics/i)).toBeVisible()
-    expect(screen.getAllByText(/Service inventory/i)[0]).toBeVisible()
-    expect(
-      screen.getAllByText(/Runtime and health summaries/i)[0]
+      await screen.findByRole('heading', {
+        name: /Secrets Broker diagnostics/i,
+      })
     ).toBeVisible()
     expect(
-      screen.getAllByText(/Secrets Broker source statuses/i)[0]
+      screen.getByRole('region', { name: /Support bundle export action/i })
     ).toBeVisible()
-    expect(screen.getAllByText(/Recent redacted errors/i)[0]).toBeVisible()
-    expect(screen.getByText(/Machine-readable manifest/i)).toBeVisible()
-    expect(screen.getAllByText(/secret-safe-by-default/i)[0]).toBeVisible()
+    expect(screen.getByText(/Export endpoint unavailable/i)).toBeVisible()
+    expect(
+      screen.getByText(/No sample bundle or fixture payload is generated here/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Configuration diagnostics/i)).toBeVisible()
+    expect(screen.getByText(/Runtime diagnostics/i)).toBeVisible()
+    expect(screen.getByText(/Authentication diagnostics/i)).toBeVisible()
+    expect(screen.getByText(/Permission diagnostics/i)).toBeVisible()
+    expect(screen.getByText(/Redaction policy/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /Download support bundle unavailable/i,
+      })
+    ).toBeDisabled()
+    expect(
+      screen.queryByText(/Machine-readable manifest/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText(/Prepared support bundle payload/i)
+    ).not.toBeInTheDocument()
   })
 
-  it('prepares a local payload without rendering raw secret-like values', async () => {
-    const user = userEvent.setup()
+  it('redirects the legacy standalone route to diagnostics', async () => {
     await renderRoute('/support-bundle')
 
-    await user.click(
-      screen.getByRole('button', { name: /Prepare export manifest/i })
-    )
-
-    const preparedPayload = screen.getByLabelText(/Prepared support bundle/i)
-    expect(preparedPayload).toBeVisible()
     expect(
-      within(preparedPayload).getByText(/\[REDACTED_SECRET\]/i)
+      await screen.findByRole('heading', {
+        name: /Secrets Broker diagnostics/i,
+      })
     ).toBeVisible()
     expect(
-      within(preparedPayload).getByText(/\[REDACTED_AUTHORIZATION\]/i)
+      screen.getByRole('region', { name: /Support bundle export action/i })
     ).toBeVisible()
     expect(
-      screen.queryByText(/provider-login-needed|session-cookie-placeholder/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/bearer\s+[a-z0-9._~+/=-]+\.[a-z0-9._~+/=-]+/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/-----BEGIN PRIVATE KEY-----/i)
+      screen.queryByText(/Machine-readable manifest/i)
     ).not.toBeInTheDocument()
   })
 
@@ -71,11 +73,18 @@ describe('support bundle export surface', () => {
     expect(redacted).not.toContain('session-canary')
   })
 
-  it('keeps generated support bundle fixtures free of secret material', () => {
-    const payload = buildSupportBundlePayload()
+  it('keeps the diagnostics review free of secret material', () => {
+    const review = buildSupportBundleReview(
+      secretsBrokerDiagnostics.map((diagnostic) => ({
+        category: diagnostic.category,
+        status: diagnostic.status,
+      }))
+    )
 
-    expect(payload.manifest.sections).toHaveLength(6)
-    expect(payload.manifest.redactionPolicy.mode).toBe('secret-safe-by-default')
-    expect(supportBundleHasSecretMaterial(payload)).toBe(false)
+    expect(review.exportAvailability.state).toBe('unavailable')
+    expect(review.sections.some((section) => section.id === 'redaction')).toBe(
+      true
+    )
+    expect(supportBundleReviewHasSecretMaterial(review)).toBe(false)
   })
 })
