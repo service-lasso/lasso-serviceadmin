@@ -1,25 +1,26 @@
 import type { Edge, Node } from '@xyflow/react'
-import { secretsBrokerAuditEvents } from './audit-events'
-import { secretsBrokerProviderConnections } from './provider-connections'
-import { secretsBrokerSourceBackends } from './source-backends'
+import type {
+  DashboardService,
+  ServiceEnvironmentVariable,
+} from '@/lib/service-lasso-dashboard/types'
+
+export type SecretVariableMappingStatus =
+  | 'mapped'
+  | 'unmapped'
+  | 'missing-source'
+  | 'unknown'
 
 export type SecretsBrokerTopologyNodeKind =
   | 'broker'
-  | 'source'
-  | 'connection'
+  | 'provider'
   | 'ref'
   | 'service'
-  | 'workflow'
-  | 'run'
+  | 'variable'
 
 export type SecretsBrokerTopologyEdgeKind =
-  | 'resolves-from'
-  | 'uses'
-  | 'writes-back'
-  | 'failed'
-  | 'denied'
-  | 'provider-owns'
-  | 'run-uses'
+  | 'maps-to'
+  | 'provided-by'
+  | 'uses-variable'
 
 export type SecretsBrokerTopologyNode = {
   id: string
@@ -37,319 +38,283 @@ export type SecretsBrokerTopologyEdge = {
   target: string
   label: string
   kind: SecretsBrokerTopologyEdgeKind
-  status: 'ok' | 'warning' | 'failed' | 'denied' | 'missing'
+  status: 'ok' | 'warning' | 'failed' | 'denied' | 'missing' | 'unknown'
   detailHref: string
   auditHref: string
   diagnosticHref?: string
 }
 
+export type SecretVariableMappingRow = {
+  id: string
+  serviceId: string
+  serviceName: string
+  variableName: string
+  scope: ServiceEnvironmentVariable['scope']
+  source: string
+  secretRef: string
+  provider: string
+  status: SecretVariableMappingStatus
+  lastValidation: string
+  detailHref: string
+  variablesHref: string
+  sourceHref: string
+  auditHref: string
+  diagnosticsHref: string
+  searchText: string
+}
+
 export type SecretsBrokerTopology = {
+  rows: SecretVariableMappingRow[]
   nodes: SecretsBrokerTopologyNode[]
   edges: SecretsBrokerTopologyEdge[]
 }
 
-const serviceIds = ['@serviceadmin', '@secretsbroker', 'postgres']
-const workflowIds = [
-  'service-start',
-  'secret-rotation-preview',
-  'deploy-payments-api',
-]
-const runIds = ['run-20260507-190144', 'run-20260507-185812']
+const secretNamePattern =
+  /(^|_)(SECRET|TOKEN|PASSWORD|PASS|API_KEY|PRIVATE_KEY|CREDENTIAL|KEY)($|_)/i
+const secretRefPattern = /^secret:\/\//i
+const legacySecretRefPattern = /^[a-z0-9@._:/-]+\.[A-Z0-9_]+$/i
 
-function serviceNode(id: string): SecretsBrokerTopologyNode {
-  return {
-    id: `service:${id}`,
-    label: id,
-    kind: 'service',
-    summary: 'Service using broker refs or broker metadata.',
-    detailHref: `/services/${encodeURIComponent(id)}`,
-    auditHref: `/secrets-broker/audit-events`,
-    diagnosticHref: `/secrets-broker/diagnostics`,
+function safeNodeId(value: string) {
+  return value.replace(/[^a-z0-9@._:/-]+/gi, '-')
+}
+
+function isSecretLikeVariable(variable: ServiceEnvironmentVariable) {
+  return (
+    variable.secret === true ||
+    secretRefPattern.test(variable.value) ||
+    secretNamePattern.test(variable.key)
+  )
+}
+
+function extractSafeSecretRef(variable: ServiceEnvironmentVariable) {
+  if (secretRefPattern.test(variable.value)) return variable.value
+  if (variable.secret && legacySecretRefPattern.test(variable.value)) {
+    return `secret://${variable.value}`
   }
+  return ''
 }
 
-function workflowNode(id: string): SecretsBrokerTopologyNode {
-  return {
-    id: `workflow:${id}`,
-    label: id,
-    kind: 'workflow',
-    summary: 'Workflow using broker refs through an audited run identity.',
-    detailHref: `/dependencies?service=${encodeURIComponent(id)}`,
-    auditHref: `/secrets-broker/audit-events`,
-    diagnosticHref: `/secrets-broker/diagnostics`,
-  }
+function providerFromSource(source: string) {
+  if (!source || source === 'Not mapped') return 'None'
+  return source.replace(/^@secretsbroker\//, '')
 }
 
-function runNode(id: string): SecretsBrokerTopologyNode {
-  return {
-    id: `run:${id}`,
-    label: id,
-    kind: 'run',
-    summary: 'Audited workflow/service run context with safe metadata only.',
-    detailHref: `/secrets-broker/audit-events`,
-    auditHref: `/secrets-broker/audit-events`,
-    diagnosticHref: `/secrets-broker/diagnostics`,
-  }
+function mappingStatusFor(variable: ServiceEnvironmentVariable) {
+  const hasSafeRef = Boolean(extractSafeSecretRef(variable))
+  const hasBrokerSource = Boolean(variable.source?.includes('@secretsbroker'))
+
+  if (hasSafeRef && hasBrokerSource) return 'mapped'
+  if (variable.secret && !hasSafeRef) return 'missing-source'
+  if (hasSafeRef) return 'unknown'
+  return 'unmapped'
 }
 
-function refId(ref: string) {
-  return `ref:${ref.replace(/[^a-z0-9@._:/-]+/gi, '-')}`
+function validationFor(status: SecretVariableMappingStatus) {
+  if (status === 'mapped') return 'SecretRef mapping present'
+  if (status === 'missing-source') return 'Secret flag set without safe ref'
+  if (status === 'unknown') return 'SecretRef present without broker source'
+  return 'Secret-like variable is not mapped'
 }
 
-function refNode(ref: string): SecretsBrokerTopologyNode {
-  return {
-    id: refId(ref),
-    label: ref,
-    kind: 'ref',
-    summary: 'SecretRef identifier only; resolved value is hidden.',
-    detailHref: `/secrets-broker/audit-events`,
-    auditHref: `/secrets-broker/audit-events`,
-    diagnosticHref: `/secrets-broker/diagnostics`,
-  }
+export function buildSecretVariableMappingRows(
+  services: DashboardService[]
+): SecretVariableMappingRow[] {
+  return services.flatMap((service) =>
+    service.environmentVariables
+      .filter(isSecretLikeVariable)
+      .map((variable) => {
+        const status = mappingStatusFor(variable)
+        const safeRef = extractSafeSecretRef(variable)
+        const source =
+          variable.source ?? (safeRef ? 'Unknown source' : 'Not mapped')
+        const provider = providerFromSource(source)
+        const row: SecretVariableMappingRow = {
+          id: `${service.id}:${variable.scope}:${variable.key}`,
+          serviceId: service.id,
+          serviceName: service.name,
+          variableName: variable.key,
+          scope: variable.scope,
+          source,
+          secretRef: safeRef || 'Not mapped',
+          provider,
+          status,
+          lastValidation: validationFor(status),
+          detailHref: `/services/${encodeURIComponent(service.id)}`,
+          variablesHref: `/services/${encodeURIComponent(service.id)}`,
+          sourceHref: '/secrets-broker/sources',
+          auditHref: '/secrets-broker/audit-events',
+          diagnosticsHref: '/secrets-broker/diagnostics',
+          searchText: '',
+        }
+
+        return {
+          ...row,
+          searchText: [
+            row.serviceId,
+            row.serviceName,
+            row.variableName,
+            row.scope,
+            row.source,
+            row.secretRef,
+            row.provider,
+            row.status,
+            row.lastValidation,
+          ]
+            .join(' ')
+            .toLowerCase(),
+        }
+      })
+  )
 }
 
-function edgeStatusFromOutcome(
-  outcome: (typeof secretsBrokerAuditEvents)[number]['outcome']
-): SecretsBrokerTopologyEdge['status'] {
-  if (outcome === 'denied' || outcome === 'revoked') return 'denied'
-  if (outcome === 'failure') return 'failed'
-  return 'ok'
+function addNode(
+  nodes: Map<string, SecretsBrokerTopologyNode>,
+  node: SecretsBrokerTopologyNode
+) {
+  if (!nodes.has(node.id)) nodes.set(node.id, node)
 }
 
-function edgeKindFromEvent(
-  event: (typeof secretsBrokerAuditEvents)[number]
-): SecretsBrokerTopologyEdgeKind {
-  if (event.outcome === 'denied' || event.outcome === 'revoked') return 'denied'
-  if (event.outcome === 'failure') return 'failed'
-  if (event.type === 'write_back_denied' || event.type === 'secret_rotated') {
-    return 'writes-back'
-  }
-  return 'uses'
+function edgeStatusFor(status: SecretVariableMappingStatus) {
+  if (status === 'mapped') return 'ok'
+  if (status === 'unmapped') return 'missing'
+  if (status === 'missing-source') return 'missing'
+  return 'unknown'
 }
 
-export function buildSecretsBrokerTopology(): SecretsBrokerTopology {
+export function buildSecretsBrokerTopology(
+  services: DashboardService[] = []
+): SecretsBrokerTopology {
+  const rows = buildSecretVariableMappingRows(services)
   const nodes = new Map<string, SecretsBrokerTopologyNode>()
   const edges: SecretsBrokerTopologyEdge[] = []
 
-  nodes.set('broker:@secretsbroker', {
+  addNode(nodes, {
     id: 'broker:@secretsbroker',
     label: '@secretsbroker',
     kind: 'broker',
-    summary:
-      'Broker service mediating secret refs, providers, policies, and audit.',
+    summary: 'Broker metadata surface for service SecretRef mappings.',
     detailHref: '/secrets-broker',
     auditHref: '/secrets-broker/audit-events',
     diagnosticHref: '/secrets-broker/diagnostics',
   })
 
-  secretsBrokerSourceBackends.forEach((source) => {
-    const sourceNode: SecretsBrokerTopologyNode = {
-      id: `source:${source.id}`,
-      label: source.title,
-      kind: 'source',
-      summary: `${source.provider} source · ${source.state} · ${source.mode}`,
-      detailHref: '/secrets-broker/sources',
-      auditHref: '/secrets-broker/audit-events',
-      diagnosticHref: '/secrets-broker/diagnostics',
-    }
-    nodes.set(sourceNode.id, sourceNode)
-    edges.push({
-      id: `broker-source:${source.id}`,
-      source: sourceNode.id,
-      target: 'broker:@secretsbroker',
-      label: 'provider/source ownership',
-      kind: 'provider-owns',
-      status:
-        source.state === 'failing'
-          ? 'failed'
-          : source.state === 'not-configured'
-            ? 'missing'
-            : 'ok',
-      detailHref: '/secrets-broker/sources',
-      auditHref: '/secrets-broker/audit-events',
-      diagnosticHref: '/secrets-broker/diagnostics',
+  rows.forEach((row) => {
+    const serviceNodeId = `service:${safeNodeId(row.serviceId)}`
+    const variableNodeId = `variable:${safeNodeId(row.id)}`
+    const providerNodeId = `provider:${safeNodeId(row.provider)}`
+    const refNodeId = `ref:${safeNodeId(row.secretRef)}`
+    const status = edgeStatusFor(row.status)
+
+    addNode(nodes, {
+      id: serviceNodeId,
+      label: row.serviceName,
+      kind: 'service',
+      summary: `${row.serviceId} runtime service`,
+      detailHref: row.detailHref,
+      auditHref: row.auditHref,
+      diagnosticHref: row.diagnosticsHref,
+    })
+    addNode(nodes, {
+      id: variableNodeId,
+      label: row.variableName,
+      kind: 'variable',
+      summary: `${row.scope} variable; raw value hidden`,
+      detailHref: row.variablesHref,
+      auditHref: row.auditHref,
+      diagnosticHref: row.diagnosticsHref,
     })
 
-    source.exampleRefs.forEach((ref) => {
-      const safeRefNode = refNode(ref)
-      nodes.set(safeRefNode.id, safeRefNode)
-      edges.push({
-        id: `source-ref:${source.id}:${safeRefNode.id}`,
-        source: sourceNode.id,
-        target: safeRefNode.id,
-        label: 'resolves from',
-        kind: 'resolves-from',
-        status:
-          source.testResult.outcome === 'failure'
-            ? 'failed'
-            : source.testResult.outcome === 'not-run'
-              ? 'warning'
-              : 'ok',
-        detailHref: '/secrets-broker/sources',
-        auditHref: '/secrets-broker/audit-events',
-        diagnosticHref: '/secrets-broker/diagnostics',
-      })
+    edges.push({
+      id: `service-variable:${row.id}`,
+      source: serviceNodeId,
+      target: variableNodeId,
+      label: 'declares variable',
+      kind: 'uses-variable',
+      status,
+      detailHref: row.detailHref,
+      auditHref: row.auditHref,
+      diagnosticHref: row.diagnosticsHref,
     })
+
+    if (row.status === 'mapped' || row.status === 'unknown') {
+      addNode(nodes, {
+        id: refNodeId,
+        label: row.secretRef,
+        kind: 'ref',
+        summary: 'SecretRef identifier only; resolved value hidden',
+        detailHref: row.auditHref,
+        auditHref: row.auditHref,
+        diagnosticHref: row.diagnosticsHref,
+      })
+      edges.push({
+        id: `variable-ref:${row.id}`,
+        source: variableNodeId,
+        target: refNodeId,
+        label: 'maps to SecretRef',
+        kind: 'maps-to',
+        status,
+        detailHref: row.detailHref,
+        auditHref: row.auditHref,
+        diagnosticHref: row.diagnosticsHref,
+      })
+    }
+
+    if (row.provider !== 'None') {
+      addNode(nodes, {
+        id: providerNodeId,
+        label: row.provider,
+        kind: 'provider',
+        summary: `${row.source} metadata source`,
+        detailHref: row.sourceHref,
+        auditHref: row.auditHref,
+        diagnosticHref: row.diagnosticsHref,
+      })
+      edges.push({
+        id: `provider-variable:${row.id}`,
+        source: providerNodeId,
+        target: variableNodeId,
+        label: 'provides mapping metadata',
+        kind: 'provided-by',
+        status,
+        detailHref: row.sourceHref,
+        auditHref: row.auditHref,
+        diagnosticHref: row.diagnosticsHref,
+      })
+    } else {
+      edges.push({
+        id: `broker-variable:${row.id}`,
+        source: 'broker:@secretsbroker',
+        target: variableNodeId,
+        label: 'mapping missing',
+        kind: 'maps-to',
+        status,
+        detailHref: row.detailHref,
+        auditHref: row.auditHref,
+        diagnosticHref: row.diagnosticsHref,
+      })
+    }
   })
 
-  secretsBrokerProviderConnections.forEach((connection) => {
-    const connectionNode: SecretsBrokerTopologyNode = {
-      id: `connection:${connection.id}`,
-      label: connection.title,
-      kind: 'connection',
-      summary: `${connection.provider} connection · ${connection.state} · ${connection.secretMaterial.presence}`,
-      detailHref: `/secrets-broker/${connection.id}`,
-      auditHref: '/secrets-broker/audit-events',
-      diagnosticHref: '/secrets-broker/diagnostics',
-    }
-    nodes.set(connectionNode.id, connectionNode)
-    edges.push({
-      id: `broker-connection:${connection.id}`,
-      source: 'broker:@secretsbroker',
-      target: connectionNode.id,
-      label: 'provider connection',
-      kind: 'provider-owns',
-      status:
-        connection.state === 'healthy'
-          ? 'ok'
-          : connection.state === 'missing'
-            ? 'missing'
-            : connection.state === 'failed'
-              ? 'failed'
-              : 'warning',
-      detailHref: `/secrets-broker/${connection.id}`,
-      auditHref: '/secrets-broker/audit-events',
-      diagnosticHref: '/secrets-broker/diagnostics',
-    })
-
-    connection.usage.linkedServices.forEach((service) => {
-      const node = serviceNode(service)
-      nodes.set(node.id, node)
-      edges.push({
-        id: `connection-service:${connection.id}:${service}`,
-        source: connectionNode.id,
-        target: node.id,
-        label:
-          connection.state === 'healthy' ? 'uses' : 'missing/denied resolution',
-        kind:
-          connection.state === 'healthy'
-            ? 'uses'
-            : connection.state === 'missing'
-              ? 'denied'
-              : 'failed',
-        status:
-          connection.state === 'healthy'
-            ? 'ok'
-            : connection.state === 'missing'
-              ? 'missing'
-              : 'warning',
-        detailHref: `/secrets-broker/${connection.id}`,
-        auditHref: '/secrets-broker/audit-events',
-        diagnosticHref: '/secrets-broker/diagnostics',
-      })
-    })
-
-    connection.usage.linkedWorkflows.forEach((workflow) => {
-      const node = workflowNode(workflow)
-      nodes.set(node.id, node)
-      edges.push({
-        id: `connection-workflow:${connection.id}:${workflow}`,
-        source: connectionNode.id,
-        target: node.id,
-        label: 'workflow uses',
-        kind: 'uses',
-        status: connection.state === 'healthy' ? 'ok' : 'warning',
-        detailHref: `/secrets-broker/${connection.id}`,
-        auditHref: '/secrets-broker/audit-events',
-        diagnosticHref: '/secrets-broker/diagnostics',
-      })
-    })
-
-    connection.usage.linkedRuns.forEach((run) => {
-      const node = runNode(run)
-      nodes.set(node.id, node)
-      edges.push({
-        id: `connection-run:${connection.id}:${run}`,
-        source: connectionNode.id,
-        target: node.id,
-        label: 'audited run',
-        kind: 'run-uses',
-        status: connection.state === 'healthy' ? 'ok' : 'warning',
-        detailHref: `/secrets-broker/${connection.id}`,
-        auditHref: '/secrets-broker/audit-events',
-        diagnosticHref: '/secrets-broker/diagnostics',
-      })
-    })
-  })
-
-  serviceIds.forEach((service) =>
-    nodes.set(`service:${service}`, serviceNode(service))
-  )
-  workflowIds.forEach((workflow) =>
-    nodes.set(`workflow:${workflow}`, workflowNode(workflow))
-  )
-  runIds.forEach((run) => nodes.set(`run:${run}`, runNode(run)))
-
-  secretsBrokerAuditEvents.forEach((event) => {
-    const targetKind =
-      event.actorType === 'workflow'
-        ? 'workflow'
-        : event.actorType === 'cli-session'
-          ? 'run'
-          : 'service'
-    const targetId = `${targetKind}:${event.serviceOrWorkflow}`
-    if (!nodes.has(targetId)) {
-      nodes.set(
-        targetId,
-        targetKind === 'workflow'
-          ? workflowNode(event.serviceOrWorkflow)
-          : targetKind === 'run'
-            ? runNode(event.serviceOrWorkflow)
-            : serviceNode(event.serviceOrWorkflow)
-      )
-    }
-    const safeRefNode = refNode(event.ref)
-    nodes.set(safeRefNode.id, safeRefNode)
-    edges.push({
-      id: `audit:${event.id}`,
-      source: safeRefNode.id,
-      target: targetId,
-      label: event.type.replace(/_/g, ' '),
-      kind: edgeKindFromEvent(event),
-      status: edgeStatusFromOutcome(event.outcome),
-      detailHref: `/secrets-broker/audit-events`,
-      auditHref: `/secrets-broker/audit-events`,
-      diagnosticHref:
-        event.outcome === 'failure' || event.outcome === 'denied'
-          ? '/secrets-broker/diagnostics'
-          : undefined,
-    })
-  })
-
-  return { nodes: Array.from(nodes.values()), edges }
+  return { rows, nodes: Array.from(nodes.values()), edges }
 }
 
 const nodePositionByKind: Record<
   SecretsBrokerTopologyNodeKind,
   { x: number; y: number }
 > = {
-  source: { x: -620, y: 0 },
-  broker: { x: -300, y: 0 },
-  connection: { x: 20, y: 0 },
+  broker: { x: -580, y: 0 },
+  provider: { x: -300, y: -120 },
+  service: { x: -300, y: 160 },
+  variable: { x: 20, y: 0 },
   ref: { x: 340, y: 0 },
-  service: { x: 660, y: -120 },
-  workflow: { x: 660, y: 120 },
-  run: { x: 980, y: 120 },
 }
 
 const nodeKindColor: Record<SecretsBrokerTopologyNodeKind, string> = {
   broker: '#2563eb',
-  source: '#0891b2',
-  connection: '#7c3aed',
-  ref: '#f59e0b',
+  provider: '#0891b2',
   service: '#16a34a',
-  workflow: '#db2777',
-  run: '#64748b',
+  variable: '#7c3aed',
+  ref: '#f59e0b',
 }
 
 const edgeStatusColor: Record<SecretsBrokerTopologyEdge['status'], string> = {
@@ -358,6 +323,7 @@ const edgeStatusColor: Record<SecretsBrokerTopologyEdge['status'], string> = {
   failed: '#dc2626',
   denied: '#991b1b',
   missing: '#f97316',
+  unknown: '#64748b',
 }
 
 export function toReactFlowSecretsBrokerTopology(
@@ -378,12 +344,12 @@ export function toReactFlowSecretsBrokerTopology(
       },
       style: {
         border: `2px solid ${nodeKindColor[node.kind]}`,
-        borderRadius: 12,
+        borderRadius: 8,
         background: '#ffffff',
         color: '#0f172a',
         fontSize: 12,
         minWidth: 150,
-        maxWidth: 210,
+        maxWidth: 230,
         whiteSpace: 'pre-line',
       },
     }
@@ -394,7 +360,7 @@ export function toReactFlowSecretsBrokerTopology(
     source: edge.source,
     target: edge.target,
     label: edge.label,
-    animated: edge.status === 'failed' || edge.status === 'denied',
+    animated: edge.status === 'missing',
     style: {
       stroke: edgeStatusColor[edge.status],
       strokeWidth: edge.status === 'ok' ? 2 : 3,
@@ -418,7 +384,6 @@ export function filterSecretsBrokerTopology(
   query: string
 ): SecretsBrokerTopology {
   const normalizedQuery = query.trim().toLowerCase()
-
   if (!normalizedQuery) return topology
 
   const nodesById = new Map(topology.nodes.map((node) => [node.id, node]))
@@ -463,6 +428,9 @@ export function filterSecretsBrokerTopology(
   })
 
   return {
+    rows: topology.rows.filter((row) =>
+      row.searchText.includes(normalizedQuery)
+    ),
     nodes: topology.nodes.filter((node) => visibleNodeIds.has(node.id)),
     edges: topology.edges.filter((edge) => visibleEdgeIds.has(edge.id)),
   }
@@ -470,6 +438,16 @@ export function filterSecretsBrokerTopology(
 
 export function topologyHasSecretValue(topology: SecretsBrokerTopology) {
   const joined = [
+    ...topology.rows.flatMap((row) => [
+      row.id,
+      row.serviceId,
+      row.serviceName,
+      row.variableName,
+      row.source,
+      row.secretRef,
+      row.provider,
+      row.lastValidation,
+    ]),
     ...topology.nodes.flatMap((node) => [node.id, node.label, node.summary]),
     ...topology.edges.flatMap((edge) => [edge.id, edge.label]),
   ].join(' ')

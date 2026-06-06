@@ -7,6 +7,7 @@ import {
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import {
   filterSecretsBrokerAuditEvents,
   secretsBrokerAuditEvents,
@@ -43,6 +44,7 @@ import {
   sourceBackendHasSecretValue,
 } from './source-backends'
 import {
+  buildSecretVariableMappingRows,
   buildSecretsBrokerTopology,
   filterSecretsBrokerTopology,
   topologyHasSecretValue,
@@ -51,6 +53,58 @@ import {
   workflowAuthoringBoundaries,
   workflowAuthoringHasSecretValue,
 } from './workflow-authoring'
+
+const topologyTestServices = [
+  {
+    id: 'admin-api',
+    name: 'Admin API',
+    status: 'running',
+    favorite: false,
+    note: 'Test service',
+    links: [],
+    installed: true,
+    role: 'Test service',
+    runtimeHealth: {
+      state: 'running',
+      health: 'healthy',
+      uptime: '1m',
+      lastCheckAt: '2026-06-06T20:00:00Z',
+      summary: 'Healthy',
+    },
+    endpoints: [],
+    metadata: {
+      serviceType: 'api',
+      runtime: 'node',
+      version: 'test',
+      build: 'test',
+    },
+    dependencies: [],
+    dependents: [],
+    environmentVariables: [
+      {
+        key: 'ADMIN_API_TOKEN',
+        value: 'secret://services/admin/api_token',
+        scope: 'service',
+        secret: true,
+        source: '@secretsbroker/local/default',
+      },
+      {
+        key: 'UNMAPPED_PASSWORD',
+        value: 'plain-text-password-value',
+        scope: 'service',
+        source: 'service.json',
+      },
+      {
+        key: 'LOG_LEVEL',
+        value: 'debug',
+        scope: 'service',
+        source: 'service.json',
+      },
+    ],
+    recentLogs: [],
+    actions: [],
+  },
+] as DashboardService[]
 
 describe('Secrets Broker setup wizard', () => {
   it('shows the safe setup contract without plaintext values', async () => {
@@ -902,36 +956,37 @@ describe('Secrets Broker setup wizard', () => {
     ).toBe(true)
   })
 
-  it('renders Secrets Broker topology graph and accessible relationship fallback', async () => {
+  it('renders Secrets Broker topology graph and variable mapping table', async () => {
     await renderRoute('/secrets-broker/topology')
-
-    const topology = buildSecretsBrokerTopology()
-    const postgresTopology = filterSecretsBrokerTopology(topology, 'postgres')
 
     expect(
       screen.getByRole('heading', { name: /Secrets Broker topology/i })
     ).toBeVisible()
-    expect(screen.getAllByText(/Safe metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/List fallback included/i)).toBeVisible()
-    expect(screen.getByText(/Actionable relationship fallback/i)).toBeVisible()
-    expect(screen.getAllByText(/provider\/source ownership/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/missing\/denied resolution/i)[0]).toBeVisible()
-    expect(screen.getAllByRole('link', { name: /Detail/i })[0]).toBeVisible()
-    expect(screen.getAllByRole('link', { name: /Audit/i })[0]).toBeVisible()
+    expect(await screen.findByText(/Runtime inventory source/i)).toBeVisible()
+    expect(screen.getByText(/Derived from table rows/i)).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: /service/i })).toBeVisible()
     expect(
-      screen.getAllByRole('link', { name: /Diagnostics/i })[0]
+      screen.getByRole('columnheader', { name: /variable/i })
     ).toBeVisible()
-    const topologySearch = screen.getByLabelText(/Search topology/i)
-    await userEvent.type(topologySearch, 'postgres')
-    expect(topologySearch).toHaveValue('postgres')
     expect(
-      screen.getByText(
-        new RegExp(
-          `Showing ${postgresTopology.nodes.length} of ${topology.nodes.length} nodes and ${postgresTopology.edges.length} of ${topology.edges.length} relationships\\.`
-        )
-      )
+      screen.getByRole('columnheader', { name: /SecretRef/i })
     ).toBeVisible()
-    expect(screen.getAllByText(/postgres/i).length).toBeGreaterThan(0)
+    expect(screen.getByText('SESSION_SECRET')).toBeVisible()
+    expect(
+      screen.getByText('secret://@serviceadmin/SESSION_SECRET')
+    ).toBeVisible()
+    expect(screen.getByText('POSTGRES_ADMIN_PASSWORD')).toBeVisible()
+    expect(screen.getAllByRole('link', { name: /^Service$/i })[0]).toBeVisible()
+    expect(
+      screen.getAllByRole('link', { name: /^Diagnostics$/i })[0]
+    ).toBeVisible()
+
+    const tableSearch = screen.getByPlaceholderText(
+      /Search services, variables, refs, sources, and status/i
+    )
+    await userEvent.type(tableSearch, 'telegram')
+    expect(tableSearch).toHaveValue('telegram')
+    expect(screen.getByText('TELEGRAM_BOT_TOKEN')).toBeVisible()
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)
     ).not.toBeInTheDocument()
@@ -941,12 +996,11 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.queryByText(/sk-this-value-must-not-render/i)
     ).not.toBeInTheDocument()
-    expect(topology.edges.length).toBeGreaterThan(0)
   })
 
   it('filters topology search results without orphaning visible edges', () => {
-    const topology = buildSecretsBrokerTopology()
-    const filteredTopology = filterSecretsBrokerTopology(topology, 'postgres')
+    const topology = buildSecretsBrokerTopology(topologyTestServices)
+    const filteredTopology = filterSecretsBrokerTopology(topology, 'admin')
     const filteredNodeIds = new Set(
       filteredTopology.nodes.map((node) => node.id)
     )
@@ -955,7 +1009,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(filteredTopology.nodes.length).toBeLessThan(topology.nodes.length)
     expect(filteredTopology.edges.length).toBeGreaterThan(0)
     expect(
-      filteredTopology.nodes.some((node) => node.label === 'postgres')
+      filteredTopology.nodes.some((node) => node.label === 'Admin API')
     ).toBe(true)
     expect(
       filteredTopology.edges.every(
@@ -966,32 +1020,40 @@ describe('Secrets Broker setup wizard', () => {
     expect(topologyHasSecretValue(filteredTopology)).toBe(false)
   })
 
-  it('builds topology from the same safe metadata used by list and audit views', () => {
-    const topology = buildSecretsBrokerTopology()
+  it('builds topology from runtime service variables without raw values or sample defaults', () => {
+    const topology = buildSecretsBrokerTopology(topologyTestServices)
+    const rows = buildSecretVariableMappingRows(topologyTestServices)
     const edgeNodeIds = new Set(
       topology.edges.flatMap((edge) => [edge.source, edge.target])
     )
     const topologyNodeIds = new Set(topology.nodes.map((node) => node.id))
 
+    expect(rows.map((row) => row.variableName)).toEqual([
+      'ADMIN_API_TOKEN',
+      'UNMAPPED_PASSWORD',
+    ])
+    expect(
+      rows.find((row) => row.variableName === 'ADMIN_API_TOKEN')
+    ).toMatchObject({
+      secretRef: 'secret://services/admin/api_token',
+      status: 'mapped',
+    })
+    expect(
+      rows.find((row) => row.variableName === 'UNMAPPED_PASSWORD')
+    ).toMatchObject({
+      secretRef: 'Not mapped',
+      status: 'unmapped',
+    })
     expect(topologyHasSecretValue(topology)).toBe(false)
-    expect(
-      secretsBrokerProviderConnections.every((connection) =>
-        topology.nodes.some((node) => node.id === `connection:${connection.id}`)
-      )
-    ).toBe(true)
-    expect(
-      secretsBrokerSourceBackends.every((source) =>
-        topology.nodes.some((node) => node.id === `source:${source.id}`)
-      )
-    ).toBe(true)
-    expect(
-      secretsBrokerAuditEvents.every((event) =>
-        topology.edges.some((edge) => edge.id === `audit:${event.id}`)
-      )
-    ).toBe(true)
     expect([...edgeNodeIds].every((id) => topologyNodeIds.has(id))).toBe(true)
-    expect(topology.edges.some((edge) => edge.status === 'denied')).toBe(true)
-    expect(topology.edges.some((edge) => edge.status === 'failed')).toBe(true)
+    expect(topology.edges.some((edge) => edge.status === 'ok')).toBe(true)
+    expect(topology.edges.some((edge) => edge.status === 'missing')).toBe(true)
+    expect(
+      topology.nodes.some((node) => node.label === 'run-20260507-190144')
+    ).toBe(false)
+    expect(topology.nodes.some((node) => node.label === 'service-start')).toBe(
+      false
+    )
   })
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {
