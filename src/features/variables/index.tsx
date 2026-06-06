@@ -71,7 +71,14 @@ const columns: ColumnDef<VariableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Key' />
     ),
-    cell: ({ row }) => <span className='font-medium'>{row.original.key}</span>,
+    cell: ({ row }) => (
+      <span
+        className='block max-w-[220px] truncate font-medium'
+        title={row.original.key}
+      >
+        {row.original.key}
+      </span>
+    ),
     enableHiding: false,
   },
   {
@@ -81,8 +88,13 @@ const columns: ColumnDef<VariableRow>[] = [
       <DataTableColumnHeader column={column} title='Value' />
     ),
     cell: ({ row }) => (
-      <div className='flex items-start gap-2'>
-        <span className='max-w-[320px] text-sm break-all text-muted-foreground'>
+      <div className='flex min-w-0 items-center gap-2'>
+        <span
+          className='block max-w-[320px] truncate text-sm text-muted-foreground'
+          title={
+            row.original.secret === 'secret' ? undefined : row.original.value
+          }
+        >
           {row.original.secret === 'secret' ? '••••••••' : row.original.value}
         </span>
         <Button
@@ -128,7 +140,14 @@ const columns: ColumnDef<VariableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Source' />
     ),
-    cell: ({ row }) => row.original.source,
+    cell: ({ row }) => (
+      <span
+        className='block max-w-[220px] truncate'
+        title={row.original.source}
+      >
+        {row.original.source}
+      </span>
+    ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
@@ -137,23 +156,37 @@ const columns: ColumnDef<VariableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Services' />
     ),
-    cell: ({ row }) => (
-      <div className='flex flex-wrap gap-2'>
-        {row.original.services.map((service) => (
-          <Button
-            key={service.id}
-            variant='outline'
-            size='sm'
-            className='h-8'
-            asChild
-          >
-            <Link to='/services/$serviceId' params={{ serviceId: service.id }}>
-              {service.name}
-            </Link>
-          </Button>
-        ))}
-      </div>
-    ),
+    cell: ({ row }) => {
+      const visibleServices = row.original.services.slice(0, 2)
+      const hiddenCount = row.original.services.length - visibleServices.length
+
+      return (
+        <div className='flex min-w-0 items-center gap-2 overflow-hidden'>
+          {visibleServices.map((service) => (
+            <Button
+              key={service.id}
+              variant='outline'
+              size='sm'
+              className='h-7 max-w-[150px] shrink truncate px-2'
+              asChild
+            >
+              <Link
+                to='/services/$serviceId'
+                params={{ serviceId: service.id }}
+                title={service.name}
+              >
+                {service.name}
+              </Link>
+            </Button>
+          ))}
+          {hiddenCount > 0 ? (
+            <Badge variant='outline' className='shrink-0'>
+              +{hiddenCount}
+            </Badge>
+          ) : null}
+        </div>
+      )
+    },
   },
 ]
 
@@ -242,7 +275,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
         </div>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         <div className='flex flex-wrap items-end justify-between gap-2'>
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Variables</h2>
@@ -263,7 +296,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
         {servicesQuery.isLoading ? (
           <VariablesLoading />
         ) : (
-          <div className='flex flex-1 flex-col gap-4'>
+          <div className='flex min-h-0 flex-1 flex-col gap-4'>
             <DataTableToolbar
               table={table}
               searchPlaceholder='Search variable keys, values, sources, or services...'
@@ -296,9 +329,12 @@ export function Variables({ service, keyFilter }: VariablesProps) {
               ]}
             />
 
-            <div className='overflow-hidden rounded-md border'>
-              <Table>
-                <TableHeader>
+            <div
+              className='min-h-[320px] flex-1 overflow-auto rounded-md border'
+              data-testid='variables-table-scroll-region'
+            >
+              <Table className='table-fixed'>
+                <TableHeader className='sticky top-0 z-10 bg-background'>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
                       {headerGroup.headers.map((header) => (
@@ -319,7 +355,7 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                     table.getRowModel().rows.map((row) => (
                       <TableRow key={row.id}>
                         {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
+                          <TableCell key={cell.id} className='min-w-0'>
                             {flexRender(
                               cell.column.columnDef.cell,
                               cell.getContext()
