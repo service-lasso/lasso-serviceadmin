@@ -12,7 +12,13 @@ const forbiddenSecretMaterialPatterns = [
 async function expectNoBlankScreen(page: Page) {
   await expect(page.locator('main')).toBeVisible()
   await expect(page.locator('main')).not.toBeEmpty()
-  await expect(page.getByText(/not signed in/i).first()).toBeVisible()
+  await expect(
+    page
+      .getByRole('button', { name: /Service Lasso instance selector/i })
+      .first()
+  ).toBeVisible()
+  await expect(page.getByText(/not signed in/i)).toHaveCount(0)
+  await expect(page.getByText(/no active session/i)).toHaveCount(0)
 }
 
 async function expectNoSecretMaterial(page: Page) {
