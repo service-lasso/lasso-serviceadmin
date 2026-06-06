@@ -40,5 +40,11 @@ describe('variables page', () => {
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeVisible()
     expect(screen.getByText('SERVICE_LASSO_API_BASE_URL')).toBeVisible()
     expect(screen.getByText('http://127.0.0.1:17883')).toBeVisible()
+
+    const scrollRegion = screen.getByTestId('variables-table-scroll-region')
+    expect(scrollRegion).toHaveClass('flex-1')
+    expect(scrollRegion).toHaveClass('overflow-auto')
+    expect(scrollRegion).toHaveClass('min-h-[320px]')
+    expect(screen.getByRole('button', { name: /next page/i })).toBeVisible()
   })
 })
