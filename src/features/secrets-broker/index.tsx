@@ -3324,9 +3324,7 @@ export function SecretsBrokerSetupWizard({
                   <DiagnosticCard key={diagnostic.id} diagnostic={diagnostic} />
                 ))}
               </div>
-              <SupportBundleDiagnosticsAction
-                diagnostics={secretsBrokerDiagnostics}
-              />
+              <SupportBundleDiagnosticsAction />
               <div className='flex gap-3 rounded-lg border p-3 text-sm'>
                 <ShieldCheck className='mt-0.5 size-4 shrink-0' />
                 <div>
