@@ -1,3 +1,8 @@
+import type {
+  DashboardService,
+  DashboardSummary,
+} from '@/lib/service-lasso-dashboard/types'
+
 export type SupportBundleSeverity = 'info' | 'warning' | 'error'
 
 export type SupportBundleReviewSectionId =
@@ -8,10 +13,11 @@ export type SupportBundleReviewSectionId =
   | 'permission'
   | 'redaction'
 
-export type SupportBundleDiagnosticInput = {
-  category: 'configuration' | 'permission' | 'provider' | 'auth' | 'runtime'
-  status: 'pass' | 'warning' | 'fail'
-}
+export type SupportBundleSourceState =
+  | 'available'
+  | 'loading'
+  | 'unavailable'
+  | 'error'
 
 export interface SupportBundleReviewSection {
   id: SupportBundleReviewSectionId
@@ -21,15 +27,36 @@ export interface SupportBundleReviewSection {
   severity: SupportBundleSeverity
 }
 
+export interface SupportBundleReviewItem {
+  id: string
+  title: string
+  source: string
+  status: SupportBundleSeverity
+  details: string[]
+}
+
 export interface SupportBundleReview {
   exportAvailability: {
     state: 'unavailable'
     label: string
     reason: string
   }
+  sourceState: {
+    state: SupportBundleSourceState
+    label: string
+    summary: string
+  }
   sections: SupportBundleReviewSection[]
+  previewItems: SupportBundleReviewItem[]
   redactionStatus: string
   approximateSizeLabel: string
+}
+
+export type SupportBundleRuntimeInput = {
+  summary?: DashboardSummary
+  services?: DashboardService[]
+  isLoading?: boolean
+  error?: unknown
 }
 
 export const supportBundleRedactionRules = [
@@ -51,7 +78,7 @@ export const supportBundleExcludedMaterial = [
 ]
 
 const assignmentPattern =
-  /\b(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|client[_-]?secret|session[_-]?secret|secret|password|cookie|private[_-]?key|recovery[_-]?key|env[_-]?value)\s*[:=]\s*([^\s,;]+)/gi
+  /\b(access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|session[_-]?secret|secret|password|cookie|private[_-]?key|recovery[_-]?key|env[_-]?value)\s*[:=]\s*([^\s,;]+)/gi
 const authPattern = /\b(bearer|basic)\s+[a-z0-9._~+/=-]+/gi
 const privateKeyPattern =
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi
@@ -77,7 +104,7 @@ export function containsSecretLikeMaterial(value: string): boolean {
     )
   const hasUnredactedAssignment = [
     ...value.matchAll(
-      /\b(access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|client[_-]?secret|session[_-]?secret|secret|password|cookie|private[_-]?key|recovery[_-]?key|env[_-]?value)\s*[:=]\s*([^\s,;]+)/gi
+      /\b(access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|session[_-]?secret|secret|password|cookie|private[_-]?key|recovery[_-]?key|env[_-]?value)\s*[:=]\s*([^\s,;]+)/gi
     ),
   ].some((match) => !match[2].startsWith('[REDACTED_'))
 
@@ -110,39 +137,229 @@ const sectionCopy: Record<
   },
 }
 
-function severityForDiagnostics(
-  diagnostics: SupportBundleDiagnosticInput[]
-): SupportBundleSeverity {
-  if (diagnostics.some((diagnostic) => diagnostic.status === 'fail')) {
+function serviceSeverity(services: DashboardService[]): SupportBundleSeverity {
+  if (
+    services.some(
+      (service) =>
+        service.status === 'stopped' ||
+        service.runtimeHealth.health === 'critical'
+    )
+  ) {
     return 'error'
   }
 
-  if (diagnostics.some((diagnostic) => diagnostic.status === 'warning')) {
+  if (
+    services.some(
+      (service) =>
+        service.status === 'degraded' ||
+        service.runtimeHealth.health === 'warning'
+    )
+  ) {
     return 'warning'
   }
 
   return 'info'
 }
 
+function sourceStateForRuntimeInput(
+  input: SupportBundleRuntimeInput
+): SupportBundleReview['sourceState'] {
+  if (input.isLoading) {
+    return {
+      state: 'loading',
+      label: 'Collecting live diagnostics',
+      summary: 'Runtime and service metadata are still loading.',
+    }
+  }
+
+  if (input.error) {
+    return {
+      state: 'error',
+      label: 'Live diagnostics unavailable',
+      summary:
+        'Runtime API data could not be loaded, so no bundle preview payload is prepared.',
+    }
+  }
+
+  const serviceCount = input.services?.length ?? 0
+
+  if (!input.summary && serviceCount === 0) {
+    return {
+      state: 'unavailable',
+      label: 'No live diagnostics loaded',
+      summary:
+        'No runtime dashboard data is available for support bundle review.',
+    }
+  }
+
+  return {
+    state: 'available',
+    label: 'Live diagnostics preview',
+    summary: `${serviceCount} service${serviceCount === 1 ? '' : 's'} loaded from the current runtime dashboard context.`,
+  }
+}
+
+function buildPreviewItems({
+  summary,
+  services = [],
+}: SupportBundleRuntimeInput): SupportBundleReviewItem[] {
+  const items: SupportBundleReviewItem[] = []
+
+  if (summary) {
+    items.push({
+      id: 'runtime-summary',
+      title: 'Runtime health summary',
+      source: 'Service Lasso runtime API',
+      status: summary.runtime.status === 'warning' ? 'warning' : 'info',
+      details: [
+        `${summary.servicesRunning} running`,
+        `${summary.servicesAvailable ?? 0} available`,
+        `${summary.servicesDegraded} degraded`,
+        `${summary.servicesStopped} stopped`,
+        `${summary.runtime.warningCount} runtime warnings`,
+      ],
+    })
+  }
+
+  const problemServices = services.filter(
+    (service) =>
+      service.status === 'degraded' ||
+      service.status === 'stopped' ||
+      service.runtimeHealth.health !== 'healthy'
+  )
+
+  if (problemServices.length) {
+    items.push({
+      id: 'service-health-problems',
+      title: 'Service health exceptions',
+      source: 'Service Lasso runtime API',
+      status: serviceSeverity(problemServices),
+      details: problemServices.map((service) =>
+        redactDiagnosticText(
+          `${service.id}: ${service.status}; ${service.runtimeHealth.summary}`
+        )
+      ),
+    })
+  }
+
+  const secretRefs = services.flatMap((service) =>
+    service.environmentVariables
+      .filter(
+        (variable) => variable.secret || variable.value.startsWith('secret://')
+      )
+      .map(
+        (variable) =>
+          `${service.id}: ${variable.key} from ${variable.source ?? 'runtime metadata'} (value excluded)`
+      )
+  )
+
+  if (secretRefs.length) {
+    items.push({
+      id: 'secret-ref-inventory',
+      title: 'Secret reference inventory',
+      source: 'Service metadata',
+      status: 'info',
+      details: secretRefs,
+    })
+  }
+
+  const endpointDetails = services.flatMap((service) =>
+    service.endpoints.map(
+      (endpoint) =>
+        `${service.id}: ${endpoint.label} ${endpoint.protocol}/${endpoint.exposure} ${endpoint.bind}:${endpoint.port}`
+    )
+  )
+
+  if (endpointDetails.length) {
+    items.push({
+      id: 'route-endpoint-metadata',
+      title: 'Route and endpoint metadata',
+      source: 'Service metadata',
+      status: 'info',
+      details: endpointDetails,
+    })
+  }
+
+  const logDetails = services.flatMap((service) =>
+    service.recentLogs
+      .slice(0, 3)
+      .map((entry) =>
+        redactDiagnosticText(
+          `${service.id}: ${entry.timestamp} ${entry.level}/${entry.source} ${entry.message}`
+        )
+      )
+  )
+
+  if (logDetails.length) {
+    items.push({
+      id: 'recent-log-summaries',
+      title: 'Recent log summaries',
+      source: 'Runtime log preview',
+      status: logDetails.some((line) => line.includes(' error/'))
+        ? 'warning'
+        : 'info',
+      details: logDetails,
+    })
+  }
+
+  return items
+}
+
 export function buildSupportBundleReview(
-  diagnostics: SupportBundleDiagnosticInput[]
+  input: SupportBundleRuntimeInput = {}
 ): SupportBundleReview {
+  const services = input.services ?? []
+  const previewItems = buildPreviewItems(input)
+  const sectionCounts: Record<
+    Exclude<SupportBundleReviewSectionId, 'redaction'>,
+    number
+  > = {
+    configuration: services.filter(
+      (service) =>
+        service.metadata.configPath ||
+        service.metadata.dataPath ||
+        service.metadata.installPath
+    ).length,
+    runtime: input.summary ? 1 + services.length : services.length,
+    provider: services.filter(
+      (service) =>
+        service.id.toLowerCase().includes('secretsbroker') ||
+        service.name.toLowerCase().includes('secrets broker')
+    ).length,
+    auth: services.reduce(
+      (count, service) =>
+        count +
+        service.environmentVariables.filter(
+          (variable) =>
+            variable.secret || variable.value.startsWith('secret://')
+        ).length,
+      0
+    ),
+    permission: services.reduce(
+      (count, service) => count + service.dependencies.length,
+      0
+    ),
+  }
+  const overallSeverity = serviceSeverity(services)
+
   const sections: SupportBundleReviewSection[] = Object.entries(
     sectionCopy
   ).map(([id, copy]) => {
-    const matchingDiagnostics = diagnostics.filter(
-      (diagnostic) => diagnostic.category === id
-    )
+    const sectionId = id as Exclude<SupportBundleReviewSectionId, 'redaction'>
+    const itemCount = sectionCounts[sectionId]
 
     return {
-      id: id as Exclude<SupportBundleReviewSectionId, 'redaction'>,
+      id: sectionId,
       title: copy.title,
       summary:
-        matchingDiagnostics.length > 0
+        itemCount > 0
           ? copy.summary
-          : `${copy.summary} No current diagnostics are available from this context.`,
-      itemCount: matchingDiagnostics.length,
-      severity: severityForDiagnostics(matchingDiagnostics),
+          : `${copy.summary} No live records are currently available for this category.`,
+      itemCount,
+      severity:
+        sectionId === 'runtime' || sectionId === 'provider'
+          ? overallSeverity
+          : 'info',
     }
   })
 
@@ -161,11 +378,16 @@ export function buildSupportBundleReview(
       state: 'unavailable',
       label: 'Export endpoint unavailable',
       reason:
-        'A real broker support-bundle export endpoint is not wired in Service Admin yet.',
+        'A real redacted support-bundle export endpoint is not wired in Service Admin yet.',
     },
+    sourceState: sourceStateForRuntimeInput(input),
     sections,
+    previewItems,
     redactionStatus: 'Secret-safe policy preview',
-    approximateSizeLabel: 'Unavailable until backend estimates export size',
+    approximateSizeLabel:
+      previewItems.length > 0
+        ? `${previewItems.length} metadata group${previewItems.length === 1 ? '' : 's'} in review`
+        : 'Unavailable until live metadata is loaded',
   }
 }
 
