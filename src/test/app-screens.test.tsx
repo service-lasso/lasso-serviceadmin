@@ -69,6 +69,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Sources',
   },
   {
+    path: '/secrets-broker/operational-controls',
+    heading: /^Secrets Broker operational controls$/i,
+    title: 'Service Admin - Secrets Broker Operational Controls',
+  },
+  {
     path: '/secrets-broker/provider-connections',
     heading: /^Secrets Broker provider connections$/i,
     title: 'Service Admin - Secrets Broker Provider Connections',
