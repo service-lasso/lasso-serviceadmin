@@ -1,15 +1,29 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  type PaginationState,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
 import {
   DatabaseZap,
   Eye,
   ListChecks,
   RotateCcw,
-  SearchIcon,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import { cn } from '@/lib/utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,6 +44,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { ConfigDrawer } from '@/components/config-drawer'
+import {
+  DataTableColumnHeader,
+  DataTablePagination,
+  DataTableToolbar,
+} from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -40,13 +59,13 @@ import {
   buildManagedSecretActionPreview,
   buildStubSecretMutationPreview,
   bulkSecretCampaignOperations,
-  filterManagedSecrets,
   managedSecretRows,
   managedSecretSafetyBoundaries,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
   type BulkSecretCampaignOperation,
   type ManagedSecretAction,
+  type ManagedSecretRow,
   type ManagedSecretState,
   type StubSecretMutationState,
 } from './secrets-management'
@@ -61,11 +80,20 @@ const stateVariant: Record<
   'rotation-due': 'outline',
 }
 
+const stateOptions: Array<{ label: string; value: ManagedSecretState }> = [
+  { label: 'Present', value: 'present' },
+  { label: 'Rotation due', value: 'rotation-due' },
+  { label: 'Stale', value: 'stale' },
+  { label: 'Missing', value: 'missing' },
+]
+
+const providerOptions = Array.from(
+  new Set(managedSecretRows.map((row) => row.provider))
+)
+  .sort()
+  .map((provider) => ({ label: provider, value: provider }))
+
 export function SecretsManagementPage() {
-  const [metadataQuery, setMetadataQuery] = useState('')
-  const [stateFilter, setStateFilter] = useState<ManagedSecretState | 'all'>(
-    'all'
-  )
   const [valueQuery, setValueQuery] = useState('')
   const [valueSearchSupported, setValueSearchSupported] = useState(false)
   const [selectedRowId, setSelectedRowId] = useState(managedSecretRows[0].id)
@@ -81,6 +109,13 @@ export function SecretsManagementPage() {
   const [bulkOperation, setBulkOperation] =
     useState<BulkSecretCampaignOperation>('rotate-reset')
   const [bulkPlanGenerated, setBulkPlanGenerated] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState('')
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  })
 
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Secrets',
@@ -88,10 +123,6 @@ export function SecretsManagementPage() {
       'Searchable metadata-first Secrets Broker management table for controlled reveal, dry-run edit/reset, and policy preview actions.',
   })
 
-  const filteredRows = useMemo(
-    () => filterManagedSecrets(managedSecretRows, metadataQuery, stateFilter),
-    [metadataQuery, stateFilter]
-  )
   const valueSearchRows = useMemo(
     () =>
       valueSearchManagedSecrets(
@@ -145,6 +176,234 @@ export function SecretsManagementPage() {
     setBulkPlanGenerated(false)
     setBulkOperation(operation)
   }
+
+  const columns = useMemo<ColumnDef<ManagedSecretRow>[]>(
+    () => [
+      {
+        id: 'plan',
+        header: 'Plan',
+        cell: ({ row }) => (
+          <input
+            type='checkbox'
+            aria-label={`Select ${row.original.name} for bulk dry-run`}
+            checked={bulkSelectedIds.includes(row.original.id)}
+            onChange={(event) =>
+              toggleBulkSelection(row.original.id, event.target.checked)
+            }
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
+        id: 'name',
+        accessorFn: (row) =>
+          [
+            row.name,
+            row.ref,
+            row.owningService,
+            row.provider,
+            row.source,
+            row.workspace,
+            row.rotationStatus,
+            row.policy,
+            row.auditStatus,
+            row.backendCapability,
+            row.safeTags.join(' '),
+          ].join(' '),
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title='Secret ref' />
+        ),
+        cell: ({ row }) => (
+          <div className='min-w-80 align-top'>
+            <div className='font-medium'>{row.original.name}</div>
+            <div className='text-sm break-all text-muted-foreground'>
+              {row.original.ref}
+            </div>
+            <div className='mt-2 flex flex-wrap gap-1'>
+              {row.original.safeTags.map((tag) => (
+                <Badge key={tag} variant='outline'>
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ),
+        filterFn: (row, id, value) =>
+          String(row.getValue(id))
+            .toLowerCase()
+            .includes(String(value).toLowerCase()),
+        enableHiding: false,
+      },
+      {
+        accessorKey: 'provider',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title='Owner / provider' />
+        ),
+        cell: ({ row }) => (
+          <div className='min-w-56 align-top'>
+            <div className='font-medium'>{row.original.owningService}</div>
+            <div className='text-sm text-muted-foreground'>
+              {row.original.provider} · {row.original.source}
+            </div>
+            <div className='text-xs text-muted-foreground'>
+              {row.original.workspace}
+            </div>
+          </div>
+        ),
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
+      },
+      {
+        accessorKey: 'state',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title='Status' />
+        ),
+        cell: ({ row }) => (
+          <div className='min-w-48 align-top'>
+            <Badge variant={stateVariant[row.original.state]}>
+              {row.original.state}
+            </Badge>
+            <div className='mt-2 text-sm'>{row.original.rotationStatus}</div>
+            <div className='text-xs text-muted-foreground'>
+              Updated: {row.original.lastUpdatedAt}
+            </div>
+          </div>
+        ),
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
+      },
+      {
+        accessorKey: 'policy',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title='Policy / audit' />
+        ),
+        cell: ({ row }) => (
+          <div className='min-w-64 align-top text-sm'>
+            <div className='break-all'>{row.original.policy}</div>
+            <div className='mt-2 text-muted-foreground'>
+              {row.original.auditStatus}
+            </div>
+            <div className='text-xs text-muted-foreground'>
+              Capability: {row.original.backendCapability}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => (
+          <div className='flex min-w-72 flex-wrap gap-2 align-top'>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => chooseAction(row.original.id, 'metadata')}
+            >
+              View metadata
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => chooseAction(row.original.id, 'reveal')}
+            >
+              Controlled reveal
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => chooseAction(row.original.id, 'edit')}
+            >
+              Edit/update dry-run
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => chooseAction(row.original.id, 'reset')}
+            >
+              Reset/rotate dry-run
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => chooseAction(row.original.id, 'delete')}
+            >
+              Delete dry-run
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => chooseAction(row.original.id, 'policy')}
+            >
+              Apply policy preview
+            </Button>
+          </div>
+        ),
+        enableSorting: false,
+      },
+    ],
+    [bulkSelectedIds]
+  )
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data: managedSecretRows,
+    columns,
+    state: {
+      sorting,
+      columnFilters,
+      globalFilter,
+      pagination,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const query = String(filterValue ?? '')
+        .trim()
+        .toLowerCase()
+      if (!query) return true
+      return [
+        row.original.ref,
+        row.original.name,
+        row.original.owningService,
+        row.original.provider,
+        row.original.source,
+        row.original.workspace,
+        row.original.rotationStatus,
+        row.original.policy,
+        row.original.auditStatus,
+        row.original.backendCapability,
+        ...row.original.safeTags,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+  })
+
+  useEffect(() => {
+    if (
+      pagination.pageIndex > 0 &&
+      pagination.pageIndex >= table.getPageCount()
+    ) {
+      setPagination((current) => ({
+        ...current,
+        pageIndex: Math.max(table.getPageCount() - 1, 0),
+      }))
+    }
+  }, [pagination.pageIndex, table])
 
   return (
     <>
@@ -217,53 +476,27 @@ export function SecretsManagementPage() {
         <Card>
           <CardHeader>
             <CardTitle className='flex items-center gap-2'>
-              <SearchIcon className='size-4' /> Search and value-search posture
+              <DatabaseZap className='size-4' /> Search and value-search posture
             </CardTitle>
             <CardDescription>
-              Metadata search never reads plaintext. Value search is explicitly
+              The management table uses the shared Service Admin table controls
+              for metadata search, state/provider filters, sorting, column
+              visibility, and pagination. Value search is explicitly
               broker-backed and returns refs/metadata only when supported.
             </CardDescription>
           </CardHeader>
           <CardContent className='grid gap-4 lg:grid-cols-2'>
             <div className='space-y-2'>
-              <label
-                htmlFor='metadata-search'
-                className='text-sm font-medium text-muted-foreground'
-              >
-                Metadata search
-              </label>
-              <Input
-                id='metadata-search'
-                value={metadataQuery}
-                onChange={(event) => setMetadataQuery(event.target.value)}
-                placeholder='Search ref, owner, provider, tag, workspace'
-              />
-              <div className='max-w-xs'>
-                <label
-                  htmlFor='state-filter'
-                  className='mb-1 block text-xs text-muted-foreground'
-                >
-                  State filter
-                </label>
-                <select
-                  id='state-filter'
-                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
-                  value={stateFilter}
-                  onChange={(event) =>
-                    setStateFilter(
-                      event.target.value as ManagedSecretState | 'all'
-                    )
-                  }
-                >
-                  <option value='all'>All states</option>
-                  <option value='present'>Present</option>
-                  <option value='rotation-due'>Rotation due</option>
-                  <option value='stale'>Stale</option>
-                  <option value='missing'>Missing</option>
-                </select>
+              <div className='text-sm font-medium text-muted-foreground'>
+                Shared table metadata controls
+              </div>
+              <div className='rounded-md border bg-muted/40 p-3 text-sm'>
+                Use the table toolbar below to search safe refs, owners,
+                providers, tags, policy names, and audit metadata. The search
+                index excludes raw values and provider credentials.
               </div>
               <div className='text-sm text-muted-foreground'>
-                Metadata matches: {filteredRows.length}
+                Metadata matches: {table.getFilteredRowModel().rows.length}
               </div>
             </div>
 
@@ -325,129 +558,84 @@ export function SecretsManagementPage() {
               mutation.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className='space-y-4'>
+            <DataTableToolbar
+              table={table}
+              searchPlaceholder='Search secret metadata...'
+              filters={[
+                {
+                  columnId: 'state',
+                  title: 'State',
+                  options: stateOptions,
+                },
+                {
+                  columnId: 'provider',
+                  title: 'Provider',
+                  options: providerOptions,
+                },
+              ]}
+            />
             <div className='overflow-x-auto rounded-md border'>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className='w-12'>Plan</TableHead>
-                    <TableHead>Secret ref</TableHead>
-                    <TableHead>Owner / provider</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Policy / audit</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className='align-top'>
-                        <input
-                          type='checkbox'
-                          aria-label={`Select ${row.name} for bulk dry-run`}
-                          checked={bulkSelectedIds.includes(row.id)}
-                          onChange={(event) =>
-                            toggleBulkSelection(row.id, event.target.checked)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className='min-w-80 align-top'>
-                        <div className='font-medium'>{row.name}</div>
-                        <div className='text-sm break-all text-muted-foreground'>
-                          {row.ref}
-                        </div>
-                        <div className='mt-2 flex flex-wrap gap-1'>
-                          {row.safeTags.map((tag) => (
-                            <Badge key={tag} variant='outline'>
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-56 align-top'>
-                        <div className='font-medium'>{row.owningService}</div>
-                        <div className='text-sm text-muted-foreground'>
-                          {row.provider} · {row.source}
-                        </div>
-                        <div className='text-xs text-muted-foreground'>
-                          {row.workspace}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-48 align-top'>
-                        <Badge variant={stateVariant[row.state]}>
-                          {row.state}
-                        </Badge>
-                        <div className='mt-2 text-sm'>{row.rotationStatus}</div>
-                        <div className='text-xs text-muted-foreground'>
-                          Updated: {row.lastUpdatedAt}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-64 align-top text-sm'>
-                        <div className='break-all'>{row.policy}</div>
-                        <div className='mt-2 text-muted-foreground'>
-                          {row.auditStatus}
-                        </div>
-                        <div className='text-xs text-muted-foreground'>
-                          Capability: {row.backendCapability}
-                        </div>
-                      </TableCell>
-                      <TableCell className='min-w-72 align-top'>
-                        <div className='flex flex-wrap gap-2'>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            onClick={() => chooseAction(row.id, 'metadata')}
-                          >
-                            View metadata
-                          </Button>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            onClick={() => chooseAction(row.id, 'reveal')}
-                          >
-                            Controlled reveal
-                          </Button>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            onClick={() => chooseAction(row.id, 'edit')}
-                          >
-                            Edit/update dry-run
-                          </Button>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            onClick={() => chooseAction(row.id, 'reset')}
-                          >
-                            Reset/rotate dry-run
-                          </Button>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            onClick={() => chooseAction(row.id, 'delete')}
-                          >
-                            Delete dry-run
-                          </Button>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            onClick={() => chooseAction(row.id, 'policy')}
-                          >
-                            Apply policy preview
-                          </Button>
-                        </div>
-                      </TableCell>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id} className='group/row'>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          colSpan={header.colSpan}
+                          className={cn(
+                            'bg-background group-hover/row:bg-muted',
+                            header.column.columnDef.meta?.className,
+                            header.column.columnDef.meta?.thClassName
+                          )}
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id} className='group/row'>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell
+                            key={cell.id}
+                            className={cn(
+                              'bg-background align-top group-hover/row:bg-muted',
+                              cell.column.columnDef.meta?.className,
+                              cell.column.columnDef.meta?.tdClassName
+                            )}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className='h-24 text-center'
+                      >
+                        No secrets match the current filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
+            <DataTablePagination table={table} className='mt-auto' />
           </CardContent>
         </Card>
 
