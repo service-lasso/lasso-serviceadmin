@@ -2304,7 +2304,6 @@ export function SecretsBrokerSetupWizard({
                 </CardContent>
               </Card>
             </div>
-
           </>
         ) : null}
 

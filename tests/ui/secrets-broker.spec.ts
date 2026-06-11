@@ -364,10 +364,7 @@ test.describe('Secrets Broker browser coverage', () => {
   }) => {
     const sections = [
       ['/secrets-broker/single-reveal', /Privileged single-secret reveal/i],
-      [
-        '/secrets-broker/operational-controls',
-        /Operational controls/i,
-      ],
+      ['/secrets-broker/operational-controls', /Operational controls/i],
       ['/secrets-broker/sources', /Secret Sources \/ Backends/i],
       ['/secrets-broker/provider-connections', /Provider Connections/i],
       ['/secrets-broker/backup-keys', /Backup, restore, and key management/i],
