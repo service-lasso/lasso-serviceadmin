@@ -23,6 +23,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import { isServiceAdminStubModeEnabled } from '@/lib/service-lasso-dashboard/stub'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -94,6 +95,7 @@ const providerOptions = Array.from(
   .map((provider) => ({ label: provider, value: provider }))
 
 export function SecretsManagementPage() {
+  const stubModeEnabled = isServiceAdminStubModeEnabled()
   const [valueQuery, setValueQuery] = useState('')
   const [valueSearchSupported, setValueSearchSupported] = useState(false)
   const [selectedRowId, setSelectedRowId] = useState(managedSecretRows[0].id)
@@ -404,6 +406,63 @@ export function SecretsManagementPage() {
       }))
     }
   }, [pagination.pageIndex, table])
+
+  if (!stubModeEnabled) {
+    return (
+      <>
+        <Header fixed>
+          <Search />
+          <div className='ms-auto flex items-center space-x-4'>
+            <ThemeSwitch />
+            <ConfigDrawer />
+            <ProfileDropdown />
+          </div>
+        </Header>
+
+        <Main id='content' className='space-y-6'>
+          <div className='flex flex-wrap items-start justify-between gap-4'>
+            <div>
+              <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
+                <DatabaseZap className='size-5' /> Secrets
+              </h1>
+              <p className='mt-1 text-muted-foreground'>
+                Secrets Broker management table for safe metadata search,
+                controlled reveal entry, and dry-run edit/reset/delete/policy
+                actions. Rows never render raw secret values.
+              </p>
+            </div>
+            <Badge variant='outline'>Live API required</Badge>
+          </div>
+
+          <Alert>
+            <ShieldCheck className='size-4' />
+            <AlertTitle>Secrets Broker API unavailable</AlertTitle>
+            <AlertDescription>
+              No local stub data is rendered because Service Admin stub mode is
+              disabled. Connect a live Secrets Broker API or enable the explicit
+              local developer stub flag for fixture previews.
+            </AlertDescription>
+          </Alert>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Secrets management unavailable</CardTitle>
+              <CardDescription>
+                The production mutation contract is not connected in this UI
+                build, so fixture rows, stub previews, and simulated apply
+                controls stay hidden by default.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='flex flex-wrap gap-2 text-sm text-muted-foreground'>
+              <Badge variant='outline'>No fixture rows</Badge>
+              <Badge variant='outline'>No simulated mutations</Badge>
+              <Badge variant='outline'>No raw values</Badge>
+            </CardContent>
+          </Card>
+        </Main>
+      </>
+    )
+  }
 
   return (
     <>

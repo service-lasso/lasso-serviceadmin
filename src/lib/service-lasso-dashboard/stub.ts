@@ -16,6 +16,13 @@ export const stubDashboardDataEnabled =
   import.meta.env.DEV &&
   import.meta.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA === 'true'
 
+export function isServiceAdminStubModeEnabled() {
+  return (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA === 'true'
+  )
+}
+
 export const favoritesFeatureEnabled =
   import.meta.env.VITE_SERVICE_LASSO_FAVORITES_ENABLED === 'true'
 
