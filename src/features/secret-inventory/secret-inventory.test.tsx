@@ -10,6 +10,23 @@ import {
 } from './secret-inventory'
 
 describe('secret inventory metadata view', () => {
+  it('hides deterministic fixture metadata when stub mode is disabled', async () => {
+    await renderRoute('/secrets-broker/secret-inventory', { stubData: false })
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secret inventory$/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Secret inventory unavailable/i)).toBeVisible()
+    expect(screen.getByText(/No fixture rows/i)).toBeVisible()
+    expect(
+      screen.queryByText(/Deterministic local fixture/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('local/serviceadmin')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('secret://local/serviceadmin/session-signing')
+    ).not.toBeInTheDocument()
+  })
+
   it('renders deterministic local fixture metadata without plaintext controls', async () => {
     await renderRoute('/secrets-broker/secret-inventory')
 

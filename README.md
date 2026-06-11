@@ -44,7 +44,8 @@ Current UI runtime behavior:
 - dashboard service status, health, runtime actions, and logs are read from the live Service Lasso runtime API by default
 - if `VITE_SERVICE_LASSO_API_BASE_URL` is set, API calls target that runtime URL
 - if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, API calls use same-origin `/api/*` so packaged Service Admin can proxy to the runtime API
-- local dashboard stub data is available only in Vite development mode when `VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true`
+- local dashboard, Secrets Broker preview, and Secret Inventory fixture data is available only in Vite development mode when `VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true`
+- when that stub flag is absent or false, pages without a live API contract must render unavailable/setup-needed states instead of deterministic sample rows or stub controls
 - lifecycle and favorite changes are persisted in browser local storage during demo/stub development sessions
 - a missing, misconfigured, or unavailable runtime API is treated as an error instead of falling back to sample status
 - favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`

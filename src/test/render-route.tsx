@@ -11,8 +11,18 @@ import { DirectionProvider } from '@/context/direction-provider'
 import { FontProvider } from '@/context/font-provider'
 import { ThemeProvider } from '@/context/theme-provider'
 
-export async function renderRoute(path: string) {
-  vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+type RenderRouteOptions = {
+  stubData?: boolean
+}
+
+export async function renderRoute(
+  path: string,
+  options: RenderRouteOptions = {}
+) {
+  vi.stubEnv(
+    'VITE_SERVICE_LASSO_ENABLE_STUB_DATA',
+    options.stubData === false ? 'false' : 'true'
+  )
 
   const queryClient = new QueryClient({
     defaultOptions: {

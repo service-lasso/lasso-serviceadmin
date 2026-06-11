@@ -1,6 +1,7 @@
 import { getRouteApi } from '@tanstack/react-router'
 import { DatabaseZap, ShieldCheck } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import { isServiceAdminStubModeEnabled } from '@/lib/service-lasso-dashboard/stub'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -28,6 +29,7 @@ const route = getRouteApi('/_authenticated/secrets-broker/secret-inventory')
 export function SecretInventoryPage() {
   const search = route.useSearch()
   const navigate = route.useNavigate()
+  const stubModeEnabled = isServiceAdminStubModeEnabled()
   const counts = countSecretInventoryByState()
 
   usePageMetadata({
@@ -35,6 +37,62 @@ export function SecretInventoryPage() {
     description:
       'Metadata-only Secrets Broker inventory for refs, ownership, state, and rotation planning.',
   })
+
+  if (!stubModeEnabled) {
+    return (
+      <>
+        <Header fixed>
+          <Search />
+          <div className='ms-auto flex items-center space-x-4'>
+            <ThemeSwitch />
+            <ConfigDrawer />
+            <ProfileDropdown />
+          </div>
+        </Header>
+
+        <Main id='content' className='space-y-6'>
+          <div className='flex flex-wrap items-start justify-between gap-4'>
+            <div>
+              <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
+                <DatabaseZap className='size-5' /> Secret inventory
+              </h1>
+              <p className='mt-1 text-muted-foreground'>
+                Advanced Secrets Broker planning view for ref metadata,
+                ownership, state, expiry, and rotation readiness.
+              </p>
+            </div>
+            <Badge variant='outline'>Live API required</Badge>
+          </div>
+
+          <Alert>
+            <ShieldCheck className='size-4' />
+            <AlertTitle>Secret inventory unavailable</AlertTitle>
+            <AlertDescription>
+              No local sample metadata is rendered because Service Admin stub
+              mode is disabled. Connect a live inventory API or enable the
+              explicit local developer stub flag for fixture previews.
+            </AlertDescription>
+          </Alert>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Metadata table unavailable</CardTitle>
+              <CardDescription>
+                The live inventory API is not connected in this UI build, so
+                local fixture rows and planning-only sample metadata stay hidden
+                by default.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='flex flex-wrap gap-2 text-sm text-muted-foreground'>
+              <Badge variant='outline'>No fixture rows</Badge>
+              <Badge variant='outline'>No sample metadata</Badge>
+              <Badge variant='outline'>No privileged actions</Badge>
+            </CardContent>
+          </Card>
+        </Main>
+      </>
+    )
+  }
 
   return (
     <>
