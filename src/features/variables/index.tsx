@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -17,6 +16,8 @@ import { Copy } from 'lucide-react'
 import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
+import { cn } from '@/lib/utils'
+import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -42,7 +43,8 @@ import { ThemeSwitch } from '@/components/theme-switch'
 
 type VariablesProps = {
   service?: string
-  keyFilter?: string
+  search: Record<string, unknown>
+  navigate: NavigateFn
 }
 
 type VariableRow = {
@@ -53,6 +55,7 @@ type VariableRow = {
   secret: 'secret' | 'plain'
   source: string
   services: { id: string; name: string }[]
+  searchText: string
 }
 
 function VariablesLoading() {
@@ -190,7 +193,7 @@ const columns: ColumnDef<VariableRow>[] = [
   },
 ]
 
-export function Variables({ service, keyFilter }: VariablesProps) {
+export function Variables({ service, search, navigate }: VariablesProps) {
   usePageMetadata({
     title: 'Service Admin - Variables',
     description: 'Service Admin environment variables and config values view.',
@@ -200,9 +203,27 @@ export function Variables({ service, keyFilter }: VariablesProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'key', desc: false },
   ])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
-    keyFilter ? [{ id: 'key', value: keyFilter }] : []
-  )
+
+  const {
+    globalFilter,
+    onGlobalFilterChange,
+    columnFilters,
+    onColumnFiltersChange,
+    pagination,
+    onPaginationChange,
+    ensurePageInRange,
+  } = useTableUrlState({
+    search,
+    navigate,
+    pagination: { defaultPage: 1, defaultPageSize: 10 },
+    globalFilter: { key: 'q' },
+    columnFilters: [
+      { columnId: 'key', searchKey: 'key', type: 'string' },
+      { columnId: 'scope', searchKey: 'scope', type: 'array' },
+      { columnId: 'source', searchKey: 'source', type: 'array' },
+      { columnId: 'secret', searchKey: 'visibility', type: 'array' },
+    ],
+  })
 
   const rows = useMemo<VariableRow[]>(() => {
     const services = (servicesQuery.data ?? []).filter(
@@ -222,9 +243,20 @@ export function Variables({ service, keyFilter }: VariablesProps) {
 
         const existing = map.get(id)
         if (existing) {
-          existing.services.push({ id: service.id, name: service.name })
+          const serviceRef = { id: service.id, name: service.name }
+          existing.services.push(serviceRef)
+          existing.searchText = [
+            existing.searchText,
+            serviceRef.id,
+            serviceRef.name,
+          ]
+            .join(' ')
+            .toLowerCase()
           continue
         }
+
+        const safeValue = variable.secret ? '' : variable.value
+        const serviceRef = { id: service.id, name: service.name }
 
         map.set(id, {
           id,
@@ -233,7 +265,18 @@ export function Variables({ service, keyFilter }: VariablesProps) {
           scope: variable.scope,
           secret: variable.secret ? 'secret' : 'plain',
           source: variable.source ?? 'Not recorded',
-          services: [{ id: service.id, name: service.name }],
+          services: [serviceRef],
+          searchText: [
+            variable.key,
+            safeValue,
+            variable.scope,
+            variable.secret ? 'secret' : 'plain',
+            variable.source ?? 'Not recorded',
+            serviceRef.id,
+            serviceRef.name,
+          ]
+            .join(' ')
+            .toLowerCase(),
         })
       }
     }
@@ -253,9 +296,20 @@ export function Variables({ service, keyFilter }: VariablesProps) {
     state: {
       sorting,
       columnFilters,
+      globalFilter,
+      pagination,
     },
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
+    onColumnFiltersChange,
+    onGlobalFilterChange,
+    onPaginationChange,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const query = String(filterValue ?? '')
+        .trim()
+        .toLowerCase()
+      if (!query) return true
+      return row.original.searchText.includes(query)
+    },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -263,6 +317,10 @@ export function Variables({ service, keyFilter }: VariablesProps) {
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
+
+  useEffect(() => {
+    ensurePageInRange(table.getPageCount())
+  }, [table, ensurePageInRange])
 
   return (
     <>
@@ -300,7 +358,6 @@ export function Variables({ service, keyFilter }: VariablesProps) {
             <DataTableToolbar
               table={table}
               searchPlaceholder='Search variable keys, values, sources, or services...'
-              searchKey='key'
               filters={[
                 {
                   columnId: 'scope',
@@ -336,9 +393,17 @@ export function Variables({ service, keyFilter }: VariablesProps) {
               <Table className='table-fixed'>
                 <TableHeader className='sticky top-0 z-10 bg-background'>
                   {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
+                    <TableRow key={headerGroup.id} className='group/row'>
                       {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
+                        <TableHead
+                          key={header.id}
+                          colSpan={header.colSpan}
+                          className={cn(
+                            'bg-background group-hover/row:bg-muted',
+                            header.column.columnDef.meta?.className,
+                            header.column.columnDef.meta?.thClassName
+                          )}
+                        >
                           {header.isPlaceholder
                             ? null
                             : flexRender(
@@ -353,9 +418,16 @@ export function Variables({ service, keyFilter }: VariablesProps) {
                 <TableBody>
                   {table.getRowModel().rows.length ? (
                     table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id}>
+                      <TableRow key={row.id} className='group/row'>
                         {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className='min-w-0'>
+                          <TableCell
+                            key={cell.id}
+                            className={cn(
+                              'min-w-0 bg-background align-top group-hover/row:bg-muted',
+                              cell.column.columnDef.meta?.className,
+                              cell.column.columnDef.meta?.tdClassName
+                            )}
+                          >
                             {flexRender(
                               cell.column.columnDef.cell,
                               cell.getContext()
