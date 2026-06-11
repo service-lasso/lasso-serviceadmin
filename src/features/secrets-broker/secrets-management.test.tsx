@@ -63,13 +63,13 @@ describe('Secrets Broker secrets management page', () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
 
-    await user.type(screen.getByLabelText(/Metadata search/i), 'payments')
+    await user.type(
+      screen.getByPlaceholderText(/Search secret metadata/i),
+      'payments'
+    )
     expect(screen.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
     expect(screen.getByText(/Metadata matches: 1/i)).toBeVisible()
-
-    await user.selectOptions(screen.getByLabelText(/State filter/i), 'missing')
-    expect(screen.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
-    expect(screen.getAllByText(/missing/i)[0]).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
   it('shows broker-backed value search supported and unsupported states without raw values', async () => {

@@ -139,7 +139,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
     await expect(page.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
 
-    await page.getByLabel(/Metadata search/i).fill('payments')
+    await page.getByPlaceholder(/Search secret metadata/i).fill('payments')
     await expect(page.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
     await expect(page.getByText(/Metadata matches: 1/i)).toBeVisible()
 
@@ -152,7 +152,7 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/Value search supported: 1 safe ref metadata match/i)
     ).toBeVisible()
 
-    await page.getByLabel(/Metadata search/i).fill('')
+    await page.getByPlaceholder(/Search secret metadata/i).fill('')
     await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
 
     await page
