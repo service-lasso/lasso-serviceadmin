@@ -14,6 +14,23 @@ import {
 } from './secrets-management'
 
 describe('Secrets Broker secrets management page', () => {
+  it('hides stub previews and fixture rows when stub mode is disabled', async () => {
+    await renderRoute('/secrets-broker/secrets', { stubData: false })
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Secrets Broker API unavailable/i)).toBeVisible()
+    expect(screen.getByText(/No fixture rows/i)).toBeVisible()
+    expect(
+      screen.queryByText(/Stub update\/reset\/delete\/reveal API preview/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Simulate stub apply/i })
+    ).not.toBeInTheDocument()
+  })
+
   it('renders the Secrets sub-page table with metadata rows and no raw values', async () => {
     await renderRoute('/secrets-broker/secrets')
 
