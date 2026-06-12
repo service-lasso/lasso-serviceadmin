@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { ExternalLink, ShieldCheck } from 'lucide-react'
+import { ExternalLink, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type {
@@ -56,11 +56,16 @@ type ServiceRouteRow = {
   serviceStatus: DashboardService['status']
   routeLabel: string
   url: string
+  routeHost: string
+  routePath: string
   bind: string
   port: number
   protocol: ServiceEndpoint['protocol']
   exposure: ServiceEndpoint['exposure']
-  routeKind: 'Local' | 'LAN' | 'Traefik / public'
+  provider: 'Service Lasso runtime' | 'Traefik'
+  routeState: 'Active' | 'Degraded' | 'Invalid route' | 'Unavailable'
+  configSource: string
+  target: string
   searchText: string
 }
 
@@ -71,22 +76,64 @@ const statusLabels: Record<DashboardService['status'], string> = {
   stopped: 'Stopped',
 }
 
-const exposureLabels: Record<ServiceEndpoint['exposure'], string> = {
-  lan: 'LAN',
-  local: 'Local',
-  public: 'Public',
+const routeStateLabels: Record<ServiceRouteRow['routeState'], string> = {
+  Active: 'Active',
+  Degraded: 'Degraded',
+  'Invalid route': 'Invalid route',
+  Unavailable: 'Unavailable',
 }
 
-function routeKindForExposure(exposure: ServiceEndpoint['exposure']) {
-  if (exposure === 'public') return 'Traefik / public'
-  if (exposure === 'lan') return 'LAN'
-  return 'Local'
+function providerForExposure(exposure: ServiceEndpoint['exposure']) {
+  return exposure === 'public' ? 'Traefik' : 'Service Lasso runtime'
+}
+
+function routeStateForEndpoint(
+  serviceStatus: DashboardService['status'],
+  hasValidUrl: boolean
+): ServiceRouteRow['routeState'] {
+  if (!hasValidUrl) return 'Invalid route'
+  if (serviceStatus === 'degraded') return 'Degraded'
+  if (serviceStatus === 'stopped') return 'Unavailable'
+  return 'Active'
+}
+
+function parseRouteUrl(url: string) {
+  try {
+    const parsed = new URL(url)
+    const routePath = `${parsed.pathname || '/'}${parsed.search}`
+
+    return {
+      hasValidUrl: true,
+      routeHost: parsed.host,
+      routePath,
+    }
+  } catch {
+    return {
+      hasValidUrl: false,
+      routeHost: 'Invalid URL',
+      routePath: '-',
+    }
+  }
+}
+
+function fileNameFromPath(path?: string) {
+  if (!path) return 'Runtime metadata'
+
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  const fileName = parts[parts.length - 1]
+
+  return fileName ? `${fileName} via runtime metadata` : 'Runtime metadata'
 }
 
 function buildServiceRouteRows(services: DashboardService[]) {
   return services.flatMap((service) =>
     service.endpoints.map((endpoint) => {
-      const routeKind = routeKindForExposure(endpoint.exposure)
+      const provider = providerForExposure(endpoint.exposure)
+      const parsedRoute = parseRouteUrl(endpoint.url)
+      const routeState = routeStateForEndpoint(
+        service.status,
+        parsedRoute.hasValidUrl
+      )
       const row: ServiceRouteRow = {
         id: `${service.id}:${endpoint.label}:${endpoint.url}`,
         serviceId: service.id,
@@ -94,11 +141,16 @@ function buildServiceRouteRows(services: DashboardService[]) {
         serviceStatus: service.status,
         routeLabel: endpoint.label,
         url: endpoint.url,
+        routeHost: parsedRoute.routeHost,
+        routePath: parsedRoute.routePath,
         bind: endpoint.bind,
         port: endpoint.port,
         protocol: endpoint.protocol,
         exposure: endpoint.exposure,
-        routeKind,
+        provider,
+        routeState,
+        configSource: fileNameFromPath(service.metadata.configPath),
+        target: `${service.id}:${endpoint.port}`,
         searchText: '',
       }
 
@@ -109,11 +161,16 @@ function buildServiceRouteRows(services: DashboardService[]) {
           service.name,
           endpoint.label,
           endpoint.url,
+          parsedRoute.routeHost,
+          parsedRoute.routePath,
           endpoint.bind,
           endpoint.port,
           endpoint.protocol,
           endpoint.exposure,
-          routeKind,
+          provider,
+          routeState,
+          row.configSource,
+          row.target,
         ]
           .join(' ')
           .toLowerCase(),
@@ -156,6 +213,27 @@ function ExposureBadge({
   return <Badge variant='outline'>Local</Badge>
 }
 
+function RouteStateBadge({ state }: { state: ServiceRouteRow['routeState'] }) {
+  if (state === 'Active') {
+    return <Badge className='bg-emerald-600 hover:bg-emerald-600'>Active</Badge>
+  }
+
+  if (state === 'Degraded') {
+    return <Badge variant='secondary'>Degraded</Badge>
+  }
+
+  if (state === 'Invalid route') {
+    return (
+      <Badge variant='destructive' className='gap-1'>
+        <ShieldAlert className='size-3' />
+        Invalid route
+      </Badge>
+    )
+  }
+
+  return <Badge variant='outline'>Unavailable</Badge>
+}
+
 const serviceRouteColumns: ColumnDef<ServiceRouteRow>[] = [
   {
     accessorKey: 'serviceName',
@@ -187,52 +265,82 @@ const serviceRouteColumns: ColumnDef<ServiceRouteRow>[] = [
       <div className='flex min-w-0 flex-col gap-1'>
         <span className='font-medium'>{row.original.routeLabel}</span>
         <span className='text-xs text-muted-foreground'>
-          {row.original.routeKind}
+          {row.original.protocol.toUpperCase()} / {row.original.exposure}
         </span>
       </div>
     ),
   },
   {
+    accessorKey: 'routeHost',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Host / path' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex min-w-0 flex-col gap-1'>
+        <LongText className='font-mono text-xs'>
+          {row.original.routeHost}
+        </LongText>
+        <LongText className='font-mono text-xs text-muted-foreground'>
+          {row.original.routePath}
+        </LongText>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'target',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Target' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex min-w-0 flex-col gap-1'>
+        <code className='rounded bg-muted px-1.5 py-0.5 text-xs'>
+          {row.original.target}
+        </code>
+        <span className='text-xs text-muted-foreground'>
+          {row.original.bind}:{row.original.port}
+        </span>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'routeState',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Routing' />
+    ),
+    cell: ({ row }) => <RouteStateBadge state={row.original.routeState} />,
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
     accessorKey: 'serviceStatus',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Status' />
+      <DataTableColumnHeader column={column} title='Service status' />
     ),
     cell: ({ row }) => <StatusBadge status={row.original.serviceStatus} />,
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
-    accessorKey: 'protocol',
+    accessorKey: 'provider',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Protocol' />
-    ),
-    cell: ({ row }) => row.original.protocol.toUpperCase(),
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-  },
-  {
-    accessorKey: 'bind',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Bind' />
+      <DataTableColumnHeader column={column} title='Provider' />
     ),
     cell: ({ row }) => (
-      <code className='rounded bg-muted px-1.5 py-0.5 text-xs'>
-        {row.original.bind}
-      </code>
+      <div className='flex flex-col gap-1'>
+        <span>{row.original.provider}</span>
+        <ExposureBadge exposure={row.original.exposure} />
+      </div>
     ),
-  },
-  {
-    accessorKey: 'port',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Port' />
-    ),
-    cell: ({ row }) => row.original.port,
-  },
-  {
-    accessorKey: 'exposure',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Exposure' />
-    ),
-    cell: ({ row }) => <ExposureBadge exposure={row.original.exposure} />,
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    accessorKey: 'configSource',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Config source' />
+    ),
+    cell: ({ row }) => (
+      <LongText className='text-sm text-muted-foreground'>
+        {row.original.configSource}
+      </LongText>
+    ),
   },
   {
     accessorKey: 'url',
@@ -297,9 +405,9 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
     pagination: { defaultPage: 1, defaultPageSize: 10 },
     globalFilter: { key: 'route' },
     columnFilters: [
+      { columnId: 'routeState', searchKey: 'routing', type: 'array' },
       { columnId: 'serviceStatus', searchKey: 'status', type: 'array' },
-      { columnId: 'protocol', searchKey: 'protocol', type: 'array' },
-      { columnId: 'exposure', searchKey: 'exposure', type: 'array' },
+      { columnId: 'provider', searchKey: 'provider', type: 'array' },
     ],
   })
 
@@ -340,6 +448,14 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
         searchPlaceholder='Search services, URLs, binds, ports, and route labels...'
         filters={[
           {
+            columnId: 'routeState',
+            title: 'Routing',
+            options: Object.entries(routeStateLabels).map(([value, label]) => ({
+              value,
+              label,
+            })),
+          },
+          {
             columnId: 'serviceStatus',
             title: 'Status',
             options: Object.entries(statusLabels).map(([value, label]) => ({
@@ -348,21 +464,15 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
             })),
           },
           {
-            columnId: 'protocol',
-            title: 'Protocol',
+            columnId: 'provider',
+            title: 'Provider',
             options: [
-              { label: 'HTTP', value: 'http' },
-              { label: 'HTTPS', value: 'https' },
-              { label: 'TCP', value: 'tcp' },
+              {
+                label: 'Service Lasso runtime',
+                value: 'Service Lasso runtime',
+              },
+              { label: 'Traefik', value: 'Traefik' },
             ],
-          },
-          {
-            columnId: 'exposure',
-            title: 'Exposure',
-            options: Object.entries(exposureLabels).map(([value, label]) => ({
-              value,
-              label,
-            })),
           },
         ]}
       />
@@ -419,7 +529,9 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
                   colSpan={serviceRouteColumns.length}
                   className='h-24 text-center'
                 >
-                  No service routes match the current filters.
+                  {rows.length === 0
+                    ? 'No routes are available from runtime metadata.'
+                    : 'No service routes match the current filters.'}
                 </TableCell>
               </TableRow>
             )}
