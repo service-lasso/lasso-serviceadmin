@@ -59,6 +59,7 @@ import { Route as AuthenticatedSecretsBrokerSecretsRouteImport } from './routes/
 import { Route as AuthenticatedSecretsBrokerSecretInventoryRouteImport } from './routes/_authenticated/secrets-broker/secret-inventory'
 import { Route as AuthenticatedSecretsBrokerProviderConnectionsRouteImport } from './routes/_authenticated/secrets-broker/provider-connections'
 import { Route as AuthenticatedSecretsBrokerPolicySimulationRouteImport } from './routes/_authenticated/secrets-broker/policy-simulation'
+import { Route as AuthenticatedSecretsBrokerOperationalControlsRouteImport } from './routes/_authenticated/secrets-broker/operational-controls'
 import { Route as AuthenticatedSecretsBrokerDiagnosticsRouteImport } from './routes/_authenticated/secrets-broker/diagnostics'
 import { Route as AuthenticatedSecretsBrokerConfigurationRouteImport } from './routes/_authenticated/secrets-broker/configuration'
 import { Route as AuthenticatedSecretsBrokerBackupKeysRouteImport } from './routes/_authenticated/secrets-broker/backup-keys'
@@ -341,6 +342,12 @@ const AuthenticatedSecretsBrokerPolicySimulationRoute =
     path: '/secrets-broker/policy-simulation',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSecretsBrokerOperationalControlsRoute =
+  AuthenticatedSecretsBrokerOperationalControlsRouteImport.update({
+    id: '/secrets-broker/operational-controls',
+    path: '/secrets-broker/operational-controls',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecretsBrokerDiagnosticsRoute =
   AuthenticatedSecretsBrokerDiagnosticsRouteImport.update({
     id: '/secrets-broker/diagnostics',
@@ -398,6 +405,7 @@ export interface FileRoutesByFullPath {
   '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
   '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
   '/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/secrets-broker/operational-controls': typeof AuthenticatedSecretsBrokerOperationalControlsRoute
   '/secrets-broker/policy-simulation': typeof AuthenticatedSecretsBrokerPolicySimulationRoute
   '/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   '/secrets-broker/secret-inventory': typeof AuthenticatedSecretsBrokerSecretInventoryRoute
@@ -452,6 +460,7 @@ export interface FileRoutesByTo {
   '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
   '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
   '/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/secrets-broker/operational-controls': typeof AuthenticatedSecretsBrokerOperationalControlsRoute
   '/secrets-broker/policy-simulation': typeof AuthenticatedSecretsBrokerPolicySimulationRoute
   '/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   '/secrets-broker/secret-inventory': typeof AuthenticatedSecretsBrokerSecretInventoryRoute
@@ -511,6 +520,7 @@ export interface FileRoutesById {
   '/_authenticated/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
   '/_authenticated/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
   '/_authenticated/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/_authenticated/secrets-broker/operational-controls': typeof AuthenticatedSecretsBrokerOperationalControlsRoute
   '/_authenticated/secrets-broker/policy-simulation': typeof AuthenticatedSecretsBrokerPolicySimulationRoute
   '/_authenticated/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   '/_authenticated/secrets-broker/secret-inventory': typeof AuthenticatedSecretsBrokerSecretInventoryRoute
@@ -568,6 +578,7 @@ export interface FileRouteTypes {
     | '/secrets-broker/backup-keys'
     | '/secrets-broker/configuration'
     | '/secrets-broker/diagnostics'
+    | '/secrets-broker/operational-controls'
     | '/secrets-broker/policy-simulation'
     | '/secrets-broker/provider-connections'
     | '/secrets-broker/secret-inventory'
@@ -622,6 +633,7 @@ export interface FileRouteTypes {
     | '/secrets-broker/backup-keys'
     | '/secrets-broker/configuration'
     | '/secrets-broker/diagnostics'
+    | '/secrets-broker/operational-controls'
     | '/secrets-broker/policy-simulation'
     | '/secrets-broker/provider-connections'
     | '/secrets-broker/secret-inventory'
@@ -680,6 +692,7 @@ export interface FileRouteTypes {
     | '/_authenticated/secrets-broker/backup-keys'
     | '/_authenticated/secrets-broker/configuration'
     | '/_authenticated/secrets-broker/diagnostics'
+    | '/_authenticated/secrets-broker/operational-controls'
     | '/_authenticated/secrets-broker/policy-simulation'
     | '/_authenticated/secrets-broker/provider-connections'
     | '/_authenticated/secrets-broker/secret-inventory'
@@ -1083,6 +1096,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecretsBrokerPolicySimulationRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/secrets-broker/operational-controls': {
+      id: '/_authenticated/secrets-broker/operational-controls'
+      path: '/secrets-broker/operational-controls'
+      fullPath: '/secrets-broker/operational-controls'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerOperationalControlsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/secrets-broker/diagnostics': {
       id: '/_authenticated/secrets-broker/diagnostics'
       path: '/secrets-broker/diagnostics'
@@ -1160,6 +1180,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSecretsBrokerBackupKeysRoute: typeof AuthenticatedSecretsBrokerBackupKeysRoute
   AuthenticatedSecretsBrokerConfigurationRoute: typeof AuthenticatedSecretsBrokerConfigurationRoute
   AuthenticatedSecretsBrokerDiagnosticsRoute: typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  AuthenticatedSecretsBrokerOperationalControlsRoute: typeof AuthenticatedSecretsBrokerOperationalControlsRoute
   AuthenticatedSecretsBrokerPolicySimulationRoute: typeof AuthenticatedSecretsBrokerPolicySimulationRoute
   AuthenticatedSecretsBrokerProviderConnectionsRoute: typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
   AuthenticatedSecretsBrokerSecretInventoryRoute: typeof AuthenticatedSecretsBrokerSecretInventoryRoute
@@ -1202,6 +1223,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedSecretsBrokerConfigurationRoute,
   AuthenticatedSecretsBrokerDiagnosticsRoute:
     AuthenticatedSecretsBrokerDiagnosticsRoute,
+  AuthenticatedSecretsBrokerOperationalControlsRoute:
+    AuthenticatedSecretsBrokerOperationalControlsRoute,
   AuthenticatedSecretsBrokerPolicySimulationRoute:
     AuthenticatedSecretsBrokerPolicySimulationRoute,
   AuthenticatedSecretsBrokerProviderConnectionsRoute:

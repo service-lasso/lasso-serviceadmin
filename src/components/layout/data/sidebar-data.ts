@@ -101,6 +101,11 @@ export const sidebarData: SidebarData = {
           icon: DatabaseZap,
         },
         {
+          title: 'Operational Controls',
+          url: '/secrets-broker/operational-controls',
+          icon: ShieldCheck,
+        },
+        {
           title: 'Configuration',
           url: '/secrets-broker/configuration',
           icon: Settings,

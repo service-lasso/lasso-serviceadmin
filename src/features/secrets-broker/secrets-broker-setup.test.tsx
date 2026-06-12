@@ -193,7 +193,7 @@ describe('Secrets Broker setup wizard', () => {
 
   it('renders operational controls with policy telemetry event filters and lockout state', async () => {
     const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+    await renderRoute('/secrets-broker/operational-controls')
 
     expect(screen.getAllByText(/Operational controls/i)[0]).toBeVisible()
     expect(screen.getByText(/Effective service policy/i)).toBeVisible()
@@ -526,6 +526,23 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.queryByRole('heading', { name: /^Secrets Broker setup$/i })
     ).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['operational-controls', '/secrets-broker/operational-controls'],
+    ['provider-connections', '/secrets-broker/provider-connections'],
+    ['single-secret-reveal', '/secrets-broker/single-reveal'],
+    ['backup-keys', '/secrets-broker/backup-keys'],
+    ['workflow-authoring-boundary', '/secrets-broker/workflow-boundaries'],
+    ['secrets-topology', '/secrets-broker/topology'],
+    ['audit-events', '/secrets-broker/audit-events'],
+    ['diagnostics', '/secrets-broker/diagnostics'],
+  ])('routes legacy #%s hash to %s', async (hash, path) => {
+    const { router } = await renderRoute(`/secrets-broker#${hash}`)
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(path)
+    })
   })
 
   it('links source configuration actions to the dedicated configuration page', async () => {

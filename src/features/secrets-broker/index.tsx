@@ -138,6 +138,7 @@ type SecretsBrokerOverviewScenario = {
 
 export type SecretsBrokerSectionFocus =
   | 'overview'
+  | 'operational-controls'
   | 'sources'
   | 'provider-connections'
   | 'single-reveal'
@@ -155,6 +156,12 @@ const secretsBrokerSectionMetadata: Record<
     title: 'Service Admin - Secrets Broker Setup',
     heading: 'Secrets Broker setup',
     description: 'Configure sources, policies, and recovery safely.',
+  },
+  'operational-controls': {
+    title: 'Service Admin - Secrets Broker Operational Controls',
+    heading: 'Secrets Broker operational controls',
+    description:
+      'Inspect policy, audit, telemetry, event filtering, and lockout posture.',
   },
   sources: {
     title: 'Service Admin - Secrets Broker Sources',
@@ -1901,11 +1908,27 @@ export function SecretsBrokerSetupWizard({
   const pageMetadata = secretsBrokerSectionMetadata[focusSection]
 
   useEffect(() => {
-    if (
-      focusSection === 'overview' &&
-      (hash === 'secret-sources' || hash === '#secret-sources')
-    ) {
-      void navigate({ to: '/secrets-broker/sources', replace: true })
+    if (focusSection !== 'overview') return
+
+    const legacyHash = hash.replace(/^#/, '')
+    const legacyHashRoute: Partial<Record<string, string>> = {
+      'operational-controls': '/secrets-broker/operational-controls',
+      'secret-sources': '/secrets-broker/sources',
+      'provider-connections': '/secrets-broker/provider-connections',
+      'single-secret-reveal': '/secrets-broker/single-reveal',
+      'single-reveal': '/secrets-broker/single-reveal',
+      'backup-keys': '/secrets-broker/backup-keys',
+      'workflow-authoring-boundary': '/secrets-broker/workflow-boundaries',
+      'workflow-boundaries': '/secrets-broker/workflow-boundaries',
+      'secrets-topology': '/secrets-broker/topology',
+      topology: '/secrets-broker/topology',
+      'audit-events': '/secrets-broker/audit-events',
+      diagnostics: '/secrets-broker/diagnostics',
+    }
+    const route = legacyHashRoute[legacyHash]
+
+    if (route) {
+      void navigate({ to: route, replace: true })
     }
   }, [focusSection, hash, navigate])
 
@@ -2076,13 +2099,16 @@ export function SecretsBrokerSetupWizard({
                       values.
                     </CardDescription>
                   </div>
-                  <Badge
-                    variant={
-                      brokerOverviewStateVariant[brokerOverview.health.state]
-                    }
-                  >
-                    {brokerOverviewStateCopy[brokerOverview.health.state]}
-                  </Badge>
+                  <div className='flex flex-wrap gap-2'>
+                    <Badge
+                      variant={
+                        brokerOverviewStateVariant[brokerOverview.health.state]
+                      }
+                    >
+                      {brokerOverviewStateCopy[brokerOverview.health.state]}
+                    </Badge>
+                    <Badge variant='outline'>Raw values hidden</Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className='space-y-4'>
@@ -2278,9 +2304,11 @@ export function SecretsBrokerSetupWizard({
                 </CardContent>
               </Card>
             </div>
-
-            <OperationalControlsPanel />
           </>
+        ) : null}
+
+        {focusSection === 'operational-controls' ? (
+          <OperationalControlsPanel />
         ) : null}
 
         {focusSection === 'single-reveal' ? (

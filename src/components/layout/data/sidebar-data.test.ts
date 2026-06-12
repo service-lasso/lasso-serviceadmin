@@ -47,6 +47,7 @@ describe('sidebar optional page classification', () => {
     expect(secretsBrokerGroup?.items.map((item) => item.url)).toEqual([
       '/secrets-broker',
       '/secrets-broker/secrets',
+      '/secrets-broker/operational-controls',
       '/secrets-broker/configuration',
       '/secrets-broker/sources',
       '/secrets-broker/provider-connections',
