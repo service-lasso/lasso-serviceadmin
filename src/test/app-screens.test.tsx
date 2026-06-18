@@ -84,6 +84,16 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Audit Events',
   },
   {
+    path: '/operations/telemetry',
+    heading: /^Telemetry$/i,
+    title: 'Service Admin - Operations Telemetry',
+  },
+  {
+    path: '/operations/audit-logging',
+    heading: /^Audit Logging$/i,
+    title: 'Service Admin - Operations Audit Logging',
+  },
+  {
     path: '/auth-session',
     heading: /^Trusted SSO identity context$/i,
     title: 'Service Admin - Trusted SSO Identity',
@@ -113,6 +123,7 @@ const removedSecretsBrokerRoutes = [
   ['/secrets-broker/workflow-boundaries', '/secrets-broker/sources'],
   ['/secrets-broker/single-reveal', '/secrets-broker/secrets'],
   ['/secrets-broker/policy-simulation', '/secrets-broker/operational-controls'],
+  ['/support-bundle', '/secrets-broker/sources'],
 ] as const
 
 const compatibleSecretsBrokerRoutes: ScreenCase[] = [
