@@ -16,6 +16,7 @@ import {
 import { Copy, ExternalLink } from 'lucide-react'
 import { copyText } from '@/lib/copy-text'
 import { usePageMetadata } from '@/lib/page-metadata'
+import { renderServiceEndpointUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +46,7 @@ type NetworkRow = {
   id: string
   service: DashboardService
   endpoint: DashboardService['endpoints'][number]
+  url: string
 }
 
 function NetworkLoading() {
@@ -89,14 +91,14 @@ const columns: ColumnDef<NetworkRow>[] = [
   },
   {
     id: 'url',
-    accessorFn: (row) => row.endpoint.url,
+    accessorFn: (row) => row.url,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='URL' />
     ),
     cell: ({ row }) => (
       <div className='flex items-start gap-2'>
         <span className='max-w-[360px] text-sm break-all text-muted-foreground'>
-          {row.original.endpoint.url}
+          {row.original.url}
         </span>
         <Button
           type='button'
@@ -104,7 +106,7 @@ const columns: ColumnDef<NetworkRow>[] = [
           size='icon'
           className='size-7 shrink-0'
           title='Copy URL'
-          onClick={() => void copyText(row.original.endpoint.url)}
+          onClick={() => void copyText(row.original.url)}
         >
           <Copy className='size-3.5' />
         </Button>
@@ -114,7 +116,7 @@ const columns: ColumnDef<NetworkRow>[] = [
           className='size-7 shrink-0'
           asChild
         >
-          <a href={row.original.endpoint.url} target='_blank' rel='noreferrer'>
+          <a href={row.original.url} target='_blank' rel='noreferrer'>
             <ExternalLink className='size-3.5' />
           </a>
         </Button>
@@ -178,6 +180,7 @@ export function Network() {
         id: `${service.id}-${endpoint.label}-${index}`,
         service,
         endpoint,
+        url: renderServiceEndpointUrl(endpoint),
       }))
     )
   }, [servicesQuery.data])

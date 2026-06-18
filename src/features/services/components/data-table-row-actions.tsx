@@ -2,6 +2,7 @@ import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { Link } from '@tanstack/react-router'
 import { type Row } from '@tanstack/react-table'
 import { ExternalLink, ScrollText, Star } from 'lucide-react'
+import { renderServiceLinkUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +21,7 @@ type DataTableRowActionsProps = {
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const service = row.original
   const primaryLink = service.links[0]
+  const primaryUrl = primaryLink ? renderServiceLinkUrl(primaryLink) : undefined
 
   return (
     <DropdownMenu modal={false}>
@@ -49,11 +51,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuShortcut>
           </Link>
         </DropdownMenuItem>
-        {primaryLink ? (
+        {primaryLink && primaryUrl ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <a href={primaryLink.url} target='_blank' rel='noreferrer'>
+              <a href={primaryUrl} target='_blank' rel='noreferrer'>
                 Open {primaryLink.label}
                 <DropdownMenuShortcut>
                   <ExternalLink size={16} />
