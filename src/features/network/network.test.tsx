@@ -17,6 +17,60 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
             protocol: 'http',
             exposure: 'local',
           },
+          {
+            label: 'api',
+            url: 'http://127.0.0.1:17883/api',
+            bind: '127.0.0.1',
+            port: 17883,
+            protocol: 'http',
+            exposure: 'local',
+          },
+          {
+            label: 'health',
+            url: 'http://127.0.0.1:17883/api/health',
+            bind: '127.0.0.1',
+            port: 17883,
+            protocol: 'http',
+            exposure: 'local',
+          },
+        ],
+      },
+      {
+        id: '@archive',
+        name: 'Archive',
+        endpoints: [
+          {
+            label: 'vendor download',
+            url: 'https://www.7-zip.org/download.html',
+            bind: 'metadata',
+            port: 443,
+            protocol: 'https',
+            exposure: 'public',
+          },
+          {
+            label: 'release asset',
+            url: 'https://github.com/ip7z/7zip/releases/download/24.09/7z2409-x64.exe',
+            bind: 'metadata',
+            port: 443,
+            protocol: 'https',
+            exposure: 'public',
+          },
+          {
+            label: 'docs',
+            url: 'https://www.7-zip.org/',
+            bind: 'metadata',
+            port: 443,
+            protocol: 'https',
+            exposure: 'public',
+          },
+          {
+            label: 'route',
+            url: 'https://archive.service-lasso.local',
+            bind: '0.0.0.0',
+            port: 443,
+            protocol: 'https',
+            exposure: 'lan',
+          },
         ],
       },
     ],
@@ -42,7 +96,29 @@ describe('network page', () => {
     expect(
       screen.getByRole('columnheader', { name: /exposure/i })
     ).toBeVisible()
-    expect(screen.getByRole('link', { name: /Service Admin/i })).toBeVisible()
+    expect(
+      screen.getAllByRole('link', { name: /Service Admin/i })[0]
+    ).toBeVisible()
     expect(screen.getByText('http://127.0.0.1:17700')).toBeVisible()
+  })
+
+  it('only shows operator service endpoints in the network table', async () => {
+    await renderRoute('/network')
+
+    await waitFor(() => {
+      expect(screen.getByText('http://127.0.0.1:17883/api')).toBeVisible()
+    })
+
+    expect(screen.getByText('http://127.0.0.1:17883/api/health')).toBeVisible()
+    expect(
+      screen.getByText('https://archive.service-lasso.local')
+    ).toBeVisible()
+    expect(screen.queryByText('https://www.7-zip.org/download.html')).toBeNull()
+    expect(
+      screen.queryByText(
+        'https://github.com/ip7z/7zip/releases/download/24.09/7z2409-x64.exe'
+      )
+    ).toBeNull()
+    expect(screen.queryByRole('cell', { name: /^docs$/i })).toBeNull()
   })
 })
