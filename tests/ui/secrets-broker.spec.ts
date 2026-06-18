@@ -78,7 +78,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/@secretsbroker overview/i)).toBeVisible()
     await expect(
-      page.getByRole('link', { name: 'View provider connections' })
+      page.getByRole('link', { name: 'View providers' })
     ).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'View secret sources' })
@@ -87,7 +87,7 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByRole('link', { name: 'View audit/events' })
     ).toBeVisible()
     await expect(
-      page.getByRole('link', { name: 'View diagnostics' })
+      page.getByRole('link', { name: 'View provider status' })
     ).toBeVisible()
     await expectNoSecretMaterial(page)
     await expect(page.getByText(/raw values hidden/i).first()).toBeVisible()
@@ -103,17 +103,10 @@ test.describe('Secrets Broker browser coverage', () => {
       ['Overview / Setup', /\/secrets-broker$/],
       ['Secrets', /\/secrets-broker\/secrets$/],
       ['Operational Controls', /\/secrets-broker\/operational-controls$/],
-      ['Configuration', /\/secrets-broker\/configuration$/],
-      ['Sources / Backends', /\/secrets-broker\/sources$/],
-      ['Provider Connections', /\/secrets-broker\/provider-connections$/],
-      ['Single Reveal', /\/secrets-broker\/single-reveal$/],
+      ['Providers', /\/secrets-broker\/sources$/],
       ['Backup / Keys', /\/secrets-broker\/backup-keys$/],
-      ['Workflow Boundaries', /\/secrets-broker\/workflow-boundaries$/],
       ['Topology', /\/secrets-broker\/topology$/],
       ['Audit / Events', /\/secrets-broker\/audit-events$/],
-      ['Diagnostics', /\/secrets-broker\/diagnostics$/],
-      ['Secret Inventory', /\/secrets-broker\/secret-inventory$/],
-      ['Policy Simulation', /\/secrets-broker\/policy-simulation$/],
     ] as const
 
     for (const [name, urlPattern] of navLinks) {
@@ -213,66 +206,6 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
-  test('covers the Configuration sub-page provider and migration states', async ({
-    page,
-  }) => {
-    await page.goto('/secrets-broker/configuration')
-    await expectNoBlankScreen(page)
-    await expect(
-      page.getByRole('heading', { name: /^Configuration$/ })
-    ).toBeVisible()
-    await expect(page.getByText(/Handles only · dry-run first/i)).toBeVisible()
-    await expect(page.getByText(/Credential values shown/i)).toBeVisible()
-
-    await page.getByLabel(/Provider state scenario/i).selectOption('healthy')
-    await expect(
-      page.getByText(/Provider configuration validated/i)
-    ).toBeVisible()
-    await page
-      .getByLabel(/Provider state scenario/i)
-      .selectOption('auth-required')
-    await expect(
-      page.getByText(/Provider requires credential ref refresh/i)
-    ).toBeVisible()
-    await page
-      .getByLabel(/Provider state scenario/i)
-      .selectOption('unsupported')
-    await expect(page.getByText(/cannot be a migration target/i)).toBeVisible()
-    await page
-      .getByLabel(/Provider state scenario/i)
-      .selectOption('validation-failed')
-    await expect(page.getByText(/Validation failed closed/i)).toBeVisible()
-
-    await page
-      .getByLabel(/Migration state scenario/i)
-      .selectOption('dry-run-partial')
-    await expect(
-      page.getByText(/Migration dry-run partial denial/i)
-    ).toBeVisible()
-    await expect(page.getByText(/partial_failure/i)).toBeVisible()
-    await page
-      .getByLabel(/Migration state scenario/i)
-      .selectOption('apply-ready')
-    await page.getByLabel(/Audit reason/i).fill('approved migration')
-    await page.getByRole('button', { name: /Record confirmation/i }).click()
-    await expect(
-      page.getByRole('button', { name: /Migration apply ready/i })
-    ).toBeEnabled()
-    await page
-      .getByLabel(/Migration state scenario/i)
-      .selectOption('apply-partial')
-    await expect(
-      page.getByText(/Migration partial failure/i).last()
-    ).toBeVisible()
-    await expect(page.getByText(/Provider credentials hidden/i)).toBeVisible()
-    await expect(
-      page.getByText(/fixture-provider-credential-value/i)
-    ).toHaveCount(0)
-    await expect(page.getByText(/fixture-managed-secret-value/i)).toHaveCount(0)
-    await expectNoSecretMaterial(page)
-    expect(consoleErrors).toEqual([])
-  })
-
   test('covers healthy degraded offline and unconfigured broker states', async ({
     page,
   }) => {
@@ -304,87 +237,41 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
-  test('reveals one broker secret only after explicit action and re-hides safely', async ({
-    page,
-  }) => {
-    await page.goto('/secrets-broker/single-reveal')
-    await expectNoBlankScreen(page)
-    await expect(
-      page.getByText(/Privileged single-secret reveal/i)
-    ).toBeVisible()
-    await expect(page.getByText(/Value hidden by default/i)).toBeVisible()
-    await expect(
-      page.getByText('SESSION_SIGNING_KEY', { exact: true })
-    ).toBeVisible()
-    await expect(page.getByText(fakeRevealValue)).toHaveCount(0)
-    await expect(
-      page.getByRole('button', { name: /Reveal secret value/i })
-    ).toBeDisabled()
-
-    const revealState = page.locator('#single-secret-reveal-state')
-    for (const state of [
-      'auth-required',
-      'policy-denied',
-      'broker-offline',
-      'unconfigured',
-      'audit-unavailable',
-    ]) {
-      await revealState.selectOption(state)
-      await expect(
-        page.getByRole('button', { name: /Reveal secret value/i })
-      ).toBeDisabled()
-      await expect(page.getByText(fakeRevealValue)).toHaveCount(0)
-    }
-
-    await revealState.selectOption('allowed')
-    await expect(
-      page.getByRole('button', { name: /Reveal secret value/i })
-    ).toBeEnabled()
-    await page.getByRole('button', { name: /Reveal secret value/i }).click()
-    await expect(page.getByText(fakeRevealValue)).toBeVisible()
-    await expect(
-      page.getByText(/Audit event recorded: audit-reveal-001/i)
-    ).toBeVisible()
-    await expect(page).toHaveURL(/\/secrets-broker\/single-reveal$/)
-    expect(page.url()).not.toContain(fakeRevealValue)
-    expect(consoleErrors.join('\n')).not.toContain(fakeRevealValue)
-    await expect(
-      page.getByRole('button', { name: /Copy secret/i })
-    ).toHaveCount(0)
-
-    await page.getByRole('button', { name: /Expire reveal window/i }).click()
-    await expect(
-      page.getByText(/Reveal window expired; value re-hidden/i)
-    ).toBeVisible()
-    await expect(page.getByText(fakeRevealValue)).toHaveCount(0)
-    await expectNoSecretMaterial(page)
-    expect(consoleErrors).toEqual([])
-  })
-
   test('deep-links to broker surfaces and provider detail with safe metadata only', async ({
     page,
   }) => {
     const sections = [
-      ['/secrets-broker/single-reveal', /Privileged single-secret reveal/i],
       ['/secrets-broker/operational-controls', /Operational controls/i],
       ['/secrets-broker/sources', /Secret Sources \/ Backends/i],
-      ['/secrets-broker/provider-connections', /Provider Connections/i],
       ['/secrets-broker/backup-keys', /Backup, restore, and key management/i],
-      ['/secrets-broker/workflow-boundaries', /Workflow authoring boundary/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
       ['/secrets-broker/audit-events', /Audit and events/i],
-      ['/secrets-broker/diagnostics', /Diagnostics and troubleshooting/i],
-      ['/secrets-broker/secret-inventory', /^Secret inventory$/i],
-      [
-        '/secrets-broker/policy-simulation',
-        /Secrets Broker policy\s+simulation/i,
-      ],
     ] as const
 
     for (const [path, label] of sections) {
       await page.goto(path)
       await expectNoBlankScreen(page)
       await expect(page.getByText(label).first()).toBeVisible()
+      await expectNoSecretMaterial(page)
+    }
+
+    const removedRoutes = [
+      ['/secrets-broker/provider-connections', /\/secrets-broker\/sources$/],
+      ['/secrets-broker/configuration', /\/secrets-broker\/sources$/],
+      ['/secrets-broker/diagnostics', /\/secrets-broker\/sources$/],
+      ['/secrets-broker/secret-inventory', /\/secrets-broker\/sources$/],
+      ['/secrets-broker/workflow-boundaries', /\/secrets-broker\/sources$/],
+      ['/secrets-broker/single-reveal', /\/secrets-broker\/secrets$/],
+      [
+        '/secrets-broker/policy-simulation',
+        /\/secrets-broker\/operational-controls$/,
+      ],
+    ] as const
+
+    for (const [path, urlPattern] of removedRoutes) {
+      await page.goto(path)
+      await expect(page).toHaveURL(urlPattern)
+      await expectNoBlankScreen(page)
       await expectNoSecretMaterial(page)
     }
 

@@ -1,5 +1,3 @@
-import { renderRoute } from '@/test/render-route'
-import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type {
   DashboardService,
@@ -89,59 +87,6 @@ const summary: DashboardSummary = {
 }
 
 describe('support bundle diagnostics action', () => {
-  it('renders as a compact diagnostics action instead of a standalone export page', async () => {
-    await renderRoute('/secrets-broker/diagnostics')
-
-    expect(
-      await screen.findByRole('heading', {
-        name: /Secrets Broker diagnostics/i,
-      })
-    ).toBeVisible()
-    expect(
-      screen.getByRole('region', { name: /Support bundle export action/i })
-    ).toBeVisible()
-    expect(screen.getByText(/Export endpoint unavailable/i)).toBeVisible()
-    expect(
-      screen.getByText(/No sample bundle or fixture payload is generated here/i)
-    ).toBeVisible()
-    expect(await screen.findByText(/Live diagnostics preview/i)).toBeVisible()
-    expect(screen.getByText(/Live metadata review/i)).toBeVisible()
-    expect(screen.getByText(/Runtime health summary/i)).toBeVisible()
-    expect(screen.getByText(/Secret reference inventory/i)).toBeVisible()
-    expect(screen.getByText(/Configuration diagnostics/i)).toBeVisible()
-    expect(screen.getByText(/Runtime diagnostics/i)).toBeVisible()
-    expect(screen.getByText(/Authentication diagnostics/i)).toBeVisible()
-    expect(screen.getByText(/Permission diagnostics/i)).toBeVisible()
-    expect(screen.getByText(/Redaction policy/i)).toBeVisible()
-    expect(
-      screen.getByRole('button', {
-        name: /Download support bundle unavailable/i,
-      })
-    ).toBeDisabled()
-    expect(
-      screen.queryByText(/Machine-readable manifest/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByLabelText(/Prepared support bundle payload/i)
-    ).not.toBeInTheDocument()
-  })
-
-  it('redirects the legacy standalone route to diagnostics', async () => {
-    await renderRoute('/support-bundle')
-
-    expect(
-      await screen.findByRole('heading', {
-        name: /Secrets Broker diagnostics/i,
-      })
-    ).toBeVisible()
-    expect(
-      screen.getByRole('region', { name: /Support bundle export action/i })
-    ).toBeVisible()
-    expect(
-      screen.queryByText(/Machine-readable manifest/i)
-    ).not.toBeInTheDocument()
-  })
-
   it('redacts common secret-like diagnostic values', () => {
     const redacted = redactDiagnosticText(
       'authorization=ok bearer abc.def.ghi api_key=sk_test_canary password=hunter2 cookie=session-canary -----BEGIN PRIVATE KEY-----abc-----END PRIVATE KEY-----'

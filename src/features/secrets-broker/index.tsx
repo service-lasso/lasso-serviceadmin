@@ -917,8 +917,8 @@ function SourceBackendCard({ source }: { source: SecretsBrokerSourceBackend }) {
   const actionLinks: Partial<
     Record<SecretsBrokerSourceBackend['supportedActions'][number], string>
   > = {
-    'view-diagnostics': '/secrets-broker/diagnostics',
-    'edit-configuration': '/secrets-broker/configuration',
+    'view-diagnostics': '/secrets-broker/sources',
+    'edit-configuration': '/secrets-broker/sources',
   }
 
   return (
@@ -1914,16 +1914,16 @@ export function SecretsBrokerSetupWizard({
     const legacyHashRoute: Partial<Record<string, string>> = {
       'operational-controls': '/secrets-broker/operational-controls',
       'secret-sources': '/secrets-broker/sources',
-      'provider-connections': '/secrets-broker/provider-connections',
-      'single-secret-reveal': '/secrets-broker/single-reveal',
-      'single-reveal': '/secrets-broker/single-reveal',
+      'provider-connections': '/secrets-broker/sources',
+      'single-secret-reveal': '/secrets-broker/secrets',
+      'single-reveal': '/secrets-broker/secrets',
       'backup-keys': '/secrets-broker/backup-keys',
-      'workflow-authoring-boundary': '/secrets-broker/workflow-boundaries',
-      'workflow-boundaries': '/secrets-broker/workflow-boundaries',
+      'workflow-authoring-boundary': '/secrets-broker/sources',
+      'workflow-boundaries': '/secrets-broker/sources',
       'secrets-topology': '/secrets-broker/topology',
       topology: '/secrets-broker/topology',
       'audit-events': '/secrets-broker/audit-events',
-      diagnostics: '/secrets-broker/diagnostics',
+      diagnostics: '/secrets-broker/sources',
     }
     const route = legacyHashRoute[legacyHash]
 
@@ -2244,9 +2244,7 @@ export function SecretsBrokerSetupWizard({
 
                 <div className='flex flex-wrap gap-2'>
                   <Button variant='outline' size='sm' asChild>
-                    <Link to='/secrets-broker/provider-connections'>
-                      View provider connections
-                    </Link>
+                    <Link to='/secrets-broker/sources'>View providers</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
                     <Link to='/secrets-broker/sources'>
@@ -2259,8 +2257,8 @@ export function SecretsBrokerSetupWizard({
                     </Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
-                    <Link to='/secrets-broker/diagnostics'>
-                      View diagnostics
+                    <Link to='/secrets-broker/sources'>
+                      View provider status
                     </Link>
                   </Button>
                 </div>
@@ -2594,7 +2592,7 @@ export function SecretsBrokerSetupWizard({
                               ) : null}
                               {connection.lifecycle.diagnosticRef ? (
                                 <a
-                                  href='/secrets-broker/diagnostics'
+                                  href='/secrets-broker/sources'
                                   className='text-primary underline-offset-4 hover:underline'
                                 >
                                   Diagnostics{' '}

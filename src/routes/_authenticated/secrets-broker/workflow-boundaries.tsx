@@ -1,10 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { SecretsBrokerSetupWizard } from '@/features/secrets-broker'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute(
   '/_authenticated/secrets-broker/workflow-boundaries'
 )({
-  component: () => (
-    <SecretsBrokerSetupWizard focusSection='workflow-boundaries' />
-  ),
+  beforeLoad: () => {
+    throw redirect({ to: '/secrets-broker/sources' })
+  },
 })

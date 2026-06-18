@@ -74,24 +74,9 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Operational Controls',
   },
   {
-    path: '/secrets-broker/provider-connections',
-    heading: /^Secrets Broker provider connections$/i,
-    title: 'Service Admin - Secrets Broker Provider Connections',
-  },
-  {
-    path: '/secrets-broker/single-reveal',
-    heading: /^Secrets Broker single reveal$/i,
-    title: 'Service Admin - Secrets Broker Single Reveal',
-  },
-  {
     path: '/secrets-broker/backup-keys',
     heading: /^Secrets Broker backup keys$/i,
     title: 'Service Admin - Secrets Broker Backup Keys',
-  },
-  {
-    path: '/secrets-broker/workflow-boundaries',
-    heading: /^Secrets Broker workflow boundaries$/i,
-    title: 'Service Admin - Secrets Broker Workflow Boundaries',
   },
   {
     path: '/secrets-broker/topology',
@@ -102,21 +87,6 @@ const appScreens: ScreenCase[] = [
     path: '/secrets-broker/audit-events',
     heading: /^Secrets Broker audit events$/i,
     title: 'Service Admin - Secrets Broker Audit Events',
-  },
-  {
-    path: '/secrets-broker/diagnostics',
-    heading: /^Secrets Broker diagnostics$/i,
-    title: 'Service Admin - Secrets Broker Diagnostics',
-  },
-  {
-    path: '/secrets-broker/secret-inventory',
-    heading: /^Secret inventory$/i,
-    title: 'Service Admin - Secret Inventory',
-  },
-  {
-    path: '/secrets-broker/policy-simulation',
-    heading: /^Secrets Broker policy simulation$/i,
-    title: 'Service Admin - Secrets Policy Simulation',
   },
   {
     path: '/auth-session',
@@ -140,6 +110,16 @@ const appScreens: ScreenCase[] = [
   { path: '/settings/notifications', heading: /^Notifications$/i },
 ]
 
+const removedSecretsBrokerRoutes = [
+  ['/secrets-broker/provider-connections', '/secrets-broker/sources'],
+  ['/secrets-broker/configuration', '/secrets-broker/sources'],
+  ['/secrets-broker/diagnostics', '/secrets-broker/sources'],
+  ['/secrets-broker/secret-inventory', '/secrets-broker/sources'],
+  ['/secrets-broker/workflow-boundaries', '/secrets-broker/sources'],
+  ['/secrets-broker/single-reveal', '/secrets-broker/secrets'],
+  ['/secrets-broker/policy-simulation', '/secrets-broker/operational-controls'],
+] as const
+
 describe('app screens', () => {
   it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
     await renderRoute(path)
@@ -154,4 +134,15 @@ describe('app screens', () => {
       })
     }
   })
+
+  it.each(removedSecretsBrokerRoutes)(
+    'redirects removed Secrets Broker route %s to %s',
+    async (path, redirectedPath) => {
+      const { router } = await renderRoute(path)
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(redirectedPath)
+      })
+    }
+  )
 })
