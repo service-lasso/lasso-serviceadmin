@@ -7,7 +7,6 @@ import {
   Wrench,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -76,6 +75,7 @@ export function ProviderConfigurationPage() {
     () => migration.applyEnabled && confirmed && auditReason.trim().length > 0,
     [auditReason, confirmed, migration.applyEnabled]
   )
+  const applyGateLabel = applyAllowed ? 'Ready' : 'Locked'
 
   return (
     <>
@@ -95,25 +95,43 @@ export function ProviderConfigurationPage() {
               <Wrench className='size-5' /> Configuration
             </h1>
             <p className='mt-1 text-muted-foreground'>
-              Configure a Secrets Broker provider and migrate existing refs with
-              safe handles, metadata-only dry-runs, and explicit audit-gated
-              apply. Provider credentials and raw secret values are never
-              rendered.
+              Configure provider handles, validate capability, and dry-run ref
+              migration.
             </p>
           </div>
           <Badge variant='secondary'>Handles only · dry-run first</Badge>
         </div>
 
-        <Alert>
-          <ShieldCheck className='size-4' />
-          <AlertTitle>Provider setup stays secret-safe</AlertTitle>
-          <AlertDescription>
-            This screen models the #36 backend contract: provider capabilities,
-            config status, validation, migration dry-run, and apply responses
-            use safe metadata only. Apply remains disabled until confirmation,
-            operation id, and audit reason are present.
-          </AlertDescription>
-        </Alert>
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <ShieldCheck className='size-4' /> Operator queue
+            </CardTitle>
+            <CardDescription>
+              Provider changes are handle-based and apply-gated.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 md:grid-cols-3'>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Validate provider</div>
+              <div className='text-muted-foreground'>
+                Check capability, auth, namespaces, and source status.
+              </div>
+            </div>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Review migration plan</div>
+              <div className='text-muted-foreground'>
+                Inspect refs, risk, policy, recovery, and item outcomes.
+              </div>
+            </div>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Unlock apply</div>
+              <div className='text-muted-foreground'>
+                Confirmation and audit reason are required before apply.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className='grid gap-4 md:grid-cols-4'>
           <Card>
@@ -152,8 +170,7 @@ export function ProviderConfigurationPage() {
               <KeyRound className='size-4' /> Provider configuration
             </CardTitle>
             <CardDescription>
-              Select safe provider states and validate configuration without
-              showing or persisting provider credential values.
+              Select provider state and validate safe connection handles.
             </CardDescription>
           </CardHeader>
           <CardContent className='grid gap-4 lg:grid-cols-3'>
@@ -232,7 +249,7 @@ export function ProviderConfigurationPage() {
               <DatabaseZap className='size-4' /> Capability summary
             </CardTitle>
             <CardDescription>
-              Safe capability metadata from the provider configuration contract.
+              Safe capability metadata from the configuration contract.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -255,9 +272,7 @@ export function ProviderConfigurationPage() {
               <GitBranch className='size-4' /> Migration dry-run / apply
             </CardTitle>
             <CardDescription>
-              Migration plans show refs, source/target provider ids, policy,
-              risk, expected action, audit requirement, and recovery guidance —
-              never raw secret values.
+              Review refs, provider targets, policy, risk, audit, and recovery.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
@@ -383,17 +398,20 @@ export function ProviderConfigurationPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Safety boundaries</CardTitle>
+            <CardTitle>Guardrails</CardTitle>
             <CardDescription>
-              Guardrails for provider configuration and migration.
+              Boundaries enforced by this operator surface.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <ul className='list-disc space-y-2 ps-5 text-sm text-muted-foreground'>
-              {configurationSafetyBoundaries.map((boundary) => (
-                <li key={boundary}>{boundary}</li>
-              ))}
-            </ul>
+          <CardContent className='flex flex-wrap gap-2'>
+            {configurationSafetyBoundaries.slice(0, 5).map((boundary) => (
+              <Badge key={boundary} variant='outline'>
+                {boundary}
+              </Badge>
+            ))}
+            <Badge variant={applyAllowed ? 'default' : 'secondary'}>
+              Apply gate: {applyGateLabel}
+            </Badge>
           </CardContent>
         </Card>
       </Main>
