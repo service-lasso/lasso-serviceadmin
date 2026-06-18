@@ -974,6 +974,7 @@ describe('Secrets Broker setup wizard', () => {
   })
 
   it('renders Secrets Broker topology graph and variable mapping table', async () => {
+    const user = userEvent.setup()
     await renderRoute('/secrets-broker/topology')
 
     expect(
@@ -998,10 +999,41 @@ describe('Secrets Broker setup wizard', () => {
       screen.getAllByRole('link', { name: /^Diagnostics$/i })[0]
     ).toBeVisible()
 
+    const graphSearch = screen.getByLabelText(/Search topology/i)
+    expect(graphSearch).toBeVisible()
+    expect(
+      screen.getByText(/Showing \d+ of \d+ nodes and \d+ of \d+ relationships/i)
+    ).toBeVisible()
+
+    await user.type(graphSearch, 'telegram')
+    expect(graphSearch).toHaveValue('telegram')
+    expect(screen.getByText('TELEGRAM_BOT_TOKEN')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Clear topology search/i })
+    ).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', { name: /Clear topology search/i })
+    )
+    expect(graphSearch).toHaveValue('')
+    expect(screen.getByText('SESSION_SECRET')).toBeVisible()
+
+    await user.type(graphSearch, 'zz-no-match')
+    expect(
+      screen.getByText(/No topology nodes or relationships match/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/No secret variable mappings match the current filters/i)
+    ).toBeVisible()
+
+    await user.keyboard('{Escape}')
+    expect(graphSearch).toHaveValue('')
+    expect(screen.getByText('SESSION_SECRET')).toBeVisible()
+
     const tableSearch = screen.getByPlaceholderText(
       /Search services, variables, refs, sources, and status/i
     )
-    await userEvent.type(tableSearch, 'telegram')
+    await user.type(tableSearch, 'telegram')
     expect(tableSearch).toHaveValue('telegram')
     expect(screen.getByText('TELEGRAM_BOT_TOKEN')).toBeVisible()
     expect(
