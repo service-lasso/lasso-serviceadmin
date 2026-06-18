@@ -64,4 +64,19 @@ describe('sidebar optional page classification', () => {
       secretsBrokerGroup?.items.every((item) => !item.url?.includes('#'))
     ).toBe(true)
   })
+
+  it('exposes Operations telemetry and audit pages as first-class routes', () => {
+    const operationsGroup = sidebarData.navGroups.find(
+      (group) => group.title === 'Operations'
+    )
+
+    expect(operationsGroup?.items.map((item) => item.url)).toEqual([
+      '/operations/telemetry',
+      '/operations/audit-logging',
+    ])
+    expect(operationsGroup?.items.map((item) => item.title)).toEqual([
+      'Telemetry',
+      'Audit Logging',
+    ])
+  })
 })
