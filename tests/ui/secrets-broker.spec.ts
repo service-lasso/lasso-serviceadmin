@@ -136,6 +136,10 @@ test.describe('Secrets Broker browser coverage', () => {
     await page.goto('/secrets-broker/secrets')
     await expectNoBlankScreen(page)
     await expect(page.getByRole('heading', { name: /^Secrets$/ })).toBeVisible()
+    await expect(page.getByText(/Operator queue/i)).toBeVisible()
+    await expect(page.getByText(/Find a ref/i)).toBeVisible()
+    await expect(page.getByText(/Pick row action/i)).toBeVisible()
+    await expect(page.getByText(/Dry-run before apply/i)).toBeVisible()
     await expect(page.getByText(/Stub preview · values hidden/i)).toBeVisible()
     await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
     await expect(page.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
@@ -184,10 +188,8 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/delete preview required before apply/i)
     ).toBeVisible()
 
-    await expect(
-      page.getByText(/Stub update\/reset\/delete\/reveal API preview/i)
-    ).toBeVisible()
-    await expect(page.getByText(/audit reason required/i)).toBeVisible()
+    await expect(page.getByText(/Single-secret preview gate/i)).toBeVisible()
+    await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
     await expect(
       page.getByRole('button', { name: /Simulate stub apply/i })
     ).toBeDisabled()

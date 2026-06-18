@@ -61,7 +61,6 @@ import {
   buildStubSecretMutationPreview,
   bulkSecretCampaignOperations,
   managedSecretRows,
-  managedSecretSafetyBoundaries,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
   type BulkSecretCampaignOperation,
@@ -482,26 +481,44 @@ export function SecretsManagementPage() {
               <DatabaseZap className='size-5' /> Secrets
             </h1>
             <p className='mt-1 text-muted-foreground'>
-              Secrets Broker management table for safe metadata search,
-              controlled reveal entry, and dry-run edit/reset/delete/policy
-              actions. Rows never render raw secret values.
+              Search refs, review provider state, and launch dry-run actions
+              without raw values.
             </p>
           </div>
           <Badge variant='secondary'>Stub preview · values hidden</Badge>
         </div>
 
-        <Alert>
-          <ShieldCheck className='size-4' />
-          <AlertTitle>Controlled management surface</AlertTitle>
-          <AlertDescription>
-            Metadata search is local over safe refs and labels only.
-            Broker-backed value search, when supported, returns matching
-            refs/metadata only. Reveal delegates to the audited #38 pattern;
-            edit, reset, delete, and policy changes require dry-run/preview
-            before apply. The mutation API on this page is stubbed preview
-            behavior until the production Secrets Broker contract lands.
-          </AlertDescription>
-        </Alert>
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <ShieldCheck className='size-4' /> Operator queue
+            </CardTitle>
+            <CardDescription>
+              Current controls are metadata-first and dry-run gated.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 md:grid-cols-3'>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Find a ref</div>
+              <div className='text-muted-foreground'>
+                Use table search, filters, sorting, and pagination.
+              </div>
+            </div>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Pick row action</div>
+              <div className='text-muted-foreground'>
+                Reveal, edit, reset, delete, and policy actions open previews.
+              </div>
+            </div>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Dry-run before apply</div>
+              <div className='text-muted-foreground'>
+                Apply stays locked without preview, audit reason, and
+                confirmation.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className='grid gap-4 md:grid-cols-4'>
           <Card>
@@ -538,10 +555,8 @@ export function SecretsManagementPage() {
               <DatabaseZap className='size-4' /> Search and value-search posture
             </CardTitle>
             <CardDescription>
-              The management table uses the shared Service Admin table controls
-              for metadata search, state/provider filters, sorting, column
-              visibility, and pagination. Value search is explicitly
-              broker-backed and returns refs/metadata only when supported.
+              Table controls search safe metadata; value search returns
+              refs/metadata only when the broker supports it.
             </CardDescription>
           </CardHeader>
           <CardContent className='grid gap-4 lg:grid-cols-2'>
@@ -704,9 +719,8 @@ export function SecretsManagementPage() {
               <ListChecks className='size-4' /> Bulk campaign dry-run planner
             </CardTitle>
             <CardDescription>
-              Stage 1 campaign planning only. The plan evaluates selected refs,
-              capability, policy, risk, audit needs, and blockers without
-              reading or writing raw secret material.
+              Stage 1 planning only: selected refs become a metadata-only
+              capability, policy, risk, audit, and blocker plan.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4 text-sm'>
@@ -936,11 +950,9 @@ export function SecretsManagementPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Stub update/reset/delete/reveal API preview</CardTitle>
+            <CardTitle>Single-secret preview gate</CardTitle>
             <CardDescription>
-              Deterministic non-production status model for a single selected
-              secret. This previews the operator flow only; no secret material
-              is read, written, copied, exported, logged, or displayed.
+              Deterministic non-production status model for one selected ref.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4 text-sm'>
@@ -1080,18 +1092,17 @@ export function SecretsManagementPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Safety boundaries</CardTitle>
+            <CardTitle>Guardrails</CardTitle>
             <CardDescription>
-              Guardrails for this Secrets sub-page while the backend API
-              contract and single-connection workflows mature.
+              Boundaries enforced by this operator surface.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <ul className='list-disc space-y-2 ps-5 text-sm text-muted-foreground'>
-              {managedSecretSafetyBoundaries.map((boundary) => (
-                <li key={boundary}>{boundary}</li>
-              ))}
-            </ul>
+          <CardContent className='flex flex-wrap gap-2'>
+            <Badge variant='outline'>No plaintext table editing</Badge>
+            <Badge variant='outline'>No copy/export</Badge>
+            <Badge variant='outline'>Dry-run first</Badge>
+            <Badge variant='outline'>Audit reason required</Badge>
+            <Badge variant='outline'>Raw values hidden</Badge>
           </CardContent>
         </Card>
       </Main>

@@ -16,16 +16,45 @@ describe('Secrets Broker provider configuration page', () => {
       await screen.findByRole('heading', { name: /^Configuration$/i })
     ).toBeVisible()
     expect(screen.getByText(/Handles only · dry-run first/i)).toBeVisible()
+    expect(screen.getByText(/Operator queue/i)).toBeVisible()
+    expect(screen.getByText(/Validate provider/i)).toBeVisible()
+    expect(screen.getByText(/Review migration plan/i)).toBeVisible()
+    expect(screen.getByText(/Unlock apply/i)).toBeVisible()
     expect(screen.getByText(/Current provider\/backend summary/i)).toBeVisible()
     expect(screen.getByText(/Credential values shown/i)).toBeVisible()
     expect(screen.getByText(/Migration dry-run \/ apply/i)).toBeVisible()
     expect(screen.getByText(/Provider credentials hidden/i)).toBeVisible()
+    expect(screen.getByText(/Guardrails/i)).toBeVisible()
+    expect(
+      screen.queryByText(/Provider setup stays secret-safe/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Safety boundaries$/i)).not.toBeInTheDocument()
     expect(
       screen.queryByText(/fixture-provider-credential-value/i)
     ).not.toBeInTheDocument()
     expect(
       screen.queryByText(/fixture-managed-secret-value/i)
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps first-screen controls task-oriented before setup prose', async () => {
+    await renderRoute('/secrets-broker/configuration')
+
+    expect(
+      await screen.findByRole('heading', { name: /^Configuration$/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Operator queue/i)).toBeVisible()
+    expect(screen.getByLabelText(/Provider state scenario/i)).toBeVisible()
+    expect(screen.getByLabelText(/Migration state scenario/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /Migration apply disabled until confirmation and audit reason/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.queryByText(/Provider setup stays secret-safe/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Safety boundaries$/i)).not.toBeInTheDocument()
   })
 
   it('covers provider validation states safely', async () => {

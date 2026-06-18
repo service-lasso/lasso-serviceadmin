@@ -23,7 +23,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/Secrets Broker API unavailable/i)).toBeVisible()
     expect(screen.getByText(/No fixture rows/i)).toBeVisible()
     expect(
-      screen.queryByText(/Stub update\/reset\/delete\/reveal API preview/i)
+      screen.queryByText(/Single-secret preview gate/i)
     ).not.toBeInTheDocument()
     expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
     expect(
@@ -37,12 +37,16 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       await screen.findByRole('heading', { name: /^Secrets$/i })
     ).toBeVisible()
-    expect(screen.getByText(/Secrets Broker management table/i)).toBeVisible()
+    expect(
+      screen.getByText(/Search refs, review provider state/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Operator queue/i)).toBeVisible()
+    expect(screen.getByText(/Find a ref/i)).toBeVisible()
+    expect(screen.getByText(/Pick row action/i)).toBeVisible()
+    expect(screen.getByText(/Dry-run before apply/i)).toBeVisible()
     expect(screen.getByText(/Visible values/i)).toBeVisible()
     expect(screen.getByText(/Stub preview · values hidden/i)).toBeVisible()
-    expect(
-      screen.getByText(/Stub update\/reset\/delete\/reveal API preview/i)
-    ).toBeVisible()
+    expect(screen.getByText(/Single-secret preview gate/i)).toBeVisible()
     expect(screen.getAllByText(/Stub API · preview only/i)[0]).toBeVisible()
     expect(screen.getAllByText(/SESSION_SIGNING_KEY/i)[0]).toBeVisible()
     expect(screen.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
@@ -57,6 +61,26 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.queryByRole('button', { name: /Copy secret/i })
     ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Controlled management surface/i)).toBeNull()
+    expect(screen.queryByText(/^Safety boundaries$/i)).toBeNull()
+  })
+
+  it('keeps first-screen controls task-oriented before any long prose', async () => {
+    await renderRoute('/secrets-broker/secrets')
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Operator queue/i)).toBeVisible()
+    expect(screen.getByPlaceholderText(/Search secret metadata/i)).toBeVisible()
+    expect(
+      screen.getAllByRole('button', { name: /Controlled reveal/i })[0]
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    ).toBeVisible()
+    expect(screen.queryByText(/Controlled management surface/i)).toBeNull()
+    expect(screen.queryByText(/^Safety boundaries$/i)).toBeNull()
   })
 
   it('filters metadata locally without value search or plaintext indexing', async () => {
@@ -190,10 +214,8 @@ describe('Secrets Broker secrets management page', () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
 
-    expect(
-      screen.getByText(/Stub update\/reset\/delete\/reveal API preview/i)
-    ).toBeVisible()
-    expect(screen.getByText(/audit reason required/i)).toBeVisible()
+    expect(screen.getByText(/Single-secret preview gate/i)).toBeVisible()
+    expect(screen.getAllByText(/audit reason required/i)[0]).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Simulate stub apply/i })
     ).toBeDisabled()
