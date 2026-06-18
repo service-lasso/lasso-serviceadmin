@@ -65,6 +65,8 @@ import { Route as AuthenticatedSecretsBrokerConfigurationRouteImport } from './r
 import { Route as AuthenticatedSecretsBrokerBackupKeysRouteImport } from './routes/_authenticated/secrets-broker/backup-keys'
 import { Route as AuthenticatedSecretsBrokerAuditEventsRouteImport } from './routes/_authenticated/secrets-broker/audit-events'
 import { Route as AuthenticatedSecretsBrokerConnectionIdRouteImport } from './routes/_authenticated/secrets-broker.$connectionId'
+import { Route as AuthenticatedOperationsTelemetryRouteImport } from './routes/_authenticated/operations/telemetry'
+import { Route as AuthenticatedOperationsAuditLoggingRouteImport } from './routes/_authenticated/operations/audit-logging'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 
 const ClerkRouteRoute = ClerkRouteRouteImport.update({
@@ -378,6 +380,18 @@ const AuthenticatedSecretsBrokerConnectionIdRoute =
     path: '/secrets-broker/$connectionId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOperationsTelemetryRoute =
+  AuthenticatedOperationsTelemetryRouteImport.update({
+    id: '/operations/telemetry',
+    path: '/operations/telemetry',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOperationsAuditLoggingRoute =
+  AuthenticatedOperationsAuditLoggingRouteImport.update({
+    id: '/operations/audit-logging',
+    path: '/operations/audit-logging',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
@@ -400,6 +414,8 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/operations/audit-logging': typeof AuthenticatedOperationsAuditLoggingRoute
+  '/operations/telemetry': typeof AuthenticatedOperationsTelemetryRoute
   '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
   '/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
   '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
@@ -455,6 +471,8 @@ export interface FileRoutesByTo {
   '/503': typeof errors503Route
   '/': typeof AuthenticatedIndexRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/operations/audit-logging': typeof AuthenticatedOperationsAuditLoggingRoute
+  '/operations/telemetry': typeof AuthenticatedOperationsTelemetryRoute
   '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
   '/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
   '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
@@ -515,6 +533,8 @@ export interface FileRoutesById {
   '/(errors)/503': typeof errors503Route
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/_authenticated/operations/audit-logging': typeof AuthenticatedOperationsAuditLoggingRoute
+  '/_authenticated/operations/telemetry': typeof AuthenticatedOperationsTelemetryRoute
   '/_authenticated/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
   '/_authenticated/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
   '/_authenticated/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
@@ -573,6 +593,8 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/errors/$error'
+    | '/operations/audit-logging'
+    | '/operations/telemetry'
     | '/secrets-broker/$connectionId'
     | '/secrets-broker/audit-events'
     | '/secrets-broker/backup-keys'
@@ -628,6 +650,8 @@ export interface FileRouteTypes {
     | '/503'
     | '/'
     | '/errors/$error'
+    | '/operations/audit-logging'
+    | '/operations/telemetry'
     | '/secrets-broker/$connectionId'
     | '/secrets-broker/audit-events'
     | '/secrets-broker/backup-keys'
@@ -687,6 +711,8 @@ export interface FileRouteTypes {
     | '/(errors)/503'
     | '/_authenticated/'
     | '/_authenticated/errors/$error'
+    | '/_authenticated/operations/audit-logging'
+    | '/_authenticated/operations/telemetry'
     | '/_authenticated/secrets-broker/$connectionId'
     | '/_authenticated/secrets-broker/audit-events'
     | '/_authenticated/secrets-broker/backup-keys'
@@ -1138,6 +1164,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecretsBrokerConnectionIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/operations/telemetry': {
+      id: '/_authenticated/operations/telemetry'
+      path: '/operations/telemetry'
+      fullPath: '/operations/telemetry'
+      preLoaderRoute: typeof AuthenticatedOperationsTelemetryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/operations/audit-logging': {
+      id: '/_authenticated/operations/audit-logging'
+      path: '/operations/audit-logging'
+      fullPath: '/operations/audit-logging'
+      preLoaderRoute: typeof AuthenticatedOperationsAuditLoggingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/errors/$error': {
       id: '/_authenticated/errors/$error'
       path: '/errors/$error'
@@ -1175,6 +1215,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
+  AuthenticatedOperationsAuditLoggingRoute: typeof AuthenticatedOperationsAuditLoggingRoute
+  AuthenticatedOperationsTelemetryRoute: typeof AuthenticatedOperationsTelemetryRoute
   AuthenticatedSecretsBrokerConnectionIdRoute: typeof AuthenticatedSecretsBrokerConnectionIdRoute
   AuthenticatedSecretsBrokerAuditEventsRoute: typeof AuthenticatedSecretsBrokerAuditEventsRoute
   AuthenticatedSecretsBrokerBackupKeysRoute: typeof AuthenticatedSecretsBrokerBackupKeysRoute
@@ -1213,6 +1255,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
+  AuthenticatedOperationsAuditLoggingRoute:
+    AuthenticatedOperationsAuditLoggingRoute,
+  AuthenticatedOperationsTelemetryRoute: AuthenticatedOperationsTelemetryRoute,
   AuthenticatedSecretsBrokerConnectionIdRoute:
     AuthenticatedSecretsBrokerConnectionIdRoute,
   AuthenticatedSecretsBrokerAuditEventsRoute:

@@ -2,6 +2,7 @@ import {
   Boxes,
   Command,
   DatabaseZap,
+  FileChartColumn,
   FileKey2,
   GitBranch,
   Globe,
@@ -80,6 +81,21 @@ export const sidebarData: SidebarData = {
           title: 'Network',
           url: '/network',
           icon: Globe,
+        },
+      ],
+    },
+    {
+      title: 'Operations',
+      items: [
+        {
+          title: 'Telemetry',
+          url: '/operations/telemetry',
+          icon: FileChartColumn,
+        },
+        {
+          title: 'Audit Logging',
+          url: '/operations/audit-logging',
+          icon: ScrollText,
         },
       ],
     },
