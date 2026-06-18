@@ -81,4 +81,37 @@ describe('logs provider relative api mode', () => {
     expect(chunk.lines).toHaveLength(100)
     expect(chunk.hasMore).toBe(true)
   })
+
+  it('requests service log overview through a relative service endpoint when no api base is configured', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: null,
+    }))
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          logs: {
+            serviceId: '@serviceadmin',
+            logPath: 'C:\\runtime\\@serviceadmin.log',
+            entries: [],
+            archives: [],
+            retention: { maxArchives: 3 },
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchServiceLogsOverview } = await import('./provider')
+
+    const overview = await fetchServiceLogsOverview(service as never)
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/services/%40serviceadmin/logs')
+    expect(overview.serviceId).toBe('@serviceadmin')
+  })
 })

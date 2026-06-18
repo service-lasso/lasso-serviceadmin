@@ -47,6 +47,8 @@ import {
   debugLogs,
   fetchServiceLogChunk,
   fetchServiceLogInfo,
+  fetchServiceLogsOverview,
+  type ServiceLogOverview,
   type ServiceLogInfo,
 } from './provider'
 
@@ -191,6 +193,132 @@ function RealServiceLogViewer({
   )
 }
 
+function buildLogEmptyState(
+  service: DashboardService,
+  logInfo: ServiceLogInfo | null
+) {
+  if (!service.installed) {
+    return {
+      title: 'No logs because the service is not installed yet',
+      description:
+        'The runtime knows about this service, but install/config/start has not produced a current log file in this environment.',
+    }
+  }
+
+  const isProvider =
+    service.role === 'provider' || service.metadata.serviceType === 'provider'
+
+  if (isProvider) {
+    return {
+      title: 'Provider service has no daemon log entries',
+      description:
+        'Provider-role services may only emit install or configuration events. They can be valid even when no long-running process writes stdout or stderr.',
+    }
+  }
+
+  if (service.status === 'stopped') {
+    return {
+      title: 'No current logs because the service is stopped',
+      description:
+        'Start or restart the service to create new runtime output. Existing archived logs appear when the runtime reports them.',
+    }
+  }
+
+  return {
+    title: 'No current log entries yet',
+    description: logInfo?.path
+      ? 'The runtime resolved a log file, but there are no entries in the selected tail window yet.'
+      : 'The runtime has not resolved a current log source for this service yet.',
+  }
+}
+
+function ServiceLogsOverviewPanel({
+  overview,
+}: {
+  overview: ServiceLogOverview | null
+}) {
+  if (!overview) return null
+
+  const archiveCount = overview.archives.length
+  const paths = [
+    { label: 'Service log', value: overview.logPath },
+    { label: 'Stdout', value: overview.stdoutPath },
+    { label: 'Stderr', value: overview.stderrPath },
+  ].filter((item) => Boolean(item.value))
+
+  return (
+    <div className='space-y-3 rounded-md border bg-muted/20 p-3 text-sm'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div className='font-medium'>Runtime log overview</div>
+        <div className='text-xs text-muted-foreground'>
+          {overview.entries.length.toLocaleString()} current entries ·{' '}
+          {archiveCount.toLocaleString()} archives
+        </div>
+      </div>
+      {paths.length ? (
+        <div className='grid gap-2 md:grid-cols-3'>
+          {paths.map((item) => (
+            <div key={item.label} className='min-w-0'>
+              <div className='text-xs font-medium'>{item.label}</div>
+              <div className='truncate text-xs text-muted-foreground'>
+                {item.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ServiceLogEmptyState({
+  service,
+  logInfo,
+  overview,
+}: {
+  service: DashboardService
+  logInfo: ServiceLogInfo | null
+  overview: ServiceLogOverview | null
+}) {
+  const state = buildLogEmptyState(service, logInfo)
+  const entries = overview?.entries.slice(0, 5) ?? []
+
+  return (
+    <div className='space-y-3'>
+      <div className='rounded-md border border-dashed bg-muted/20 p-6'>
+        <div className='font-medium'>{state.title}</div>
+        <p className='mt-1 text-sm text-muted-foreground'>
+          {state.description}
+        </p>
+      </div>
+      {entries.length ? (
+        <div className='overflow-hidden rounded-md border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Level</TableHead>
+                <TableHead>Recent runtime event</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries.map((entry, index) => (
+                <TableRow key={`${entry.level}-${index}`}>
+                  <TableCell className='w-28'>
+                    <Badge variant='outline'>{entry.level}</Badge>
+                  </TableCell>
+                  <TableCell className='text-sm text-muted-foreground'>
+                    {entry.message}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function ServiceLazyLogViewer({
   service,
   paused,
@@ -199,6 +327,9 @@ function ServiceLazyLogViewer({
   paused: boolean
 }) {
   const [logInfo, setLogInfo] = useState<ServiceLogInfo | null>(null)
+  const [logOverview, setLogOverview] = useState<ServiceLogOverview | null>(
+    null
+  )
   const [loading, setLoading] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -259,6 +390,7 @@ function ServiceLazyLogViewer({
       if (!service) {
         debugLogs('loadInitial skipped because no service is selected')
         setLogInfo(null)
+        setLogOverview(null)
         setLines([])
         setHasMore(false)
         setNextBefore(null)
@@ -277,7 +409,7 @@ function ServiceLazyLogViewer({
       try {
         setLoading(true)
         setError(null)
-        const [info, chunk] = await Promise.all([
+        const [info, chunk, overview] = await Promise.all([
           fetchServiceLogInfo(service, 'default'),
           fetchServiceLogChunk(
             service,
@@ -285,11 +417,13 @@ function ServiceLazyLogViewer({
             undefined,
             DEFAULT_LOG_CHUNK_SIZE
           ),
+          fetchServiceLogsOverview(service).catch(() => null),
         ])
 
         if (cancelled) return
 
         setLogInfo(info)
+        setLogOverview(overview)
         setLines(chunk.lines)
         setHasMore(chunk.hasMore)
         setNextBefore(chunk.nextBefore)
@@ -311,6 +445,7 @@ function ServiceLazyLogViewer({
         })
         setError('Unable to load log content right now.')
         setLogInfo(null)
+        setLogOverview(null)
         setLines([])
         setHasMore(false)
         setNextBefore(null)
@@ -326,7 +461,7 @@ function ServiceLazyLogViewer({
     return () => {
       cancelled = true
     }
-  }, [paused, service?.id])
+  }, [paused, service])
 
   useLayoutEffect(() => {
     const adjustment = prependAdjustmentRef.current
@@ -413,6 +548,7 @@ function ServiceLazyLogViewer({
       loading,
       loadingOlder,
       logPath: logInfo?.path ?? null,
+      overviewEntries: logOverview?.entries.length ?? null,
       lineCount: lines.length,
       hasMore,
       nextBefore,
@@ -425,6 +561,7 @@ function ServiceLazyLogViewer({
     loading,
     loadingOlder,
     logInfo?.path,
+    logOverview?.entries.length,
     nextBefore,
     service,
     totalLines,
@@ -452,6 +589,7 @@ function ServiceLazyLogViewer({
 
   return (
     <div className='space-y-3'>
+      <ServiceLogsOverviewPanel overview={logOverview} />
       <div className='space-y-1 text-xs text-muted-foreground'>
         <div
           className='truncate whitespace-nowrap'
@@ -476,17 +614,25 @@ function ServiceLazyLogViewer({
           {totalLines.toLocaleString()} lines
         </div>
       </div>
-      <div ref={viewerRef}>
-        <RealServiceLogViewer
-          key={`${service.id}:${logInfo?.path ?? 'default'}`}
+      {lines.length ? (
+        <div ref={viewerRef}>
+          <RealServiceLogViewer
+            key={`${service.id}:${logInfo?.path ?? 'default'}`}
+            service={service}
+            paused={paused}
+            lines={lines}
+            loadingOlder={loadingOlder}
+            hasMore={hasMore}
+            onScroll={handleViewerScroll}
+          />
+        </div>
+      ) : (
+        <ServiceLogEmptyState
           service={service}
-          paused={paused}
-          lines={lines}
-          loadingOlder={loadingOlder}
-          hasMore={hasMore}
-          onScroll={handleViewerScroll}
+          logInfo={logInfo}
+          overview={logOverview}
         />
-      </div>
+      )}
     </div>
   )
 }
@@ -504,7 +650,7 @@ export function Logs() {
   const [serviceQuery, setServiceQuery] = useState('')
   const [selectedServiceId, setSelectedServiceId] = useState('')
 
-  const services = servicesQuery.data ?? []
+  const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
   const effectiveSelectedServiceId = searchState.service ?? selectedServiceId
 
   const filteredServices = useMemo(() => {
