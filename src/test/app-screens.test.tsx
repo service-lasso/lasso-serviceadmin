@@ -75,8 +75,8 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/secrets-broker/backup-keys',
-    heading: /^Secrets Broker backup keys$/i,
-    title: 'Service Admin - Secrets Broker Backup Keys',
+    heading: /^Local encrypted store$/i,
+    title: 'Service Admin - Local Encrypted Store',
   },
   {
     path: '/secrets-broker/topology',

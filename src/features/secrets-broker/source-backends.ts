@@ -49,6 +49,17 @@ export type SecretsBrokerSourceBackend = {
   type: SecretsBrokerSourceType
   provider: string
   source: string
+  sourceId?: string
+  kind?: string
+  brokerState?: string
+  critical?: boolean
+  capabilities?: string[]
+  lifecycleDetail?: {
+    state: string
+    outcome: string
+    nextAction: string
+    retryable: boolean
+  }
   connection: string
   configured: boolean
   enabled: boolean
@@ -76,25 +87,49 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'Local encrypted store',
     type: 'local',
     provider: 'local',
-    source: '@secretsbroker/local/default',
+    source: 'local',
+    sourceId: 'local',
+    kind: 'local-encrypted-store',
+    brokerState: 'setup_needed',
+    critical: true,
+    capabilities: [
+      'read',
+      'reveal',
+      'write/update',
+      'rotate/reset',
+      'audit',
+      'migration',
+      'health',
+    ],
+    lifecycleDetail: {
+      state: 'reconnect_required',
+      outcome: 'locked',
+      nextAction: 'unlock_or_unseal_source',
+      retryable: false,
+    },
     connection: 'Local encrypted vault',
     configured: true,
     enabled: true,
-    priority: 1,
-    namespaces: ['default', 'services/*', 'workspaces/*'],
+    priority: 0,
+    namespaces: ['*'],
     defaultRole: 'default',
-    lifecycle: 'unlocked',
-    nextAction: 'Test provider status or open backup and key management.',
-    state: 'reachable',
+    lifecycle: 'locked',
+    nextAction: 'unlock_or_unseal_source',
+    state: 'configured',
     mode: 'local-first encrypted store',
-    lastCheckedAt: '2026-05-07T18:32:00Z',
+    lastCheckedAt: '2026-06-18T13:35:00Z',
     summary:
-      'Default local-first encrypted Secrets Broker source for Service Lasso runtime refs.',
+      'Built-in local encrypted Secrets Broker store for this Service Lasso instance; currently setup-needed and locked in the demo.',
     warnings: [],
     testResult: {
-      outcome: 'success',
-      checkedAt: '2026-05-07T18:32:00Z',
-      metadata: ['vault unlocked', '4 refs addressable', 'policy checked'],
+      outcome: 'failure',
+      checkedAt: '2026-06-18T13:35:00Z',
+      metadata: [
+        'broker healthy',
+        'state setup_needed',
+        'outcome locked',
+        'next action unlock_or_unseal_source',
+      ],
     },
     exampleRefs: [
       'secret://local/default/@serviceadmin/SESSION_SECRET',
@@ -471,6 +506,12 @@ export function getConfiguredSecretsBrokerProviders(
   return sources
     .filter((source) => source.configured)
     .sort((left, right) => (left.priority ?? 999) - (right.priority ?? 999))
+}
+
+export function getLocalEncryptedStoreProvider(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  return sources.find((source) => source.id === 'local-encrypted-store')
 }
 
 export function getAddableSecretsBrokerProviders(
