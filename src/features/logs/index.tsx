@@ -645,6 +645,7 @@ export function Logs() {
   })
 
   const searchState = route.useSearch()
+  const navigate = route.useNavigate()
   const servicesQuery = useServices()
   const [paused, setPaused] = useState(true)
   const [serviceQuery, setServiceQuery] = useState('')
@@ -672,6 +673,16 @@ export function Logs() {
       ) ?? selectedServiceFromSearch(services, effectiveSelectedServiceId)
     )
   }, [effectiveSelectedServiceId, filteredServices, services])
+
+  const selectService = (serviceId: string) => {
+    setSelectedServiceId(serviceId)
+    void navigate({
+      search: (previous) => ({
+        ...(previous as Record<string, unknown>),
+        service: serviceId,
+      }),
+    })
+  }
 
   return (
     <>
@@ -795,7 +806,7 @@ export function Logs() {
                                   ? 'selected'
                                   : undefined
                               }
-                              onClick={() => setSelectedServiceId(service.id)}
+                              onClick={() => selectService(service.id)}
                             >
                               <TableCell>
                                 <div className='flex min-w-0 flex-col'>
