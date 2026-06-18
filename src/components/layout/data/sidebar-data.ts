@@ -3,7 +3,6 @@ import {
   Command,
   DatabaseZap,
   FileChartColumn,
-  FileKey2,
   GitBranch,
   Globe,
   Network,
@@ -121,11 +120,6 @@ export const sidebarData: SidebarData = {
           title: 'Providers',
           url: '/secrets-broker/sources',
           icon: DatabaseZap,
-        },
-        {
-          title: 'Backup / Keys',
-          url: '/secrets-broker/backup-keys',
-          icon: FileKey2,
         },
         {
           title: 'Topology',

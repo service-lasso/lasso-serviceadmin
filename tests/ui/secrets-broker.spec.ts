@@ -102,10 +102,15 @@ test.describe('Secrets Broker browser coverage', () => {
       ['Secrets', /\/secrets-broker\/secrets$/],
       ['Operational Controls', /\/secrets-broker\/operational-controls$/],
       ['Providers', /\/secrets-broker\/sources$/],
-      ['Backup / Keys', /\/secrets-broker\/backup-keys$/],
       ['Topology', /\/secrets-broker\/topology$/],
       ['Audit / Events', /\/secrets-broker\/audit-events$/],
     ] as const
+
+    await expect(
+      page
+        .locator('[data-sidebar="menu-button"]')
+        .filter({ hasText: 'Backup / Keys' })
+    ).toHaveCount(0)
 
     for (const [name, urlPattern] of navLinks) {
       await page
