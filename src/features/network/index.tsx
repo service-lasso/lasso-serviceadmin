@@ -49,6 +49,73 @@ type NetworkRow = {
   url: string
 }
 
+const nonServiceEndpointLabelTerms = [
+  'artifact',
+  'download',
+  'docs',
+  'documentation',
+  'homepage',
+  'metadata',
+  'release',
+  'source',
+  'vendor',
+]
+
+const nonServiceEndpointPathTerms = [
+  '/artifact',
+  '/artifacts',
+  '/download',
+  '/downloads',
+  '/docs',
+  '/documentation',
+  '/manual',
+  '/metadata',
+  '/release',
+  '/releases',
+]
+
+const artifactExtensions = new Set([
+  '.7z',
+  '.deb',
+  '.dmg',
+  '.exe',
+  '.gz',
+  '.msi',
+  '.pkg',
+  '.rpm',
+  '.tar',
+  '.tgz',
+  '.zip',
+])
+
+function isOperatorNetworkEndpoint(
+  endpoint: DashboardService['endpoints'][number]
+) {
+  const label = endpoint.label.toLowerCase()
+
+  if (nonServiceEndpointLabelTerms.some((term) => label.includes(term))) {
+    return false
+  }
+
+  try {
+    const parsed = new URL(endpoint.url)
+    const pathname = parsed.pathname.toLowerCase()
+    const urlParts = `${pathname}${parsed.search.toLowerCase()}${parsed.hash.toLowerCase()}`
+
+    if (nonServiceEndpointPathTerms.some((term) => urlParts.includes(term))) {
+      return false
+    }
+
+    if (artifactExtensions.has(pathname.slice(pathname.lastIndexOf('.')))) {
+      return false
+    }
+  } catch {
+    return true
+  }
+
+  return true
+}
+
 function NetworkLoading() {
   return (
     <div className='flex flex-1 flex-col gap-4'>
@@ -176,12 +243,14 @@ export function Network() {
 
   const rows = useMemo<NetworkRow[]>(() => {
     return (servicesQuery.data ?? []).flatMap((service) =>
-      service.endpoints.map((endpoint, index) => ({
-        id: `${service.id}-${endpoint.label}-${index}`,
-        service,
-        endpoint,
-        url: renderServiceEndpointUrl(endpoint),
-      }))
+      service.endpoints
+        .filter(isOperatorNetworkEndpoint)
+        .map((endpoint, index) => ({
+          id: `${service.id}-${endpoint.label}-${index}`,
+          service,
+          endpoint,
+          url: renderServiceEndpointUrl(endpoint),
+        }))
     )
   }, [servicesQuery.data])
 
