@@ -26,6 +26,41 @@ export type ServiceLogChunk = {
   lines: string[]
 }
 
+export type ServiceLogOverviewEntry = {
+  timestamp?: string
+  level: string
+  message: string
+}
+
+export type ServiceLogOverview = {
+  serviceId: string
+  logPath?: string
+  stdoutPath?: string
+  stderrPath?: string
+  entries: ServiceLogOverviewEntry[]
+  archives: unknown[]
+  retention?: {
+    maxArchives?: number
+  }
+}
+
+type ServiceLogOverviewResponse = {
+  logs: ServiceLogOverview
+}
+
+export function redactLogLine(line: string) {
+  return line
+    .replace(
+      /\b(authorization)(\s*[:=]\s*)Bearer\s+([A-Za-z0-9._~+/-]+=*)/gi,
+      '$1$2[redacted]'
+    )
+    .replace(
+      /\b(password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key|cookie|authorization)(\s*[:=]\s*)([^\s,;]+)/gi,
+      '$1$2[redacted]'
+    )
+    .replace(/\b(Bearer)\s+([A-Za-z0-9._~+/-]+=*)/gi, '$1 [redacted]')
+}
+
 export function debugLogs(message: string, details?: Record<string, unknown>) {
   if (!logsDebugEnabled) return
   // eslint-disable-next-line no-console
@@ -50,11 +85,18 @@ function resolveLogsApiBaseUrl() {
   return serviceLassoApiBaseUrl ?? relativeLogsApiBaseUrl
 }
 
-function buildLogsApiUrl(
-  pathname: '/api/services/log-info' | '/api/logs/read',
-  params: URLSearchParams
-) {
+function buildLogsApiUrl(pathname: string, params: URLSearchParams) {
   return `${resolveLogsApiBaseUrl()}${pathname}?${params.toString()}`
+}
+
+function encodeServiceId(serviceId: string) {
+  return encodeURIComponent(serviceId)
+}
+
+function buildServiceLogsOverviewUrl(serviceId: string) {
+  return `${resolveLogsApiBaseUrl()}/api/services/${encodeServiceId(
+    serviceId
+  )}/logs`
 }
 
 export async function fetchServiceLogInfo(
@@ -86,6 +128,27 @@ export async function fetchServiceLogInfo(
   return info
 }
 
+export async function fetchServiceLogsOverview(service: DashboardService) {
+  const overviewUrl = buildServiceLogsOverviewUrl(service.id)
+
+  debugLogs('requesting service logs overview', {
+    serviceId: service.id,
+    overviewUrl,
+  })
+
+  const response = await fetch(overviewUrl)
+  const payload = await parseJsonResponse<ServiceLogOverviewResponse>(response)
+  const overview = payload.logs
+
+  return {
+    ...overview,
+    entries: overview.entries.map((entry) => ({
+      ...entry,
+      message: redactLogLine(entry.message),
+    })),
+  }
+}
+
 export async function fetchServiceLogChunk(
   service: DashboardService,
   type: 'default' | 'access' | 'error',
@@ -114,17 +177,21 @@ export async function fetchServiceLogChunk(
 
   const response = await fetch(chunkUrl)
   const chunk = await parseJsonResponse<ServiceLogChunk>(response)
+  const safeChunk = {
+    ...chunk,
+    lines: chunk.lines.map(redactLogLine),
+  }
 
   debugLogs('log chunk loaded', {
-    serviceId: chunk.serviceId,
-    type: chunk.type,
+    serviceId: safeChunk.serviceId,
+    type: safeChunk.type,
     before: before ?? null,
-    lineCount: chunk.lines.length,
-    totalLines: chunk.totalLines,
-    hasMore: chunk.hasMore,
-    nextBefore: chunk.nextBefore,
-    firstLinePreview: chunk.lines[0]?.slice(0, 120) ?? null,
+    lineCount: safeChunk.lines.length,
+    totalLines: safeChunk.totalLines,
+    hasMore: safeChunk.hasMore,
+    nextBefore: safeChunk.nextBefore,
+    firstLinePreview: safeChunk.lines[0]?.slice(0, 120) ?? null,
   })
 
-  return chunk
+  return safeChunk
 }

@@ -6,6 +6,7 @@ import {
   Play,
   RotateCcw,
   Search,
+  ScrollText,
   Square,
   Star,
 } from 'lucide-react'
@@ -267,14 +268,26 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
   {
     id: 'open',
     header: 'Open',
-    cell: ({ row }) => (
-      <Button size='sm' variant='outline' asChild>
-        <Link to='/services/$serviceId' params={{ serviceId: row.original.id }}>
-          <Search className='mr-2 size-3.5' />
-          Details
-        </Link>
-      </Button>
-    ),
+    cell: ({ row }) => {
+      const service = row.original
+
+      return (
+        <div className='flex flex-wrap gap-2'>
+          <Button size='sm' variant='outline' asChild>
+            <Link to='/logs' search={{ service: service.id }}>
+              <ScrollText className='mr-2 size-3.5' />
+              Logs
+            </Link>
+          </Button>
+          <Button size='sm' variant='outline' asChild>
+            <Link to='/services/$serviceId' params={{ serviceId: service.id }}>
+              <Search className='mr-2 size-3.5' />
+              Details
+            </Link>
+          </Button>
+        </div>
+      )
+    },
     enableSorting: false,
   },
   {

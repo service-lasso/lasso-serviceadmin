@@ -1,7 +1,7 @@
 import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { Link } from '@tanstack/react-router'
 import { type Row } from '@tanstack/react-table'
-import { ExternalLink, Star } from 'lucide-react'
+import { ExternalLink, ScrollText, Star } from 'lucide-react'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,6 +38,14 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             View details
             <DropdownMenuShortcut>
               <ExternalLink size={16} />
+            </DropdownMenuShortcut>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to='/logs' search={{ service: service.id }}>
+            Open logs
+            <DropdownMenuShortcut>
+              <ScrollText size={16} />
             </DropdownMenuShortcut>
           </Link>
         </DropdownMenuItem>
