@@ -74,11 +74,6 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Operational Controls',
   },
   {
-    path: '/secrets-broker/backup-keys',
-    heading: /^Local encrypted store$/i,
-    title: 'Service Admin - Local Encrypted Store',
-  },
-  {
     path: '/secrets-broker/topology',
     heading: /^Secrets Broker topology$/i,
     title: 'Service Admin - Secrets Broker Topology',
@@ -120,6 +115,14 @@ const removedSecretsBrokerRoutes = [
   ['/secrets-broker/policy-simulation', '/secrets-broker/operational-controls'],
 ] as const
 
+const compatibleSecretsBrokerRoutes: ScreenCase[] = [
+  {
+    path: '/secrets-broker/backup-keys',
+    heading: /^Local encrypted store$/i,
+    title: 'Service Admin - Local Encrypted Store',
+  },
+]
+
 describe('app screens', () => {
   it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
     await renderRoute(path)
@@ -143,6 +146,23 @@ describe('app screens', () => {
       await waitFor(() => {
         expect(router.state.location.pathname).toBe(redirectedPath)
       })
+    }
+  )
+
+  it.each(compatibleSecretsBrokerRoutes)(
+    'keeps legacy Secrets Broker route $path compatible',
+    async ({ path, heading, title }) => {
+      await renderRoute(path)
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: heading })).toBeVisible()
+      })
+
+      if (title) {
+        await waitFor(() => {
+          expect(document.title).toBe(title)
+        })
+      }
     }
   )
 })

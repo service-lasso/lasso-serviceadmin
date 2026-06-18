@@ -43,10 +43,11 @@ describe('sidebar optional page classification', () => {
     expect(titles).not.toContain('Diagnostics')
     expect(titles).not.toContain('Secret Inventory')
     expect(titles).not.toContain('Policy Simulation')
+    expect(titles).not.toContain('Backup / Keys')
     expect(titles).toContain('Providers')
   })
 
-  it('links visible Secrets Broker sub-items to route-backed pages only', () => {
+  it('links visible Secrets Broker sub-items without presenting Backup / Keys as a separate page', () => {
     const secretsBrokerGroup = sidebarData.navGroups.find(
       (group) => group.title === 'Secrets Broker'
     )
@@ -56,7 +57,6 @@ describe('sidebar optional page classification', () => {
       '/secrets-broker/secrets',
       '/secrets-broker/operational-controls',
       '/secrets-broker/sources',
-      '/secrets-broker/backup-keys',
       '/secrets-broker/topology',
       '/secrets-broker/audit-events',
     ])
