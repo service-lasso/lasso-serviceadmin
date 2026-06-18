@@ -31,10 +31,38 @@ export interface SecretInventoryRow {
   unavailableActions: string[]
 }
 
+export type SecretInventoryOperation = 'rotate' | 'delete'
+
+export type SecretInventoryOperationState =
+  | 'preview-ready'
+  | 'unsupported'
+  | 'policy-denied'
+  | 'auth-required'
+  | 'missing'
+  | 'success'
+  | 'failure'
+
+export interface SecretInventoryOperationPreview {
+  operation: SecretInventoryOperation
+  state: SecretInventoryOperationState
+  title: string
+  badge: string
+  capabilityResult: string
+  policyResult: string
+  auditRequirement: string
+  applyStatus: string
+  nextStep: string
+  safeDiff: string[]
+  affectedRefs: string[]
+  requiresTypedConfirmation: boolean
+  canRecordPreview: boolean
+}
+
 export const secretInventoryBoundaries = [
-  'This is deterministic local fixture metadata only; it does not query a backend or resolve secret payloads.',
-  'Rows show refs, state, ownership, expiry, rotation, and links to adjacent metadata views only.',
-  'Plaintext values, raw reveal controls, clipboard actions, bulk edits, and rotation mutations are intentionally absent.',
+  'This deterministic local fixture models broker operation metadata only; it does not resolve secret payloads.',
+  'Rows show refs, state, ownership, expiry, rotation readiness, safe actions, and links to adjacent metadata views only.',
+  'Single-row rotate/delete actions use metadata-only broker previews with audit reason and typed confirmation gates.',
+  'Plaintext values, raw reveal controls, clipboard actions, bulk edits, and spreadsheet-style mutation are intentionally absent.',
   'Any future raw reveal flow must remain a separate privileged workflow with identity, policy, audit reason, timeout, and no logging of values.',
 ]
 
@@ -167,6 +195,193 @@ export function buildLargeSecretInventoryFixture(
   }))
 }
 
+function deriveOperationState(
+  row: SecretInventoryRow,
+  operation: SecretInventoryOperation
+): SecretInventoryOperationState {
+  if (row.presenceState === 'missing') return 'missing'
+
+  if (row.source === 'file source') return 'unsupported'
+
+  if (
+    row.unavailableActions.some((action) =>
+      action.toLowerCase().includes(operation)
+    )
+  ) {
+    return 'unsupported'
+  }
+
+  if (row.backend.toLowerCase().includes('payments')) {
+    return 'policy-denied'
+  }
+
+  if (row.source === 'provider connection' && operation === 'rotate') {
+    return 'auth-required'
+  }
+
+  return 'preview-ready'
+}
+
+export function buildSecretInventoryOperationPreview(
+  row: SecretInventoryRow,
+  operation: SecretInventoryOperation,
+  auditReason: string,
+  confirmation: string,
+  selectedState: SecretInventoryOperationState = 'preview-ready'
+): SecretInventoryOperationPreview {
+  const state =
+    selectedState === 'preview-ready'
+      ? deriveOperationState(row, operation)
+      : selectedState
+  const operationLabel = operation === 'rotate' ? 'Rotate' : 'Delete'
+  const hasAuditReason = auditReason.trim().length >= 8
+  const hasConfirmation = confirmation.trim() === row.refId
+  const canRecordPreview =
+    state === 'preview-ready' && hasAuditReason && hasConfirmation
+
+  const base = {
+    operation,
+    state,
+    title: `${operationLabel} preview for ${row.refId}`,
+    affectedRefs: [row.refId],
+    requiresTypedConfirmation: true,
+    canRecordPreview,
+  }
+
+  if (state === 'unsupported') {
+    return {
+      ...base,
+      badge: 'Unsupported',
+      capabilityResult:
+        operation === 'rotate'
+          ? 'unsupported: provider/source does not expose broker-backed rotation'
+          : 'unsupported: provider/source does not expose broker-backed delete',
+      policyResult: 'not evaluated because capability is unavailable',
+      auditRequirement:
+        'audit reason may be recorded as operator intent; no mutation preview can apply',
+      applyStatus: 'not applied',
+      nextStep:
+        'Use provider-specific metadata or external runbook for this ref.',
+      safeDiff: [
+        'no value read',
+        'no value written',
+        'unsupported capability rendered safely',
+      ],
+    }
+  }
+
+  if (state === 'policy-denied') {
+    return {
+      ...base,
+      badge: 'Policy denied',
+      capabilityResult: 'supported only after policy grants mutation',
+      policyResult:
+        'deny: selected ref is readonly or outside operator mutation scope',
+      auditRequirement:
+        'audit reason retained as metadata only; no mutation attempted',
+      applyStatus: 'not applied',
+      nextStep:
+        'Request least-privilege mutation policy or choose another ref.',
+      safeDiff: ['no value read', 'no value written', 'policy denial recorded'],
+    }
+  }
+
+  if (state === 'auth-required') {
+    return {
+      ...base,
+      badge: 'Provider auth required',
+      capabilityResult: 'challenge: provider requires fresh operator auth',
+      policyResult: 'policy pending until provider challenge completes',
+      auditRequirement: 'reauthenticate before preview or apply',
+      applyStatus: 'not applied',
+      nextStep:
+        'Complete the provider challenge, then rerun the broker-backed preview.',
+      safeDiff: [
+        'no value read',
+        'no value written',
+        'provider auth challenge emitted',
+      ],
+    }
+  }
+
+  if (state === 'missing') {
+    return {
+      ...base,
+      badge: 'Ref missing',
+      capabilityResult: 'missing: provider/source has no current ref to mutate',
+      policyResult: 'fail closed before broker operation',
+      auditRequirement:
+        'audit reason can document operator intent; no existing ref is changed',
+      applyStatus: 'not applied',
+      nextStep: 'Connect or recreate the provider/source ref before mutation.',
+      safeDiff: [
+        'no existing ref selected for mutation',
+        'no value read',
+        'no value written',
+      ],
+    }
+  }
+
+  if (state === 'success') {
+    return {
+      ...base,
+      badge: 'Preview recorded',
+      capabilityResult: 'broker accepted metadata-only preview',
+      policyResult: 'allow: single-ref mutation permitted by preview policy',
+      auditRequirement: 'audit reason captured as safe metadata',
+      applyStatus: 'deterministic preview recorded; production apply not wired',
+      nextStep:
+        'Use the production broker operation endpoint when the live contract is connected.',
+      safeDiff: [
+        'operation id would be recorded',
+        'audit metadata would be linked',
+        'raw value remains hidden',
+      ],
+    }
+  }
+
+  if (state === 'failure') {
+    return {
+      ...base,
+      badge: 'Preview failed',
+      capabilityResult: 'broker returned safe failure metadata',
+      policyResult: 'allow preview; operation failed before mutation',
+      auditRequirement: 'audit reason retained for failed preview',
+      applyStatus: 'not applied',
+      nextStep: 'Review the safe failure category and retry after repair.',
+      safeDiff: [
+        'metadata unchanged',
+        'failure category rendered',
+        'raw value remains hidden',
+      ],
+    }
+  }
+
+  return {
+    ...base,
+    badge: 'Preview ready',
+    capabilityResult:
+      operation === 'rotate'
+        ? 'supported: broker-backed rotate dry-run available'
+        : 'supported: broker-backed delete dry-run available',
+    policyResult: 'allow preview; apply remains confirmation gated',
+    auditRequirement: hasAuditReason
+      ? 'audit reason present; typed confirmation still required'
+      : 'enter at least 8 characters of audit reason',
+    applyStatus: canRecordPreview
+      ? 'ready to record metadata-only broker preview'
+      : 'not applied',
+    nextStep: canRecordPreview
+      ? 'Record the preview result; production mutation still requires the live broker endpoint.'
+      : 'Enter audit reason and the exact ref id before preview can be recorded.',
+    safeDiff: [
+      `${operationLabel.toLowerCase()} target ref selected`,
+      'affected service metadata reviewed',
+      'raw value is never displayed, logged, copied, or exported',
+    ],
+  }
+}
+
 export function secretInventoryHasPlaintextMaterial(
   rows = secretInventoryRows
 ): boolean {
@@ -178,4 +393,12 @@ export function secretInventoryHasPlaintextMaterial(
     ) ||
     /-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(serialized)
   )
+}
+
+export function secretInventoryOperationHasPlaintextMaterial(
+  preview: SecretInventoryOperationPreview
+): boolean {
+  return secretInventoryHasPlaintextMaterial([
+    preview as unknown as SecretInventoryRow,
+  ])
 }

@@ -13,9 +13,11 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
+import { RotateCcw, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -30,6 +32,7 @@ import {
   DataTableToolbar,
 } from '@/components/data-table'
 import {
+  type SecretInventoryOperation,
   type SecretInventoryRow,
   type SecretInventorySource,
   type SecretInventoryState,
@@ -59,156 +62,188 @@ const sourceOptions: Array<{ label: string; value: SecretInventorySource }> = [
   { label: 'Generated write-back', value: 'generated write-back' },
 ]
 
-const columns: ColumnDef<SecretInventoryRow>[] = [
-  {
-    id: 'ref',
-    accessorFn: (row) =>
-      [
-        row.namespace,
-        row.refId,
-        row.owningService,
-        row.workspace,
-        row.backend,
-        row.safeNotes,
-      ].join(' '),
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Namespace / ref' />
-    ),
-    cell: ({ row }) => (
-      <div className='min-w-72 align-top'>
-        <div className='font-medium'>{row.original.namespace}</div>
-        <div className='text-sm break-all text-muted-foreground'>
-          {row.original.refId}
+function buildColumns(
+  onSelectOperation: (
+    row: SecretInventoryRow,
+    operation: SecretInventoryOperation
+  ) => void
+): ColumnDef<SecretInventoryRow>[] {
+  return [
+    {
+      id: 'ref',
+      accessorFn: (row) =>
+        [
+          row.namespace,
+          row.refId,
+          row.owningService,
+          row.workspace,
+          row.backend,
+          row.safeNotes,
+        ].join(' '),
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title='Namespace / ref' />
+      ),
+      cell: ({ row }) => (
+        <div className='min-w-72 align-top'>
+          <div className='font-medium'>{row.original.namespace}</div>
+          <div className='text-sm break-all text-muted-foreground'>
+            {row.original.refId}
+          </div>
+          <div className='mt-2 text-xs text-muted-foreground'>
+            {row.original.safeNotes}
+          </div>
         </div>
-        <div className='mt-2 text-xs text-muted-foreground'>
-          {row.original.safeNotes}
+      ),
+      filterFn: (row, id, value) =>
+        String(row.getValue(id))
+          .toLowerCase()
+          .includes(String(value).toLowerCase()),
+      enableHiding: false,
+    },
+    {
+      accessorKey: 'source',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title='Source / backend' />
+      ),
+      cell: ({ row }) => (
+        <div className='min-w-56 align-top'>
+          <Badge variant='outline'>{row.original.source}</Badge>
+          <div className='mt-2 text-sm text-muted-foreground'>
+            {row.original.backend}
+          </div>
         </div>
-      </div>
-    ),
-    filterFn: (row, id, value) =>
-      String(row.getValue(id))
-        .toLowerCase()
-        .includes(String(value).toLowerCase()),
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'source',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Source / backend' />
-    ),
-    cell: ({ row }) => (
-      <div className='min-w-56 align-top'>
-        <Badge variant='outline'>{row.original.source}</Badge>
-        <div className='mt-2 text-sm text-muted-foreground'>
-          {row.original.backend}
+      ),
+      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+    },
+    {
+      accessorKey: 'owningService',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title='Owner' />
+      ),
+      cell: ({ row }) => (
+        <div className='min-w-44 align-top'>
+          <div className='font-medium'>{row.original.owningService}</div>
+          <div className='text-sm text-muted-foreground'>
+            {row.original.workspace}
+          </div>
         </div>
-      </div>
-    ),
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-  },
-  {
-    accessorKey: 'owningService',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Owner' />
-    ),
-    cell: ({ row }) => (
-      <div className='min-w-44 align-top'>
-        <div className='font-medium'>{row.original.owningService}</div>
-        <div className='text-sm text-muted-foreground'>
-          {row.original.workspace}
+      ),
+    },
+    {
+      accessorKey: 'presenceState',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title='State' />
+      ),
+      cell: ({ row }) => (
+        <Badge variant={stateVariant[row.original.presenceState]}>
+          {row.original.presenceState}
+        </Badge>
+      ),
+      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+    },
+    {
+      accessorKey: 'rotationStatus',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title='Key / rotation' />
+      ),
+      cell: ({ row }) => (
+        <div className='min-w-48 align-top'>
+          <div>{row.original.keyVersion}</div>
+          <div className='text-sm text-muted-foreground'>
+            {row.original.rotationStatus}
+          </div>
+          <div className='text-xs text-muted-foreground'>
+            Expiry: {row.original.expiry}
+          </div>
         </div>
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'presenceState',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='State' />
-    ),
-    cell: ({ row }) => (
-      <Badge variant={stateVariant[row.original.presenceState]}>
-        {row.original.presenceState}
-      </Badge>
-    ),
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-  },
-  {
-    accessorKey: 'rotationStatus',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Key / rotation' />
-    ),
-    cell: ({ row }) => (
-      <div className='min-w-48 align-top'>
-        <div>{row.original.keyVersion}</div>
-        <div className='text-sm text-muted-foreground'>
-          {row.original.rotationStatus}
+      ),
+    },
+    {
+      accessorKey: 'lastUpdated',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title='Last updated / used' />
+      ),
+      cell: ({ row }) => (
+        <div className='min-w-52 align-top text-sm'>
+          <div>Updated: {row.original.lastUpdated}</div>
+          <div className='text-muted-foreground'>
+            Used: {row.original.lastUsed}
+          </div>
         </div>
-        <div className='text-xs text-muted-foreground'>
-          Expiry: {row.original.expiry}
-        </div>
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'lastUpdated',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Last updated / used' />
-    ),
-    cell: ({ row }) => (
-      <div className='min-w-52 align-top text-sm'>
-        <div>Updated: {row.original.lastUpdated}</div>
-        <div className='text-muted-foreground'>
-          Used: {row.original.lastUsed}
-        </div>
-      </div>
-    ),
-  },
-  {
-    id: 'links',
-    header: 'Metadata links',
-    cell: ({ row }) => (
-      <div className='min-w-48 align-top'>
-        <div className='space-y-1 text-sm'>
-          {row.original.providerConnectionUrl ? (
+      ),
+    },
+    {
+      id: 'links',
+      header: 'Links / safe actions',
+      cell: ({ row }) => (
+        <div className='min-w-64 align-top'>
+          <div className='space-y-1 text-sm'>
+            {row.original.providerConnectionUrl ? (
+              <Link
+                to={row.original.providerConnectionUrl}
+                className='block text-primary underline-offset-4 hover:underline'
+              >
+                provider metadata
+              </Link>
+            ) : null}
             <Link
-              to={row.original.providerConnectionUrl}
+              to={row.original.refUsageUrl}
               className='block text-primary underline-offset-4 hover:underline'
             >
-              provider metadata
+              ref usage
             </Link>
-          ) : null}
-          <Link
-            to={row.original.refUsageUrl}
-            className='block text-primary underline-offset-4 hover:underline'
-          >
-            ref usage
-          </Link>
-          <Link
-            to={row.original.auditUrl}
-            className='block text-primary underline-offset-4 hover:underline'
-          >
-            audit events
-          </Link>
+            <Link
+              to={row.original.auditUrl}
+              className='block text-primary underline-offset-4 hover:underline'
+            >
+              audit events
+            </Link>
+          </div>
+          <div className='mt-2 text-xs text-muted-foreground'>
+            Unavailable: {row.original.unavailableActions.join(', ')}
+          </div>
+          <div className='mt-3 flex flex-wrap gap-2'>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => onSelectOperation(row.original, 'rotate')}
+            >
+              <RotateCcw className='size-3.5' />
+              Rotate
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => onSelectOperation(row.original, 'delete')}
+            >
+              <Trash2 className='size-3.5' />
+              Delete
+            </Button>
+          </div>
         </div>
-        <div className='mt-2 text-xs text-muted-foreground'>
-          Unavailable: {row.original.unavailableActions.join(', ')}
-        </div>
-      </div>
-    ),
-    enableSorting: false,
-  },
-]
+      ),
+      enableSorting: false,
+    },
+  ]
+}
 
 type SecretInventoryTableProps = {
   data: SecretInventoryRow[]
   search: Record<string, unknown>
   navigate: NavigateFn
+  onSelectOperation: (
+    row: SecretInventoryRow,
+    operation: SecretInventoryOperation
+  ) => void
 }
 
 export function SecretInventoryTable({
   data,
   search,
   navigate,
+  onSelectOperation,
 }: SecretInventoryTableProps) {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [sorting, setSorting] = useState<SortingState>([
@@ -232,6 +267,8 @@ export function SecretInventoryTable({
       { columnId: 'source', searchKey: 'source', type: 'array' },
     ],
   })
+
+  const columns = buildColumns(onSelectOperation)
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({

@@ -3,8 +3,10 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
+  buildSecretInventoryOperationPreview,
   buildLargeSecretInventoryFixture,
   countSecretInventoryByState,
+  secretInventoryOperationHasPlaintextMaterial,
   secretInventoryHasPlaintextMaterial,
   secretInventoryRows,
 } from './secret-inventory'
@@ -34,14 +36,12 @@ describe('secret inventory metadata view', () => {
       await screen.findByRole('heading', { name: /^Secret inventory$/i })
     ).toBeVisible()
     expect(screen.getAllByText(/Deterministic local fixture/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/No plaintext or privileged actions/i)
-    ).toBeVisible()
+    expect(screen.getByText(/No plaintext values/i)).toBeVisible()
     expect(screen.getByText(/not a password vault/i)).toBeVisible()
     expect(screen.getByText(/metadata-first ref table/i)).toBeVisible()
     expect(screen.getByText('local/serviceadmin')).toBeVisible()
     expect(
-      screen.getByText('secret://local/serviceadmin/session-signing')
+      screen.getAllByText('secret://local/serviceadmin/session-signing')[0]
     ).toBeVisible()
     expect(screen.getAllByText('@serviceadmin')[0]).toBeVisible()
     expect(screen.getAllByText(/provider metadata/i)[0]).toBeVisible()
@@ -49,19 +49,106 @@ describe('secret inventory metadata view', () => {
     expect(screen.getAllByText(/audit events/i)[0]).toBeVisible()
   })
 
-  it('shows unavailable privileged actions as blocked text, not controls', async () => {
+  it('shows unavailable plaintext actions as blocked text, not controls', async () => {
     await renderRoute('/secrets-broker/secret-inventory')
 
     expect(screen.getAllByText(/show plaintext/i)[0]).toBeVisible()
     expect(screen.getAllByText(/copy value/i)[0]).toBeVisible()
     expect(screen.getAllByText(/bulk edit/i)[0]).toBeVisible()
-    expect(screen.getByText(/rotate from table/i)).toBeVisible()
+    expect(screen.getAllByRole('button', { name: /Rotate/i })[0]).toBeVisible()
+    expect(screen.getAllByRole('button', { name: /Delete/i })[0]).toBeVisible()
     expect(
       screen.queryByRole('button', {
-        name: /show plaintext|copy value|rotate/i,
+        name: /show plaintext|copy value|export/i,
       })
     ).not.toBeInTheDocument()
     expect(screen.queryByText(/unredacted value/i)).not.toBeInTheDocument()
+  })
+
+  it('previews per-row rotate and delete actions behind audit and typed confirmation gates', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secret-inventory')
+
+    expect(
+      screen.getByText(/Rotate preview for secret:\/\/local\/serviceadmin/i)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Record broker operation preview/i })
+    ).toBeDisabled()
+    expect(
+      screen.getByText(/enter at least 8 characters of audit reason/i)
+    ).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Audit reason/i),
+      'operator requested safe rotate'
+    )
+    await user.type(
+      screen.getByLabelText(/Confirm exact ref id/i),
+      'secret://local/serviceadmin/session-signing'
+    )
+
+    expect(
+      screen.getByText(/ready to record metadata-only broker preview/i)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Record broker operation preview/i })
+    ).toBeEnabled()
+
+    await user.selectOptions(screen.getByLabelText(/Operation/i), 'delete')
+    expect(
+      screen.getByText(/Delete preview for secret:\/\/local\/serviceadmin/i)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Record broker operation preview/i })
+    ).toBeEnabled()
+  })
+
+  it('renders unsupported denied auth missing success and failure states safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secret-inventory')
+
+    await user.selectOptions(
+      screen.getByLabelText(/Broker preview state/i),
+      'auth-required'
+    )
+    expect(screen.getAllByText(/Provider auth required/i)[1]).toBeVisible()
+    expect(screen.getByText(/Complete the provider challenge/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Broker preview state/i),
+      'unsupported'
+    )
+    expect(screen.getAllByText(/Unsupported/i)[1]).toBeVisible()
+    expect(
+      screen.getByText(/unsupported capability rendered safely/i)
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Broker preview state/i),
+      'policy-denied'
+    )
+    expect(screen.getAllByText(/Policy denied/i)[1]).toBeVisible()
+    expect(screen.getByText(/outside operator mutation scope/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Broker preview state/i),
+      'missing'
+    )
+    expect(screen.getByText(/Ref missing/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Broker preview state/i),
+      'success'
+    )
+    expect(screen.getAllByText(/Preview recorded/i)[0]).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Broker preview state/i),
+      'failure'
+    )
+    expect(screen.getByText(/Preview failed/i)).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
   it('counts states and keeps fixtures free of plaintext-like material', () => {
@@ -73,6 +160,16 @@ describe('secret inventory metadata view', () => {
     })
     expect(secretInventoryRows).toHaveLength(5)
     expect(secretInventoryHasPlaintextMaterial()).toBe(false)
+    expect(
+      secretInventoryOperationHasPlaintextMaterial(
+        buildSecretInventoryOperationPreview(
+          secretInventoryRows[0],
+          'delete',
+          'operator requested safe delete',
+          'secret://local/serviceadmin/session-signing'
+        )
+      )
+    ).toBe(false)
   })
 
   it('builds large deterministic fixture sets for table behavior tests', () => {
