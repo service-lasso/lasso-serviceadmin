@@ -13,7 +13,14 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { Activity, AlertTriangle, Network, ShieldCheck } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  Network,
+  Search as SearchIcon,
+  ShieldCheck,
+  X,
+} from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { cn } from '@/lib/utils'
@@ -21,6 +28,7 @@ import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -45,6 +53,7 @@ import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
   buildSecretsBrokerTopology,
+  filterSecretsBrokerTopology,
   type SecretVariableMappingRow,
   type SecretVariableMappingStatus,
   toReactFlowSecretsBrokerTopology,
@@ -344,17 +353,25 @@ export function SecretsBrokerTopologyPage() {
   })
 
   const servicesQuery = useServices()
+  const [topologySearchQuery, setTopologySearchQuery] = useState('')
   const topology = useMemo(
     () => buildSecretsBrokerTopology(servicesQuery.data ?? []),
     [servicesQuery.data]
   )
+  const filteredTopology = useMemo(
+    () => filterSecretsBrokerTopology(topology, topologySearchQuery),
+    [topology, topologySearchQuery]
+  )
   const graph = useMemo(
-    () => toReactFlowSecretsBrokerTopology(topology),
-    [topology]
+    () => toReactFlowSecretsBrokerTopology(filteredTopology),
+    [filteredTopology]
   )
   const unmappedCount = topology.rows.filter(
     (row) => row.status !== 'mapped'
   ).length
+  const hasTopologySearch = topologySearchQuery.trim().length > 0
+  const topologyHasMatches =
+    filteredTopology.nodes.length > 0 || filteredTopology.rows.length > 0
 
   return (
     <>
@@ -423,16 +440,73 @@ export function SecretsBrokerTopologyPage() {
 
             <Card>
               <CardHeader className='space-y-1'>
-                <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='flex flex-wrap items-center justify-between gap-3'>
                   <div className='flex items-center gap-2 font-semibold'>
                     <Network className='size-4' />
                     Mapping graph
                   </div>
-                  <Badge variant='secondary'>Derived from table rows</Badge>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <Badge variant='secondary'>Derived from table rows</Badge>
+                    {hasTopologySearch ? (
+                      <Badge variant='outline'>
+                        {filteredTopology.nodes.length} of{' '}
+                        {topology.nodes.length} nodes
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+                <div className='flex flex-col gap-2 pt-2 sm:flex-row sm:items-end sm:justify-between'>
+                  <div className='min-w-0 flex-1 space-y-1'>
+                    <label
+                      htmlFor='secrets-topology-search'
+                      className='text-xs font-medium text-muted-foreground'
+                    >
+                      Search topology
+                    </label>
+                    <div className='relative max-w-xl'>
+                      <SearchIcon className='pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+                      <Input
+                        id='secrets-topology-search'
+                        value={topologySearchQuery}
+                        onChange={(event) =>
+                          setTopologySearchQuery(event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            setTopologySearchQuery('')
+                          }
+                        }}
+                        placeholder='Search services, refs, providers, routes, or variables...'
+                        className='ps-9 pe-10'
+                        aria-describedby='secrets-topology-search-summary'
+                      />
+                      {hasTopologySearch ? (
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='icon'
+                          className='absolute end-1 top-1/2 size-7 -translate-y-1/2'
+                          onClick={() => setTopologySearchQuery('')}
+                          aria-label='Clear topology search'
+                        >
+                          <X className='size-4' />
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p
+                    id='secrets-topology-search-summary'
+                    className='text-sm text-muted-foreground'
+                  >
+                    Showing {filteredTopology.nodes.length} of{' '}
+                    {topology.nodes.length} nodes and{' '}
+                    {filteredTopology.edges.length} of {topology.edges.length}{' '}
+                    relationships.
+                  </p>
                 </div>
               </CardHeader>
               <CardContent>
-                {topology.rows.length ? (
+                {topology.rows.length && topologyHasMatches ? (
                   <DependencyGraphCanvas
                     nodes={graph.nodes}
                     edges={graph.edges}
@@ -450,6 +524,10 @@ export function SecretsBrokerTopologyPage() {
                       { label: 'unknown', color: '#64748b', dashed: true },
                     ]}
                   />
+                ) : hasTopologySearch ? (
+                  <div className='flex min-h-[240px] items-center justify-center rounded-md border text-sm text-muted-foreground'>
+                    No topology nodes or relationships match the current search.
+                  </div>
                 ) : (
                   <div className='flex min-h-[240px] items-center justify-center rounded-md border text-sm text-muted-foreground'>
                     No secret-like service variables were reported by the
@@ -467,7 +545,7 @@ export function SecretsBrokerTopologyPage() {
               </div>
             ) : null}
 
-            <SecretsBrokerTopologyTable rows={topology.rows} />
+            <SecretsBrokerTopologyTable rows={filteredTopology.rows} />
           </>
         )}
       </Main>
