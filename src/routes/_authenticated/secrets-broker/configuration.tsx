@@ -1,8 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { ProviderConfigurationPage } from '@/features/secrets-broker/provider-configuration-page'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute(
   '/_authenticated/secrets-broker/configuration'
 )({
-  component: ProviderConfigurationPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/secrets-broker/sources' })
+  },
 })

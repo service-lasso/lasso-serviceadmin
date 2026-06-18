@@ -36,7 +36,6 @@ import {
 import {
   revealFixtureLooksLikeProviderCredential,
   revealSafeSurfacesIncludeRawValue,
-  singleSecretRevealReference,
   singleSecretRevealScenarios,
 } from './single-secret-reveal'
 import {
@@ -123,8 +122,8 @@ describe('Secrets Broker setup wizard', () => {
       screen.getByRole('link', { name: /View audit\/events/i })
     ).toHaveAttribute('href', '/secrets-broker/audit-events')
     expect(
-      screen.getByRole('link', { name: /View diagnostics/i })
-    ).toHaveAttribute('href', '/secrets-broker/diagnostics')
+      screen.getByRole('link', { name: /View provider status/i })
+    ).toHaveAttribute('href', '/secrets-broker/sources')
     expect(
       screen.queryByRole('heading', { name: /Secret Sources \/ Backends/i })
     ).not.toBeInTheDocument()
@@ -157,7 +156,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
     expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()
     expect(screen.getByText(/key version v3/i)).toBeVisible()
-    expect(screen.getByText(/View provider connections/i)).toBeVisible()
+    expect(screen.getByText(/View providers/i)).toBeVisible()
     expect(screen.getByText(/View audit\/events/i)).toBeVisible()
 
     await user.selectOptions(
@@ -285,126 +284,6 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
   }, 30000)
 
-  it('renders privileged single-secret reveal default and fail-closed states without raw material', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker/single-reveal')
-
-    expect(screen.getByText(/Privileged single-secret reveal/i)).toBeVisible()
-    expect(screen.getByText(/Selected safe metadata/i)).toBeVisible()
-    expect(screen.getByText(singleSecretRevealReference.ref)).toBeVisible()
-    expect(screen.getByText(singleSecretRevealReference.name)).toBeVisible()
-    expect(
-      screen.getAllByText(singleSecretRevealReference.owningService)[0]
-    ).toBeVisible()
-    expect(screen.getByText(/Value hidden by default/i)).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /Reveal secret value/i })
-    ).toBeDisabled()
-    expect(screen.getByText(/Bulk reveal disabled/i)).toBeVisible()
-    expect(screen.getByText(/Copy disabled/i)).toBeVisible()
-    expect(screen.getByText(/No route\/query value material/i)).toBeVisible()
-    expect(
-      screen.queryByText(singleSecretRevealReference.fakeRawValue)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /Copy secret/i })
-    ).not.toBeInTheDocument()
-
-    const blockedStates = [
-      [
-        'auth-required',
-        /Reveal blocked until operator authorization completes/i,
-      ],
-      ['policy-denied', /Reveal denied by policy/i],
-      [
-        'broker-offline',
-        /Reveal unavailable because @secretsbroker is offline/i,
-      ],
-      [
-        'unconfigured',
-        /Reveal unavailable until a source\/backend is configured/i,
-      ],
-      [
-        'audit-unavailable',
-        /Reveal blocked because audit recording is unavailable/i,
-      ],
-    ] as const
-
-    for (const [state, status] of blockedStates) {
-      await user.selectOptions(
-        screen.getByLabelText(/Reveal workflow state/i),
-        state
-      )
-      expect(screen.getByText(status)).toBeVisible()
-      expect(
-        screen.getByRole('button', { name: /Reveal secret value/i })
-      ).toBeDisabled()
-      expect(
-        screen.queryByText(singleSecretRevealReference.fakeRawValue)
-      ).not.toBeInTheDocument()
-    }
-  }, 30000)
-
-  it('reveals deterministic fake material only after explicit action and re-hides on cancel or expiry', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker/single-reveal')
-
-    await user.selectOptions(
-      screen.getByLabelText(/Reveal workflow state/i),
-      'allowed'
-    )
-    expect(
-      screen.getByText(/Ready for explicit, time-limited reveal/i)
-    ).toBeVisible()
-    expect(
-      screen.queryByText(singleSecretRevealReference.fakeRawValue)
-    ).not.toBeInTheDocument()
-
-    await user.click(
-      screen.getByRole('button', { name: /Reveal secret value/i })
-    )
-    expect(
-      screen.getByText(singleSecretRevealReference.fakeRawValue)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Audit event recorded: audit-reveal-001/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Reveal window expires in 60 seconds/i)
-    ).toBeVisible()
-    expect(
-      screen.queryByRole('button', { name: /Copy secret/i })
-    ).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /Cancel reveal/i }))
-    expect(
-      screen.getByText(/Reveal cancelled; value remains hidden/i)
-    ).toBeVisible()
-    expect(
-      screen.queryByText(singleSecretRevealReference.fakeRawValue)
-    ).not.toBeInTheDocument()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Reveal workflow state/i),
-      'allowed'
-    )
-    await user.click(
-      screen.getByRole('button', { name: /Reveal secret value/i })
-    )
-    expect(
-      screen.getByText(singleSecretRevealReference.fakeRawValue)
-    ).toBeVisible()
-    await user.click(
-      screen.getByRole('button', { name: /Expire reveal window/i })
-    )
-    expect(
-      screen.getByText(/Reveal window expired; value re-hidden/i)
-    ).toBeVisible()
-    expect(
-      screen.queryByText(singleSecretRevealReference.fakeRawValue)
-    ).not.toBeInTheDocument()
-  }, 30000)
-
   it('keeps single-secret reveal safe surfaces free of raw material', () => {
     expect(singleSecretRevealScenarios.map((scenario) => scenario.id)).toEqual([
       'hidden',
@@ -503,10 +382,10 @@ describe('Secrets Broker setup wizard', () => {
     ).toBeVisible()
     expect(
       screen.getAllByRole('link', { name: /View diagnostics/i })[0]
-    ).toHaveAttribute('href', '/secrets-broker/diagnostics')
+    ).toHaveAttribute('href', '/secrets-broker/sources')
     expect(
       screen.getAllByRole('link', { name: /Edit configuration/i })[0]
-    ).toHaveAttribute('href', '/secrets-broker/configuration')
+    ).toHaveAttribute('href', '/secrets-broker/sources')
     expect(screen.getByText(/3 keys matched allowlist/i)).toBeVisible()
     expect(screen.getByText(/path policy denied/i)).toBeVisible()
     expect(screen.getByText(/command not executed/i)).toBeVisible()
@@ -530,13 +409,13 @@ describe('Secrets Broker setup wizard', () => {
 
   it.each([
     ['operational-controls', '/secrets-broker/operational-controls'],
-    ['provider-connections', '/secrets-broker/provider-connections'],
-    ['single-secret-reveal', '/secrets-broker/single-reveal'],
+    ['provider-connections', '/secrets-broker/sources'],
+    ['single-secret-reveal', '/secrets-broker/secrets'],
     ['backup-keys', '/secrets-broker/backup-keys'],
-    ['workflow-authoring-boundary', '/secrets-broker/workflow-boundaries'],
+    ['workflow-authoring-boundary', '/secrets-broker/sources'],
     ['secrets-topology', '/secrets-broker/topology'],
     ['audit-events', '/secrets-broker/audit-events'],
-    ['diagnostics', '/secrets-broker/diagnostics'],
+    ['diagnostics', '/secrets-broker/sources'],
   ])('routes legacy #%s hash to %s', async (hash, path) => {
     const { router } = await renderRoute(`/secrets-broker#${hash}`)
 
@@ -545,7 +424,7 @@ describe('Secrets Broker setup wizard', () => {
     })
   })
 
-  it('links source configuration actions to the dedicated configuration page', async () => {
+  it('links source configuration actions to the Providers page', async () => {
     await renderRoute('/secrets-broker/sources')
 
     const configurationLinks = screen.getAllByRole('link', {
@@ -554,7 +433,7 @@ describe('Secrets Broker setup wizard', () => {
 
     expect(configurationLinks[0]).toHaveAttribute(
       'href',
-      '/secrets-broker/configuration'
+      '/secrets-broker/sources'
     )
   })
 
@@ -562,71 +441,6 @@ describe('Secrets Broker setup wizard', () => {
     expect(secretsBrokerSourceBackends.some(sourceBackendHasSecretValue)).toBe(
       false
     )
-  })
-
-  it('renders provider connections list with status badges and safe material state', async () => {
-    await renderRoute('/secrets-broker/provider-connections')
-
-    expect(screen.getAllByText(/Provider Connections/i)[0]).toBeVisible()
-    expect(
-      screen.getAllByText(/Local default encrypted store/i)[0]
-    ).toBeVisible()
-    expect(screen.getAllByText(/Vault ops connection/i)[0]).toBeVisible()
-    expect(
-      screen.getAllByText(/AWS backup worker connection/i)[0]
-    ).toBeVisible()
-    expect(screen.getAllByText(/Healthy/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Reconnect required/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Auth required/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Revoked/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Permission changed/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Degraded/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Failing/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Operator action required/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/credential_handle_missing/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Audit evt-connection/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Diagnostics diag-/i)[0]).toBeVisible()
-    expect(
-      screen.getAllByText(/Reconnect unavailable: Reconnect is unavailable/i)[0]
-    ).toBeVisible()
-    expect(screen.getAllByText(/value hidden/i)[0]).toBeVisible()
-    expect(
-      screen.getAllByRole('link', { name: /View details/i })[0]
-    ).toHaveAttribute('href', '/secrets-broker/local-default')
-    expect(
-      screen.queryByRole('button', { name: /Copy secret/i })
-    ).not.toBeInTheDocument()
-  })
-
-  it('filters provider connections by provider status and label with empty state', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker/provider-connections')
-
-    await user.selectOptions(
-      screen.getByLabelText(/Connection provider/i),
-      'vault'
-    )
-    expect(screen.getAllByText(/Vault ops connection/i)[0]).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Connection provider/i),
-      'all'
-    )
-    await user.selectOptions(
-      screen.getByLabelText(/Connection status/i),
-      'missing'
-    )
-    expect(
-      screen.getAllByText(/AWS backup worker connection/i)[0]
-    ).toBeVisible()
-
-    await user.selectOptions(screen.getByLabelText(/Connection status/i), 'all')
-    await user.type(screen.getByLabelText(/Search label/i), 'does-not-exist')
-    expect(
-      screen.getByText(/No provider connections match these filters/i)
-    ).toBeVisible()
-    expect(screen.getByText(/Add a source or connection/i)).toBeVisible()
   })
 
   it('renders safe provider connection detail without raw secret values', async () => {
@@ -907,48 +721,6 @@ describe('Secrets Broker setup wizard', () => {
     ).toBe(false)
   })
 
-  it('renders workflow authoring boundary with safe validation and snippets', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker/workflow-boundaries')
-
-    expect(screen.getByText(/Workflow authoring boundary/i)).toBeVisible()
-    expect(screen.getByText(/No runner editor/i)).toBeVisible()
-    expect(screen.getByText(/SecretRefs only/i)).toBeVisible()
-    expect(screen.getByText(/metadata-only validation/i)).toBeVisible()
-    expect(screen.getAllByText(/Service start bootstrap/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/Service Admin session signing secret/i)
-    ).toBeVisible()
-    expect(
-      screen.getAllByText(/secret:\/\/local\/default\/.*SESSION_SECRET/i)[0]
-    ).toBeVisible()
-    expect(screen.getByText(/Generated safe snippet/i)).toBeVisible()
-    expect(screen.getAllByText(/values hidden/i)[0]).toBeVisible()
-    expect(screen.getByText(/revealValues: false/i)).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Authoring scenario/i),
-      'deploy-payments-api'
-    )
-
-    expect(screen.getAllByText(/Deploy payments API/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/policy denies this workflow identity/i)
-    ).toBeVisible()
-    expect(screen.getByText(/Ref metadata is missing/i)).toBeVisible()
-    expect(screen.getAllByText(/Denied/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Missing/i)[0]).toBeVisible()
-    expect(screen.getByText(/blockOn: \[missing, denied\]/i)).toBeVisible()
-    expect(
-      screen.getByText(/Missing or denied refs should block save\/run handoff/i)
-    ).toBeVisible()
-    expect(
-      screen.queryByText(/correct-horse-battery-staple/i)
-    ).not.toBeInTheDocument()
-    expect(screen.queryByText(/ghp_ex…oken/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/sk-thi…nder/i)).not.toBeInTheDocument()
-  })
-
   it('keeps workflow authoring fixtures and generated snippets secret-safe', () => {
     expect(workflowAuthoringHasSecretValue()).toBe(false)
     expect(
@@ -996,7 +768,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText('POSTGRES_ADMIN_PASSWORD')).toBeVisible()
     expect(screen.getAllByRole('link', { name: /^Service$/i })[0]).toBeVisible()
     expect(
-      screen.getAllByRole('link', { name: /^Diagnostics$/i })[0]
+      screen.getAllByRole('link', { name: /^Provider status$/i })[0]
     ).toBeVisible()
 
     const graphSearch = screen.getByLabelText(/Search topology/i)
@@ -1176,40 +948,6 @@ describe('Secrets Broker setup wizard', () => {
       'evt-20260507-004',
       'evt-20260507-005',
     ])
-  })
-
-  it('covers diagnostic failure categories and suggested fixes without raw secret output', async () => {
-    await renderRoute('/secrets-broker/diagnostics')
-
-    expect(screen.getByText(/Broker API reachable/i)).toBeVisible()
-    expect(screen.getByText(/Local vault readable/i)).toBeVisible()
-    expect(screen.getByText(/External source authentication/i)).toBeVisible()
-    expect(screen.getByText(/OpenClaw SecretRef exec adapter/i)).toBeVisible()
-    expect(screen.getByText(/Workflow runtime integration/i)).toBeVisible()
-    expect(screen.getAllByText(/locked/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/policy_denied/i)[0]).toBeVisible()
-    expect(screen.getByText(/runtime_integration_degraded/i)).toBeVisible()
-    expect(screen.getByText(/Unlock the local store/i)).toBeVisible()
-    expect(
-      screen.getByText(/Re-authenticate the external source/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Review namespace\/action allowlist/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Refresh the workflow launch identity/i)
-    ).toBeVisible()
-    expect(screen.getAllByText(/Open diagnostics logs/i)[0]).toBeVisible()
-    expect(
-      screen.queryByText(/correct-horse-battery-staple/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/ghp_examplePlaintextToken/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/sk-this-value-must-not-render/i)
-    ).not.toBeInTheDocument()
   })
 
   it('scrubs secret-like diagnostic output before rendering', () => {

@@ -1,8 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { SecretsPolicySimulationPage } from '@/features/secrets-policy-simulation'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute(
   '/_authenticated/secrets-broker/policy-simulation'
 )({
-  component: SecretsPolicySimulationPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/secrets-broker/operational-controls' })
+  },
 })

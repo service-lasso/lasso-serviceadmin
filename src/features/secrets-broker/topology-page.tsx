@@ -186,7 +186,7 @@ const mappingColumns: ColumnDef<SecretVariableMappingRow>[] = [
           <Link to='/secrets-broker/sources'>Source</Link>
         </Button>
         <Button asChild size='sm' variant='outline'>
-          <Link to='/secrets-broker/diagnostics'>Diagnostics</Link>
+          <Link to='/secrets-broker/sources'>Provider status</Link>
         </Button>
       </div>
     ),

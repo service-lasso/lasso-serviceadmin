@@ -100,7 +100,7 @@ export const secretInventoryRows: SecretInventoryRow[] = [
     lastUsed: '2026-05-08T08:20:00Z',
     expiry: '2026-05-15T00:00:00Z',
     rotationStatus: 'due within 7 days',
-    providerConnectionUrl: '/secrets-broker/provider-connections',
+    providerConnectionUrl: '/secrets-broker/sources',
     refUsageUrl: '/dependencies?ref=zitadel-client-credential',
     auditUrl: '/secrets-broker/audit-events',
     safeNotes: 'Connection metadata only; provider material remains hidden.',
@@ -158,7 +158,7 @@ export const secretInventoryRows: SecretInventoryRow[] = [
     lastUsed: 'not available',
     expiry: 'not available',
     rotationStatus: 'registration pending',
-    providerConnectionUrl: '/secrets-broker/provider-connections',
+    providerConnectionUrl: '/secrets-broker/sources',
     refUsageUrl: '/dependencies?ref=payments-signing-ref',
     auditUrl: '/secrets-broker/audit-events',
     safeNotes:
