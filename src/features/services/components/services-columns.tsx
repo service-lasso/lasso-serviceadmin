@@ -10,6 +10,7 @@ import {
   Square,
   Star,
 } from 'lucide-react'
+import { renderServiceLinkUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import {
   useFavoriteFeatureState,
@@ -235,19 +236,23 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
       const service = row.original
       return (
         <div className='flex flex-wrap items-center gap-2'>
-          {service.links.slice(0, 2).map((link) => (
-            <Button
-              key={`${service.id}-${link.label}`}
-              asChild
-              size='sm'
-              variant='outline'
-            >
-              <a href={link.url} target='_blank' rel='noreferrer'>
-                {link.label}
-                <ExternalLink className='ml-2 size-3.5' />
-              </a>
-            </Button>
-          ))}
+          {service.links.slice(0, 2).map((link) => {
+            const url = renderServiceLinkUrl(link)
+
+            return (
+              <Button
+                key={`${service.id}-${link.label}`}
+                asChild
+                size='sm'
+                variant='outline'
+              >
+                <a href={url} target='_blank' rel='noreferrer'>
+                  {link.label}
+                  <ExternalLink className='ml-2 size-3.5' />
+                </a>
+              </Button>
+            )
+          })}
           {service.links.length > 2 ? (
             <span className='text-xs text-muted-foreground'>
               +{service.links.length - 2} more
