@@ -308,18 +308,20 @@ describe('Secrets Broker setup wizard', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: /Secrets Broker backup keys/i,
+        name: /Local encrypted store/i,
       })
     ).toBeVisible()
+    expect(screen.getAllByText(/Backup and keys/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/reconnect_required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/unlock_or_unseal_source/i)[0]).toBeVisible()
+    expect(screen.getByText(/^stale$/i)).toBeVisible()
     expect(
-      screen.getAllByText(/Backup, restore, and key management/i)[0]
+      screen.getByText(/rotation available after fresh backup/i)
     ).toBeVisible()
-    expect(screen.getByText(/Backup stale/i)).toBeVisible()
-    expect(screen.getByText(/Recovery risk/i)).toBeVisible()
-    expect(screen.getByText(/Last backup/i)).toBeVisible()
-    expect(screen.getAllByText(/Restore readiness/i)[0]).toBeVisible()
-    expect(screen.getByText(/key version v4/i)).toBeVisible()
-    expect(screen.getByText(/mkid_7f3a…9c21/i)).toBeVisible()
+    expect(screen.getByText(/restore metadata/i)).toBeVisible()
+    expect(screen.getByText(/master key status/i)).toBeVisible()
+    expect(screen.getByText(/recovery share metadata/i)).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Create encrypted backup/i })
     ).toBeVisible()
@@ -332,9 +334,9 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.getByRole('button', { name: /Rotate master key/i })
     ).toBeVisible()
-    expect(screen.getByText(/Confirm artifact path/i)).toBeVisible()
-    expect(screen.getByText(/never paste key material/i)).toBeVisible()
-    expect(screen.getByText(/Recent backup\/key audit metadata/i)).toBeVisible()
+    expect(
+      screen.getByText(/SECRETSBROKER_SOURCES_PATH: no external config active/i)
+    ).toBeVisible()
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)
     ).not.toBeInTheDocument()
@@ -373,10 +375,15 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/^Add Provider$/i)).toBeVisible()
     expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
     expect(screen.getAllByText(/local-encrypted-store/i)[0]).toBeVisible()
-    expect(screen.getByText(/Priority 1/i)).toBeVisible()
+    expect(screen.getByText(/Priority 0/i)).toBeVisible()
     expect(screen.getByText(/^default$/i)).toBeVisible()
     expect(screen.getByRole('button', { name: /Configure/i })).toBeVisible()
     expect(screen.getByRole('button', { name: /^Test$/i })).toBeVisible()
+    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/reconnect_required/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/locked/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/unlock_or_unseal_source/i)[0]).toBeVisible()
+    expect(screen.getByText(/default fallback provider/i)).toBeVisible()
     expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
     expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
@@ -445,8 +452,8 @@ describe('Secrets Broker setup wizard', () => {
     expect(getAddableSecretsBrokerProviders().length).toBeGreaterThan(1)
     expect(buildProvidersManagementSummary()).toMatchObject({
       configuredCount: 1,
-      readyCount: 1,
-      needsActionCount: 0,
+      readyCount: 0,
+      needsActionCount: 1,
       defaultProvider: 'Local encrypted store',
     })
 

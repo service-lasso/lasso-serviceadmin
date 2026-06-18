@@ -33,6 +33,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { LocalEncryptedStoreProviderDetail } from './local-encrypted-store-detail'
 import {
   buildProvidersManagementSummary,
   filterProviderManagementRows,
@@ -318,6 +319,8 @@ export function ProvidersManagementPage() {
             </div>
           </CardContent>
         </Card>
+
+        <LocalEncryptedStoreProviderDetail />
 
         <Card>
           <CardHeader>

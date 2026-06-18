@@ -241,7 +241,7 @@ test.describe('Secrets Broker browser coverage', () => {
     const sections = [
       ['/secrets-broker/operational-controls', /Operational controls/i],
       ['/secrets-broker/sources', /Secrets Broker providers/i],
-      ['/secrets-broker/backup-keys', /Backup, restore, and key management/i],
+      ['/secrets-broker/backup-keys', /Local encrypted store/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
       ['/secrets-broker/audit-events', /Audit and events/i],
     ] as const
