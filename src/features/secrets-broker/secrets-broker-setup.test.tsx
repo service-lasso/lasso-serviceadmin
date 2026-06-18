@@ -39,6 +39,9 @@ import {
   singleSecretRevealScenarios,
 } from './single-secret-reveal'
 import {
+  buildProvidersManagementSummary,
+  getAddableSecretsBrokerProviders,
+  getConfiguredSecretsBrokerProviders,
   secretsBrokerSourceBackends,
   sourceBackendHasSecretValue,
 } from './source-backends'
@@ -358,11 +361,22 @@ describe('Secrets Broker setup wizard', () => {
     ).toHaveLength(1)
   })
 
-  it('renders secret sources and backends with warning states and metadata-only test results', async () => {
+  it('renders Providers management with local default and addable provider options', async () => {
+    const user = userEvent.setup()
     await renderRoute('/secrets-broker/sources')
 
-    expect(screen.getByText(/Secret Sources \/ Backends/i)).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: /Secrets Broker providers/i })
+    ).toBeVisible()
     expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
+    expect(screen.getByText(/Configured provider table/i)).toBeVisible()
+    expect(screen.getByText(/^Add Provider$/i)).toBeVisible()
+    expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/local-encrypted-store/i)[0]).toBeVisible()
+    expect(screen.getByText(/Priority 1/i)).toBeVisible()
+    expect(screen.getByText(/^default$/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /Configure/i })).toBeVisible()
+    expect(screen.getByRole('button', { name: /^Test$/i })).toBeVisible()
     expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
     expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
@@ -378,18 +392,13 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Untrusted command path/i)).toBeVisible()
     expect(screen.getByText(/Missing timeout\/output limits/i)).toBeVisible()
     expect(
-      screen.getAllByRole('button', { name: /Test source/i })[0]
+      screen.getAllByRole('button', { name: /Add Environment provider/i })[0]
     ).toBeVisible()
-    expect(
-      screen.getAllByRole('link', { name: /View diagnostics/i })[0]
-    ).toHaveAttribute('href', '/secrets-broker/sources')
-    expect(
-      screen.getAllByRole('link', { name: /Edit configuration/i })[0]
-    ).toHaveAttribute('href', '/secrets-broker/sources')
-    expect(screen.getByText(/3 keys matched allowlist/i)).toBeVisible()
-    expect(screen.getByText(/path policy denied/i)).toBeVisible()
-    expect(screen.getByText(/command not executed/i)).toBeVisible()
-    expect(screen.getAllByText(/value=hidden/i)[0]).toBeVisible()
+
+    await user.type(screen.getByLabelText(/Search providers/i), 'aws')
+    expect(screen.getByText(/No configured providers match/i)).toBeVisible()
+    expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
+    expect(screen.queryByText(/Environment provider/i)).not.toBeInTheDocument()
   })
 
   it('routes the legacy secret-sources hash to the canonical sources page', async () => {
@@ -397,7 +406,7 @@ describe('Secrets Broker setup wizard', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /^Secrets Broker sources$/i })
+        screen.getByRole('heading', { name: /^Secrets Broker providers$/i })
       ).toBeVisible()
     })
 
@@ -424,17 +433,26 @@ describe('Secrets Broker setup wizard', () => {
     })
   })
 
-  it('links source configuration actions to the Providers page', async () => {
+  it('keeps provider management fixtures scoped to one configured default', async () => {
     await renderRoute('/secrets-broker/sources')
 
-    const configurationLinks = screen.getAllByRole('link', {
-      name: /Edit configuration/i,
+    expect(getConfiguredSecretsBrokerProviders()).toHaveLength(1)
+    expect(getConfiguredSecretsBrokerProviders()[0]).toMatchObject({
+      id: 'local-encrypted-store',
+      configured: true,
+      defaultRole: 'default',
+    })
+    expect(getAddableSecretsBrokerProviders().length).toBeGreaterThan(1)
+    expect(buildProvidersManagementSummary()).toMatchObject({
+      configuredCount: 1,
+      readyCount: 1,
+      needsActionCount: 0,
+      defaultProvider: 'Local encrypted store',
     })
 
-    expect(configurationLinks[0]).toHaveAttribute(
-      'href',
-      '/secrets-broker/sources'
-    )
+    expect(
+      screen.getByRole('button', { name: /Add AWS Secrets Manager CLI/i })
+    ).toBeVisible()
   })
 
   it('keeps source backend fixtures free of secret values', () => {

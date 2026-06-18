@@ -80,9 +80,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByRole('link', { name: 'View providers' })
     ).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: 'View secret sources' })
-    ).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Add provider' })).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'View audit/events' })
     ).toBeVisible()
@@ -242,7 +240,7 @@ test.describe('Secrets Broker browser coverage', () => {
   }) => {
     const sections = [
       ['/secrets-broker/operational-controls', /Operational controls/i],
-      ['/secrets-broker/sources', /Secret Sources \/ Backends/i],
+      ['/secrets-broker/sources', /Secrets Broker providers/i],
       ['/secrets-broker/backup-keys', /Backup, restore, and key management/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
       ['/secrets-broker/audit-events', /Audit and events/i],
