@@ -164,9 +164,9 @@ const secretsBrokerSectionMetadata: Record<
       'Inspect policy, audit, telemetry, event filtering, and lockout posture.',
   },
   sources: {
-    title: 'Service Admin - Secrets Broker Sources',
-    heading: 'Secrets Broker sources',
-    description: 'Inspect configured source and backend metadata safely.',
+    title: 'Service Admin - Secrets Broker Providers',
+    heading: 'Secrets Broker providers',
+    description: 'Inspect configured provider metadata safely.',
   },
   'provider-connections': {
     title: 'Service Admin - Secrets Broker Provider Connections',
@@ -2247,9 +2247,7 @@ export function SecretsBrokerSetupWizard({
                     <Link to='/secrets-broker/sources'>View providers</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
-                    <Link to='/secrets-broker/sources'>
-                      View secret sources
-                    </Link>
+                    <Link to='/secrets-broker/sources'>Add provider</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
                     <Link to='/secrets-broker/audit-events'>
@@ -2268,7 +2266,7 @@ export function SecretsBrokerSetupWizard({
             <div className='grid gap-4 md:grid-cols-3'>
               <Card>
                 <CardHeader className='pb-2'>
-                  <CardTitle className='text-base'>Ready sources</CardTitle>
+                  <CardTitle className='text-base'>Ready providers</CardTitle>
                   <CardDescription>
                     Sources that can be saved or retried safely.
                   </CardDescription>

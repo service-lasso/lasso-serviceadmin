@@ -29,6 +29,14 @@ export type SecretsBrokerSourceWarning = {
   description: string
 }
 
+export type SecretsBrokerProviderLifecycle =
+  | 'setup-needed'
+  | 'locked'
+  | 'unlocked'
+  | 'auth-required'
+  | 'invalid'
+  | 'ready'
+
 export type SecretsBrokerSourceTestResult = {
   outcome: 'success' | 'failure' | 'not-run'
   checkedAt: string
@@ -42,6 +50,13 @@ export type SecretsBrokerSourceBackend = {
   provider: string
   source: string
   connection: string
+  configured: boolean
+  enabled: boolean
+  priority: number | null
+  namespaces: string[]
+  defaultRole: 'default' | 'fallback' | 'addable'
+  lifecycle: SecretsBrokerProviderLifecycle
+  nextAction: string
   state: SecretsBrokerSourceState
   mode: string
   lastCheckedAt: string
@@ -63,6 +78,13 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     provider: 'local',
     source: '@secretsbroker/local/default',
     connection: 'Local encrypted vault',
+    configured: true,
+    enabled: true,
+    priority: 1,
+    namespaces: ['default', 'services/*', 'workspaces/*'],
+    defaultRole: 'default',
+    lifecycle: 'unlocked',
+    nextAction: 'Test provider status or open backup and key management.',
     state: 'reachable',
     mode: 'local-first encrypted store',
     lastCheckedAt: '2026-05-07T18:32:00Z',
@@ -91,9 +113,17 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'Environment provider',
     type: 'env',
     provider: 'env',
-    source: '@secretsbroker/env/service-lasso',
-    connection: 'Process environment',
-    state: 'configured',
+    source: 'addable:env',
+    connection: 'Add provider to choose allowlisted environment keys',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, define an explicit allowlist, then test metadata only.',
+    state: 'not-configured',
     mode: 'read-only allowlist',
     lastCheckedAt: '2026-05-07T18:31:15Z',
     summary:
@@ -125,9 +155,17 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'File provider',
     type: 'file',
     provider: 'file',
-    source: '@secretsbroker/file/runtime',
-    connection: 'Scoped runtime env file',
-    state: 'failing',
+    source: 'addable:file',
+    connection: 'Add provider to choose scoped file paths',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, restrict root paths, then run path/symlink validation.',
+    state: 'not-configured',
     mode: 'read-only file path',
     lastCheckedAt: '2026-05-07T18:30:40Z',
     summary:
@@ -168,9 +206,17 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'Exec provider',
     type: 'exec',
     provider: 'exec',
-    source: '@secretsbroker/exec/openclaw',
-    connection: 'OpenClaw SecretRef adapter',
-    state: 'failing',
+    source: 'addable:exec',
+    connection: 'Add provider to choose a trusted resolver command',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, pin trusted command paths, timeout, and output limits.',
+    state: 'not-configured',
     mode: 'allowlisted command',
     lastCheckedAt: '2026-05-07T18:30:05Z',
     summary:
@@ -214,9 +260,17 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'HashiCorp Vault CLI',
     type: 'vault-cli',
     provider: 'vault',
-    source: '@secretsbroker/external/ops',
-    connection: 'Vault kv/service-lasso',
-    state: 'failing',
+    source: 'addable:vault',
+    connection: 'Add provider to configure Vault/OpenBao metadata',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, capture safe address/mount metadata, and test auth state.',
+    state: 'not-configured',
     mode: 'external cli read',
     lastCheckedAt: '2026-05-07T18:29:40Z',
     summary:
@@ -252,8 +306,16 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'AWS Secrets Manager CLI',
     type: 'aws-secrets-manager-cli',
     provider: 'aws',
-    source: '@secretsbroker/external/aws',
-    connection: 'AWS Secrets Manager CLI',
+    source: 'addable:aws-secrets-manager',
+    connection: 'Add provider to configure AWS metadata',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, choose safe region/profile metadata, then run metadata-only tests.',
     state: 'untested',
     mode: 'external cli metadata probe',
     lastCheckedAt: 'never',
@@ -278,9 +340,17 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: '1Password CLI',
     type: 'onepassword-cli',
     provider: 'onepassword',
-    source: '@secretsbroker/external/1password',
-    connection: '1Password ops vault',
-    state: 'configured',
+    source: 'addable:onepassword',
+    connection: 'Add provider to configure 1Password item mappings',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, map vault/item metadata, and verify sign-in state.',
+    state: 'not-configured',
     mode: 'external cli metadata probe',
     lastCheckedAt: '2026-05-07T18:28:30Z',
     summary:
@@ -304,8 +374,16 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'Bitwarden / BWS CLI',
     type: 'bitwarden-bws-cli',
     provider: 'bitwarden',
-    source: '@secretsbroker/external/bws',
-    connection: 'Bitwarden Secrets Manager',
+    source: 'addable:bitwarden-bws',
+    connection: 'Add provider to configure BWS project mappings',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, map project/secret ids, and keep tokens as refs only.',
     state: 'not-configured',
     mode: 'external cli metadata probe',
     lastCheckedAt: 'never',
@@ -330,9 +408,17 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     title: 'Docker/Kubernetes mounted secrets',
     type: 'mounted-secrets',
     provider: 'mounted-file',
-    source: '@secretsbroker/mounted/run-secrets',
-    connection: '/run/secrets/*',
-    state: 'configured',
+    source: 'addable:mounted-secrets',
+    connection: 'Add provider to configure mounted path metadata',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, restrict root path and symlink policy, then test metadata only.',
+    state: 'not-configured',
     mode: 'read-only mounted path',
     lastCheckedAt: '2026-05-07T18:27:20Z',
     summary:
@@ -376,6 +462,79 @@ export function countSourceBackendsByState(
       failing: 0,
       untested: 0,
     }
+  )
+}
+
+export function getConfiguredSecretsBrokerProviders(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  return sources
+    .filter((source) => source.configured)
+    .sort((left, right) => (left.priority ?? 999) - (right.priority ?? 999))
+}
+
+export function getAddableSecretsBrokerProviders(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  return sources
+    .filter((source) => !source.configured)
+    .sort((left, right) => left.title.localeCompare(right.title))
+}
+
+export function buildProvidersManagementSummary(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  const configured = getConfiguredSecretsBrokerProviders(sources)
+  const addable = getAddableSecretsBrokerProviders(sources)
+  const ready = configured.filter(
+    (source) =>
+      source.enabled &&
+      ['reachable', 'configured'].includes(source.state) &&
+      ['ready', 'unlocked'].includes(source.lifecycle)
+  )
+  const needsAction = configured.filter(
+    (source) =>
+      !source.enabled ||
+      ['failing', 'untested'].includes(source.state) ||
+      !['ready', 'unlocked'].includes(source.lifecycle)
+  )
+  const defaultProvider =
+    configured.find((source) => source.defaultRole === 'default') ??
+    configured[0]
+
+  return {
+    configuredCount: configured.length,
+    addableCount: addable.length,
+    readyCount: ready.length,
+    needsActionCount: needsAction.length,
+    defaultProvider: defaultProvider?.title ?? 'None',
+  }
+}
+
+export function filterProviderManagementRows(
+  sources: SecretsBrokerSourceBackend[],
+  query: string
+) {
+  const normalizedQuery = query.trim().toLowerCase()
+
+  if (!normalizedQuery) return sources
+
+  return sources.filter((source) =>
+    [
+      source.title,
+      source.type,
+      source.provider,
+      source.source,
+      source.connection,
+      source.state,
+      source.lifecycle,
+      source.namespaces.join(' '),
+      source.defaultRole,
+      source.nextAction,
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedQuery)
   )
 }
 
