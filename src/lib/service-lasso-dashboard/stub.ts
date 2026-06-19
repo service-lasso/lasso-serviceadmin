@@ -298,6 +298,14 @@ const defaultServices: DashboardService[] = [
         scope: 'global',
         source: '.env',
       },
+      {
+        key: 'SERVICE_LASSO_RUNTIME_CONFIG_PATH',
+        value:
+          'C:\\service-lasso\\profiles\\development\\services\\lasso-serviceadmin\\config\\runtime\\resolved\\service-lasso-runtime-config.json',
+        scope: 'service',
+        source:
+          'C:\\service-lasso\\profiles\\development\\services\\lasso-serviceadmin\\service.json',
+      },
     ],
     recentLogs: [
       {

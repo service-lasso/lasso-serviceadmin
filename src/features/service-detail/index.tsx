@@ -587,8 +587,18 @@ function EnvironmentTable({
   variables: ServiceEnvironmentVariable[]
 }) {
   return (
-    <div className='overflow-x-auto rounded-md border'>
-      <Table>
+    <div
+      className='overflow-x-auto rounded-md border'
+      data-testid='service-detail-variables-table'
+    >
+      <Table className='min-w-[860px] table-fixed'>
+        <colgroup>
+          <col className='w-[20%]' />
+          <col className='w-[34%]' />
+          <col className='w-[11%]' />
+          <col className='w-[19%]' />
+          <col className='w-[16%]' />
+        </colgroup>
         <TableHeader>
           <TableRow>
             <TableHead>Key</TableHead>
@@ -602,11 +612,21 @@ function EnvironmentTable({
           {variables.length ? (
             variables.map((variable) => (
               <TableRow key={variable.key}>
-                <TableCell className='font-medium'>{variable.key}</TableCell>
-                <TableCell className='max-w-[360px] text-sm break-all text-muted-foreground'>
-                  {variable.secret ? '••••••••' : variable.value}
+                <TableCell className='min-w-0 align-top font-medium whitespace-normal'>
+                  <div className='truncate' title={variable.key}>
+                    {variable.key}
+                  </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className='min-w-0 align-top text-sm whitespace-normal text-muted-foreground'>
+                  <div
+                    className='leading-relaxed break-all'
+                    data-testid='service-detail-variable-value'
+                    title={variable.secret ? undefined : variable.value}
+                  >
+                    {variable.secret ? '••••••••' : variable.value}
+                  </div>
+                </TableCell>
+                <TableCell className='align-top whitespace-normal'>
                   <Badge
                     variant={
                       variable.scope === 'global' ? 'secondary' : 'outline'
@@ -615,9 +635,19 @@ function EnvironmentTable({
                     {variable.scope}
                   </Badge>
                 </TableCell>
-                <TableCell>{variable.source ?? 'Not recorded'}</TableCell>
-                <TableCell>
-                  <div className='flex flex-wrap gap-2'>
+                <TableCell className='min-w-0 align-top text-sm whitespace-normal text-muted-foreground'>
+                  <div
+                    className='truncate'
+                    title={variable.source ?? 'Not recorded'}
+                  >
+                    {variable.source ?? 'Not recorded'}
+                  </div>
+                </TableCell>
+                <TableCell className='align-top whitespace-normal'>
+                  <div
+                    className='flex min-w-[8.75rem] flex-wrap items-center gap-2'
+                    data-testid='service-detail-variable-actions'
+                  >
                     <CopyValueButton value={variable.value} />
                     <Button variant='outline' size='sm' asChild>
                       <Link
