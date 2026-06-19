@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Copy,
   ExternalLink,
+  FileJson,
   HeartPulse,
   Link2,
   Network,
@@ -60,6 +61,16 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -79,6 +90,46 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+
+const REDACTED_CONFIG_VALUE = '[redacted by Service Admin]'
+const SENSITIVE_CONFIG_KEY_PATTERN =
+  /(?:password|passphrase|token|api[_-]?key|secret|private[_-]?key|credential|cookie)/i
+
+function redactSensitiveConfigValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveConfigValue(item))
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  const record = value as Record<string, unknown>
+
+  if (typeof record.key === 'string' && record.secret === true) {
+    return {
+      ...record,
+      value: REDACTED_CONFIG_VALUE,
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entryValue]) => {
+      if (
+        SENSITIVE_CONFIG_KEY_PATTERN.test(key) &&
+        typeof entryValue === 'string'
+      ) {
+        return [key, REDACTED_CONFIG_VALUE]
+      }
+
+      return [key, redactSensitiveConfigValue(entryValue)]
+    })
+  )
+}
+
+function buildServiceConfigJson(service: DashboardService) {
+  return JSON.stringify(redactSensitiveConfigValue(service), null, 2)
+}
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
@@ -644,6 +695,42 @@ function MetadataRow({ label, value }: { label: string; value?: string }) {
   )
 }
 
+function FullConfigJsonDialog({ service }: { service: DashboardService }) {
+  const configJson = useMemo(() => buildServiceConfigJson(service), [service])
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button type='button' variant='outline' size='sm'>
+          <FileJson className='mr-2 size-4' />
+          View full config JSON
+        </Button>
+      </DialogTrigger>
+      <DialogContent className='max-h-[88vh] gap-5 sm:max-w-4xl'>
+        <DialogHeader className='pr-8'>
+          <DialogTitle>Full config JSON</DialogTitle>
+          <DialogDescription>
+            {service.name} runtime service record with sensitive values masked.
+          </DialogDescription>
+        </DialogHeader>
+        <pre
+          data-testid='service-detail-full-config-json'
+          className='max-h-[60vh] overflow-auto rounded-md border bg-muted/35 p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground'
+        >
+          {configJson}
+        </pre>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type='button' variant='outline'>
+              Close
+            </Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function EnvironmentTable({
   serviceId,
   variables,
@@ -995,6 +1082,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         Runtime
                       </Link>
                     </Button>
+                    <FullConfigJsonDialog service={service} />
                   </div>
                 </div>
 
