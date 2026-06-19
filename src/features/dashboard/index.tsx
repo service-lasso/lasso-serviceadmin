@@ -293,6 +293,8 @@ export function Dashboard() {
   }
 
   const summary = summaryQuery.data
+  const isReloadingRuntime =
+    actionMutation.isPending && actionMutation.variables === 'reload-runtime'
 
   return (
     <>
@@ -331,8 +333,10 @@ export function Dashboard() {
                 disabled={actionMutation.isPending}
                 className='w-full justify-start'
               >
-                <RefreshCcw className='mr-2 h-4 w-4' />
-                Reload runtime
+                <RefreshCcw
+                  className={`mr-2 h-4 w-4 ${isReloadingRuntime ? 'animate-spin' : ''}`}
+                />
+                {isReloadingRuntime ? 'Reloading runtime...' : 'Reload runtime'}
               </Button>
             }
           />

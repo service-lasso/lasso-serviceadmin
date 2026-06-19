@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   buildServiceLogUrl,
   fetchDashboardService,
@@ -46,7 +47,7 @@ export function useDashboardAction() {
 
   return useMutation({
     mutationFn: (action: DashboardAction) => runDashboardAction(action),
-    onSuccess: (data) => {
+    onSuccess: (data, action) => {
       queryClient.setQueryData(dashboardQueryKey, data)
 
       const allServices = [
@@ -58,6 +59,22 @@ export function useDashboardAction() {
       for (const service of allServices) {
         queryClient.setQueryData([...dashboardQueryKey, service.id], service)
       }
+
+      if (action === 'reload-runtime') {
+        toast.success('Runtime reloaded and health data refreshed.')
+      }
+    },
+    onError: (error, action) => {
+      if (action !== 'reload-runtime') {
+        return
+      }
+
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Runtime reload failed. Check the Service Lasso runtime API logs.'
+
+      toast.error(message)
     },
   })
 }

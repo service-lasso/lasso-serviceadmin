@@ -104,9 +104,9 @@ function summary(services: DashboardService[]): DashboardSummary {
   }
 }
 
-function jsonResponse(body: unknown) {
+function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status: init?.status ?? 200,
     headers: { 'Content-Type': 'application/json' },
   })
 }
@@ -266,6 +266,79 @@ describe('service lasso dashboard runtime client', () => {
     )
     expect(runtimeSummary.servicesRunning).toBe(3)
     expect(runtimeSummary.problemServices).toEqual([])
+  })
+
+  it('reloads runtime through the runtime action API before refreshing dashboard status', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const warningServices = [
+      service('@traefik', 'Traefik', 'stopped'),
+      service('@serviceadmin', 'Service Admin', 'running'),
+    ]
+    const healthyServices = warningServices.map((item) => ({
+      ...item,
+      status: 'running' as const,
+      runtimeHealth: {
+        ...item.runtimeHealth,
+        state: 'running' as const,
+        health: 'healthy' as const,
+      },
+    }))
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          action: 'reload',
+          ok: true,
+          results: [],
+          skipped: [],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ summary: summary(healthyServices) })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { runDashboardAction } = await import('./client')
+
+    const runtimeSummary = await runDashboardAction('reload-runtime')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://runtime.test/api/runtime/actions/reload',
+      { method: 'POST' }
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://runtime.test/api/dashboard',
+      undefined
+    )
+    expect(runtimeSummary.runtime.status).toBe('healthy')
+    expect(runtimeSummary.problemServices).toEqual([])
+  })
+
+  it('surfaces runtime API error details from failed reload responses', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        {
+          detail: 'Reload blocked because @nginx has invalid health config.',
+        },
+        { status: 409 }
+      )
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { runDashboardAction } = await import('./client')
+
+    await expect(runDashboardAction('reload-runtime')).rejects.toThrow(
+      'Service Lasso runtime API returned 409: Reload blocked because @nginx has invalid health config.'
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('runs stop-all and restart-all through runtime orchestration endpoints', async () => {
