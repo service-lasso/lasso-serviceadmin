@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { SidebarMenuButton } from '@/components/ui/sidebar'
+import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar'
 import { activeInstanceSelectorState } from '@/components/instance-selector-model'
 import type { FleetInstanceSummary } from '@/features/fleet-overview/fleet-overview'
 
@@ -29,28 +29,42 @@ export function InstanceSelector({
 }: InstanceSelectorProps) {
   const { endpoint, instance, label, remoteConnectState } =
     activeInstanceSelectorState
+  const { isMobile, state } = useSidebar()
+  const isCollapsed = state === 'collapsed' && !isMobile
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <SidebarMenuButton
           size='lg'
-          aria-label='Service Lasso instance selector'
+          aria-label={`Service Lasso instance selector: ${label} (${endpoint})`}
+          tooltip={
+            isCollapsed
+              ? {
+                  children: `${label} - ${endpoint}`,
+                }
+              : undefined
+          }
           className={cn(
-            'h-9 min-w-[220px] border bg-background px-2 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
+            'h-9 border bg-background data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
+            isCollapsed ? 'min-w-0 justify-center px-0' : 'min-w-[220px] px-2',
             className
           )}
         >
           <div className='flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
             <Monitor className='size-4' />
           </div>
-          <div className='grid flex-1 text-left text-sm leading-tight'>
-            <span className='truncate font-medium'>{label}</span>
-            <span className='truncate text-xs text-muted-foreground'>
-              {endpoint}
-            </span>
-          </div>
-          <ChevronsUpDown className='ml-auto size-4' />
+          {!isCollapsed && (
+            <>
+              <div className='grid flex-1 text-left text-sm leading-tight'>
+                <span className='truncate font-medium'>{label}</span>
+                <span className='truncate text-xs text-muted-foreground'>
+                  {endpoint}
+                </span>
+              </div>
+              <ChevronsUpDown className='ml-auto size-4' />
+            </>
+          )}
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
