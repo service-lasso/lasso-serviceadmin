@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
   buildBulkSecretCampaignPlan,
+  buildBulkSecretCampaignApplyGate,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
   managedSecretBulkPlanHasSecretMaterial,
@@ -145,9 +146,118 @@ describe('Secrets Broker secrets management page', () => {
       screen.getByText(/denied: policy is readonly for this ref/i)
     ).toBeVisible()
     expect(
-      screen.getByRole('button', { name: /Bulk apply unavailable in Stage 1/i })
+      screen.getByRole('button', {
+        name: /Bulk apply blocked by broker campaign API/i,
+      })
     ).toBeDisabled()
+    expect(
+      screen.getByText(/Campaign confirmation and revalidation/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/provider auth required/i)[0]).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps bulk campaign apply blocked until audit reason confirmation and fresh revalidation pass', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    await user.click(
+      screen.getByLabelText(
+        /Select ZITADEL_CLIENT_CREDENTIAL for bulk dry-run/i
+      )
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+
+    expect(screen.getByText(/Revalidation blocked/i)).toBeVisible()
+    expect(screen.getByText(/audit reason missing/i)).toBeVisible()
+    expect(screen.getByText(/high-risk confirmation missing/i)).toBeVisible()
+    expect(screen.getByText(/revalidation not run/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/broker campaign API unavailable/i)[0]
+    ).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Campaign audit reason/i),
+      'operator requested controlled campaign rotation'
+    )
+    await user.type(
+      screen.getByLabelText(/Explicit confirmation/i),
+      'CONFIRM HIGH RISK CAMPAIGN'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+
+    expect(screen.getAllByText(/Revalidated/i)[0]).toBeVisible()
+    expect(screen.getByText(/audit reason recorded/i)).toBeVisible()
+    expect(screen.getByText(/confirmation accepted/i)).toBeVisible()
+    expect(screen.getByText(/revalidation passed/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/broker campaign API unavailable/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: /Bulk apply blocked by broker campaign API/i,
+      })
+    ).toBeDisabled()
+  })
+
+  it('shows stale plan and revalidation failure states before bulk apply', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    await user.click(
+      screen.getByLabelText(
+        /Select ZITADEL_CLIENT_CREDENTIAL for bulk dry-run/i
+      )
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+    await user.type(
+      screen.getByLabelText(/Campaign audit reason/i),
+      'operator requested controlled campaign rotation'
+    )
+    await user.type(
+      screen.getByLabelText(/Explicit confirmation/i),
+      'CONFIRM HIGH RISK CAMPAIGN'
+    )
+
+    await user.selectOptions(
+      screen.getByLabelText(/Revalidation outcome/i),
+      'stale-plan'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+    expect(screen.getAllByText(/stale plan/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/revalidation blocked/i)[0]).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Revalidation outcome/i),
+      'auth-required'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+    expect(
+      screen.getAllByText(
+        /provider auth required before revalidation can pass/i
+      )[0]
+    ).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Revalidation outcome/i),
+      'audit-unavailable'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+    expect(
+      screen.getAllByText(/audit unavailable; campaign apply fails closed/i)[0]
+    ).toBeVisible()
   })
 
   it('previews reveal edit reset delete and policy actions behind dry-run or confirmation gates', async () => {
@@ -319,5 +429,44 @@ describe('Secrets Broker secrets management page', () => {
     expect(bulkPlan.missingProviderCount).toBe(1)
     expect(bulkPlan.applyAvailable).toBe(false)
     expect(managedSecretBulkPlanHasSecretMaterial(bulkPlan)).toBe(false)
+
+    const blockedGate = buildBulkSecretCampaignApplyGate(
+      bulkPlan,
+      'operator requested controlled campaign rotation',
+      'CONFIRM HIGH RISK CAMPAIGN',
+      'ready',
+      true
+    )
+    expect(blockedGate.canApply).toBe(false)
+    expect(blockedGate.blockers).toContain(
+      'broker campaign apply API not connected'
+    )
+
+    const cleanPlan = buildBulkSecretCampaignPlan(
+      managedSecretRows,
+      [managedSecretRows[0].id],
+      'rotate-reset'
+    )
+    const staleGate = buildBulkSecretCampaignApplyGate(
+      cleanPlan,
+      'operator requested controlled campaign rotation',
+      'CONFIRM HIGH RISK CAMPAIGN',
+      'stale-plan',
+      true,
+      true
+    )
+    expect(staleGate.canApply).toBe(false)
+    expect(staleGate.revalidationPassed).toBe(false)
+    expect(staleGate.revalidationStatus).toMatch(/stale plan/i)
+
+    const readyGate = buildBulkSecretCampaignApplyGate(
+      cleanPlan,
+      'operator requested controlled campaign rotation',
+      'CONFIRM HIGH RISK CAMPAIGN',
+      'ready',
+      true,
+      true
+    )
+    expect(readyGate.canApply).toBe(true)
   })
 })
