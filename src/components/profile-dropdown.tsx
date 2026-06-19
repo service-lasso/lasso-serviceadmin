@@ -12,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SidebarMenuButton } from '@/components/ui/sidebar'
-import { InstanceSelector } from '@/components/instance-selector'
 import { SignOutDialog } from '@/components/sign-out-dialog'
 
 export function ProfileDropdown() {
@@ -21,7 +20,6 @@ export function ProfileDropdown() {
 
   return (
     <>
-      {!authUser ? <InstanceSelector align='end' /> : null}
       {authUser ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
