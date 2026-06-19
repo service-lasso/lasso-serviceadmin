@@ -33,12 +33,52 @@ function buildApiUrl(pathname: string) {
   return `${serviceLassoApiBaseUrl}${pathname}`
 }
 
+function readApiErrorMessage(payload: unknown) {
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+
+  for (const key of ['detail', 'message', 'title', 'error']) {
+    const value = (payload as Record<string, unknown>)[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return null
+}
+
+async function readResponseBody(response: Response, contentType: string) {
+  if (contentType.toLowerCase().includes('application/json')) {
+    try {
+      return await response.json()
+    } catch {
+      return null
+    }
+  }
+
+  try {
+    return await response.text()
+  } catch {
+    return null
+  }
+}
+
 async function fetchRuntimeJson<T>(pathname: string, init?: RequestInit) {
   const response = await fetch(buildApiUrl(pathname), init)
   const contentType = response.headers.get('content-type') ?? ''
 
   if (!response.ok) {
-    throw new Error(`Service Lasso runtime API returned ${response.status}.`)
+    const body = await readResponseBody(response, contentType)
+    const bodyMessage =
+      typeof body === 'string' && body.trim()
+        ? body.trim()
+        : readApiErrorMessage(body)
+    const suffix = bodyMessage ? `: ${bodyMessage}` : '.'
+
+    throw new Error(
+      `Service Lasso runtime API returned ${response.status}${suffix}`
+    )
   }
 
   if (!contentType.toLowerCase().includes('application/json')) {
