@@ -63,16 +63,27 @@ export function useDashboardAction() {
       if (action === 'reload-runtime') {
         toast.success('Runtime reloaded and health data refreshed.')
       }
+
+      if (action === 'start-services') {
+        toast.success(
+          'Start services request accepted. Services status refreshed.'
+        )
+      }
     },
     onError: (error, action) => {
-      if (action !== 'reload-runtime') {
+      if (action !== 'reload-runtime' && action !== 'start-services') {
         return
       }
+
+      const fallback =
+        action === 'reload-runtime'
+          ? 'Runtime reload failed. Check the Service Lasso runtime API logs.'
+          : 'Start services failed. Check the Service Lasso runtime API logs.'
 
       const message =
         error instanceof Error && error.message.trim()
           ? error.message
-          : 'Runtime reload failed. Check the Service Lasso runtime API logs.'
+          : fallback
 
       toast.error(message)
     },
