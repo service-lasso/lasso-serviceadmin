@@ -44,6 +44,32 @@ describe('instance selector shell control', () => {
     expect(screen.getByText(/Setup needed/i)).toBeVisible()
   })
 
+  it('renders as an icon-only affordance when the desktop sidebar is collapsed', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/')
+
+    const sidebarTrigger = document.querySelector<HTMLButtonElement>(
+      '[data-sidebar="trigger"]'
+    )
+
+    expect(sidebarTrigger).not.toBeNull()
+    await user.click(sidebarTrigger!)
+
+    const [selector] = await screen.findAllByRole('button', {
+      name: /Service Lasso instance selector/i,
+    })
+
+    expect(within(selector).queryByText('Local')).not.toBeInTheDocument()
+    expect(
+      within(selector).queryByText(activeInstanceSelectorState.endpoint)
+    ).not.toBeInTheDocument()
+
+    await user.click(selector)
+
+    expect(screen.getByText(/Service Lasso instance/i)).toBeVisible()
+    expect(screen.getByText(/Local on-prem control is selected/i)).toBeVisible()
+  })
+
   it('keeps selector metadata free of secret material', () => {
     expect(instanceSelectorHasSecretMaterial()).toBe(false)
   })
