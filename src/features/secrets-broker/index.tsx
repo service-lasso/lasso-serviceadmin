@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { Header } from '@/components/layout/header'
@@ -53,11 +54,14 @@ import {
   type SecretsBrokerDiagnosticStatus,
 } from './diagnostics'
 import {
+  buildOperationalLockoutClearPreview,
+  buildOperationalLockoutClearResult,
   filterOperationalControlEvents,
   operationalControlEvents,
   operationalControlLockouts,
   operationalControlMetrics,
   operationalControlPolicies,
+  type OperationalControlLockoutClearResult,
   type OperationalControlOutcome,
   type OperationalControlSeverity,
 } from './operational-controls'
@@ -1296,6 +1300,15 @@ function OperationalControlsPanel() {
   >('all')
   const [sinceFilter, setSinceFilter] = useState('')
   const [untilFilter, setUntilFilter] = useState('')
+  const [lockoutClearReasons, setLockoutClearReasons] = useState<
+    Record<string, string>
+  >({})
+  const [lockoutClearConfirmations, setLockoutClearConfirmations] = useState<
+    Record<string, string>
+  >({})
+  const [lockoutClearResults, setLockoutClearResults] = useState<
+    Record<string, OperationalControlLockoutClearResult>
+  >({})
 
   const services = Array.from(
     new Set(operationalControlEvents.map((event) => event.serviceId))
@@ -1433,44 +1446,152 @@ function OperationalControlsPanel() {
               <Badge variant='outline'>secret-bearing actions only</Badge>
             </div>
             <div className='space-y-3'>
-              {operationalControlLockouts.map((lockout) => (
-                <div key={lockout.id} className='rounded-md border p-3 text-sm'>
-                  <div className='flex flex-wrap items-center justify-between gap-2'>
-                    <div className='font-medium'>{lockout.scope}</div>
-                    <Badge
-                      variant={
-                        lockout.status === 'active'
-                          ? 'destructive'
-                          : 'secondary'
-                      }
-                    >
-                      {lockout.status}
-                    </Badge>
-                  </div>
-                  <div className='mt-2 text-muted-foreground'>
-                    {lockout.affected}
-                  </div>
-                  <div className='mt-2 grid gap-2 text-xs sm:grid-cols-2'>
-                    <div>Retry after: {lockout.retryAfterSeconds}s</div>
-                    <div>
-                      Audited clear:{' '}
-                      {lockout.auditedClearSupported ? 'supported' : 'blocked'}
-                    </div>
-                  </div>
-                  <div className='mt-2 text-xs text-muted-foreground'>
-                    {lockout.reason}
-                  </div>
-                  <Button
-                    className='mt-3'
-                    type='button'
-                    size='sm'
-                    variant='outline'
-                    disabled={!lockout.auditedClearSupported}
+              {operationalControlLockouts.map((lockout) => {
+                const auditReason = lockoutClearReasons[lockout.id] ?? ''
+                const confirmation = lockoutClearConfirmations[lockout.id] ?? ''
+                const preview = buildOperationalLockoutClearPreview(
+                  lockout,
+                  auditReason,
+                  confirmation
+                )
+                const result = lockoutClearResults[lockout.id]
+
+                return (
+                  <div
+                    key={lockout.id}
+                    className='rounded-md border p-3 text-sm'
                   >
-                    Request audited clear
-                  </Button>
-                </div>
-              ))}
+                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                      <div className='font-medium'>{lockout.scope}</div>
+                      <Badge
+                        variant={
+                          lockout.status === 'active'
+                            ? 'destructive'
+                            : 'secondary'
+                        }
+                      >
+                        {lockout.status}
+                      </Badge>
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      {lockout.affected}
+                    </div>
+                    <div className='mt-2 grid gap-2 text-xs sm:grid-cols-2'>
+                      <div>Retry after: {lockout.retryAfterSeconds}s</div>
+                      <div>
+                        Audited clear:{' '}
+                        {lockout.auditedClearSupported
+                          ? 'supported'
+                          : 'blocked'}
+                      </div>
+                      <div>Endpoint: {lockout.clearEndpoint}</div>
+                      <div>Audit status: {lockout.auditStatus}</div>
+                    </div>
+                    <div className='mt-2 text-xs text-muted-foreground'>
+                      {lockout.reason}
+                    </div>
+
+                    {lockout.auditedClearSupported ? (
+                      <div className='mt-3 space-y-3 rounded-md border bg-muted/30 p-3'>
+                        <div>
+                          <label
+                            htmlFor={`${lockout.id}-clear-reason`}
+                            className='mb-1 block text-xs font-medium'
+                          >
+                            Audit reason for lockout clear
+                          </label>
+                          <Textarea
+                            id={`${lockout.id}-clear-reason`}
+                            value={auditReason}
+                            onChange={(event) =>
+                              setLockoutClearReasons((current) => ({
+                                ...current,
+                                [lockout.id]: event.target.value,
+                              }))
+                            }
+                            placeholder='why this scoped lockout is safe to clear'
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor={`${lockout.id}-clear-confirmation`}
+                            className='mb-1 block text-xs font-medium'
+                          >
+                            Confirm exact lockout scope
+                          </label>
+                          <Input
+                            id={`${lockout.id}-clear-confirmation`}
+                            value={confirmation}
+                            onChange={(event) =>
+                              setLockoutClearConfirmations((current) => ({
+                                ...current,
+                                [lockout.id]: event.target.value,
+                              }))
+                            }
+                            placeholder={lockout.scope}
+                          />
+                        </div>
+                        <div className='flex flex-wrap items-center gap-2 text-xs text-muted-foreground'>
+                          <Badge
+                            variant={
+                              preview.canSubmit ? 'default' : 'secondary'
+                            }
+                          >
+                            {preview.outcome}
+                          </Badge>
+                          <span>{preview.nextAction}</span>
+                        </div>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='outline'
+                          disabled={!preview.canSubmit}
+                          onClick={() => {
+                            const clearResult =
+                              buildOperationalLockoutClearResult(
+                                lockout,
+                                auditReason,
+                                confirmation
+                              )
+
+                            if (clearResult) {
+                              setLockoutClearResults((current) => ({
+                                ...current,
+                                [lockout.id]: clearResult,
+                              }))
+                            }
+                          }}
+                        >
+                          Request audited clear
+                        </Button>
+                        {result ? (
+                          <div className='rounded-md border bg-background p-3 text-xs'>
+                            <div className='font-medium'>
+                              Audited clear recorded
+                            </div>
+                            <div className='mt-1 grid gap-1 text-muted-foreground sm:grid-cols-2'>
+                              <div>request: {result.response.requestId}</div>
+                              <div>outcome: {result.response.outcome}</div>
+                              <div>audit: {result.response.auditStatus}</div>
+                              <div>next: {result.response.nextAction}</div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <Button
+                        className='mt-3'
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        disabled
+                      >
+                        Request audited clear
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
