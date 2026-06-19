@@ -50,6 +50,8 @@ export type OperationalControlLockout = {
   status: 'active' | 'clear-ready' | 'observed'
   auditedClearSupported: boolean
   reason: string
+  clearEndpoint: 'POST /v1/management/lockouts/clear' | 'unavailable'
+  auditStatus: 'audit_ready' | 'audit_unavailable' | 'audit_recorded'
 }
 
 export type OperationalControlFilters = {
@@ -60,6 +62,33 @@ export type OperationalControlFilters = {
   severity?: OperationalControlSeverity | 'all'
   since?: string
   until?: string
+}
+
+export type OperationalControlLockoutClearPreview = {
+  endpoint: 'POST /v1/management/lockouts/clear'
+  scope: string
+  normalizedReason: string
+  canSubmit: boolean
+  outcome: 'clear_ready' | 'clear_blocked'
+  auditStatus: 'audit_ready' | 'audit_unavailable'
+  nextAction: string
+}
+
+export type OperationalControlLockoutClearResult = {
+  endpoint: 'POST /v1/management/lockouts/clear'
+  request: {
+    scope: string
+    reason: string
+  }
+  response: {
+    serviceId: '@secretsbroker'
+    apiVersion: 'secretsbroker.local/v1'
+    requestId: string
+    scope: string
+    outcome: 'cleared'
+    auditStatus: 'audit_recorded'
+    nextAction: 'retry_secret_bearing_action'
+  }
 }
 
 export const operationalControlPolicies: OperationalControlPolicy[] = [
@@ -194,24 +223,99 @@ export const operationalControlEvents: OperationalControlEvent[] = [
 export const operationalControlLockouts: OperationalControlLockout[] = [
   {
     id: 'lockout-local-api-ui',
-    scope: 'local-api/session/ui',
+    scope: 'local_api:127.0.0.1',
     affected: '@serviceadmin secret-bearing management actions',
     retryAfterSeconds: 240,
     status: 'active',
     auditedClearSupported: false,
     reason: 'invalid local API token attempts exceeded scoped threshold',
+    clearEndpoint: 'unavailable',
+    auditStatus: 'audit_unavailable',
   },
   {
     id: 'lockout-vault-refresh',
-    scope: 'provider/vault/ops',
+    scope:
+      'management:edit:@serviceadmin:services/@serviceadmin/runtime/API_TOKEN',
     affected: 'payments-api provider-backed resolve tests',
     retryAfterSeconds: 0,
     status: 'clear-ready',
     auditedClearSupported: true,
     reason:
       'operator re-authentication completed and clear action requires reason',
+    clearEndpoint: 'POST /v1/management/lockouts/clear',
+    auditStatus: 'audit_ready',
   },
 ]
+
+export function buildOperationalLockoutClearPreview(
+  lockout: OperationalControlLockout,
+  auditReason: string,
+  confirmation: string
+): OperationalControlLockoutClearPreview {
+  const normalizedReason = normalizeLockoutClearReason(auditReason)
+  const exactScopeConfirmed = confirmation.trim() === lockout.scope
+  const canSubmit =
+    lockout.auditedClearSupported &&
+    lockout.clearEndpoint !== 'unavailable' &&
+    normalizedReason.length >= 8 &&
+    exactScopeConfirmed
+
+  return {
+    endpoint: 'POST /v1/management/lockouts/clear',
+    scope: lockout.scope,
+    normalizedReason,
+    canSubmit,
+    outcome: canSubmit ? 'clear_ready' : 'clear_blocked',
+    auditStatus:
+      lockout.auditStatus === 'audit_unavailable'
+        ? 'audit_unavailable'
+        : 'audit_ready',
+    nextAction: canSubmit
+      ? 'Submit audited clear through Secrets Broker management API.'
+      : 'Enter an audit reason and confirm the exact lockout scope.',
+  }
+}
+
+export function buildOperationalLockoutClearResult(
+  lockout: OperationalControlLockout,
+  auditReason: string,
+  confirmation: string
+): OperationalControlLockoutClearResult | null {
+  const preview = buildOperationalLockoutClearPreview(
+    lockout,
+    auditReason,
+    confirmation
+  )
+
+  if (!preview.canSubmit) return null
+
+  return {
+    endpoint: preview.endpoint,
+    request: {
+      scope: lockout.scope,
+      reason: preview.normalizedReason,
+    },
+    response: {
+      serviceId: '@secretsbroker',
+      apiVersion: 'secretsbroker.local/v1',
+      requestId: `clear-${lockout.id}`,
+      scope: lockout.scope,
+      outcome: 'cleared',
+      auditStatus: 'audit_recorded',
+      nextAction: 'retry_secret_bearing_action',
+    },
+  }
+}
+
+function normalizeLockoutClearReason(value: string) {
+  return Array.from(value)
+    .map((char) => {
+      const code = char.charCodeAt(0)
+      return code < 32 || code === 127 ? ' ' : char
+    })
+    .join('')
+    .trim()
+}
 
 const secretMaterialSentinels = [
   'ACTUAL_SECRET',

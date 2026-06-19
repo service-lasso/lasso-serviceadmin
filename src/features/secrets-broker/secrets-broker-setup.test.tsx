@@ -18,9 +18,12 @@ import {
 } from './backup-key-management'
 import { secretsBrokerDiagnostics, scrubSecretLikeOutput } from './diagnostics'
 import {
+  buildOperationalLockoutClearPreview,
+  buildOperationalLockoutClearResult,
   filterOperationalControlEvents,
   operationalControlEvents,
   operationalControlFixturesHaveSecretMaterial,
+  operationalControlLockouts,
 } from './operational-controls'
 import {
   buildProviderReconnectPlan,
@@ -203,13 +206,34 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Operational events/i)).toBeVisible()
     expect(screen.getByText(/Audit availability/i)).toBeVisible()
     expect(screen.getByText(/services\/\*\/runtime\/\*/i)).toBeVisible()
-    expect(screen.getAllByText(/local-api\/session\/ui/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/local_api:127\.0\.0\.1/i)[0]).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Export audit metadata/i })
     ).toBeVisible()
     expect(
       screen.getAllByRole('button', { name: /Request audited clear/i })[0]
     ).toBeDisabled()
+    expect(
+      screen.getByText(/POST \/v1\/management\/lockouts\/clear/i)
+    ).toBeVisible()
+
+    const clearButtons = screen.getAllByRole('button', {
+      name: /Request audited clear/i,
+    })
+    expect(clearButtons[1]).toBeDisabled()
+    await user.type(
+      screen.getByLabelText(/Audit reason for lockout clear/i),
+      'operator reauthenticated provider and verified audit chain'
+    )
+    await user.type(
+      screen.getByLabelText(/Confirm exact lockout scope/i),
+      'management:edit:@serviceadmin:services/@serviceadmin/runtime/API_TOKEN'
+    )
+    expect(clearButtons[1]).toBeEnabled()
+    await user.click(clearButtons[1])
+    expect(screen.getByText(/Audited clear recorded/i)).toBeVisible()
+    expect(screen.getByText(/outcome: cleared/i)).toBeVisible()
+    expect(screen.getByText(/audit: audit_recorded/i)).toBeVisible()
 
     await user.selectOptions(
       screen.getByLabelText(/Control service/i),
@@ -361,6 +385,37 @@ describe('Secrets Broker setup wizard', () => {
         severity: 'critical',
       })
     ).toHaveLength(1)
+
+    const supportedLockout = operationalControlLockouts.find(
+      (lockout) => lockout.auditedClearSupported
+    )
+    expect(supportedLockout).toBeDefined()
+    const blockedPreview = buildOperationalLockoutClearPreview(
+      supportedLockout!,
+      'short',
+      supportedLockout!.scope
+    )
+    expect(blockedPreview.canSubmit).toBe(false)
+    const readyPreview = buildOperationalLockoutClearPreview(
+      supportedLockout!,
+      'operator reauthenticated source and verified audit availability',
+      supportedLockout!.scope
+    )
+    expect(readyPreview).toMatchObject({
+      canSubmit: true,
+      outcome: 'clear_ready',
+      auditStatus: 'audit_ready',
+    })
+    const clearResult = buildOperationalLockoutClearResult(
+      supportedLockout!,
+      'operator reauthenticated source and verified audit availability',
+      supportedLockout!.scope
+    )
+    expect(clearResult).toMatchObject({
+      endpoint: 'POST /v1/management/lockouts/clear',
+      request: { scope: supportedLockout!.scope },
+      response: { outcome: 'cleared', auditStatus: 'audit_recorded' },
+    })
   })
 
   it('renders Providers management with local default and addable provider options', async () => {
