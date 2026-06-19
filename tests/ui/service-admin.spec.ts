@@ -119,6 +119,45 @@ test('services table filters and opens service detail', async ({ page }) => {
   await expect(page.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toBeVisible()
 })
 
+test('service detail variables table keeps long values inside their columns', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto('/services/@serviceadmin')
+  await page.getByRole('tab', { name: /variables/i }).click()
+
+  const table = page.getByTestId('service-detail-variables-table')
+  const row = table
+    .locator('tbody tr')
+    .filter({ hasText: 'SERVICE_LASSO_RUNTIME_CONFIG_PATH' })
+
+  await expect(row).toBeVisible()
+
+  const cells = row.locator('td')
+  const cellBoxes = await cells.evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect()
+      return {
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+      }
+    })
+  )
+
+  expect(cellBoxes[1].right).toBeLessThanOrEqual(cellBoxes[2].left + 1)
+  expect(cellBoxes[2].right).toBeLessThanOrEqual(cellBoxes[3].left + 1)
+  expect(cellBoxes[3].right).toBeLessThanOrEqual(cellBoxes[4].left + 1)
+
+  const valueFitsColumn = await row
+    .getByTestId('service-detail-variable-value')
+    .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+  expect(valueFitsColumn).toBe(true)
+
+  await expect(row.getByTestId('service-detail-variable-actions')).toBeVisible()
+  await expect(row.getByRole('link', { name: 'Open variables' })).toBeVisible()
+})
+
 test('runtime, network, installed, and variables tables render', async ({
   page,
 }) => {
