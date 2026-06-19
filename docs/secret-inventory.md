@@ -10,8 +10,8 @@ The secret inventory surface is an advanced Secrets Broker planning view for met
 - Shows namespace/ref id, source/backend, owning service/workspace, presence state, key version, last updated, last used, expiry/rotation status, and adjacent metadata links.
 - Links to provider metadata, ref usage, and audit views where applicable.
 - Shows unavailable privileged operations as explanatory text, not controls.
-- The Secrets Broker Secrets page also exposes a Stage 1 bulk campaign dry-run planner. Operators can select multiple metadata rows, choose a campaign operation, and generate safe per-ref/aggregate capability, policy, risk, audit, and blocker metadata.
-- The bulk planner is non-mutating. Its apply button is unavailable in this stage and the generated plan contains refs, owners, providers, policy names, blockers, and expected actions only.
+- The Secrets Broker Secrets page also exposes a bulk campaign workflow. Operators can select multiple metadata rows, choose a campaign operation, and generate safe per-ref/aggregate capability, policy, risk, audit, operation ID, idempotency, and blocker metadata.
+- Supported rotate/reset and update/edit campaigns can apply only after audit reason, explicit confirmation, and immediate revalidation. Apply results show campaign ID, operation ID, plan token, per-item operation IDs, idempotency keys, typed outcomes, audit status, retry/recovery guidance, and skipped/denied/unsupported/auth-required rows without raw values.
 
 ## Not implemented in this slice
 
@@ -21,7 +21,6 @@ This slice does **not** implement:
 - raw reveal controls
 - clipboard/copy value controls
 - backend reads or writes
-- bulk edit or bulk rotation apply operations
 - provider credential access
 - arbitrary password-vault/note storage behavior
 - backend enforcement claims
@@ -37,7 +36,7 @@ Any future raw reveal or mutation workflow must be separate from this inventory 
 - no-logging/no-export boundaries for revealed values
 - tests proving values do not leak into ordinary UI, logs, diagnostics, support bundles, or table fixtures
 
-Any future bulk apply workflow must build on the Stage 1 dry-run planner and must add fresh revalidation, audit reason capture, explicit confirmation for high-risk plans, per-ref policy enforcement, operation IDs, partial outcome reporting, and tests proving unsupported, denied, auth-required, missing-provider, stale-plan, success, and partial-failure states remain value-safe.
+Bulk policy and provider migration apply operations remain separate future slices. They must reuse the same dry-run, audit reason, explicit confirmation, fresh revalidation, operation ID/idempotency, partial-outcome, and redaction boundaries before they can apply.
 
 ## Secret-safety boundary
 
