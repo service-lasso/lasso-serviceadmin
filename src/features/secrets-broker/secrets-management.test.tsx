@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
+  buildBulkSecretCampaignApplyResult,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
+  managedSecretBulkApplyResultHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
@@ -147,7 +149,7 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(
       screen.getByRole('button', {
-        name: /Bulk apply blocked by broker campaign API/i,
+        name: /Apply bulk campaign/i,
       })
     ).toBeDisabled()
     expect(
@@ -157,7 +159,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
-  it('keeps bulk campaign apply blocked until audit reason confirmation and fresh revalidation pass', async () => {
+  it('applies a broker-backed bulk campaign after audit reason confirmation and fresh revalidation pass', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
 
@@ -175,7 +177,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/high-risk confirmation missing/i)).toBeVisible()
     expect(screen.getByText(/revalidation not run/i)).toBeVisible()
     expect(
-      screen.getAllByText(/broker campaign API unavailable/i)[0]
+      screen.getAllByText(/broker campaign API available/i)[0]
     ).toBeVisible()
 
     await user.type(
@@ -195,13 +197,128 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/confirmation accepted/i)).toBeVisible()
     expect(screen.getByText(/revalidation passed/i)).toBeVisible()
     expect(
-      screen.getAllByText(/broker campaign API unavailable/i)[0]
+      screen.getAllByText(/broker campaign API available/i)[0]
     ).toBeVisible()
     expect(
       screen.getByRole('button', {
-        name: /Bulk apply blocked by broker campaign API/i,
+        name: /Apply bulk campaign/i,
       })
-    ).toBeDisabled()
+    ).toBeEnabled()
+
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+    expect(screen.getByText(/Campaign apply result: applied/i)).toBeVisible()
+    expect(screen.getAllByText(/Applied 1/i)[0]).toBeVisible()
+    expect(screen.getByText(/campaign and item audit recorded/i)).toBeVisible()
+    expect(screen.getAllByText(/retry by operation id/i)[0]).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('shows partial failure and retry-safe per-item operation metadata', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    await user.selectOptions(screen.getByLabelText(/Campaign operation/i), [
+      'update-edit',
+    ])
+    await user.click(
+      screen.getByLabelText(
+        /Select ZITADEL_CLIENT_CREDENTIAL for bulk dry-run/i
+      )
+    )
+    await user.click(
+      screen.getByLabelText(/Select NODE_REGISTRY_AUTH for bulk dry-run/i)
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+    await user.type(
+      screen.getByLabelText(/Campaign audit reason/i),
+      'operator requested controlled campaign update'
+    )
+    await user.type(
+      screen.getByLabelText(/Explicit confirmation/i),
+      'CONFIRM HIGH RISK CAMPAIGN'
+    )
+    await user.selectOptions(
+      screen.getByLabelText(/Apply result mode/i),
+      'partial-failure'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+
+    expect(
+      screen.getByText(/Campaign apply result: partial_failure/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Applied 1/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Failed 1/i)[0]).toBeVisible()
+    expect(
+      screen.getAllByText(/retry with the same idempotency key/i)[0]
+    ).toBeVisible()
+    expect(screen.getAllByText(/campaign-update-edit/i)[0]).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('covers retryable non-retryable and stale apply result states', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    await user.click(
+      screen.getByLabelText(
+        /Select ZITADEL_CLIENT_CREDENTIAL for bulk dry-run/i
+      )
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+    await user.type(
+      screen.getByLabelText(/Campaign audit reason/i),
+      'operator requested controlled campaign rotation'
+    )
+    await user.type(
+      screen.getByLabelText(/Explicit confirmation/i),
+      'CONFIRM HIGH RISK CAMPAIGN'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+
+    await user.selectOptions(
+      screen.getByLabelText(/Apply result mode/i),
+      'retryable-failure'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+    expect(screen.getByText(/Campaign apply result: failed/i)).toBeVisible()
+    expect(screen.getAllByText(/retry by operation id/i)[0]).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Apply result mode/i),
+      'non-retryable-failure'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+    expect(
+      screen.getByText(/manual recovery required; do not replay/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/fresh plan required/i)[0]).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Apply result mode/i),
+      'stale-plan'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+    expect(screen.getByText(/Campaign apply result: stale_plan/i)).toBeVisible()
+    expect(screen.getAllByText(/create a fresh dry-run plan/i)[0]).toBeVisible()
   })
 
   it('shows stale plan and revalidation failure states before bulk apply', async () => {
@@ -427,7 +544,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(bulkPlan.unsupportedCount).toBe(1)
     expect(bulkPlan.authRequiredCount).toBe(1)
     expect(bulkPlan.missingProviderCount).toBe(1)
-    expect(bulkPlan.applyAvailable).toBe(false)
+    expect(bulkPlan.applyAvailable).toBe(true)
+    expect(bulkPlan.planToken).toMatch(/rotate_reset/)
+    expect(bulkPlan.items[0].operationItemId).toMatch(/campaign-/)
     expect(managedSecretBulkPlanHasSecretMaterial(bulkPlan)).toBe(false)
 
     const blockedGate = buildBulkSecretCampaignApplyGate(
@@ -435,7 +554,8 @@ describe('Secrets Broker secrets management page', () => {
       'operator requested controlled campaign rotation',
       'CONFIRM HIGH RISK CAMPAIGN',
       'ready',
-      true
+      true,
+      false
     )
     expect(blockedGate.canApply).toBe(false)
     expect(blockedGate.blockers).toContain(
@@ -468,5 +588,19 @@ describe('Secrets Broker secrets management page', () => {
       true
     )
     expect(readyGate.canApply).toBe(true)
+
+    const applyResult = buildBulkSecretCampaignApplyResult(
+      bulkPlan,
+      'partial-failure'
+    )
+    expect(applyResult.outcome).toBe('partial_failure')
+    expect(applyResult.appliedCount).toBe(1)
+    expect(applyResult.deniedCount).toBe(1)
+    expect(applyResult.unsupportedCount).toBe(1)
+    expect(applyResult.authRequiredCount).toBe(1)
+    expect(applyResult.skippedCount).toBe(0)
+    expect(managedSecretBulkApplyResultHasSecretMaterial(applyResult)).toBe(
+      false
+    )
   })
 })

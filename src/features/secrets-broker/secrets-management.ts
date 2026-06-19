@@ -85,9 +85,16 @@ export type BulkSecretCampaignItem = {
   auditRequirement: string
   expectedAction: string
   blockers: string[]
+  idempotencyKey: string
+  operationItemId: string
+  retrySafe: boolean
+  recovery: string
 }
 
 export type BulkSecretCampaignPlan = {
+  campaignId: string
+  operationId: string
+  planToken: string
   operation: BulkSecretCampaignOperation
   selectedCount: number
   applicableCount: number
@@ -97,7 +104,7 @@ export type BulkSecretCampaignPlan = {
   missingProviderCount: number
   highRiskCount: number
   items: BulkSecretCampaignItem[]
-  applyAvailable: false
+  applyAvailable: boolean
 }
 
 export type BulkSecretCampaignRevalidationState =
@@ -122,6 +129,55 @@ export type BulkSecretCampaignApplyGate = {
   blockers: string[]
   canApply: boolean
   applyDisabledReason: string
+}
+
+export type BulkSecretCampaignApplyMode =
+  | 'success'
+  | 'partial-failure'
+  | 'retryable-failure'
+  | 'non-retryable-failure'
+  | 'stale-plan'
+
+export type BulkSecretCampaignApplyItemOutcome =
+  | 'applied'
+  | 'failed'
+  | 'denied'
+  | 'skipped'
+  | 'unsupported'
+  | 'auth-required'
+  | 'stale-plan'
+
+export type BulkSecretCampaignApplyItem = {
+  id: string
+  ref: string
+  name: string
+  operationItemId: string
+  idempotencyKey: string
+  outcome: BulkSecretCampaignApplyItemOutcome
+  applied: boolean
+  retrySafe: boolean
+  auditStatus: string
+  recovery: string
+  nextAction: string
+}
+
+export type BulkSecretCampaignApplyResult = {
+  campaignId: string
+  operationId: string
+  planToken: string
+  operation: BulkSecretCampaignOperation
+  mode: 'apply'
+  outcome: 'applied' | 'partial_failure' | 'failed' | 'stale_plan'
+  appliedCount: number
+  failedCount: number
+  deniedCount: number
+  skippedCount: number
+  unsupportedCount: number
+  authRequiredCount: number
+  staleCount: number
+  auditStatus: string
+  nextAction: string
+  items: BulkSecretCampaignApplyItem[]
 }
 
 export const managedSecretRows: ManagedSecretRow[] = [
@@ -249,6 +305,17 @@ export const bulkSecretCampaignRevalidationStates: Array<{
   { id: 'audit-unavailable', label: 'Audit unavailable' },
 ]
 
+export const bulkSecretCampaignApplyModes: Array<{
+  id: BulkSecretCampaignApplyMode
+  label: string
+}> = [
+  { id: 'success', label: 'Apply success' },
+  { id: 'partial-failure', label: 'Partial failure' },
+  { id: 'retryable-failure', label: 'Retryable failure' },
+  { id: 'non-retryable-failure', label: 'Non-retryable failure' },
+  { id: 'stale-plan', label: 'Stale plan rejected' },
+]
+
 export const managedSecretSafeSurfaces = {
   route: '/secrets-broker/secrets',
   pageTitle: 'Service Admin - Secrets Broker Secrets',
@@ -265,6 +332,8 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:stub-mutation-apply-status',
     'secrets-management:stub-delete-preview',
     'secrets-management:bulk-campaign-dry-run',
+    'secrets-management:bulk-campaign-apply',
+    'secrets-management:bulk-campaign-status',
   ],
   persistedStorage: 'none',
 }
@@ -294,6 +363,39 @@ export function getBulkSecretCampaignConfirmationPhrase(
   return plan.highRiskCount > 0
     ? 'CONFIRM HIGH RISK CAMPAIGN'
     : 'CONFIRM BULK CAMPAIGN'
+}
+
+function safeCampaignSlug(value: string) {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return slug || 'campaign'
+}
+
+function brokerOperationForCampaign(operation: BulkSecretCampaignOperation) {
+  return operation.replace(/-/g, '_')
+}
+
+function buildCampaignId(operation: BulkSecretCampaignOperation) {
+  return `campaign-${safeCampaignSlug(operation)}-2026-06-20-a`
+}
+
+function buildOperationItemId(campaignId: string, itemId: string) {
+  return `${campaignId}:item:${safeCampaignSlug(itemId)}`
+}
+
+function buildIdempotencyKey(
+  campaignId: string,
+  operation: BulkSecretCampaignOperation,
+  itemId: string
+) {
+  return `${campaignId}:${brokerOperationForCampaign(operation)}:${safeCampaignSlug(itemId)}`
+}
+
+function bulkCampaignOperationCanApply(operation: BulkSecretCampaignOperation) {
+  return operation === 'rotate-reset' || operation === 'update-edit'
 }
 
 export function filterManagedSecrets(
@@ -503,6 +605,7 @@ export function buildBulkSecretCampaignPlan(
   operation: BulkSecretCampaignOperation
 ): BulkSecretCampaignPlan {
   const selected = rows.filter((row) => selectedIds.includes(row.id))
+  const campaignId = buildCampaignId(operation)
   const items = selected.map((row): BulkSecretCampaignItem => {
     const blockers: string[] = []
     let capabilityResult = 'supported: metadata dry-run only'
@@ -585,13 +688,28 @@ export function buildBulkSecretCampaignPlan(
           : 'campaign audit summary required',
       expectedAction,
       blockers,
+      idempotencyKey: buildIdempotencyKey(campaignId, operation, row.id),
+      operationItemId: buildOperationItemId(campaignId, row.id),
+      retrySafe: blockers.length === 0,
+      recovery:
+        blockers.length === 0
+          ? 'retry with the same idempotency key or restore from backup'
+          : 'fix blocker, create a fresh plan, then retry',
     }
   })
+  const applicableCount = items.filter(
+    (item) => item.blockers.length === 0
+  ).length
+  const applyAvailable =
+    bulkCampaignOperationCanApply(operation) && applicableCount > 0
 
   return {
+    campaignId,
+    operationId: `bulk-${safeCampaignSlug(operation)}-2026-06-20-a`,
+    planToken: `${campaignId}:${brokerOperationForCampaign(operation)}:sha256:metadata-only`,
     operation,
     selectedCount: items.length,
-    applicableCount: items.filter((item) => item.blockers.length === 0).length,
+    applicableCount,
     deniedCount: items.filter((item) => item.policyResult.includes('denied'))
       .length,
     unsupportedCount: items.filter((item) =>
@@ -605,7 +723,7 @@ export function buildBulkSecretCampaignPlan(
     ).length,
     highRiskCount: items.filter((item) => item.risk === 'high').length,
     items,
-    applyAvailable: false,
+    applyAvailable,
   }
 }
 
@@ -615,29 +733,26 @@ export function buildBulkSecretCampaignApplyGate(
   confirmation: string,
   revalidationState: BulkSecretCampaignRevalidationState,
   revalidated: boolean,
-  brokerCampaignApiAvailable = false
+  brokerCampaignApiAvailable = plan.applyAvailable
 ): BulkSecretCampaignApplyGate {
   const auditReasonAccepted = auditReason.trim().length >= 12
   const confirmationPhrase = getBulkSecretCampaignConfirmationPhrase(plan)
   const confirmationRequired = plan.highRiskCount > 0
   const confirmationAccepted =
     !confirmationRequired || confirmation.trim() === confirmationPhrase
-  const itemBlockers = Array.from(
-    new Set(plan.items.flatMap((item) => item.blockers))
-  )
   const blockers: string[] = []
 
   if (plan.selectedCount === 0) {
     blockers.push('select at least one ref')
+  }
+  if (plan.applicableCount === 0) {
+    blockers.push('no selected refs are applicable for this campaign')
   }
   if (!auditReasonAccepted) {
     blockers.push('audit reason must be at least 12 characters')
   }
   if (!confirmationAccepted) {
     blockers.push(`type ${confirmationPhrase}`)
-  }
-  if (itemBlockers.length > 0) {
-    blockers.push(`resolve per-item blockers: ${itemBlockers.join(', ')}`)
   }
   if (!revalidated) {
     blockers.push('run immediate revalidation')
@@ -649,7 +764,7 @@ export function buildBulkSecretCampaignApplyGate(
   }
 
   const revalidationPassed =
-    revalidated && revalidationState === 'ready' && itemBlockers.length === 0
+    revalidated && revalidationState === 'ready' && plan.applicableCount > 0
   const canApply =
     blockers.length === 0 &&
     auditReasonAccepted &&
@@ -679,12 +794,162 @@ export function buildBulkSecretCampaignApplyGate(
       brokerCampaignApiAvailable
         ? 'broker campaign API available'
         : 'broker campaign API unavailable',
+      plan.applicableCount < plan.selectedCount
+        ? 'non-applicable rows stay typed as denied skipped unsupported or auth-required'
+        : 'all selected rows are applicable',
     ],
     blockers,
     canApply,
     applyDisabledReason: canApply
       ? 'apply ready'
       : (blockers[0] ?? 'apply blocked'),
+  }
+}
+
+function itemOutcomeFromBlockers(
+  item: BulkSecretCampaignItem
+): BulkSecretCampaignApplyItemOutcome | null {
+  if (item.blockers.includes('provider auth required')) return 'auth-required'
+  if (item.blockers.includes('policy denied')) return 'denied'
+  if (item.blockers.includes('unsupported capability')) return 'unsupported'
+  if (item.blockers.includes('provider/source missing')) return 'skipped'
+  return null
+}
+
+function applyOutcomeForItem(
+  item: BulkSecretCampaignItem,
+  mode: BulkSecretCampaignApplyMode,
+  applicableIndex: number
+): BulkSecretCampaignApplyItemOutcome {
+  const blockerOutcome = itemOutcomeFromBlockers(item)
+  if (blockerOutcome) return blockerOutcome
+  if (mode === 'stale-plan') return 'stale-plan'
+  if (mode === 'retryable-failure' || mode === 'non-retryable-failure') {
+    return 'failed'
+  }
+  if (mode === 'partial-failure' && applicableIndex > 0) return 'failed'
+  return 'applied'
+}
+
+function nextActionForApplyOutcome(
+  outcome: BulkSecretCampaignApplyItemOutcome
+) {
+  switch (outcome) {
+    case 'applied':
+      return 'monitor campaign status and dependent service restart notes'
+    case 'failed':
+      return 'review safe failure metadata and retry only by operation id'
+    case 'denied':
+      return 'request policy change or remove this ref from the campaign'
+    case 'unsupported':
+      return 'choose a supported operation family or provider-specific workflow'
+    case 'auth-required':
+      return 'complete provider auth then create a fresh plan'
+    case 'stale-plan':
+      return 'create a fresh dry-run plan before applying'
+    case 'skipped':
+    default:
+      return 'fix provider/source state before retrying'
+  }
+}
+
+function recoveryForApplyOutcome(
+  item: BulkSecretCampaignItem,
+  outcome: BulkSecretCampaignApplyItemOutcome,
+  mode: BulkSecretCampaignApplyMode
+) {
+  if (outcome === 'failed' && mode === 'non-retryable-failure') {
+    return 'manual recovery required; do not replay without a fresh broker plan'
+  }
+  if (outcome === 'failed') {
+    return 'retry with the same idempotency key after fixing the safe error'
+  }
+  if (outcome === 'applied') return item.recovery
+  return 'create a fresh plan after resolving the typed blocker'
+}
+
+export function buildBulkSecretCampaignApplyResult(
+  plan: BulkSecretCampaignPlan,
+  mode: BulkSecretCampaignApplyMode
+): BulkSecretCampaignApplyResult {
+  let applicableIndex = -1
+  const items = plan.items.map((item): BulkSecretCampaignApplyItem => {
+    if (item.blockers.length === 0) applicableIndex += 1
+    const outcome = applyOutcomeForItem(item, mode, applicableIndex)
+    const applied = outcome === 'applied'
+
+    return {
+      id: item.id,
+      ref: item.ref,
+      name: item.name,
+      operationItemId: item.operationItemId,
+      idempotencyKey: item.idempotencyKey,
+      outcome,
+      applied,
+      retrySafe:
+        item.retrySafe &&
+        (outcome === 'applied' ||
+          (outcome === 'failed' && mode !== 'non-retryable-failure')),
+      auditStatus:
+        outcome === 'applied'
+          ? 'campaign and item audit recorded'
+          : 'campaign audit recorded; item mutation not applied',
+      recovery: recoveryForApplyOutcome(item, outcome, mode),
+      nextAction: nextActionForApplyOutcome(outcome),
+    }
+  })
+
+  const appliedCount = items.filter((item) => item.outcome === 'applied').length
+  const failedCount = items.filter((item) => item.outcome === 'failed').length
+  const staleCount = items.filter(
+    (item) => item.outcome === 'stale-plan'
+  ).length
+  const deniedCount = items.filter((item) => item.outcome === 'denied').length
+  const unsupportedCount = items.filter(
+    (item) => item.outcome === 'unsupported'
+  ).length
+  const authRequiredCount = items.filter(
+    (item) => item.outcome === 'auth-required'
+  ).length
+  const skippedCount = items.filter((item) => item.outcome === 'skipped').length
+  const nonAppliedCount =
+    failedCount +
+    staleCount +
+    deniedCount +
+    unsupportedCount +
+    authRequiredCount +
+    skippedCount
+  const outcome =
+    staleCount > 0
+      ? 'stale_plan'
+      : appliedCount > 0 && nonAppliedCount === 0
+        ? 'applied'
+        : appliedCount > 0
+          ? 'partial_failure'
+          : 'failed'
+
+  return {
+    campaignId: plan.campaignId,
+    operationId: plan.operationId,
+    planToken: plan.planToken,
+    operation: plan.operation,
+    mode: 'apply',
+    outcome,
+    appliedCount,
+    failedCount,
+    deniedCount,
+    skippedCount,
+    unsupportedCount,
+    authRequiredCount,
+    staleCount,
+    auditStatus: 'campaign-level audit summary recorded',
+    nextAction:
+      outcome === 'applied'
+        ? 'monitor campaign status'
+        : outcome === 'stale_plan'
+          ? 'create a fresh plan'
+          : 'review per-item outcomes and retry only by operation id',
+    items,
   }
 }
 
@@ -794,4 +1059,10 @@ export function managedSecretBulkPlanHasSecretMaterial(
   plan: BulkSecretCampaignPlan
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(plan))
+}
+
+export function managedSecretBulkApplyResultHasSecretMaterial(
+  result: BulkSecretCampaignApplyResult
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(result))
 }

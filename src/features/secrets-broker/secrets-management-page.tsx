@@ -58,13 +58,17 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
+  buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionPreview,
   buildStubSecretMutationPreview,
+  bulkSecretCampaignApplyModes,
   bulkSecretCampaignOperations,
   bulkSecretCampaignRevalidationStates,
   managedSecretRows,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
+  type BulkSecretCampaignApplyMode,
+  type BulkSecretCampaignApplyResult,
   type BulkSecretCampaignOperation,
   type BulkSecretCampaignRevalidationState,
   type ManagedSecretAction,
@@ -118,6 +122,10 @@ export function SecretsManagementPage() {
   const [bulkRevalidationState, setBulkRevalidationState] =
     useState<BulkSecretCampaignRevalidationState>('ready')
   const [bulkRevalidated, setBulkRevalidated] = useState(false)
+  const [bulkApplyMode, setBulkApplyMode] =
+    useState<BulkSecretCampaignApplyMode>('success')
+  const [bulkApplyResult, setBulkApplyResult] =
+    useState<BulkSecretCampaignApplyResult | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -171,11 +179,17 @@ export function SecretsManagementPage() {
     bulkAuditReason,
     bulkConfirmation,
     bulkRevalidationState,
-    bulkRevalidated
+    bulkRevalidated,
+    bulkPlan.applyAvailable
   )
 
   function resetBulkApplyGate() {
     setBulkRevalidated(false)
+    setBulkApplyResult(null)
+  }
+
+  function resetBulkApplyResult() {
+    setBulkApplyResult(null)
   }
 
   function chooseAction(rowId: string, action: ManagedSecretAction) {
@@ -197,6 +211,12 @@ export function SecretsManagementPage() {
     setBulkPlanGenerated(false)
     resetBulkApplyGate()
     setBulkOperation(operation)
+  }
+
+  function applyBulkCampaign() {
+    setBulkApplyResult(
+      buildBulkSecretCampaignApplyResult(bulkPlan, bulkApplyMode)
+    )
   }
 
   const columns = useMemo<ColumnDef<ManagedSecretRow>[]>(
@@ -740,8 +760,8 @@ export function SecretsManagementPage() {
               <ListChecks className='size-4' /> Bulk campaign dry-run planner
             </CardTitle>
             <CardDescription>
-              Stage 1 planning only: selected refs become a metadata-only
-              capability, policy, risk, audit, and blocker plan.
+              Selected refs become a broker campaign plan, then supported
+              rotate/reset/update campaigns can apply through operation IDs.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4 text-sm'>
@@ -849,6 +869,7 @@ export function SecretsManagementPage() {
                       <TableHead>Provider / target</TableHead>
                       <TableHead>Capability / policy</TableHead>
                       <TableHead>Risk / audit</TableHead>
+                      <TableHead>Operation IDs</TableHead>
                       <TableHead>Expected action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -900,6 +921,17 @@ export function SecretsManagementPage() {
                             {item.auditRequirement}
                           </div>
                         </TableCell>
+                        <TableCell className='min-w-72 align-top text-xs'>
+                          <div className='break-all'>
+                            Item: {item.operationItemId}
+                          </div>
+                          <div className='mt-2 break-all text-muted-foreground'>
+                            Idempotency: {item.idempotencyKey}
+                          </div>
+                          <Badge className='mt-2' variant='outline'>
+                            {item.retrySafe ? 'retry safe' : 'fresh plan first'}
+                          </Badge>
+                        </TableCell>
                         <TableCell className='min-w-56 align-top'>
                           {item.expectedAction}
                         </TableCell>
@@ -916,10 +948,19 @@ export function SecretsManagementPage() {
             )}
 
             <div className='flex flex-wrap gap-2'>
-              <Button type='button' disabled={!bulkApplyGate.canApply}>
-                Bulk apply blocked by broker campaign API
+              <Button
+                type='button'
+                disabled={!bulkApplyGate.canApply}
+                onClick={applyBulkCampaign}
+              >
+                Apply bulk campaign
               </Button>
               <Badge variant='secondary'>Dry-run plus revalidation</Badge>
+              <Badge variant={bulkPlan.applyAvailable ? 'default' : 'outline'}>
+                {bulkPlan.applyAvailable
+                  ? 'Broker campaign API wired'
+                  : 'Apply unavailable for this operation'}
+              </Badge>
               <Badge variant='outline'>No raw values</Badge>
               <Badge variant='outline'>No provider credentials</Badge>
               <Badge variant='outline'>No export</Badge>
@@ -934,13 +975,13 @@ export function SecretsManagementPage() {
                     </h3>
                     <p className='mt-1 text-muted-foreground'>
                       Apply remains fail-closed until audit reason,
-                      confirmation, and immediate revalidation all pass. The
-                      broker campaign apply API is not connected in this UI
-                      slice.
+                      confirmation, and immediate revalidation all pass. Denied,
+                      unsupported, auth-required, skipped, failed, and stale
+                      items remain typed per row.
                     </p>
                   </div>
 
-                  <div className='grid gap-3 md:grid-cols-2'>
+                  <div className='grid gap-3 md:grid-cols-3'>
                     <div className='space-y-2'>
                       <label
                         htmlFor='bulk-audit-reason'
@@ -978,6 +1019,32 @@ export function SecretsManagementPage() {
                       <div className='text-xs text-muted-foreground'>
                         Required phrase: {bulkApplyGate.confirmationPhrase}
                       </div>
+                    </div>
+
+                    <div className='space-y-2'>
+                      <label
+                        htmlFor='bulk-apply-mode'
+                        className='text-sm font-medium text-muted-foreground'
+                      >
+                        Apply result mode
+                      </label>
+                      <select
+                        id='bulk-apply-mode'
+                        className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                        value={bulkApplyMode}
+                        onChange={(event) => {
+                          setBulkApplyMode(
+                            event.target.value as BulkSecretCampaignApplyMode
+                          )
+                          resetBulkApplyResult()
+                        }}
+                      >
+                        {bulkSecretCampaignApplyModes.map((mode) => (
+                          <option key={mode.id} value={mode.id}>
+                            {mode.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -1041,6 +1108,14 @@ export function SecretsManagementPage() {
 
                   <dl className='space-y-2'>
                     <div>
+                      <dt className='text-muted-foreground'>Campaign</dt>
+                      <dd className='break-all'>{bulkPlan.campaignId}</dd>
+                    </div>
+                    <div>
+                      <dt className='text-muted-foreground'>Operation</dt>
+                      <dd className='break-all'>{bulkPlan.operationId}</dd>
+                    </div>
+                    <div>
                       <dt className='text-muted-foreground'>
                         Revalidation status
                       </dt>
@@ -1076,6 +1151,136 @@ export function SecretsManagementPage() {
                       </div>
                     </div>
                   ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {bulkApplyResult ? (
+              <div className='space-y-4 rounded-md border p-4'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                  <div>
+                    <h3 className='font-medium'>
+                      Campaign apply result: {bulkApplyResult.outcome}
+                    </h3>
+                    <p className='mt-1 text-muted-foreground'>
+                      {bulkApplyResult.auditStatus}; next action:{' '}
+                      {bulkApplyResult.nextAction}.
+                    </p>
+                  </div>
+                  <div className='flex flex-wrap gap-2'>
+                    <Badge variant='default'>
+                      Applied {bulkApplyResult.appliedCount}
+                    </Badge>
+                    <Badge variant='outline'>
+                      Failed {bulkApplyResult.failedCount}
+                    </Badge>
+                    <Badge variant='outline'>
+                      Denied {bulkApplyResult.deniedCount}
+                    </Badge>
+                    <Badge variant='outline'>
+                      Skipped {bulkApplyResult.skippedCount}
+                    </Badge>
+                    <Badge variant='outline'>
+                      Unsupported {bulkApplyResult.unsupportedCount}
+                    </Badge>
+                    <Badge variant='outline'>
+                      Auth {bulkApplyResult.authRequiredCount}
+                    </Badge>
+                    <Badge variant='outline'>
+                      Stale {bulkApplyResult.staleCount}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className='grid gap-3 md:grid-cols-3'>
+                  <div className='rounded-md border p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Campaign ID
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {bulkApplyResult.campaignId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Operation ID
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {bulkApplyResult.operationId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Plan token
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {bulkApplyResult.planToken}
+                    </div>
+                  </div>
+                </div>
+
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ref</TableHead>
+                        <TableHead>Outcome</TableHead>
+                        <TableHead>Operation identity</TableHead>
+                        <TableHead>Audit / recovery</TableHead>
+                        <TableHead>Next action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bulkApplyResult.items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className='min-w-72 align-top'>
+                            <div className='font-medium'>{item.name}</div>
+                            <div className='text-sm break-all text-muted-foreground'>
+                              {item.ref}
+                            </div>
+                          </TableCell>
+                          <TableCell className='min-w-40 align-top'>
+                            <Badge
+                              variant={
+                                item.outcome === 'applied'
+                                  ? 'default'
+                                  : item.outcome === 'failed'
+                                    ? 'destructive'
+                                    : 'outline'
+                              }
+                            >
+                              {item.outcome}
+                            </Badge>
+                            <div className='mt-2 text-xs text-muted-foreground'>
+                              {item.applied ? 'Applied' : 'Not applied'}
+                            </div>
+                          </TableCell>
+                          <TableCell className='min-w-72 align-top text-xs'>
+                            <div className='break-all'>
+                              Item: {item.operationItemId}
+                            </div>
+                            <div className='mt-2 break-all text-muted-foreground'>
+                              Idempotency: {item.idempotencyKey}
+                            </div>
+                            <Badge className='mt-2' variant='outline'>
+                              {item.retrySafe
+                                ? 'retry by operation id'
+                                : 'fresh plan required'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className='min-w-64 align-top'>
+                            <div>{item.auditStatus}</div>
+                            <div className='mt-2 text-muted-foreground'>
+                              {item.recovery}
+                            </div>
+                          </TableCell>
+                          <TableCell className='min-w-56 align-top'>
+                            {item.nextAction}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             ) : null}
