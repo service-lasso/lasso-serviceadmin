@@ -16,9 +16,12 @@ import {
   ExternalLink,
   HeartPulse,
   Link2,
+  Network,
   PackageCheck,
   Save,
   ScanSearch,
+  ScrollText,
+  Split,
   Undo2,
   Wrench,
 } from 'lucide-react'
@@ -896,14 +899,39 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       </p>
                     </div>
                   </div>
-                  <div className='flex flex-wrap gap-2'>
+                  <div
+                    className='flex flex-wrap justify-start gap-2 sm:justify-end'
+                    data-testid='service-detail-quick-actions'
+                  >
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/logs' search={{ service: service.id }}>
+                        <ScrollText className='mr-2 size-4' />
+                        Logs
+                      </Link>
+                    </Button>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/dependencies' search={{ service: service.id }}>
+                        <Split className='mr-2 size-4' />
+                        Dependencies
+                      </Link>
+                    </Button>
                     <Button variant='outline' size='sm' asChild>
                       <Link to='/variables' search={{ service: service.id }}>
+                        <ArrowRight className='mr-2 size-4' />
                         Variables
                       </Link>
                     </Button>
                     <Button variant='outline' size='sm' asChild>
-                      <Link to='/network'>Network</Link>
+                      <Link to='/network'>
+                        <Network className='mr-2 size-4' />
+                        Network
+                      </Link>
+                    </Button>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/runtime' search={{ service: service.id }}>
+                        <HeartPulse className='mr-2 size-4' />
+                        Runtime
+                      </Link>
                     </Button>
                   </div>
                 </div>
@@ -1139,8 +1167,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       <CardHeader>
                         <CardTitle>Diagnostics + recent logs</CardTitle>
                         <CardDescription>
-                          Recent activity preview plus the next operator jump
-                          points.
+                          Recent activity preview for this service.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className='space-y-4'>
@@ -1149,32 +1176,6 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           value={service.metadata.logPath}
                         />
                         <ServiceLogViewer entries={service.recentLogs} />
-                        <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
-                          <Button variant='outline' asChild>
-                            <Link to='/logs' search={{ service: service.id }}>
-                              Open live logs
-                            </Link>
-                          </Button>
-                          <Button variant='outline' asChild>
-                            <Link
-                              to='/dependencies'
-                              search={{ service: service.id }}
-                            >
-                              Open dependencies
-                            </Link>
-                          </Button>
-                          <Button variant='outline' asChild>
-                            <Link to='/network'>Open network view</Link>
-                          </Button>
-                          <Button variant='outline' asChild>
-                            <Link
-                              to='/runtime'
-                              search={{ service: service.id }}
-                            >
-                              Open runtime view
-                            </Link>
-                          </Button>
-                        </div>
                       </CardContent>
                     </Card>
                   </TabsContent>
