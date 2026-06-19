@@ -79,6 +79,21 @@ describe('Dashboard runtime health action', () => {
     expect(hookMocks.mutate).toHaveBeenCalledWith('reload-runtime')
   })
 
+  it('runs the start services action from the services card', async () => {
+    hookMocks.useDashboardAction.mockReturnValue({
+      isPending: false,
+      mutate: hookMocks.mutate,
+      variables: undefined,
+    })
+
+    await renderRoute('/')
+    await userEvent.click(
+      screen.getByRole('button', { name: /Start services/i })
+    )
+
+    expect(hookMocks.mutate).toHaveBeenCalledWith('start-services')
+  })
+
   it('shows a disabled progress state while runtime reload is pending', async () => {
     hookMocks.useDashboardAction.mockReturnValue({
       isPending: true,
@@ -90,6 +105,20 @@ describe('Dashboard runtime health action', () => {
 
     expect(
       screen.getByRole('button', { name: /Reloading runtime/i })
+    ).toBeDisabled()
+  })
+
+  it('shows a disabled progress state while services are starting', async () => {
+    hookMocks.useDashboardAction.mockReturnValue({
+      isPending: true,
+      mutate: hookMocks.mutate,
+      variables: 'start-services',
+    })
+
+    await renderRoute('/')
+
+    expect(
+      screen.getByRole('button', { name: /Starting services/i })
     ).toBeDisabled()
   })
 })

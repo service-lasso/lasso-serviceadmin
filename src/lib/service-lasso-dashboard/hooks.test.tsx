@@ -101,4 +101,40 @@ describe('useDashboardAction', () => {
     )
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
   })
+
+  it('shows a success toast after start services refreshes dashboard data', async () => {
+    mocks.runDashboardAction.mockResolvedValueOnce(summary())
+
+    const { result } = renderHook(() => useDashboardAction(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync('start-services')
+    })
+
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      'Start services request accepted. Services status refreshed.'
+    )
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('shows the specific runtime API error when start services fails', async () => {
+    mocks.runDashboardAction.mockRejectedValueOnce(
+      new Error(
+        'Service Lasso runtime API returned 503: startAll failed because @postgres did not reach healthy state.'
+      )
+    )
+
+    const { result } = renderHook(() => useDashboardAction(), { wrapper })
+
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync('start-services')
+      ).rejects.toThrow('@postgres did not reach healthy state')
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Service Lasso runtime API returned 503: startAll failed because @postgres did not reach healthy state.'
+    )
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+  })
 })

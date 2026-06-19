@@ -295,6 +295,8 @@ export function Dashboard() {
   const summary = summaryQuery.data
   const isReloadingRuntime =
     actionMutation.isPending && actionMutation.variables === 'reload-runtime'
+  const isStartingServices =
+    actionMutation.isPending && actionMutation.variables === 'start-services'
 
   return (
     <>
@@ -353,7 +355,7 @@ export function Dashboard() {
                 className='w-full justify-start'
               >
                 <Play className='mr-2 h-4 w-4' />
-                Start services
+                {isStartingServices ? 'Starting services...' : 'Start services'}
               </Button>
             }
           />
