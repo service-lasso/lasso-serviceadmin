@@ -24,6 +24,24 @@ describe('instance selector shell control', () => {
     expect(screen.queryByText(/No active session/i)).not.toBeInTheDocument()
   })
 
+  it('keeps the instance selector out of the page header controls', async () => {
+    await renderRoute('/')
+
+    const header = document.querySelector('header')
+
+    expect(header).not.toBeNull()
+    expect(
+      within(header!).queryByRole('button', {
+        name: /Service Lasso instance selector/i,
+      })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: /Service Lasso instance selector/i,
+      })
+    ).toBeVisible()
+  })
+
   it('opens local metadata and a setup-needed remote connect affordance', async () => {
     const user = userEvent.setup()
     await renderRoute('/')
