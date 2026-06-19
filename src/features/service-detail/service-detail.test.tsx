@@ -1,7 +1,7 @@
 import { renderRoute } from '@/test/render-route'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 describe('service detail quick actions', () => {
   it('keeps jump actions in the header and removes duplicate log-panel actions', async () => {
@@ -49,5 +49,52 @@ describe('service detail quick actions', () => {
       screen.queryByRole('link', { name: /open runtime view/i })
     ).toBeNull()
     expect(screen.getByText('Diagnostics + recent logs')).toBeVisible()
+  })
+})
+
+describe('service detail endpoints table', () => {
+  it('renders actual endpoint URLs with open, copy, and route inventory actions', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /endpoints/i }))
+
+    const localUrlCell = screen.getByText('http://localhost:17700')
+    const localEndpointRow = localUrlCell.closest('tr')
+    expect(localEndpointRow).not.toBeNull()
+    const row = within(localEndpointRow as HTMLTableRowElement)
+
+    expect(row.getByText('Local UI')).toBeVisible()
+    expect(row.getByText('HTTP')).toBeVisible()
+    expect(row.getByText('0.0.0.0')).toBeVisible()
+    expect(row.getByText('17700')).toBeVisible()
+    expect(row.getByText('local')).toBeVisible()
+    expect(localUrlCell).toBeVisible()
+
+    expect(
+      row.getByRole('link', { name: 'Open Local UI endpoint' })
+    ).toHaveAttribute('href', 'http://localhost:17700')
+
+    await user.click(row.getByRole('button', { name: 'Copy Local UI URL' }))
+    expect(writeText).toHaveBeenCalledWith('http://localhost:17700')
+
+    expect(
+      row.getByRole('link', { name: 'Open Local UI in route inventory' })
+    ).toHaveAttribute(
+      'href',
+      expect.stringContaining('route=http%3A%2F%2Flocalhost%3A17700')
+    )
   })
 })

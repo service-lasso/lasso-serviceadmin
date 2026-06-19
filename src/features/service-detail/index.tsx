@@ -141,6 +141,73 @@ function CopyValueButton({
   )
 }
 
+function canOpenEndpointUrl(url: string) {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function EndpointRowActions({ endpoint }: { endpoint: ServiceEndpoint }) {
+  const canOpen = canOpenEndpointUrl(endpoint.url)
+
+  return (
+    <div className='flex items-center gap-1'>
+      <Button
+        asChild={canOpen}
+        type='button'
+        size='icon'
+        variant='outline'
+        className='size-8 shrink-0'
+        title={
+          canOpen
+            ? `Open ${endpoint.label} endpoint`
+            : `Endpoint URL unavailable for ${endpoint.label}`
+        }
+        disabled={!canOpen}
+      >
+        {canOpen ? (
+          <a href={endpoint.url} target='_blank' rel='noreferrer'>
+            <ExternalLink className='size-3.5' />
+            <span className='sr-only'>Open {endpoint.label} endpoint</span>
+          </a>
+        ) : (
+          <>
+            <ExternalLink className='size-3.5' />
+            <span className='sr-only'>
+              Endpoint URL unavailable for {endpoint.label}
+            </span>
+          </>
+        )}
+      </Button>
+      <CopyValueButton
+        value={endpoint.url}
+        label={`Copy ${endpoint.label} URL`}
+      />
+      <Button
+        asChild
+        type='button'
+        size='icon'
+        variant='outline'
+        className='size-8 shrink-0'
+        title={`Open ${endpoint.label} in route inventory`}
+      >
+        <Link
+          to='/service-routes'
+          search={{ route: endpoint.url, page: 1, pageSize: 10 }}
+        >
+          <Network className='size-3.5' />
+          <span className='sr-only'>
+            Open {endpoint.label} in route inventory
+          </span>
+        </Link>
+      </Button>
+    </div>
+  )
+}
+
 function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
   return (
     <div className='overflow-x-auto rounded-md border'>
@@ -153,7 +220,7 @@ function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
             <TableHead>Port</TableHead>
             <TableHead>Exposure</TableHead>
             <TableHead>URL</TableHead>
-            <TableHead>Action</TableHead>
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -165,16 +232,11 @@ function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
                 <TableCell>{endpoint.bind}</TableCell>
                 <TableCell>{endpoint.port}</TableCell>
                 <TableCell>{endpoint.exposure}</TableCell>
-                <TableCell className='max-w-[280px] text-sm break-all text-muted-foreground'>
-                  {endpoint.url}
+                <TableCell className='max-w-[360px] min-w-[220px] font-mono text-xs break-all text-muted-foreground'>
+                  {endpoint.url || 'No URL recorded'}
                 </TableCell>
                 <TableCell>
-                  <Button asChild size='sm' variant='outline'>
-                    <a href={endpoint.url} target='_blank' rel='noreferrer'>
-                      Open
-                      <ExternalLink className='ml-2 size-3.5' />
-                    </a>
-                  </Button>
+                  <EndpointRowActions endpoint={endpoint} />
                 </TableCell>
               </TableRow>
             ))
