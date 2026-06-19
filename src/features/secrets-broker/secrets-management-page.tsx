@@ -57,13 +57,16 @@ import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
   buildBulkSecretCampaignPlan,
+  buildBulkSecretCampaignApplyGate,
   buildManagedSecretActionPreview,
   buildStubSecretMutationPreview,
   bulkSecretCampaignOperations,
+  bulkSecretCampaignRevalidationStates,
   managedSecretRows,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
   type BulkSecretCampaignOperation,
+  type BulkSecretCampaignRevalidationState,
   type ManagedSecretAction,
   type ManagedSecretRow,
   type ManagedSecretState,
@@ -110,6 +113,11 @@ export function SecretsManagementPage() {
   const [bulkOperation, setBulkOperation] =
     useState<BulkSecretCampaignOperation>('rotate-reset')
   const [bulkPlanGenerated, setBulkPlanGenerated] = useState(false)
+  const [bulkAuditReason, setBulkAuditReason] = useState('')
+  const [bulkConfirmation, setBulkConfirmation] = useState('')
+  const [bulkRevalidationState, setBulkRevalidationState] =
+    useState<BulkSecretCampaignRevalidationState>('ready')
+  const [bulkRevalidated, setBulkRevalidated] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -158,6 +166,17 @@ export function SecretsManagementPage() {
       ),
     [bulkOperation, bulkSelectedIds]
   )
+  const bulkApplyGate = buildBulkSecretCampaignApplyGate(
+    bulkPlan,
+    bulkAuditReason,
+    bulkConfirmation,
+    bulkRevalidationState,
+    bulkRevalidated
+  )
+
+  function resetBulkApplyGate() {
+    setBulkRevalidated(false)
+  }
 
   function chooseAction(rowId: string, action: ManagedSecretAction) {
     setSelectedRowId(rowId)
@@ -166,6 +185,7 @@ export function SecretsManagementPage() {
 
   function toggleBulkSelection(rowId: string, checked: boolean) {
     setBulkPlanGenerated(false)
+    resetBulkApplyGate()
     setBulkSelectedIds((current) =>
       checked
         ? [...new Set([...current, rowId])]
@@ -175,6 +195,7 @@ export function SecretsManagementPage() {
 
   function setOperation(operation: BulkSecretCampaignOperation) {
     setBulkPlanGenerated(false)
+    resetBulkApplyGate()
     setBulkOperation(operation)
   }
 
@@ -753,7 +774,10 @@ export function SecretsManagementPage() {
                 <Button
                   type='button'
                   disabled={bulkSelectedIds.length === 0}
-                  onClick={() => setBulkPlanGenerated(true)}
+                  onClick={() => {
+                    setBulkPlanGenerated(true)
+                    resetBulkApplyGate()
+                  }}
                 >
                   Generate bulk dry-run plan
                 </Button>
@@ -892,14 +916,169 @@ export function SecretsManagementPage() {
             )}
 
             <div className='flex flex-wrap gap-2'>
-              <Button type='button' disabled>
-                Bulk apply unavailable in Stage 1
+              <Button type='button' disabled={!bulkApplyGate.canApply}>
+                Bulk apply blocked by broker campaign API
               </Button>
-              <Badge variant='secondary'>Dry-run only</Badge>
+              <Badge variant='secondary'>Dry-run plus revalidation</Badge>
               <Badge variant='outline'>No raw values</Badge>
               <Badge variant='outline'>No provider credentials</Badge>
               <Badge variant='outline'>No export</Badge>
             </div>
+
+            {bulkPlanGenerated ? (
+              <div className='grid gap-4 rounded-md border p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]'>
+                <div className='space-y-4'>
+                  <div>
+                    <h3 className='font-medium'>
+                      Campaign confirmation and revalidation
+                    </h3>
+                    <p className='mt-1 text-muted-foreground'>
+                      Apply remains fail-closed until audit reason,
+                      confirmation, and immediate revalidation all pass. The
+                      broker campaign apply API is not connected in this UI
+                      slice.
+                    </p>
+                  </div>
+
+                  <div className='grid gap-3 md:grid-cols-2'>
+                    <div className='space-y-2'>
+                      <label
+                        htmlFor='bulk-audit-reason'
+                        className='text-sm font-medium text-muted-foreground'
+                      >
+                        Campaign audit reason
+                      </label>
+                      <Input
+                        id='bulk-audit-reason'
+                        value={bulkAuditReason}
+                        onChange={(event) => {
+                          setBulkAuditReason(event.target.value)
+                          resetBulkApplyGate()
+                        }}
+                        placeholder='Required before revalidation'
+                      />
+                    </div>
+
+                    <div className='space-y-2'>
+                      <label
+                        htmlFor='bulk-confirmation'
+                        className='text-sm font-medium text-muted-foreground'
+                      >
+                        Explicit confirmation
+                      </label>
+                      <Input
+                        id='bulk-confirmation'
+                        value={bulkConfirmation}
+                        onChange={(event) => {
+                          setBulkConfirmation(event.target.value)
+                          resetBulkApplyGate()
+                        }}
+                        placeholder={bulkApplyGate.confirmationPhrase}
+                      />
+                      <div className='text-xs text-muted-foreground'>
+                        Required phrase: {bulkApplyGate.confirmationPhrase}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]'>
+                    <div className='space-y-2'>
+                      <label
+                        htmlFor='bulk-revalidation-state'
+                        className='text-sm font-medium text-muted-foreground'
+                      >
+                        Revalidation outcome
+                      </label>
+                      <select
+                        id='bulk-revalidation-state'
+                        className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                        value={bulkRevalidationState}
+                        onChange={(event) => {
+                          setBulkRevalidationState(
+                            event.target
+                              .value as BulkSecretCampaignRevalidationState
+                          )
+                          resetBulkApplyGate()
+                        }}
+                      >
+                        {bulkSecretCampaignRevalidationStates.map((state) => (
+                          <option key={state.id} value={state.id}>
+                            {state.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className='flex items-end'>
+                      <Button
+                        type='button'
+                        variant='outline'
+                        disabled={!bulkApplyGate.auditReasonAccepted}
+                        onClick={() => setBulkRevalidated(true)}
+                      >
+                        Revalidate dry-run
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='mb-3 flex flex-wrap gap-2'>
+                    <Badge
+                      variant={
+                        bulkApplyGate.revalidationPassed
+                          ? 'default'
+                          : 'secondary'
+                      }
+                    >
+                      {bulkApplyGate.revalidationPassed
+                        ? 'Revalidated'
+                        : 'Revalidation blocked'}
+                    </Badge>
+                    <Badge variant='outline'>
+                      {bulkApplyGate.applyDisabledReason}
+                    </Badge>
+                  </div>
+
+                  <dl className='space-y-2'>
+                    <div>
+                      <dt className='text-muted-foreground'>
+                        Revalidation status
+                      </dt>
+                      <dd>{bulkApplyGate.revalidationStatus}</dd>
+                    </div>
+                    <div>
+                      <dt className='text-muted-foreground'>Apply state</dt>
+                      <dd>
+                        {bulkApplyGate.canApply
+                          ? 'campaign apply ready'
+                          : 'campaign apply disabled'}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <ul className='mt-3 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {bulkApplyGate.statusRows.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+
+                  {bulkApplyGate.blockers.length > 0 ? (
+                    <div className='mt-3 space-y-1'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Blockers
+                      </div>
+                      <div className='flex flex-wrap gap-1'>
+                        {bulkApplyGate.blockers.map((blocker) => (
+                          <Badge key={blocker} variant='outline'>
+                            {blocker}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

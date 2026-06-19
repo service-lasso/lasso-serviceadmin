@@ -100,6 +100,30 @@ export type BulkSecretCampaignPlan = {
   applyAvailable: false
 }
 
+export type BulkSecretCampaignRevalidationState =
+  | 'ready'
+  | 'stale-plan'
+  | 'provider-changed'
+  | 'policy-changed'
+  | 'capability-changed'
+  | 'auth-required'
+  | 'denied'
+  | 'unsupported'
+  | 'audit-unavailable'
+
+export type BulkSecretCampaignApplyGate = {
+  auditReasonAccepted: boolean
+  confirmationRequired: boolean
+  confirmationPhrase: string
+  confirmationAccepted: boolean
+  revalidationPassed: boolean
+  revalidationStatus: string
+  statusRows: string[]
+  blockers: string[]
+  canApply: boolean
+  applyDisabledReason: string
+}
+
 export const managedSecretRows: ManagedSecretRow[] = [
   {
     id: 'serviceadmin-session-signing',
@@ -210,6 +234,21 @@ export const bulkSecretCampaignOperations: Array<{
   { id: 'mark-action-required', label: 'Mark action required' },
 ]
 
+export const bulkSecretCampaignRevalidationStates: Array<{
+  id: BulkSecretCampaignRevalidationState
+  label: string
+}> = [
+  { id: 'ready', label: 'Successful revalidation' },
+  { id: 'stale-plan', label: 'Stale plan' },
+  { id: 'provider-changed', label: 'Provider config changed' },
+  { id: 'policy-changed', label: 'Policy changed' },
+  { id: 'capability-changed', label: 'Capability changed' },
+  { id: 'auth-required', label: 'Provider auth required' },
+  { id: 'denied', label: 'Policy denied' },
+  { id: 'unsupported', label: 'Unsupported rows' },
+  { id: 'audit-unavailable', label: 'Audit unavailable' },
+]
+
 export const managedSecretSafeSurfaces = {
   route: '/secrets-broker/secrets',
   pageTitle: 'Service Admin - Secrets Broker Secrets',
@@ -228,6 +267,33 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:bulk-campaign-dry-run',
   ],
   persistedStorage: 'none',
+}
+
+const bulkCampaignRevalidationMessages: Record<
+  BulkSecretCampaignRevalidationState,
+  string
+> = {
+  ready:
+    'fresh dry-run revalidated against selected refs, provider config, policy, auth, capability, and audit metadata',
+  'stale-plan':
+    'stale plan: rerun dry-run because the previous campaign plan expired',
+  'provider-changed':
+    'provider config changed since dry-run; rerun before apply',
+  'policy-changed': 'policy changed since dry-run; rerun before apply',
+  'capability-changed':
+    'provider capability changed since dry-run; rerun before apply',
+  'auth-required': 'provider auth required before revalidation can pass',
+  denied: 'policy denied during revalidation; apply fails closed',
+  unsupported: 'selected rows include unsupported campaign operations',
+  'audit-unavailable': 'audit unavailable; campaign apply fails closed',
+}
+
+export function getBulkSecretCampaignConfirmationPhrase(
+  plan: BulkSecretCampaignPlan
+) {
+  return plan.highRiskCount > 0
+    ? 'CONFIRM HIGH RISK CAMPAIGN'
+    : 'CONFIRM BULK CAMPAIGN'
 }
 
 export function filterManagedSecrets(
@@ -540,6 +606,85 @@ export function buildBulkSecretCampaignPlan(
     highRiskCount: items.filter((item) => item.risk === 'high').length,
     items,
     applyAvailable: false,
+  }
+}
+
+export function buildBulkSecretCampaignApplyGate(
+  plan: BulkSecretCampaignPlan,
+  auditReason: string,
+  confirmation: string,
+  revalidationState: BulkSecretCampaignRevalidationState,
+  revalidated: boolean,
+  brokerCampaignApiAvailable = false
+): BulkSecretCampaignApplyGate {
+  const auditReasonAccepted = auditReason.trim().length >= 12
+  const confirmationPhrase = getBulkSecretCampaignConfirmationPhrase(plan)
+  const confirmationRequired = plan.highRiskCount > 0
+  const confirmationAccepted =
+    !confirmationRequired || confirmation.trim() === confirmationPhrase
+  const itemBlockers = Array.from(
+    new Set(plan.items.flatMap((item) => item.blockers))
+  )
+  const blockers: string[] = []
+
+  if (plan.selectedCount === 0) {
+    blockers.push('select at least one ref')
+  }
+  if (!auditReasonAccepted) {
+    blockers.push('audit reason must be at least 12 characters')
+  }
+  if (!confirmationAccepted) {
+    blockers.push(`type ${confirmationPhrase}`)
+  }
+  if (itemBlockers.length > 0) {
+    blockers.push(`resolve per-item blockers: ${itemBlockers.join(', ')}`)
+  }
+  if (!revalidated) {
+    blockers.push('run immediate revalidation')
+  } else if (revalidationState !== 'ready') {
+    blockers.push(bulkCampaignRevalidationMessages[revalidationState])
+  }
+  if (!brokerCampaignApiAvailable) {
+    blockers.push('broker campaign apply API not connected')
+  }
+
+  const revalidationPassed =
+    revalidated && revalidationState === 'ready' && itemBlockers.length === 0
+  const canApply =
+    blockers.length === 0 &&
+    auditReasonAccepted &&
+    confirmationAccepted &&
+    revalidationPassed &&
+    brokerCampaignApiAvailable
+
+  return {
+    auditReasonAccepted,
+    confirmationRequired,
+    confirmationPhrase,
+    confirmationAccepted,
+    revalidationPassed,
+    revalidationStatus: revalidated
+      ? bulkCampaignRevalidationMessages[revalidationState]
+      : 'not revalidated since this dry-run was generated',
+    statusRows: [
+      auditReasonAccepted ? 'audit reason recorded' : 'audit reason missing',
+      confirmationAccepted
+        ? 'confirmation accepted'
+        : 'high-risk confirmation missing',
+      revalidationPassed
+        ? 'revalidation passed'
+        : revalidated
+          ? 'revalidation blocked'
+          : 'revalidation not run',
+      brokerCampaignApiAvailable
+        ? 'broker campaign API available'
+        : 'broker campaign API unavailable',
+    ],
+    blockers,
+    canApply,
+    applyDisabledReason: canApply
+      ? 'apply ready'
+      : (blockers[0] ?? 'apply blocked'),
   }
 }
 
