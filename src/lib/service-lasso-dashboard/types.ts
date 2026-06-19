@@ -27,6 +27,7 @@ export type ServiceEndpoint = {
 export type ServiceEnvironmentVariable = {
   key: string
   value: string
+  templateValue?: string
   scope: 'global' | 'service'
   secret?: boolean
   source?: string
