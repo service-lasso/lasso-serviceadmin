@@ -51,6 +51,7 @@ type VariableRow = {
   id: string
   key: string
   value: string
+  templateValue: string | null
   scope: 'global' | 'service'
   secret: 'secret' | 'plain'
   source: string
@@ -88,7 +89,7 @@ const columns: ColumnDef<VariableRow>[] = [
     id: 'value',
     accessorFn: (row) => row.value,
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Value' />
+      <DataTableColumnHeader column={column} title='Resolved value' />
     ),
     cell: ({ row }) => (
       <div className='flex min-w-0 items-center gap-2'>
@@ -112,6 +113,32 @@ const columns: ColumnDef<VariableRow>[] = [
         </Button>
       </div>
     ),
+  },
+  {
+    id: 'templateValue',
+    accessorFn: (row) => row.templateValue ?? '',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Template value' />
+    ),
+    cell: ({ row }) => {
+      const displayValue =
+        row.original.secret === 'secret'
+          ? '••••••••'
+          : (row.original.templateValue ?? 'Not recorded')
+
+      return (
+        <span
+          className='block max-w-[320px] truncate text-sm text-muted-foreground'
+          title={
+            row.original.secret === 'secret'
+              ? undefined
+              : (row.original.templateValue ?? 'Not recorded')
+          }
+        >
+          {displayValue}
+        </span>
+      )
+    },
   },
   {
     id: 'scope',
@@ -236,6 +263,7 @@ export function Variables({ service, search, navigate }: VariablesProps) {
         const id = [
           variable.key,
           variable.value,
+          variable.templateValue ?? '',
           variable.scope,
           variable.secret ? 'secret' : 'plain',
           variable.source ?? 'Not recorded',
@@ -256,12 +284,16 @@ export function Variables({ service, search, navigate }: VariablesProps) {
         }
 
         const safeValue = variable.secret ? '' : variable.value
+        const safeTemplateValue = variable.secret
+          ? ''
+          : (variable.templateValue ?? '')
         const serviceRef = { id: service.id, name: service.name }
 
         map.set(id, {
           id,
           key: variable.key,
           value: variable.value,
+          templateValue: variable.templateValue ?? null,
           scope: variable.scope,
           secret: variable.secret ? 'secret' : 'plain',
           source: variable.source ?? 'Not recorded',
@@ -269,6 +301,7 @@ export function Variables({ service, search, navigate }: VariablesProps) {
           searchText: [
             variable.key,
             safeValue,
+            safeTemplateValue,
             variable.scope,
             variable.secret ? 'secret' : 'plain',
             variable.source ?? 'Not recorded',

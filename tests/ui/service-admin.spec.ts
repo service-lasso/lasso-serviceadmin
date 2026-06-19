@@ -200,6 +200,11 @@ test('runtime, network, installed, and variables tables render', async ({
   await expect(page.getByRole('heading', { name: 'Variables' })).toBeVisible()
   await expect(page.getByText('Environment variables')).toHaveCount(0)
   await expect(page.getByRole('columnheader', { name: /key/i })).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: /value/i })).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: /resolved value/i })
+  ).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: /template value/i })
+  ).toBeVisible()
   await expect(page.getByText('SERVICE_LASSO_ROOT').first()).toBeVisible()
 })

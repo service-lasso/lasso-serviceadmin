@@ -269,6 +269,7 @@ const defaultServices: DashboardService[] = [
       {
         key: 'VITE_SERVICE_LASSO_API_BASE_URL',
         value: 'http://127.0.0.1:3001',
+        templateValue: '${SERVICE_LASSO_RUNTIME_URL}',
         scope: 'service',
         source: '.env.local',
       },
@@ -281,6 +282,7 @@ const defaultServices: DashboardService[] = [
       {
         key: 'SESSION_SECRET',
         value: 'secret://@serviceadmin/SESSION_SECRET',
+        templateValue: '${@serviceadmin.SESSION_SECRET}',
         scope: 'service',
         secret: true,
         source: '@secretsbroker/local/default',
