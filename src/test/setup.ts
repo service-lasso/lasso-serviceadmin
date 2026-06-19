@@ -74,9 +74,14 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
   cleanup()
+
+  // input-otp schedules unmanaged jsdom timers up to 50 ms after render.
+  // Let them drain before Vitest tears down `window` on fast Linux runners.
+  await new Promise((resolve) => setTimeout(resolve, 60))
+
   window.localStorage?.clear?.()
   window.sessionStorage?.clear?.()
   document.cookie = ''
