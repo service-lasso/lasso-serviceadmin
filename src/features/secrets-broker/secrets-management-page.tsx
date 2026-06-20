@@ -61,6 +61,7 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionPreview,
+  buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
@@ -77,6 +78,7 @@ import {
   type ManagedSecretAction,
   type ManagedSecretRow,
   type ManagedSecretState,
+  type SingleSecretOperationHistoryEntry,
   type SingleSecretOperationResult,
   type StubSecretMutationState,
 } from './secrets-management'
@@ -116,6 +118,9 @@ export function SecretsManagementPage() {
   const [confirmed, setConfirmed] = useState(false)
   const [singleApplyResult, setSingleApplyResult] =
     useState<SingleSecretOperationResult | null>(null)
+  const [singleOperationHistory, setSingleOperationHistory] = useState<
+    SingleSecretOperationHistoryEntry[]
+  >([])
   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([
     managedSecretRows[0].id,
     managedSecretRows[1].id,
@@ -240,9 +245,19 @@ export function SecretsManagementPage() {
   }
 
   function applySingleSecretOperation() {
-    setSingleApplyResult(
-      buildSingleSecretOperationResult(selectedRow, singleOperationPlan)
+    const result = buildSingleSecretOperationResult(
+      selectedRow,
+      singleOperationPlan
     )
+    setSingleApplyResult(result)
+    setSingleOperationHistory((current) => [
+      buildSingleSecretOperationHistoryEntry(
+        selectedRow,
+        singleOperationPlan,
+        current.length + 1
+      ),
+      ...current,
+    ])
     setStubState('success')
   }
 
@@ -1610,6 +1625,71 @@ export function SecretsManagementPage() {
                 </ul>
               </div>
             ) : null}
+
+            <div className='rounded-lg border p-3'>
+              <div className='mb-3 flex flex-wrap items-center gap-2'>
+                <ListChecks className='size-4 text-primary' />
+                <div className='font-medium'>
+                  Single-secret operation history
+                </div>
+                <Badge variant='secondary'>Metadata only</Badge>
+                <Badge variant='outline'>
+                  {singleOperationHistory.length} submitted
+                </Badge>
+              </div>
+              {singleOperationHistory.length > 0 ? (
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ref</TableHead>
+                        <TableHead>Action / status</TableHead>
+                        <TableHead>Audit event</TableHead>
+                        <TableHead>Next action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {singleOperationHistory.map((entry) => (
+                        <TableRow key={entry.auditEventId}>
+                          <TableCell className='min-w-72 align-top'>
+                            <div className='font-medium'>{entry.rowName}</div>
+                            <div className='text-sm break-all text-muted-foreground'>
+                              {entry.ref}
+                            </div>
+                            <div className='mt-2 text-xs text-muted-foreground'>
+                              {entry.provider}
+                            </div>
+                          </TableCell>
+                          <TableCell className='min-w-44 align-top'>
+                            <Badge variant='outline'>{entry.action}</Badge>
+                            <div className='mt-2'>{entry.statusBadge}</div>
+                            <div className='text-xs text-muted-foreground'>
+                              {entry.submittedAt}
+                            </div>
+                          </TableCell>
+                          <TableCell className='min-w-72 align-top'>
+                            <div className='break-all'>
+                              {entry.auditEventId}
+                            </div>
+                            <div className='mt-2 text-xs break-all text-muted-foreground'>
+                              {entry.policy}
+                            </div>
+                          </TableCell>
+                          <TableCell className='min-w-64 align-top'>
+                            {entry.nextAction}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className='rounded-md border bg-muted/40 p-3 text-muted-foreground'>
+                  No submitted stub operations yet. History will list refs,
+                  operation ids, audit event ids, and next actions only.
+                </div>
+              )}
+            </div>
 
             <div className='flex flex-wrap gap-2'>
               <Button

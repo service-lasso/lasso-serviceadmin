@@ -67,6 +67,15 @@ export type SingleSecretOperationResult = {
   nextAction: string
 }
 
+export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
+  rowName: string
+  provider: string
+  policy: string
+  auditEventId: string
+  statusBadge: string
+  submittedAt: string
+}
+
 export type StubSecretMutationState =
   | 'ready'
   | 'denied'
@@ -357,6 +366,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:action-preview',
     'secrets-management:stub-mutation-preview',
     'secrets-management:stub-mutation-apply-status',
+    'secrets-management:single-secret-operation-history',
     'secrets-management:stub-delete-preview',
     'secrets-management:bulk-campaign-dry-run',
     'secrets-management:bulk-campaign-apply',
@@ -1345,6 +1355,25 @@ export function buildSingleSecretOperationResult(
   }
 }
 
+export function buildSingleSecretOperationHistoryEntry(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  sequence: number
+): SingleSecretOperationHistoryEntry {
+  const result = buildSingleSecretOperationResult(row, plan)
+  const safeSequence = Math.max(1, sequence)
+
+  return {
+    ...result,
+    rowName: row.name,
+    provider: row.provider,
+    policy: row.policy,
+    auditEventId: `audit-${safeOperationSlug(plan.action, row)}-${safeSequence}`,
+    statusBadge: 'submitted to stub broker',
+    submittedAt: `stub-sequence-${safeSequence}`,
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -1366,4 +1395,10 @@ export function managedSecretBulkApplyResultHasSecretMaterial(
   result: BulkSecretCampaignApplyResult
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(result))
+}
+
+export function managedSecretSingleHistoryHasSecretMaterial(
+  entries: SingleSecretOperationHistoryEntry[]
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(entries))
 }
