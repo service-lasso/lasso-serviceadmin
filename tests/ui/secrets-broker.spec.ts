@@ -139,6 +139,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Find a ref/i)).toBeVisible()
     await expect(page.getByText(/Pick row action/i)).toBeVisible()
     await expect(page.getByText(/Dry-run before apply/i)).toBeVisible()
+    await expect(page.getByText(/Preview actions/i)).toBeVisible()
     await expect(page.getByText(/Stub preview · values hidden/i)).toBeVisible()
     await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
     await expect(page.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
@@ -186,6 +187,18 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/delete preview required before apply/i)
     ).toBeVisible()
+    await expect(
+      page.getByText(/dependent service references and recovery guidance/i)
+    ).toBeVisible()
+    await expect(page.getByText(/recoveryPlanRef/i)).toBeVisible()
+    await page
+      .getByRole('button', { name: /Apply policy preview/i })
+      .first()
+      .click()
+    await expect(
+      page.getByText(/target policy assignment diff checked/i)
+    ).toBeVisible()
+    await expect(page.getByText(/targetPolicyRef/i)).toBeVisible()
 
     await expect(page.getByText(/Single-secret preview gate/i)).toBeVisible()
     await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
