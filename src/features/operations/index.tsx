@@ -499,7 +499,9 @@ function OperationsHeader({
             <Link to='/runtime'>Runtime</Link>
           </Button>
           <Button variant='outline' size='sm' asChild>
-            <Link to='/secrets-broker/audit-events'>Secrets audit</Link>
+            <Link to='/secrets-broker/operational-controls'>
+              Operational Controls
+            </Link>
           </Button>
         </div>
       </div>

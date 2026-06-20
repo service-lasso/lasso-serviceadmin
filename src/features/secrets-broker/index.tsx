@@ -200,8 +200,8 @@ const secretsBrokerSectionMetadata: Record<
     description: 'Inspect safe service-to-secret relationship metadata.',
   },
   'audit-events': {
-    title: 'Service Admin - Secrets Broker Audit Events',
-    heading: 'Secrets Broker audit events',
+    title: 'Service Admin - Operations Audit Logging',
+    heading: 'Audit Logging',
     description: 'Inspect audit events and tamper-evidence metadata.',
   },
   diagnostics: {
@@ -1976,7 +1976,7 @@ export function SecretsBrokerSetupWizard({
       'workflow-boundaries': '/secrets-broker/sources',
       'secrets-topology': '/secrets-broker/topology',
       topology: '/secrets-broker/topology',
-      'audit-events': '/secrets-broker/audit-events',
+      'audit-events': '/operations/audit-logging',
       diagnostics: '/secrets-broker/sources',
     }
     const route = legacyHashRoute[legacyHash]
@@ -2297,9 +2297,7 @@ export function SecretsBrokerSetupWizard({
                     <Link to='/secrets-broker/sources'>Add provider</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
-                    <Link to='/secrets-broker/audit-events'>
-                      View audit/events
-                    </Link>
+                    <Link to='/operations/audit-logging'>Audit Logging</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
                     <Link to='/secrets-broker/sources'>
@@ -2629,7 +2627,7 @@ export function SecretsBrokerSetupWizard({
                             <div className='mt-2 flex flex-wrap gap-1 text-xs'>
                               {connection.lifecycle.auditEventRef ? (
                                 <a
-                                  href='/secrets-broker/audit-events'
+                                  href='/operations/audit-logging'
                                   className='text-primary underline-offset-4 hover:underline'
                                 >
                                   Audit {connection.lifecycle.auditEventRef}

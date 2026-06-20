@@ -1,8 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { SecretsBrokerSetupWizard } from '@/features/secrets-broker'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute(
   '/_authenticated/secrets-broker/audit-events'
 )({
-  component: () => <SecretsBrokerSetupWizard focusSection='audit-events' />,
+  beforeLoad: () => {
+    throw redirect({ to: '/operations/audit-logging' })
+  },
 })

@@ -126,11 +126,6 @@ export const sidebarData: SidebarData = {
           url: '/secrets-broker/topology',
           icon: Network,
         },
-        {
-          title: 'Audit / Events',
-          url: '/secrets-broker/audit-events',
-          icon: GitBranch,
-        },
       ],
     },
     {

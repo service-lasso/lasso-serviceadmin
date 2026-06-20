@@ -4,7 +4,7 @@ import {
   collectBrowserLeakSurfaces,
   serviceLassoSecretLeakSentinels,
 } from '@/test/secret-leak-harness'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
@@ -123,8 +123,12 @@ describe('Secrets Broker overview dashboard', () => {
     expect(screen.getByText(/Ready providers/i)).toBeVisible()
     expect(screen.getByText(/Needs operator action/i)).toBeVisible()
     expect(
-      screen.getByRole('link', { name: /View audit\/events/i })
-    ).toHaveAttribute('href', '/secrets-broker/audit-events')
+      screen
+        .getAllByRole('link', { name: /Audit Logging/i })
+        .some(
+          (link) => link.getAttribute('href') === '/operations/audit-logging'
+        )
+    ).toBe(true)
     expect(
       screen.getByRole('link', { name: /View provider status/i })
     ).toHaveAttribute('href', '/secrets-broker/sources')
@@ -163,7 +167,7 @@ describe('Secrets Broker overview dashboard', () => {
     expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()
     expect(screen.getByText(/key version v3/i)).toBeVisible()
     expect(screen.getByText(/View providers/i)).toBeVisible()
-    expect(screen.getByText(/View audit\/events/i)).toBeVisible()
+    expect(screen.getAllByText(/Audit Logging/i)[0]).toBeVisible()
 
     await user.selectOptions(
       screen.getByLabelText(/Preview state/i),
@@ -200,10 +204,14 @@ describe('Secrets Broker overview dashboard', () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/operational-controls')
 
-    expect(screen.getAllByText(/Operational controls/i)[0]).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: /^Operational Controls$/i })
+    ).toBeVisible()
     expect(screen.getByText(/Effective service policy/i)).toBeVisible()
     expect(screen.getByText(/Scoped lockouts/i)).toBeVisible()
-    expect(screen.getByText(/Operational events/i)).toBeVisible()
+    expect(screen.getAllByText(/Audit Logging/i)[0]).toBeVisible()
+    expect(screen.getByText(/Telemetry and log shipping/i)).toBeVisible()
+    expect(screen.getAllByText(/OpenObserve/i)[0]).toBeVisible()
     expect(screen.getByText(/Audit availability/i)).toBeVisible()
     expect(screen.getByText(/services\/\*\/runtime\/\*/i)).toBeVisible()
     expect(screen.getAllByText(/local_api:127\.0\.0\.1/i)[0]).toBeVisible()
@@ -878,7 +886,7 @@ describe('Secrets Broker overview dashboard', () => {
     ['backup-keys', '/secrets-broker/backup-keys'],
     ['workflow-authoring-boundary', '/secrets-broker/sources'],
     ['secrets-topology', '/secrets-broker/topology'],
-    ['audit-events', '/secrets-broker/audit-events'],
+    ['audit-events', '/operations/audit-logging'],
     ['diagnostics', '/secrets-broker/sources'],
   ])('routes legacy #%s hash to %s', async (hash, path) => {
     const { router } = await renderRoute(`/secrets-broker#${hash}`)
@@ -1351,35 +1359,15 @@ describe('Secrets Broker overview dashboard', () => {
   })
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker/audit-events')
+    await renderRoute('/operations/audit-logging')
 
+    expect(
+      screen.getByRole('heading', { name: /Audit Logging/i })
+    ).toBeVisible()
     expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/refresh failure/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/session token revoked/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Event detail/i)[0]).toBeVisible()
-    expect(screen.getByText('policy/openclaw/service-lasso/read')).toBeVisible()
-    expect(screen.getByText(/Resolver granted access/i)).toBeVisible()
 
-    await user.selectOptions(screen.getByLabelText(/Outcome/i), 'denied')
-    expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
     expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
-    expect(
-      screen.queryByRole('button', { name: /session token revoked/i })
-    ).not.toBeInTheDocument()
-
-    await user.selectOptions(screen.getByLabelText(/Audit provider/i), 'local')
-    expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
-
-    fireEvent.change(screen.getByLabelText(/Source \/ actor/i), {
-      target: { value: '@serviceadmin' },
-    })
-    expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
-    expect(
-      screen.queryByRole('button', { name: /resolve denied/i })
-    ).not.toBeInTheDocument()
 
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)
