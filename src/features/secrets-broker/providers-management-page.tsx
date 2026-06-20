@@ -35,6 +35,7 @@ import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { LocalBootstrapProviderDetails } from './local-bootstrap-provider-details'
 import { LocalEncryptedStoreProviderDetail } from './local-encrypted-store-detail'
+import { OnePasswordCliProviderDetail } from './onepassword-cli-provider-detail'
 import {
   buildProvidersManagementSummary,
   filterProviderManagementRows,
@@ -324,6 +325,8 @@ export function ProvidersManagementPage() {
         <LocalEncryptedStoreProviderDetail />
 
         <LocalBootstrapProviderDetails query={query} />
+
+        <OnePasswordCliProviderDetail query={query} />
 
         <Card>
           <CardHeader>
