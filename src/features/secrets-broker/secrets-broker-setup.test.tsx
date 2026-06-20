@@ -505,6 +505,80 @@ describe('Secrets Broker setup wizard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
+  it('renders Vault OpenBao provider configuration metadata safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/sources')
+
+    expect(
+      screen.getAllByText(/HashiCorp Vault \/ OpenBao provider/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Vault\/OpenBao configuration metadata/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/configure_vault_address_mount_auth_ref_and_policy/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/address, mount, token-env handle, auth identity ref/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/secret:\/\/providers\/vault\/payments\/STRIPE_KEY/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/kv\/service-lasso/i)[0]).toBeVisible()
+    expect(screen.getByText(/payments\/api/i)).toBeVisible()
+    expect(screen.getAllByText(/stripe_key/i)[0]).toBeVisible()
+    expect(screen.getByText(/Sealed, locked, auth_required/i)).toBeVisible()
+    expect(screen.getAllByText(/policy metadata only/i)[0]).toBeVisible()
+    expect(screen.getByText(/no raw Vault\/OpenBao output/i)).toBeVisible()
+
+    const vaultProvider = secretsBrokerSourceBackends.find(
+      (source) => source.id === 'vault-cli'
+    )
+    expect(vaultProvider).toMatchObject({
+      configured: false,
+      enabled: false,
+      defaultRole: 'addable',
+      lifecycle: 'setup-needed',
+      brokerState: 'auth_required',
+      kind: 'vault/openbao',
+    })
+    expect(vaultProvider?.supportedActions).toEqual(
+      expect.arrayContaining([
+        'test-source',
+        'view-diagnostics',
+        'edit-configuration',
+        'view-examples',
+      ])
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Configure Vault\/OpenBao/i })
+    )
+    expect(
+      screen.getByRole('dialog', { name: /Configure Vault\/OpenBao/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/Address/i)).toHaveValue(
+      'https://vault.service-lasso.local'
+    )
+    expect(screen.getByLabelText(/^Mount$/i)).toHaveValue('kv/service-lasso')
+    expect(screen.getByLabelText(/Auth identity reference/i)).toHaveValue(
+      'secret://providers/vault/operator-session'
+    )
+    expect(screen.getByLabelText(/Token env handle/i)).toHaveValue(
+      'VAULT_TOKEN via broker-managed env ref'
+    )
+    expect(screen.getByLabelText(/Namespace/i)).toHaveValue('providers/vault/*')
+    expect(
+      screen.getByText(/Metadata-only Vault\/OpenBao status check/i)
+    ).toBeVisible()
+
+    expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
+    expect(screen.queryByText(/SERVICE_LASSO_FAKE_SECRET_SENTINEL/i)).toBeNull()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  })
+
   it('renders 1Password CLI provider configuration metadata safely', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/sources')

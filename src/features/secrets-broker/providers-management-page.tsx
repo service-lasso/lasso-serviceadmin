@@ -48,6 +48,7 @@ import {
   type SecretsBrokerSourceBackend,
   type SecretsBrokerSourceState,
 } from './source-backends'
+import { VaultProviderDetail } from './vault-provider-detail'
 
 type ProviderOrder = 'priority' | 'name' | 'status'
 
@@ -327,6 +328,8 @@ export function ProvidersManagementPage() {
         <LocalEncryptedStoreProviderDetail />
 
         <LocalBootstrapProviderDetails query={query} />
+
+        <VaultProviderDetail query={query} />
 
         <OnePasswordCliProviderDetail query={query} />
 
