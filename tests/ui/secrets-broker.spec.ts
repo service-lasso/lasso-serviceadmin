@@ -69,12 +69,12 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('link', { name: 'Overview / Setup' }).click()
+    await page.getByRole('link', { name: 'Overview' }).click()
 
     await expect(page).toHaveURL(/\/secrets-broker$/)
     await expectNoBlankScreen(page)
     await expect(
-      page.getByRole('heading', { name: /Secrets Broker setup/i })
+      page.getByRole('heading', { name: /^Overview$/i })
     ).toBeVisible()
     await expect(page.getByText(/@secretsbroker overview/i)).toBeVisible()
     await expect(
@@ -98,7 +98,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await page.goto('/')
 
     const navLinks = [
-      ['Overview / Setup', /\/secrets-broker$/],
+      ['Overview', /\/secrets-broker$/],
       ['Secrets', /\/secrets-broker\/secrets$/],
       ['Operational Controls', /\/secrets-broker\/operational-controls$/],
       ['Providers', /\/secrets-broker\/sources$/],

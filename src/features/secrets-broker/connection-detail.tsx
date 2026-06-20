@@ -145,7 +145,7 @@ function ConnectionDetailMissing({ connectionId }: { connectionId: string }) {
           </CardHeader>
           <CardContent>
             <Button asChild variant='secondary'>
-              <Link to='/secrets-broker'>Back to Secrets Broker setup</Link>
+              <Link to='/secrets-broker'>Back to Secrets Broker overview</Link>
             </Button>
           </CardContent>
         </Card>
