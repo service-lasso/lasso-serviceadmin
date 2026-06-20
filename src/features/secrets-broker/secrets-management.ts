@@ -54,6 +54,18 @@ export type SingleSecretOperationPlan = {
   canSubmit: boolean
 }
 
+export type SingleSecretOperationResult = {
+  operationId: string
+  ref: string
+  action: ManagedSecretAction
+  outcome: 'submitted'
+  applied: false
+  auditStatus: string
+  resultStatus: string
+  safetyRows: string[]
+  nextAction: string
+}
+
 export type StubSecretMutationState =
   | 'ready'
   | 'denied'
@@ -1236,6 +1248,44 @@ export function buildSingleSecretOperationPlan(
       'auditReasonMetadata',
     ],
     canSubmit,
+  }
+}
+
+export function buildSingleSecretOperationResult(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretOperationResult {
+  const actionLabel =
+    plan.action === 'reset'
+      ? 'rotate/reset'
+      : plan.action === 'edit'
+        ? 'edit/update'
+        : plan.action === 'delete'
+          ? 'delete/decommission'
+          : plan.action === 'policy'
+            ? 'policy change'
+            : plan.action
+
+  return {
+    operationId: plan.operationId,
+    ref: row.ref,
+    action: plan.action,
+    outcome: 'submitted',
+    applied: false,
+    auditStatus: 'stub audit event recorded with metadata only',
+    resultStatus: `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`,
+    safetyRows: [
+      'raw value was not revealed',
+      'request body is limited to ref, operation id, action, owner, provider, policy, and audit reason metadata',
+      plan.action === 'reset'
+        ? 'rotation can be requested without controlled reveal'
+        : 'operator action used the selected dry-run gate',
+      'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
+    ],
+    nextAction:
+      plan.action === 'reset'
+        ? 'monitor broker rotation outcome and dependent service restart notes'
+        : 'monitor broker operation status and typed policy/audit result',
   }
 }
 

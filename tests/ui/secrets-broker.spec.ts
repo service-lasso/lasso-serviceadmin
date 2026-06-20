@@ -208,6 +208,37 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
+  test('submits a single-secret rotate preview without revealing the value', async ({
+    page,
+  }) => {
+    await page.goto('/secrets-broker/secrets')
+    await expectNoBlankScreen(page)
+
+    await page
+      .getByRole('button', { name: /Reset\/rotate dry-run/i })
+      .first()
+      .click()
+    await expect(
+      page.getByText(/Reset\/rotate dry-run for SESSION_SIGNING_KEY/i)
+    ).toBeVisible()
+    await page
+      .getByLabel(/Audit reason for stub preview/i)
+      .fill('operator requested rotation preview')
+    await page.getByLabel(/I confirm this is a stub preview/i).check()
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+
+    await expect(
+      page.getByText(/Single-secret operation result: submitted/i)
+    ).toBeVisible()
+    await expect(page.getByText(/raw value was not revealed/i)).toBeVisible()
+    await expect(
+      page.getByText(/rotation can be requested without controlled reveal/i)
+    ).toBeVisible()
+    await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
   test('covers healthy degraded offline and unconfigured broker states', async ({
     page,
   }) => {

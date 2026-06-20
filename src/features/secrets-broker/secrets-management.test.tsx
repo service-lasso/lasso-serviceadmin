@@ -6,6 +6,7 @@ import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
+  buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
@@ -540,6 +541,21 @@ describe('Secrets Broker secrets management page', () => {
       )
     ).toBeVisible()
     expect(screen.getByText(/reset dry-run capability checked/i)).toBeVisible()
+    await user.type(
+      screen.getByLabelText(/Audit reason for stub preview/i),
+      'operator requested rotation preview'
+    )
+    await user.click(screen.getByLabelText(/I confirm this is a stub preview/i))
+    await user.click(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    )
+    expect(
+      screen.getByText(/Single-secret operation result: submitted/i)
+    ).toBeVisible()
+    expect(screen.getByText(/raw value was not revealed/i)).toBeVisible()
+    expect(
+      screen.getByText(/rotation can be requested without controlled reveal/i)
+    ).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Delete dry-run/i })[0]
@@ -680,6 +696,26 @@ describe('Secrets Broker secrets management page', () => {
     })
     expect(rotatePlan.safePayloadFields).toEqual(
       expect.arrayContaining(['ref', 'operationId', 'auditReasonMetadata'])
+    )
+    const rotateResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan
+    )
+    expect(rotateResult).toMatchObject({
+      operationId: rotatePlan.operationId,
+      ref: managedSecretRows[0].ref,
+      action: 'reset',
+      outcome: 'submitted',
+      applied: false,
+      auditStatus: 'stub audit event recorded with metadata only',
+      nextAction:
+        'monitor broker rotation outcome and dependent service restart notes',
+    })
+    expect(rotateResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'raw value was not revealed',
+        'rotation can be requested without controlled reveal',
+      ])
     )
 
     const missingDeletePlan = buildSingleSecretOperationPlan(
