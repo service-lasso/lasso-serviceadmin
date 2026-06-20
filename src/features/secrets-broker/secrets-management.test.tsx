@@ -49,6 +49,8 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/Find a ref/i)).toBeVisible()
     expect(screen.getByText(/Pick row action/i)).toBeVisible()
     expect(screen.getByText(/Dry-run before apply/i)).toBeVisible()
+    expect(screen.getByText(/Preview actions/i)).toBeVisible()
+    expect(screen.getAllByText(/^5$/)[0]).toBeVisible()
     expect(screen.getByText(/Visible values/i)).toBeVisible()
     expect(screen.getByText(/Stub preview · values hidden/i)).toBeVisible()
     expect(screen.getByText(/Single-secret preview gate/i)).toBeVisible()
@@ -566,7 +568,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/delete preview required before apply/i)
     ).toBeVisible()
-    expect(screen.getByText(/recovery guidance/i)).toBeVisible()
+    expect(screen.getAllByText(/recovery guidance/i)[0]).toBeVisible()
+    expect(screen.getByText(/dependent service references/i)).toBeVisible()
+    expect(screen.getByText(/recoveryPlanRef/i)).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Apply policy preview/i })[0]
@@ -577,6 +581,10 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getAllByText(/policy preview required before apply/i)[0]
     ).toBeVisible()
+    expect(
+      screen.getByText(/target policy assignment diff checked/i)
+    ).toBeVisible()
+    expect(screen.getByText(/targetPolicyRef/i)).toBeVisible()
     expect(
       screen.getByRole('button', {
         name: /Apply disabled until dry-run preview is accepted/i,
@@ -728,6 +736,39 @@ describe('Secrets Broker secrets management page', () => {
     expect(missingDeletePlan.canSubmit).toBe(false)
     expect(missingDeletePlan.blockers).toContain('ref unavailable')
     expect(missingDeletePlan.blockers).toContain('delete dry-run unsupported')
+    expect(missingDeletePlan.safePayloadFields).toEqual(
+      expect.arrayContaining(['recoveryPlanRef', 'dependentServiceRefs'])
+    )
+    expect(missingDeletePlan.revalidationChecks).toEqual(
+      expect.arrayContaining([
+        'dependent service references and recovery guidance checked',
+      ])
+    )
+
+    const singlePolicyPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[0],
+      'policy',
+      'operator requested policy assignment preview',
+      true,
+      'ready'
+    )
+    expect(singlePolicyPlan.safePayloadFields).toEqual(
+      expect.arrayContaining(['targetPolicyRef', 'policyDiffMetadata'])
+    )
+    expect(singlePolicyPlan.revalidationChecks).toEqual(
+      expect.arrayContaining([
+        'target policy assignment diff checked as metadata only',
+      ])
+    )
+    const policyResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      singlePolicyPlan
+    )
+    expect(policyResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'policy change carries target policy metadata only',
+      ])
+    )
 
     const bulkPlan = buildBulkSecretCampaignPlan(
       managedSecretRows,

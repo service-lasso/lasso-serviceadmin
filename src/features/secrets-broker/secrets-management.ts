@@ -51,6 +51,7 @@ export type SingleSecretOperationPlan = {
   applyGate: string
   blockers: string[]
   safePayloadFields: string[]
+  revalidationChecks: string[]
   canSubmit: boolean
 }
 
@@ -1167,6 +1168,61 @@ function safeOperationSlug(action: ManagedSecretAction, row: ManagedSecretRow) {
     .replace(/^-+|-+$/g, '')
 }
 
+function safePayloadFieldsForSingleSecretAction(action: ManagedSecretAction) {
+  const baseFields = [
+    'ref',
+    'operationId',
+    'action',
+    'owningService',
+    'provider',
+    'policy',
+    'auditReasonMetadata',
+  ]
+
+  switch (action) {
+    case 'reveal':
+      return [...baseFields, 'revealChallengeId']
+    case 'edit':
+      return [...baseFields, 'metadataDiff']
+    case 'reset':
+      return [...baseFields, 'rotationReason']
+    case 'delete':
+      return [...baseFields, 'recoveryPlanRef', 'dependentServiceRefs']
+    case 'policy':
+      return [...baseFields, 'targetPolicyRef', 'policyDiffMetadata']
+    case 'metadata':
+    default:
+      return ['ref', 'operationId', 'action', 'owningService', 'provider']
+  }
+}
+
+function revalidationChecksForSingleSecretAction(
+  action: ManagedSecretAction,
+  requirement: string
+) {
+  if (action === 'metadata') {
+    return ['metadata view does not revalidate a mutation']
+  }
+
+  const checks = [
+    `${requirement} broker capability rechecked immediately before submit`,
+    'policy decision rechecked immediately before submit',
+    'audit writer availability required before submit',
+  ]
+
+  if (action === 'delete') {
+    checks.push('dependent service references and recovery guidance checked')
+  }
+  if (action === 'policy') {
+    checks.push('target policy assignment diff checked as metadata only')
+  }
+  if (action === 'reset') {
+    checks.push('rotation can submit without controlled reveal')
+  }
+
+  return checks
+}
+
 export function buildSingleSecretOperationPlan(
   row: ManagedSecretRow,
   action: ManagedSecretAction,
@@ -1238,15 +1294,11 @@ export function buildSingleSecretOperationPlan(
         ? 'metadata view only'
         : (blockers[0] ?? 'operation blocked'),
     blockers,
-    safePayloadFields: [
-      'ref',
-      'operationId',
-      'action',
-      'owningService',
-      'provider',
-      'policy',
-      'auditReasonMetadata',
-    ],
+    safePayloadFields: safePayloadFieldsForSingleSecretAction(action),
+    revalidationChecks: revalidationChecksForSingleSecretAction(
+      action,
+      requirement
+    ),
     canSubmit,
   }
 }
@@ -1279,7 +1331,11 @@ export function buildSingleSecretOperationResult(
       'request body is limited to ref, operation id, action, owner, provider, policy, and audit reason metadata',
       plan.action === 'reset'
         ? 'rotation can be requested without controlled reveal'
-        : 'operator action used the selected dry-run gate',
+        : plan.action === 'delete'
+          ? 'delete/decommission remains broker-owned and recovery-guided; current value was not read'
+          : plan.action === 'policy'
+            ? 'policy change carries target policy metadata only'
+            : 'operator action used the selected dry-run gate',
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
     nextAction:

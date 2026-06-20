@@ -605,8 +605,8 @@ export function SecretsManagementPage() {
           </Card>
           <Card>
             <CardHeader className='pb-2'>
-              <CardDescription>Dry-run actions</CardDescription>
-              <CardTitle className='text-3xl'>4</CardTitle>
+              <CardDescription>Preview actions</CardDescription>
+              <CardTitle className='text-3xl'>5</CardTitle>
             </CardHeader>
           </Card>
           <Card>
@@ -1389,6 +1389,37 @@ export function SecretsManagementPage() {
                     </Badge>
                   ))}
                 </div>
+              </div>
+            </div>
+            <div className='grid gap-3 md:grid-cols-2'>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Immediate revalidation checks
+                </div>
+                <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                  {singleOperationPlan.revalidationChecks.map((check) => (
+                    <li key={check}>{check}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className='rounded-md border p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Submit blockers
+                </div>
+                {singleOperationPlan.blockers.length > 0 ? (
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleOperationPlan.blockers.map((blocker) => (
+                      <Badge key={blocker} variant='outline'>
+                        {blocker}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <div className='mt-2 text-muted-foreground'>
+                    No blockers after audit reason, confirmation, capability,
+                    policy, and broker-state checks pass.
+                  </div>
+                )}
               </div>
             </div>
             <div className='flex flex-wrap gap-2'>
