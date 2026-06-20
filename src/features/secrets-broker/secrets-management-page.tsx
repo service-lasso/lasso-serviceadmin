@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -60,6 +60,7 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionPreview,
+  buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
   bulkSecretCampaignApplyModes,
   bulkSecretCampaignOperations,
@@ -165,6 +166,13 @@ export function SecretsManagementPage() {
     auditReason,
     confirmed
   )
+  const singleOperationPlan = buildSingleSecretOperationPlan(
+    selectedRow,
+    selectedAction,
+    auditReason,
+    confirmed,
+    stubState
+  )
   const bulkPlan = useMemo(
     () =>
       buildBulkSecretCampaignPlan(
@@ -183,29 +191,35 @@ export function SecretsManagementPage() {
     bulkPlan.applyAvailable
   )
 
-  function resetBulkApplyGate() {
+  const resetBulkApplyGate = useCallback(() => {
     setBulkRevalidated(false)
     setBulkApplyResult(null)
-  }
+  }, [])
 
   function resetBulkApplyResult() {
     setBulkApplyResult(null)
   }
 
-  function chooseAction(rowId: string, action: ManagedSecretAction) {
-    setSelectedRowId(rowId)
-    setSelectedAction(action)
-  }
+  const chooseAction = useCallback(
+    (rowId: string, action: ManagedSecretAction) => {
+      setSelectedRowId(rowId)
+      setSelectedAction(action)
+    },
+    []
+  )
 
-  function toggleBulkSelection(rowId: string, checked: boolean) {
-    setBulkPlanGenerated(false)
-    resetBulkApplyGate()
-    setBulkSelectedIds((current) =>
-      checked
-        ? [...new Set([...current, rowId])]
-        : current.filter((id) => id !== rowId)
-    )
-  }
+  const toggleBulkSelection = useCallback(
+    (rowId: string, checked: boolean) => {
+      setBulkPlanGenerated(false)
+      resetBulkApplyGate()
+      setBulkSelectedIds((current) =>
+        checked
+          ? [...new Set([...current, rowId])]
+          : current.filter((id) => id !== rowId)
+      )
+    },
+    [resetBulkApplyGate]
+  )
 
   function setOperation(operation: BulkSecretCampaignOperation) {
     setBulkPlanGenerated(false)
@@ -388,7 +402,7 @@ export function SecretsManagementPage() {
         enableSorting: false,
       },
     ],
-    [bulkSelectedIds]
+    [bulkSelectedIds, chooseAction, toggleBulkSelection]
   )
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -1321,6 +1335,48 @@ export function SecretsManagementPage() {
                 Next step
               </div>
               <div>{actionPreview.nextStep}</div>
+            </div>
+            <div className='grid gap-3 rounded-md border p-3 md:grid-cols-3'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Broker operation contract
+                </div>
+                <div className='mt-1 font-medium break-all'>
+                  {singleOperationPlan.operationId}
+                </div>
+                <div className='mt-1 text-muted-foreground'>
+                  {singleOperationPlan.endpoint}
+                </div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Dry-run and policy
+                </div>
+                <div className='mt-1'>{singleOperationPlan.dryRunStatus}</div>
+                <div className='mt-1 text-muted-foreground'>
+                  {singleOperationPlan.policyDecision}
+                </div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Submit gate
+                </div>
+                <Badge
+                  className='mt-1'
+                  variant={
+                    singleOperationPlan.canSubmit ? 'default' : 'secondary'
+                  }
+                >
+                  {singleOperationPlan.applyGate}
+                </Badge>
+                <div className='mt-2 flex flex-wrap gap-1'>
+                  {singleOperationPlan.safePayloadFields.map((field) => (
+                    <Badge key={field} variant='outline'>
+                      {field}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className='flex flex-wrap gap-2'>
               <Button type='button' disabled>
