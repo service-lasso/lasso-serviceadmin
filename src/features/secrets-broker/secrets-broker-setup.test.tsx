@@ -439,9 +439,18 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getAllByText(/locked/i)[0]).toBeVisible()
     expect(screen.getAllByText(/unlock_or_unseal_source/i)[0]).toBeVisible()
     expect(screen.getByText(/default fallback provider/i)).toBeVisible()
+    expect(screen.getByText(/Local bootstrap providers/i)).toBeVisible()
+    expect(screen.getAllByText(/Read-only by default/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
     expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/configured_metadata/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/policy_denied/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/not_configured/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/read-only bootstrap source/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/path policy denied/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/command not executed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/metadata event only/i)[0]).toBeVisible()
     expect(screen.getAllByText(/HashiCorp Vault CLI/i)[0]).toBeVisible()
     expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
     expect(screen.getAllByText(/1Password CLI/i)[0]).toBeVisible()
@@ -449,10 +458,12 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.getAllByText(/Docker\/Kubernetes mounted secrets/i)[0]
     ).toBeVisible()
-    expect(screen.getByText(/Broad env allowlist/i)).toBeVisible()
-    expect(screen.getByText(/Insecure path override/i)).toBeVisible()
-    expect(screen.getByText(/Untrusted command path/i)).toBeVisible()
-    expect(screen.getByText(/Missing timeout\/output limits/i)).toBeVisible()
+    expect(screen.getAllByText(/Broad env allowlist/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Insecure path override/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Untrusted command path/i)[0]).toBeVisible()
+    expect(
+      screen.getAllByText(/Missing timeout\/output limits/i)[0]
+    ).toBeVisible()
     expect(
       screen.getAllByRole('button', { name: /Add Environment provider/i })[0]
     ).toBeVisible()
@@ -461,6 +472,37 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/No configured providers match/i)).toBeVisible()
     expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
     expect(screen.queryByText(/Environment provider/i)).not.toBeInTheDocument()
+  })
+
+  it('renders Env File Exec provider details with safe state coverage', async () => {
+    await renderRoute('/secrets-broker/sources')
+
+    expect(screen.getByText(/Local bootstrap providers/i)).toBeVisible()
+    expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/^reachable$/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/^failing$/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/^untested$/i)[0]).toBeVisible()
+    expect(
+      screen.getAllByText(/narrow_allowlist_before_production/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/fix_path_scope_and_symlink_policy/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(
+        /configure_trusted_command_timeout_and_output_limits/i
+      )[0]
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Matches explicit env ref mappings only/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Blocks unsafe paths/i)).toBeVisible()
+    expect(screen.getByText(/Runs only explicitly allowlisted/i)).toBeVisible()
+    expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
+    expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
   it('routes the legacy secret-sources hash to the canonical sources page', async () => {
