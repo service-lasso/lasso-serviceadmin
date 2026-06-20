@@ -761,7 +761,8 @@ export function SecretsManagementPage() {
             </CardTitle>
             <CardDescription>
               Selected refs become a broker campaign plan, then supported
-              rotate/reset/update campaigns can apply through operation IDs.
+              rotate/reset/update, policy, and provider migration campaigns can
+              apply through operation IDs.
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4 text-sm'>

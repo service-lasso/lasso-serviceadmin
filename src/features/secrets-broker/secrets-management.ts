@@ -285,7 +285,7 @@ export const bulkSecretCampaignOperations: Array<{
 }> = [
   { id: 'rotate-reset', label: 'Rotate/reset selected refs' },
   { id: 'update-edit', label: 'Update/edit selected refs' },
-  { id: 'apply-policy', label: 'Apply policy preview' },
+  { id: 'apply-policy', label: 'Apply/change policy' },
   { id: 'migrate-provider', label: 'Migrate/remap provider' },
   { id: 'mark-action-required', label: 'Mark action required' },
 ]
@@ -395,7 +395,30 @@ function buildIdempotencyKey(
 }
 
 function bulkCampaignOperationCanApply(operation: BulkSecretCampaignOperation) {
-  return operation === 'rotate-reset' || operation === 'update-edit'
+  return (
+    operation === 'rotate-reset' ||
+    operation === 'update-edit' ||
+    operation === 'apply-policy' ||
+    operation === 'migrate-provider'
+  )
+}
+
+function bulkCampaignOperationIsHighRisk(
+  operation: BulkSecretCampaignOperation
+) {
+  return operation !== 'mark-action-required'
+}
+
+function bulkPolicyTargetForRow(row: ManagedSecretRow) {
+  return row.owningService === 'payments-api'
+    ? 'policy/openclaw/service-lasso/payments-campaign-review'
+    : 'policy/openclaw/service-lasso/bulk-campaign-apply'
+}
+
+function bulkMigrationTargetForRow(row: ManagedSecretRow) {
+  if (row.source === 'local-default') return 'vault-prod'
+  if (row.provider === 'provider connection') return 'local-default'
+  return 'vault-prod'
 }
 
 export function filterManagedSecrets(
@@ -612,18 +635,40 @@ export function buildBulkSecretCampaignPlan(
     let policyResult = 'allow preview'
     let risk: BulkSecretCampaignItem['risk'] = 'medium'
     let expectedAction = 'Generate campaign dry-run metadata; do not apply.'
+    let recovery = 'retry with the same idempotency key or restore from backup'
+    let targetProvider = row.source
+    let targetPolicy = row.policy
 
     if (operation === 'mark-action-required') {
       risk = 'low'
       expectedAction = 'Mark ref for follow-up only; no provider mutation.'
+      recovery = 'clear the action marker after provider/operator follow-up'
     }
 
-    if (
-      operation === 'rotate-reset' ||
-      operation === 'update-edit' ||
-      operation === 'migrate-provider'
-    ) {
+    if (bulkCampaignOperationIsHighRisk(operation)) {
       risk = 'high'
+    }
+
+    if (operation === 'apply-policy') {
+      targetPolicy = bulkPolicyTargetForRow(row)
+      capabilityResult = 'supported: policy dry-run and apply available'
+      policyResult = 'allow: target policy can be applied after revalidation'
+      expectedAction =
+        'Apply the target policy through broker policy-change operation ID.'
+      recovery =
+        'reapply the previous policy through a fresh audited campaign if rollback is required'
+    }
+
+    if (operation === 'migrate-provider') {
+      targetProvider = bulkMigrationTargetForRow(row)
+      capabilityResult =
+        'supported: provider migration/remap dry-run and apply available'
+      policyResult =
+        'allow: source and target provider namespaces are policy approved'
+      expectedAction =
+        'Move or remap the ref through broker migration operation ID.'
+      recovery =
+        'retry by operation ID; use source provider as rollback target where supported'
     }
 
     if (row.policy.includes('readonly')) {
@@ -650,12 +695,27 @@ export function buildBulkSecretCampaignPlan(
       blockers.push('unsupported capability')
       expectedAction = 'Skip this ref or choose a reset/policy preview.'
     } else if (
+      operation === 'apply-policy' &&
+      !row.backendCapability.includes('policy preview')
+    ) {
+      capabilityResult = 'unsupported: policy apply capability unavailable'
+      blockers.push('unsupported capability')
+      expectedAction = 'Skip this ref until policy apply is broker-supported.'
+    } else if (
       operation === 'migrate-provider' &&
       row.provider === 'file source'
     ) {
       capabilityResult = 'unsupported: file sources migrate outside broker'
       blockers.push('unsupported capability')
       expectedAction = 'Document external provider action only.'
+    } else if (
+      operation === 'migrate-provider' &&
+      row.safeTags.includes('provider')
+    ) {
+      capabilityResult =
+        'auth required: source provider challenge before migration apply'
+      blockers.push('provider auth required')
+      expectedAction = 'Reconnect provider auth, then create a fresh plan.'
     } else if (
       operation === 'rotate-reset' &&
       row.safeTags.includes('provider')
@@ -671,14 +731,8 @@ export function buildBulkSecretCampaignPlan(
       name: row.name,
       owningService: row.owningService,
       sourceProvider: `${row.provider} / ${row.source}`,
-      targetProvider:
-        operation === 'migrate-provider'
-          ? '@secretsbroker/local/default'
-          : row.source,
-      targetPolicy:
-        operation === 'apply-policy'
-          ? 'policy/openclaw/service-lasso/bulk-campaign-preview'
-          : row.policy,
+      targetProvider,
+      targetPolicy,
       capabilityResult,
       policyResult,
       risk,
@@ -693,7 +747,7 @@ export function buildBulkSecretCampaignPlan(
       retrySafe: blockers.length === 0,
       recovery:
         blockers.length === 0
-          ? 'retry with the same idempotency key or restore from backup'
+          ? recovery
           : 'fix blocker, create a fresh plan, then retry',
     }
   })
