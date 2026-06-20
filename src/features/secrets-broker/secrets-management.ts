@@ -40,6 +40,20 @@ export type ManagedSecretActionPreview = {
   requiresConfirmation: boolean
 }
 
+export type SingleSecretOperationPlan = {
+  action: ManagedSecretAction
+  operationId: string
+  endpoint: string
+  dryRunStatus: string
+  capabilityDecision: string
+  policyDecision: string
+  auditRequirement: string
+  applyGate: string
+  blockers: string[]
+  safePayloadFields: string[]
+  canSubmit: boolean
+}
+
 export type StubSecretMutationState =
   | 'ready'
   | 'denied'
@@ -1095,6 +1109,133 @@ export function buildManagedSecretActionPreview(
           'Choose a controlled row action when an operator task is needed.',
         requiresConfirmation: false,
       }
+  }
+}
+
+function capabilityRequirementForAction(action: ManagedSecretAction) {
+  switch (action) {
+    case 'edit':
+      return 'edit dry-run'
+    case 'reset':
+      return 'reset dry-run'
+    case 'delete':
+      return 'delete dry-run'
+    case 'policy':
+      return 'policy preview'
+    case 'reveal':
+      return 'reveal'
+    case 'metadata':
+    default:
+      return 'metadata'
+  }
+}
+
+function endpointForSingleSecretAction(action: ManagedSecretAction) {
+  switch (action) {
+    case 'reveal':
+      return 'POST /v1/management/secrets/{ref}/reveal:preview'
+    case 'edit':
+      return 'POST /v1/management/secrets/{ref}/update:dry-run'
+    case 'reset':
+      return 'POST /v1/management/secrets/{ref}/rotate:dry-run'
+    case 'delete':
+      return 'POST /v1/management/secrets/{ref}/delete:dry-run'
+    case 'policy':
+      return 'POST /v1/management/secrets/{ref}/policy:preview'
+    case 'metadata':
+    default:
+      return 'GET /v1/management/secrets/{ref}/metadata'
+  }
+}
+
+function safeOperationSlug(action: ManagedSecretAction, row: ManagedSecretRow) {
+  return `${action}-${row.id}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+export function buildSingleSecretOperationPlan(
+  row: ManagedSecretRow,
+  action: ManagedSecretAction,
+  auditReason: string,
+  confirmed: boolean,
+  state: StubSecretMutationState
+): SingleSecretOperationPlan {
+  const requirement = capabilityRequirementForAction(action)
+  const blockers: string[] = []
+  const hasAuditReason = auditReason.trim().length >= 8
+  const metadataOnly = action === 'metadata'
+  const capabilitySupported =
+    metadataOnly || row.backendCapability.includes(requirement)
+
+  if (!metadataOnly && row.state === 'missing') {
+    blockers.push('ref unavailable')
+  }
+  if (!capabilitySupported) {
+    blockers.push(`${requirement} unsupported`)
+  }
+  if (!metadataOnly && !hasAuditReason) {
+    blockers.push('audit reason required')
+  }
+  if (!metadataOnly && !confirmed) {
+    blockers.push('explicit confirmation required')
+  }
+  if (state === 'denied') {
+    blockers.push('policy denied')
+  }
+  if (state === 'auth-required') {
+    blockers.push('operator auth required')
+  }
+  if (state === 'unavailable') {
+    blockers.push('broker unavailable')
+  }
+  if (state === 'cancelled') {
+    blockers.push('operator cancelled')
+  }
+  if (state === 'failure') {
+    blockers.push('previous apply failed')
+  }
+
+  const canSubmit = !metadataOnly && blockers.length === 0 && state === 'ready'
+
+  return {
+    action,
+    operationId: `single-${safeOperationSlug(action, row)}-2026-06-20-a`,
+    endpoint: endpointForSingleSecretAction(action),
+    dryRunStatus: metadataOnly
+      ? 'metadata read only; no mutation dry-run needed'
+      : capabilitySupported
+        ? `${requirement} capability checked; preview required before submit`
+        : `${requirement} capability unavailable; fail closed`,
+    capabilityDecision: capabilitySupported
+      ? `supported: ${requirement}`
+      : `unsupported: ${requirement}`,
+    policyDecision:
+      row.policy.includes('readonly') && action !== 'metadata'
+        ? 'review required: readonly policy blocks mutation unless broker policy changes'
+        : 'allow preview: final allow/deny belongs to Secrets Broker',
+    auditRequirement: hasAuditReason
+      ? 'audit reason captured as metadata only'
+      : metadataOnly
+        ? 'audit reason not required for metadata view'
+        : 'audit reason required before submit',
+    applyGate: canSubmit
+      ? 'operation submit ready after dry-run revalidation'
+      : metadataOnly
+        ? 'metadata view only'
+        : (blockers[0] ?? 'operation blocked'),
+    blockers,
+    safePayloadFields: [
+      'ref',
+      'operationId',
+      'action',
+      'owningService',
+      'provider',
+      'policy',
+      'auditReasonMetadata',
+    ],
+    canSubmit,
   }
 }
 

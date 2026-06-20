@@ -6,6 +6,7 @@ import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
+  buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
   managedSecretBulkApplyResultHasSecretMaterial,
@@ -58,6 +59,11 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/Reset\/rotate dry-run/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Delete dry-run/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Apply policy preview/i)[0]).toBeVisible()
+    expect(screen.getByText(/Broker operation contract/i)).toBeVisible()
+    expect(screen.getByText(/single-metadata/i)).toBeVisible()
+    expect(
+      screen.getByText(/GET \/v1\/management\/secrets\/\{ref\}\/metadata/i)
+    ).toBeVisible()
     expect(screen.getAllByText(/Raw values hidden/i)[0]).toBeVisible()
     expect(screen.getByText(/No bulk mutation/i)).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
@@ -515,7 +521,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/Edit\/update dry-run for SESSION_SIGNING_KEY/i)
     ).toBeVisible()
-    expect(screen.getByText(/dry-run required before apply/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/dry-run required before apply/i)[0]
+    ).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Reset\/rotate dry-run/i })[0]
@@ -526,6 +534,12 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/rotation preview required before apply/i)
     ).toBeVisible()
+    expect(
+      screen.getByText(
+        /POST \/v1\/management\/secrets\/\{ref\}\/rotate:dry-run/i
+      )
+    ).toBeVisible()
+    expect(screen.getByText(/reset dry-run capability checked/i)).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Delete dry-run/i })[0]
@@ -650,6 +664,35 @@ describe('Secrets Broker secrets management page', () => {
         true
       ).canApply
     ).toBe(false)
+
+    const rotatePlan = buildSingleSecretOperationPlan(
+      managedSecretRows[0],
+      'reset',
+      'operator requested rotation preview',
+      true,
+      'ready'
+    )
+    expect(rotatePlan).toMatchObject({
+      endpoint: 'POST /v1/management/secrets/{ref}/rotate:dry-run',
+      capabilityDecision: 'supported: reset dry-run',
+      applyGate: 'operation submit ready after dry-run revalidation',
+      canSubmit: true,
+    })
+    expect(rotatePlan.safePayloadFields).toEqual(
+      expect.arrayContaining(['ref', 'operationId', 'auditReasonMetadata'])
+    )
+
+    const missingDeletePlan = buildSingleSecretOperationPlan(
+      managedSecretRows[3],
+      'delete',
+      'operator requested delete preview',
+      true,
+      'ready'
+    )
+    expect(missingDeletePlan.canSubmit).toBe(false)
+    expect(missingDeletePlan.blockers).toContain('ref unavailable')
+    expect(missingDeletePlan.blockers).toContain('delete dry-run unsupported')
+
     const bulkPlan = buildBulkSecretCampaignPlan(
       managedSecretRows,
       managedSecretRows.map((row) => row.id),
