@@ -33,6 +33,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { LocalBootstrapProviderDetails } from './local-bootstrap-provider-details'
 import { LocalEncryptedStoreProviderDetail } from './local-encrypted-store-detail'
 import {
   buildProvidersManagementSummary,
@@ -321,6 +322,8 @@ export function ProvidersManagementPage() {
         </Card>
 
         <LocalEncryptedStoreProviderDetail />
+
+        <LocalBootstrapProviderDetails query={query} />
 
         <Card>
           <CardHeader>
