@@ -264,6 +264,123 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
+  it('applies a bulk policy campaign through the same confirmation and revalidation gate', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    await user.selectOptions(screen.getByLabelText(/Campaign operation/i), [
+      'apply-policy',
+    ])
+    await user.click(
+      screen.getByLabelText(
+        /Select ZITADEL_CLIENT_CREDENTIAL for bulk dry-run/i
+      )
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+
+    expect(
+      screen.getByText(/supported: policy dry-run and apply available/i)
+    ).toBeVisible()
+    expect(screen.getByText(/bulk-campaign-apply/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/broker campaign API available/i)[0]
+    ).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Campaign audit reason/i),
+      'operator requested least privilege policy campaign'
+    )
+    await user.type(
+      screen.getByLabelText(/Explicit confirmation/i),
+      'CONFIRM HIGH RISK CAMPAIGN'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+
+    expect(screen.getByText(/Campaign apply result: applied/i)).toBeVisible()
+    expect(screen.getAllByText(/campaign-apply-policy/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(
+        /reapply the previous policy through a fresh audited campaign/i
+      )
+    ).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('plans and applies provider migration campaigns with typed partial outcomes', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/secrets')
+
+    await user.selectOptions(screen.getByLabelText(/Campaign operation/i), [
+      'migrate-provider',
+    ])
+    await user.click(
+      screen.getByLabelText(/Select NODE_REGISTRY_AUTH for bulk dry-run/i)
+    )
+    await user.click(
+      screen.getByLabelText(/Select PAYMENTS_SIGNING_REF for bulk dry-run/i)
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+    )
+
+    expect(
+      screen.getByText(/provider migration\/remap dry-run and apply available/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /auth required: source provider challenge before migration apply/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/unsupported: file sources migrate outside broker/i)
+    ).toBeVisible()
+    expect(screen.getByText('missing provider/source')).toBeVisible()
+    expect(
+      screen.getAllByText(/broker campaign API available/i)[0]
+    ).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Campaign audit reason/i),
+      'operator requested provider migration campaign'
+    )
+    await user.type(
+      screen.getByLabelText(/Explicit confirmation/i),
+      'CONFIRM HIGH RISK CAMPAIGN'
+    )
+    await user.selectOptions(
+      screen.getByLabelText(/Apply result mode/i),
+      'partial-failure'
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Apply bulk campaign/i })
+    )
+
+    expect(
+      screen.getByText(/Campaign apply result: partial_failure/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Applied 1/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Unsupported 1/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Auth 1/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Denied 1/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/campaign-migrate-provider/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(
+        /use source provider as rollback target where supported/i
+      )
+    ).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
   it('covers retryable non-retryable and stale apply result states', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
@@ -600,6 +717,47 @@ describe('Secrets Broker secrets management page', () => {
     expect(applyResult.authRequiredCount).toBe(1)
     expect(applyResult.skippedCount).toBe(0)
     expect(managedSecretBulkApplyResultHasSecretMaterial(applyResult)).toBe(
+      false
+    )
+
+    const policyPlan = buildBulkSecretCampaignPlan(
+      managedSecretRows,
+      managedSecretRows.map((row) => row.id),
+      'apply-policy'
+    )
+    expect(policyPlan.applyAvailable).toBe(true)
+    expect(policyPlan.applicableCount).toBe(1)
+    expect(policyPlan.unsupportedCount).toBe(2)
+    expect(policyPlan.deniedCount).toBe(1)
+    expect(policyPlan.planToken).toMatch(/apply_policy/)
+    expect(policyPlan.items[0].targetPolicy).toMatch(/bulk-campaign-apply/)
+    expect(managedSecretBulkPlanHasSecretMaterial(policyPlan)).toBe(false)
+
+    const migrationPlan = buildBulkSecretCampaignPlan(
+      managedSecretRows,
+      managedSecretRows.map((row) => row.id),
+      'migrate-provider'
+    )
+    expect(migrationPlan.applyAvailable).toBe(true)
+    expect(migrationPlan.applicableCount).toBe(1)
+    expect(migrationPlan.unsupportedCount).toBe(1)
+    expect(migrationPlan.authRequiredCount).toBe(1)
+    expect(migrationPlan.missingProviderCount).toBe(1)
+    expect(migrationPlan.deniedCount).toBe(1)
+    expect(migrationPlan.items[0].targetProvider).toBe('vault-prod')
+    expect(migrationPlan.items[1].targetProvider).toBe('local-default')
+    expect(managedSecretBulkPlanHasSecretMaterial(migrationPlan)).toBe(false)
+
+    const migrationResult = buildBulkSecretCampaignApplyResult(
+      migrationPlan,
+      'partial-failure'
+    )
+    expect(migrationResult.outcome).toBe('partial_failure')
+    expect(migrationResult.appliedCount).toBe(1)
+    expect(migrationResult.unsupportedCount).toBe(1)
+    expect(migrationResult.authRequiredCount).toBe(1)
+    expect(migrationResult.deniedCount).toBe(1)
+    expect(managedSecretBulkApplyResultHasSecretMaterial(migrationResult)).toBe(
       false
     )
   })

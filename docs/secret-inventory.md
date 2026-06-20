@@ -11,7 +11,7 @@ The secret inventory surface is an advanced Secrets Broker planning view for met
 - Links to provider metadata, ref usage, and audit views where applicable.
 - Shows unavailable privileged operations as explanatory text, not controls.
 - The Secrets Broker Secrets page also exposes a bulk campaign workflow. Operators can select multiple metadata rows, choose a campaign operation, and generate safe per-ref/aggregate capability, policy, risk, audit, operation ID, idempotency, and blocker metadata.
-- Supported rotate/reset and update/edit campaigns can apply only after audit reason, explicit confirmation, and immediate revalidation. Apply results show campaign ID, operation ID, plan token, per-item operation IDs, idempotency keys, typed outcomes, audit status, retry/recovery guidance, and skipped/denied/unsupported/auth-required rows without raw values.
+- Supported rotate/reset, update/edit, policy apply/change, and provider migration/remap campaigns can apply only after audit reason, explicit confirmation, and immediate revalidation. Apply results show campaign ID, operation ID, plan token, per-item operation IDs, idempotency keys, typed outcomes, audit status, retry/recovery guidance, and skipped/denied/unsupported/auth-required rows without raw values.
 
 ## Not implemented in this slice
 
@@ -36,7 +36,7 @@ Any future raw reveal or mutation workflow must be separate from this inventory 
 - no-logging/no-export boundaries for revealed values
 - tests proving values do not leak into ordinary UI, logs, diagnostics, support bundles, or table fixtures
 
-Bulk policy and provider migration apply operations remain separate future slices. They must reuse the same dry-run, audit reason, explicit confirmation, fresh revalidation, operation ID/idempotency, partial-outcome, and redaction boundaries before they can apply.
+Bulk policy and provider migration apply operations reuse the same dry-run, audit reason, explicit confirmation, fresh revalidation, operation ID/idempotency, partial-outcome, and redaction boundaries. Their preview/apply rows stay metadata-only and fail closed on unsupported capability, missing provider configuration, auth-required, policy-denied, stale-plan, and recovery-unavailable states.
 
 ## Secret-safety boundary
 
