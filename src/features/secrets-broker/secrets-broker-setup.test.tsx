@@ -579,6 +579,87 @@ describe('Secrets Broker setup wizard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
+  it('renders AWS Secrets Manager provider configuration metadata safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/sources')
+
+    expect(
+      screen.getAllByText(/AWS Secrets Manager CLI provider/i)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/AWS configuration metadata/i)).toBeVisible()
+    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/configure_region_profile_token_env/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /region, account\/profile, token-env handle, endpoint override/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/secret:\/\/providers\/aws\/default\/backup-worker/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/\/service-lasso\/payments\/signing/i)
+    ).toBeVisible()
+    expect(screen.getByText(/AWS auth reference required/i)).toBeVisible()
+    expect(screen.getAllByText(/IAM metadata only/i)[0]).toBeVisible()
+    expect(screen.getByText(/no raw AWS output/i)).toBeVisible()
+
+    const awsProvider = secretsBrokerSourceBackends.find(
+      (source) => source.id === 'aws-secrets-manager-cli'
+    )
+    expect(awsProvider).toMatchObject({
+      configured: false,
+      enabled: false,
+      defaultRole: 'addable',
+      lifecycle: 'setup-needed',
+      brokerState: 'auth_required',
+      kind: 'aws-secrets-manager',
+    })
+    expect(awsProvider?.supportedActions).toEqual(
+      expect.arrayContaining([
+        'test-source',
+        'view-diagnostics',
+        'edit-configuration',
+        'view-examples',
+      ])
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Configure AWS Secrets Manager/i })
+    )
+    expect(
+      screen.getByRole('dialog', { name: /Configure AWS Secrets Manager/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/^Region$/i)).toHaveValue('ap-southeast-2')
+    expect(screen.getByLabelText(/Account \/ profile/i)).toHaveValue(
+      'service-lasso-ops profile metadata'
+    )
+    expect(screen.getByLabelText(/Token env handle/i)).toHaveValue(
+      'AWS_SESSION_TOKEN presence check only'
+    )
+    expect(screen.getByLabelText(/Endpoint override/i)).toHaveValue(
+      'http://127.0.0.1:4566 for tests'
+    )
+    expect(screen.getByLabelText(/Secret id mapping/i)).toHaveValue(
+      '/service-lasso/{service}/{ref}'
+    )
+    expect(screen.getByLabelText(/Path \/ field mapping/i)).toHaveValue(
+      'JSON field selector metadata only'
+    )
+    expect(screen.getByLabelText(/Namespace ownership/i)).toHaveValue(
+      'providers/aws/*'
+    )
+    expect(screen.getByText(/Metadata-only AWS CLI probe/i)).toBeVisible()
+
+    expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
+    expect(screen.queryByText(/SERVICE_LASSO_FAKE_SECRET_SENTINEL/i)).toBeNull()
+    expect(screen.queryByText(/AKIA[0-9A-Z]{16}/i)).toBeNull()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  })
+
   it('renders 1Password CLI provider configuration metadata safely', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/sources')

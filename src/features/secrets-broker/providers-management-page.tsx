@@ -33,6 +33,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { AwsSecretsManagerProviderDetail } from './aws-secrets-manager-provider-detail'
 import { BitwardenBwsProviderDetail } from './bitwarden-bws-provider-detail'
 import { LocalBootstrapProviderDetails } from './local-bootstrap-provider-details'
 import { LocalEncryptedStoreProviderDetail } from './local-encrypted-store-detail'
@@ -330,6 +331,8 @@ export function ProvidersManagementPage() {
         <LocalBootstrapProviderDetails query={query} />
 
         <VaultProviderDetail query={query} />
+
+        <AwsSecretsManagerProviderDetail query={query} />
 
         <OnePasswordCliProviderDetail query={query} />
 
