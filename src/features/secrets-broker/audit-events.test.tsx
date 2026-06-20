@@ -8,29 +8,16 @@ import {
 } from './audit-events'
 
 describe('Secrets Broker audit event viewer', () => {
-  it('renders audit event metadata, detail, and tamper-evidence status safely', async () => {
-    await renderRoute('/secrets-broker/audit-events')
+  it('redirects the legacy Secrets Broker audit route to Operations Audit Logging', async () => {
+    const { router } = await renderRoute('/secrets-broker/audit-events')
 
     expect(
       await screen.findByRole('heading', {
-        name: /Secrets Broker audit events/i,
+        name: /Audit Logging/i,
       })
     ).toBeVisible()
-    expect(screen.getByText(/Audit and events/i)).toBeVisible()
-    expect(screen.getByText(/Values never rendered/i)).toBeVisible()
-    expect(screen.getByText(/Tamper evidence verified/i)).toBeVisible()
-    expect(screen.getByText(/chain: audit-chain\/openclaw/i)).toBeVisible()
-    expect(screen.getAllByText(/Policy decision/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Affected refs/i)[0]).toBeVisible()
-    expect(
-      screen.getAllByText(/Affected services\/workflows/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getAllByText(/startup dependency resolution/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Event details use safe identifiers/i)
-    ).toBeVisible()
+    expect(screen.getAllByText(/runtime health checked/i)[0]).toBeVisible()
+    expect(router.state.location.pathname).toBe('/operations/audit-logging')
   })
 
   it('filters by event type, outcome, provider, source, and tamper evidence', () => {
@@ -83,7 +70,7 @@ describe('Secrets Broker audit event viewer', () => {
       })
     ).toHaveLength(1)
 
-    const { container } = await renderRoute('/secrets-broker/audit-events')
+    const { container } = await renderRoute('/operations/audit-logging')
     expect(container).not.toHaveTextContent(/DEMO_REVEAL_VALUE_42/i)
     expect(container).not.toHaveTextContent(/ACTUAL_SECRET/i)
     expect(container).not.toHaveTextContent(/BEGIN PRIVATE KEY/i)

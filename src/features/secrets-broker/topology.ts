@@ -142,7 +142,7 @@ export function buildSecretVariableMappingRows(
           detailHref: `/services/${encodeURIComponent(service.id)}`,
           variablesHref: `/services/${encodeURIComponent(service.id)}`,
           sourceHref: '/secrets-broker/sources',
-          auditHref: '/secrets-broker/audit-events',
+          auditHref: '/operations/audit-logging',
           diagnosticsHref: '/secrets-broker/sources',
           searchText: '',
         }
@@ -194,7 +194,7 @@ export function buildSecretsBrokerTopology(
     kind: 'broker',
     summary: 'Broker metadata surface for service SecretRef mappings.',
     detailHref: '/secrets-broker',
-    auditHref: '/secrets-broker/audit-events',
+    auditHref: '/operations/audit-logging',
     diagnosticHref: '/secrets-broker/sources',
   })
 

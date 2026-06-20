@@ -82,7 +82,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByRole('link', { name: 'Add provider' })).toBeVisible()
     await expect(
-      page.getByRole('link', { name: 'View audit/events' })
+      page.getByRole('main').getByRole('link', { name: 'Audit Logging' })
     ).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'View provider status' })
@@ -103,7 +103,6 @@ test.describe('Secrets Broker browser coverage', () => {
       ['Operational Controls', /\/secrets-broker\/operational-controls$/],
       ['Providers', /\/secrets-broker\/sources$/],
       ['Topology', /\/secrets-broker\/topology$/],
-      ['Audit / Events', /\/secrets-broker\/audit-events$/],
     ] as const
 
     await expect(
@@ -244,11 +243,11 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     const sections = [
-      ['/secrets-broker/operational-controls', /Operational controls/i],
+      ['/secrets-broker/operational-controls', /Operational Controls/i],
       ['/secrets-broker/sources', /Secrets Broker providers/i],
       ['/secrets-broker/backup-keys', /Local encrypted store/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
-      ['/secrets-broker/audit-events', /Audit and events/i],
+      ['/operations/audit-logging', /Audit Logging/i],
     ] as const
 
     for (const [path, label] of sections) {
@@ -269,6 +268,7 @@ test.describe('Secrets Broker browser coverage', () => {
         '/secrets-broker/policy-simulation',
         /\/secrets-broker\/operational-controls$/,
       ],
+      ['/secrets-broker/audit-events', /\/operations\/audit-logging$/],
     ] as const
 
     for (const [path, urlPattern] of removedRoutes) {

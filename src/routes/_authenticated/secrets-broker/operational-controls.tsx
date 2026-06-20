@@ -1,10 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { SecretsBrokerSetupWizard } from '@/features/secrets-broker'
+import { OperationalControlsPage } from '@/features/secrets-broker/operational-controls-page'
 
 export const Route = createFileRoute(
   '/_authenticated/secrets-broker/operational-controls'
 )({
-  component: () => (
-    <SecretsBrokerSetupWizard focusSection='operational-controls' />
-  ),
+  component: OperationalControlsPage,
 })
