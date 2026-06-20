@@ -100,7 +100,6 @@ test.describe('Secrets Broker browser coverage', () => {
     const navLinks = [
       ['Overview', /\/secrets-broker$/],
       ['Secrets', /\/secrets-broker\/secrets$/],
-      ['Operational Controls', /\/secrets-broker\/operational-controls$/],
       ['Providers', /\/secrets-broker\/sources$/],
       ['Topology', /\/secrets-broker\/topology$/],
     ] as const
@@ -109,6 +108,11 @@ test.describe('Secrets Broker browser coverage', () => {
       page
         .locator('[data-sidebar="menu-button"]')
         .filter({ hasText: 'Backup / Keys' })
+    ).toHaveCount(0)
+    await expect(
+      page
+        .locator('[data-sidebar="menu-button"]')
+        .filter({ hasText: 'Operational Controls' })
     ).toHaveCount(0)
 
     for (const [name, urlPattern] of navLinks) {
@@ -274,7 +278,6 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     const sections = [
-      ['/secrets-broker/operational-controls', /Operational Controls/i],
       ['/secrets-broker/sources', /Secrets Broker providers/i],
       ['/secrets-broker/backup-keys', /Local encrypted store/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
@@ -295,10 +298,8 @@ test.describe('Secrets Broker browser coverage', () => {
       ['/secrets-broker/secret-inventory', /\/secrets-broker\/sources$/],
       ['/secrets-broker/workflow-boundaries', /\/secrets-broker\/sources$/],
       ['/secrets-broker/single-reveal', /\/secrets-broker\/secrets$/],
-      [
-        '/secrets-broker/policy-simulation',
-        /\/secrets-broker\/operational-controls$/,
-      ],
+      ['/secrets-broker/operational-controls', /\/operations\/audit-logging$/],
+      ['/secrets-broker/policy-simulation', /\/operations\/audit-logging$/],
       ['/secrets-broker/audit-events', /\/operations\/audit-logging$/],
     ] as const
 

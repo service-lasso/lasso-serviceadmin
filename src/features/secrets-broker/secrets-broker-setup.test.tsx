@@ -200,87 +200,20 @@ describe('Secrets Broker overview dashboard', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('renders operational controls with policy telemetry event filters and lockout state', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker/operational-controls')
+  it('redirects the removed operational controls route to Audit Logging', async () => {
+    const { router } = await renderRoute('/secrets-broker/operational-controls')
 
-    expect(
-      screen.getByRole('heading', { name: /^Operational Controls$/i })
-    ).toBeVisible()
-    expect(screen.getByText(/Effective service policy/i)).toBeVisible()
-    expect(screen.getByText(/Scoped lockouts/i)).toBeVisible()
-    expect(screen.getAllByText(/Audit Logging/i)[0]).toBeVisible()
-    expect(screen.getByText(/Telemetry and log shipping/i)).toBeVisible()
-    expect(screen.getAllByText(/OpenObserve/i)[0]).toBeVisible()
-    expect(screen.getByText(/Audit availability/i)).toBeVisible()
-    expect(screen.getByText(/services\/\*\/runtime\/\*/i)).toBeVisible()
-    expect(screen.getAllByText(/local_api:127\.0\.0\.1/i)[0]).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /Export audit metadata/i })
-    ).toBeVisible()
-    expect(
-      screen.getAllByRole('button', { name: /Request audited clear/i })[0]
-    ).toBeDisabled()
-    expect(
-      screen.getByText(/POST \/v1\/management\/lockouts\/clear/i)
-    ).toBeVisible()
-
-    const clearButtons = screen.getAllByRole('button', {
-      name: /Request audited clear/i,
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/operations/audit-logging')
     })
-    expect(clearButtons[1]).toBeDisabled()
-    await user.type(
-      screen.getByLabelText(/Audit reason for lockout clear/i),
-      'operator reauthenticated provider and verified audit chain'
-    )
-    await user.type(
-      screen.getByLabelText(/Confirm exact lockout scope/i),
-      'management:edit:@serviceadmin:services/@serviceadmin/runtime/API_TOKEN'
-    )
-    expect(clearButtons[1]).toBeEnabled()
-    await user.click(clearButtons[1])
-    expect(screen.getByText(/Audited clear recorded/i)).toBeVisible()
-    expect(screen.getByText(/outcome: cleared/i)).toBeVisible()
-    expect(screen.getByText(/audit: audit_recorded/i)).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Control service/i),
-      'payments-api'
-    )
     expect(
-      screen.getByText(/Resolve blocked because external provider auth/i)
+      screen.getByRole('heading', { name: /^Audit Logging$/i })
     ).toBeVisible()
     expect(
-      screen.queryByText(/Privileged reveal approved/i)
-    ).not.toBeInTheDocument()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Control provider/i),
-      'vault'
-    )
-    await user.selectOptions(
-      screen.getByLabelText(/Control urgency/i),
-      'critical'
-    )
-    expect(screen.getAllByText(/providers\/payments\/\*/i)[0]).toBeVisible()
-
-    await user.clear(screen.getByLabelText(/Control since/i))
-    await user.type(
-      screen.getByLabelText(/Control since/i),
-      '2026-05-22T04:09:00Z'
-    )
-    expect(
-      screen.getByText(/No operational events match these filters/i)
-    ).toBeVisible()
-
-    expect(
-      screen.queryByText(/fixture-provider-credential-value/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/fixture-managed-secret-value/i)
+      screen.queryByRole('heading', { name: /^Operational Controls$/i })
     ).not.toBeInTheDocument()
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
-  }, 30000)
+  })
 
   it('keeps overview action-oriented and provider setup detail on the providers page', async () => {
     await renderRoute('/secrets-broker')
@@ -880,7 +813,7 @@ describe('Secrets Broker overview dashboard', () => {
   })
 
   it.each([
-    ['operational-controls', '/secrets-broker/operational-controls'],
+    ['operational-controls', '/operations/audit-logging'],
     ['provider-connections', '/secrets-broker/sources'],
     ['single-secret-reveal', '/secrets-broker/secrets'],
     ['backup-keys', '/secrets-broker/backup-keys'],

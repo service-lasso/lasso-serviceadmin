@@ -69,11 +69,6 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Providers',
   },
   {
-    path: '/secrets-broker/operational-controls',
-    heading: /^Operational Controls$/i,
-    title: 'Service Admin - Operational Controls',
-  },
-  {
     path: '/secrets-broker/topology',
     heading: /^Secrets Broker topology$/i,
     title: 'Service Admin - Secrets Broker Topology',
@@ -117,7 +112,8 @@ const removedSecretsBrokerRoutes = [
   ['/secrets-broker/secret-inventory', '/secrets-broker/sources'],
   ['/secrets-broker/workflow-boundaries', '/secrets-broker/sources'],
   ['/secrets-broker/single-reveal', '/secrets-broker/secrets'],
-  ['/secrets-broker/policy-simulation', '/secrets-broker/operational-controls'],
+  ['/secrets-broker/operational-controls', '/operations/audit-logging'],
+  ['/secrets-broker/policy-simulation', '/operations/audit-logging'],
   ['/secrets-broker/audit-events', '/operations/audit-logging'],
   ['/support-bundle', '/secrets-broker/sources'],
 ] as const
