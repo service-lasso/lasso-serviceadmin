@@ -39,10 +39,6 @@ const appScreens: ScreenCase[] = [
     heading: /^Service routes$/i,
     title: 'Service Admin - Service Routes',
   },
-  { path: '/apps', heading: /^App Integrations$/i },
-  { path: '/chats', heading: /^Inbox$/i },
-  { path: '/tasks', heading: /^Tasks$/i },
-  { path: '/users', heading: /^User List$/i },
   {
     path: '/runtime',
     heading: /^Runtime$/i,
@@ -118,6 +114,13 @@ const removedSecretsBrokerRoutes = [
   ['/support-bundle', '/secrets-broker/sources'],
 ] as const
 
+const removedTemplateRoutes = [
+  ['/apps', '/services'],
+  ['/chats', '/operations/audit-logging'],
+  ['/tasks', '/runtime'],
+  ['/users', '/auth-session'],
+] as const
+
 const compatibleSecretsBrokerRoutes: ScreenCase[] = [
   {
     path: '/secrets-broker/backup-keys',
@@ -143,6 +146,17 @@ describe('app screens', () => {
 
   it.each(removedSecretsBrokerRoutes)(
     'redirects removed Secrets Broker route %s to %s',
+    async (path, redirectedPath) => {
+      const { router } = await renderRoute(path)
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(redirectedPath)
+      })
+    }
+  )
+
+  it.each(removedTemplateRoutes)(
+    'redirects removed template route %s to %s',
     async (path, redirectedPath) => {
       const { router } = await renderRoute(path)
 
