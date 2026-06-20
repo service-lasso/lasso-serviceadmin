@@ -432,7 +432,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getAllByText(/local-encrypted-store/i)[0]).toBeVisible()
     expect(screen.getByText(/Priority 0/i)).toBeVisible()
     expect(screen.getByText(/^default$/i)).toBeVisible()
-    expect(screen.getByRole('button', { name: /Configure/i })).toBeVisible()
+    expect(screen.getByRole('button', { name: /^Configure$/i })).toBeVisible()
     expect(screen.getByRole('button', { name: /^Test$/i })).toBeVisible()
     expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
     expect(screen.getAllByText(/reconnect_required/i)[0]).toBeVisible()
@@ -502,6 +502,69 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Runs only explicitly allowlisted/i)).toBeVisible()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  })
+
+  it('renders 1Password CLI provider configuration metadata safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/sources')
+
+    expect(screen.getByText(/1Password CLI provider/i)).toBeVisible()
+    expect(screen.getByText(/Safe configuration metadata/i)).toBeVisible()
+    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
+    expect(screen.getByText(/sign_in_and_map_item_fields/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        /vault, account, item, field, command-path, auth, namespace/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /secret:\/\/providers\/onepassword\/default\/OPENCLAW_API_KEY/i
+      )
+    ).toBeVisible()
+    expect(screen.getByText(/OpenClaw \/ API key/i)).toBeVisible()
+    expect(screen.getByText(/Release \/ signing key/i)).toBeVisible()
+    expect(screen.getAllByText(/^sign-in required$/i)[0]).toBeVisible()
+    expect(screen.getByText(/audit metadata only/i)).toBeVisible()
+    expect(screen.getByText(/no raw CLI output/i)).toBeVisible()
+
+    const onePasswordProvider = secretsBrokerSourceBackends.find(
+      (source) => source.id === 'onepassword-cli'
+    )
+    expect(onePasswordProvider).toMatchObject({
+      configured: false,
+      enabled: false,
+      defaultRole: 'addable',
+      lifecycle: 'setup-needed',
+      brokerState: 'auth_required',
+    })
+    expect(onePasswordProvider?.supportedActions).toContain(
+      'edit-configuration'
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Configure 1Password CLI/i })
+    )
+    expect(
+      screen.getByRole('dialog', { name: /Configure 1Password CLI/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/Account context/i)).toHaveValue(
+      'service-lasso.1password.com'
+    )
+    expect(screen.getByLabelText(/CLI command path/i)).toHaveValue('op')
+    expect(screen.getByLabelText(/Trusted command dirs/i)).toHaveValue(
+      'C:/Program Files/1Password CLI'
+    )
+    expect(screen.getByLabelText(/Auth state/i)).toHaveValue(
+      'operator sign-in required'
+    )
+    expect(screen.getByLabelText(/Credential handle/i)).toHaveValue(
+      'secret://providers/onepassword/cli-session'
+    )
+    expect(screen.getByText(/Metadata-only CLI status check/i)).toBeVisible()
+    expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
