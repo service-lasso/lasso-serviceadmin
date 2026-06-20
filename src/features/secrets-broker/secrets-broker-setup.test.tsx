@@ -642,6 +642,73 @@ describe('Secrets Broker setup wizard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
+  it('renders mounted secrets provider configuration metadata safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/sources')
+
+    expect(
+      screen.getAllByText(/Docker\/Kubernetes mounted secrets/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Mounted file configuration metadata/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /mount root, allowed paths, symlink policy, file mappings/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/configure_mount_root_allowed_paths/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/mounted:\/\/run-secrets\/postgres-password/i)
+    ).toBeVisible()
+    expect(screen.getByText('/run/secrets/postgres-password')).toBeVisible()
+    expect(screen.getByText(/services\/@serviceadmin\/runtime/i)).toBeVisible()
+    expect(screen.getAllByText(/symlink check passed/i)[0]).toBeVisible()
+    expect(screen.getByText(/path metadata only/i)).toBeVisible()
+    expect(screen.getByText(/no file contents/i)).toBeVisible()
+
+    const mountedProvider = secretsBrokerSourceBackends.find(
+      (source) => source.id === 'mounted-secrets'
+    )
+    expect(mountedProvider).toMatchObject({
+      configured: false,
+      enabled: false,
+      defaultRole: 'addable',
+      lifecycle: 'setup-needed',
+      brokerState: 'not_configured',
+      kind: 'mounted-secrets',
+    })
+    expect(mountedProvider?.supportedActions).toEqual(
+      expect.arrayContaining([
+        'test-source',
+        'view-diagnostics',
+        'edit-configuration',
+        'view-examples',
+      ])
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Configure mounted secrets/i })
+    )
+    expect(
+      screen.getByRole('dialog', { name: /Configure mounted secrets/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/Root path/i)).toHaveValue('/run/secrets')
+    expect(screen.getByLabelText(/Allowed paths/i)).toHaveValue(
+      '/run/secrets/postgres-password, /run/secrets/serviceadmin-session'
+    )
+    expect(screen.getByLabelText(/Follow symlinks/i)).toHaveValue('false')
+    expect(screen.getByLabelText(/Max bytes per file/i)).toHaveValue('4096')
+    expect(screen.getByText(/Metadata-only path existence/i)).toBeVisible()
+
+    expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
+    expect(screen.queryByText(/SERVICE_LASSO_FAKE_SECRET_SENTINEL/i)).toBeNull()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  })
+
   it('routes the legacy secret-sources hash to the canonical sources page', async () => {
     const { router } = await renderRoute('/secrets-broker#secret-sources')
 
