@@ -1966,7 +1966,7 @@ export function SecretsBrokerSetupWizard({
 
     const legacyHash = hash.replace(/^#/, '')
     const legacyHashRoute: Partial<Record<string, string>> = {
-      'operational-controls': '/secrets-broker/operational-controls',
+      'operational-controls': '/operations/audit-logging',
       'secret-sources': '/secrets-broker/sources',
       'provider-connections': '/secrets-broker/sources',
       'single-secret-reveal': '/secrets-broker/secrets',

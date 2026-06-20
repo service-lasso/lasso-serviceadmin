@@ -4,6 +4,6 @@ export const Route = createFileRoute(
   '/_authenticated/secrets-broker/policy-simulation'
 )({
   beforeLoad: () => {
-    throw redirect({ to: '/secrets-broker/operational-controls' })
+    throw redirect({ to: '/operations/audit-logging' })
   },
 })

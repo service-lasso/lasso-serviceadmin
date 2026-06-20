@@ -45,6 +45,7 @@ describe('sidebar optional page classification', () => {
     expect(titles).not.toContain('Policy Simulation')
     expect(titles).not.toContain('Backup / Keys')
     expect(titles).not.toContain('Audit / Events')
+    expect(titles).not.toContain('Operational Controls')
     expect(titles).toContain('Providers')
   })
 
@@ -56,7 +57,6 @@ describe('sidebar optional page classification', () => {
     expect(secretsBrokerGroup?.items.map((item) => item.url)).toEqual([
       '/secrets-broker',
       '/secrets-broker/secrets',
-      '/secrets-broker/operational-controls',
       '/secrets-broker/sources',
       '/secrets-broker/topology',
     ])

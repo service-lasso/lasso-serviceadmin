@@ -494,16 +494,9 @@ function OperationsHeader({
           <h2 className='text-2xl font-bold tracking-tight'>{title}</h2>
           <p className='text-muted-foreground'>{description}</p>
         </div>
-        <div className='flex flex-wrap gap-2'>
-          <Button variant='outline' size='sm' asChild>
-            <Link to='/runtime'>Runtime</Link>
-          </Button>
-          <Button variant='outline' size='sm' asChild>
-            <Link to='/secrets-broker/operational-controls'>
-              Operational Controls
-            </Link>
-          </Button>
-        </div>
+        <Button variant='outline' size='sm' asChild>
+          <Link to='/runtime'>Runtime</Link>
+        </Button>
       </div>
     </>
   )

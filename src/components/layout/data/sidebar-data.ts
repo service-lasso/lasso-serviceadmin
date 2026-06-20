@@ -112,11 +112,6 @@ export const sidebarData: SidebarData = {
           icon: DatabaseZap,
         },
         {
-          title: 'Operational Controls',
-          url: '/secrets-broker/operational-controls',
-          icon: ShieldCheck,
-        },
-        {
           title: 'Providers',
           url: '/secrets-broker/sources',
           icon: DatabaseZap,
