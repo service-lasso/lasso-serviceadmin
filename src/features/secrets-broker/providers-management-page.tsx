@@ -36,6 +36,7 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import { BitwardenBwsProviderDetail } from './bitwarden-bws-provider-detail'
 import { LocalBootstrapProviderDetails } from './local-bootstrap-provider-details'
 import { LocalEncryptedStoreProviderDetail } from './local-encrypted-store-detail'
+import { MountedSecretsProviderDetail } from './mounted-secrets-provider-detail'
 import { OnePasswordCliProviderDetail } from './onepassword-cli-provider-detail'
 import {
   buildProvidersManagementSummary,
@@ -330,6 +331,8 @@ export function ProvidersManagementPage() {
         <OnePasswordCliProviderDetail query={query} />
 
         <BitwardenBwsProviderDetail query={query} />
+
+        <MountedSecretsProviderDetail query={query} />
 
         <Card>
           <CardHeader>
