@@ -14,6 +14,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import {
+  CheckCircle2,
   DatabaseZap,
   Eye,
   ListChecks,
@@ -60,6 +61,7 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionPreview,
+  buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
   bulkSecretCampaignApplyModes,
@@ -75,6 +77,7 @@ import {
   type ManagedSecretAction,
   type ManagedSecretRow,
   type ManagedSecretState,
+  type SingleSecretOperationResult,
   type StubSecretMutationState,
 } from './secrets-management'
 
@@ -111,6 +114,8 @@ export function SecretsManagementPage() {
   const [stubState, setStubState] = useState<StubSecretMutationState>('ready')
   const [auditReason, setAuditReason] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const [singleApplyResult, setSingleApplyResult] =
+    useState<SingleSecretOperationResult | null>(null)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([
     managedSecretRows[0].id,
     managedSecretRows[1].id,
@@ -204,6 +209,7 @@ export function SecretsManagementPage() {
     (rowId: string, action: ManagedSecretAction) => {
       setSelectedRowId(rowId)
       setSelectedAction(action)
+      setSingleApplyResult(null)
     },
     []
   )
@@ -231,6 +237,13 @@ export function SecretsManagementPage() {
     setBulkApplyResult(
       buildBulkSecretCampaignApplyResult(bulkPlan, bulkApplyMode)
     )
+  }
+
+  function applySingleSecretOperation() {
+    setSingleApplyResult(
+      buildSingleSecretOperationResult(selectedRow, singleOperationPlan)
+    )
+    setStubState('success')
   }
 
   const columns = useMemo<ColumnDef<ManagedSecretRow>[]>(
@@ -1417,9 +1430,10 @@ export function SecretsManagementPage() {
                   id='stub-state'
                   className='mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm'
                   value={stubState}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setStubState(event.target.value as StubSecretMutationState)
-                  }
+                    setSingleApplyResult(null)
+                  }}
                 >
                   {stubSecretMutationStates.map((state) => (
                     <option key={state.id} value={state.id}>
@@ -1456,14 +1470,20 @@ export function SecretsManagementPage() {
                 <Input
                   id='audit-reason'
                   value={auditReason}
-                  onChange={(event) => setAuditReason(event.target.value)}
+                  onChange={(event) => {
+                    setAuditReason(event.target.value)
+                    setSingleApplyResult(null)
+                  }}
                   placeholder='Required before simulated apply; no secret values'
                 />
                 <label className='flex items-center gap-2 text-sm'>
                   <input
                     type='checkbox'
                     checked={confirmed}
-                    onChange={(event) => setConfirmed(event.target.checked)}
+                    onChange={(event) => {
+                      setConfirmed(event.target.checked)
+                      setSingleApplyResult(null)
+                    }}
                   />
                   I confirm this is a stub preview and no production mutation
                   will be performed.
@@ -1510,8 +1530,62 @@ export function SecretsManagementPage() {
               </div>
             </div>
 
+            {singleApplyResult ? (
+              <div className='rounded-lg border p-3'>
+                <div className='mb-3 flex flex-wrap items-center gap-2'>
+                  <CheckCircle2 className='size-4 text-primary' />
+                  <div className='font-medium'>
+                    Single-secret operation result: {singleApplyResult.outcome}
+                  </div>
+                  <Badge variant='secondary'>Metadata only</Badge>
+                  <Badge variant='outline'>
+                    {singleApplyResult.applied ? 'Applied' : 'Not applied'}
+                  </Badge>
+                </div>
+                <div className='grid gap-3 md:grid-cols-3'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Operation ID
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.operationId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Ref
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.ref}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Audit
+                    </div>
+                    <div className='mt-1'>{singleApplyResult.auditStatus}</div>
+                  </div>
+                </div>
+                <div className='mt-3 rounded-md border bg-muted/40 p-3'>
+                  <div>{singleApplyResult.resultStatus}</div>
+                  <div className='mt-2 text-muted-foreground'>
+                    {singleApplyResult.nextAction}
+                  </div>
+                </div>
+                <ul className='mt-3 list-disc space-y-1 ps-5 text-muted-foreground'>
+                  {singleApplyResult.safetyRows.map((row) => (
+                    <li key={row}>{row}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className='flex flex-wrap gap-2'>
-              <Button type='button' disabled={!stubMutationPreview.canApply}>
+              <Button
+                type='button'
+                disabled={!stubMutationPreview.canApply}
+                onClick={applySingleSecretOperation}
+              >
                 Simulate stub apply
               </Button>
               <Button
@@ -1521,6 +1595,7 @@ export function SecretsManagementPage() {
                   setAuditReason('')
                   setConfirmed(false)
                   setStubState('cancelled')
+                  setSingleApplyResult(null)
                 }}
               >
                 Cancel stub preview
