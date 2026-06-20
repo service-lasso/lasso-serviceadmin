@@ -153,7 +153,7 @@ export const singleSecretRevealScenarios: SingleSecretRevealScenario[] = [
 
 export const singleSecretRevealSafeSurfaces = {
   route: '/secrets-broker/single-reveal',
-  pageTitle: 'Secrets Broker setup',
+  pageTitle: 'Secrets Broker overview',
   breadcrumb: 'Secrets Broker / privileged single-secret reveal',
   diagnostics:
     'reveal_status=redacted; selected_ref=metadata_only; raw_value=hidden',

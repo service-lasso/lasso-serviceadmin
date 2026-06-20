@@ -102,7 +102,7 @@ export const sidebarData: SidebarData = {
       title: 'Secrets Broker',
       items: [
         {
-          title: 'Overview / Setup',
+          title: 'Overview',
           url: '/secrets-broker',
           icon: ShieldCheck,
         },

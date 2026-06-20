@@ -157,9 +157,10 @@ const secretsBrokerSectionMetadata: Record<
   { title: string; heading: string; description: string }
 > = {
   overview: {
-    title: 'Service Admin - Secrets Broker Setup',
-    heading: 'Secrets Broker setup',
-    description: 'Configure sources, policies, and recovery safely.',
+    title: 'Service Admin - Secrets Broker Overview',
+    heading: 'Overview',
+    description:
+      'Monitor Secrets Broker health, sources, policy, audit, and operator action state.',
   },
   'operational-controls': {
     title: 'Service Admin - Secrets Broker Operational Controls',
@@ -399,25 +400,6 @@ const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
       'Add a local encrypted store or connect an external source to activate @secretsbroker.',
   },
 ]
-
-const statusCopy: Record<WizardSource['status'], string> = {
-  ready: 'Ready',
-  locked: 'Locked',
-  'auth-required': 'Auth required',
-  degraded: 'Degraded',
-  'policy-denied': 'Policy denied',
-}
-
-const statusVariant: Record<
-  WizardSource['status'],
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  ready: 'default',
-  locked: 'secondary',
-  'auth-required': 'secondary',
-  degraded: 'outline',
-  'policy-denied': 'destructive',
-}
 
 const brokerOverviewStateCopy: Record<SecretsBrokerOverviewState, string> = {
   healthy: 'Healthy',
@@ -865,55 +847,6 @@ function BackupKeyManagementPanel() {
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function SourceIcon({ source }: { source: WizardSource }) {
-  if (source.id === 'local-vault') return <LockKeyhole className='size-4' />
-  if (source.id === 'file-source') return <FileKey2 className='size-4' />
-  if (source.id === 'exec-adapter') return <TerminalSquare className='size-4' />
-  if (source.id === 'generated-writeback') {
-    return <ClipboardCheck className='size-4' />
-  }
-  return <KeyRound className='size-4' />
-}
-
-function SourceCard({
-  source,
-  selected,
-  onSelect,
-}: {
-  source: WizardSource
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      type='button'
-      onClick={onSelect}
-      className={`rounded-lg border p-4 text-left transition hover:border-primary ${
-        selected ? 'border-primary bg-muted/60' : 'bg-card'
-      }`}
-    >
-      <div className='mb-3 flex items-start justify-between gap-3'>
-        <div className='flex items-center gap-2 font-medium'>
-          <SourceIcon source={source} />
-          {source.title}
-        </div>
-        <Badge variant={statusVariant[source.status]}>
-          {statusCopy[source.status]}
-        </Badge>
-      </div>
-      <p className='text-sm text-muted-foreground'>{source.summary}</p>
-    </button>
-  )
-}
-
-function SafeExample({ value }: { value: string }) {
-  return (
-    <div className='rounded-md border bg-muted/40 p-3 font-mono text-sm break-all'>
-      {value}
-    </div>
   )
 }
 
@@ -2058,7 +1991,6 @@ export function SecretsBrokerSetupWizard({
     description: pageMetadata.description,
   })
 
-  const [selectedId, setSelectedId] = useState(wizardSources[0].id)
   const [auditTypeFilter, setAuditTypeFilter] = useState<
     SecretsBrokerAuditEventType | 'all'
   >('all')
@@ -2096,12 +2028,6 @@ export function SecretsBrokerSetupWizard({
     brokerOverviewScenarios.find(
       (scenario) => scenario.id === overviewScenarioId
     ) ?? brokerOverviewScenarios[0]
-  const selectedSource = useMemo(
-    () =>
-      wizardSources.find((source) => source.id === selectedId) ??
-      wizardSources[0],
-    [selectedId]
-  )
   const readyCount = wizardSources.filter(
     (source) => source.status === 'ready'
   ).length
@@ -3486,135 +3412,6 @@ export function SecretsBrokerSetupWizard({
               </div>
             </CardContent>
           </Card>
-        ) : null}
-
-        {focusSection === 'overview' ? (
-          <>
-            <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]'>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Source setup paths</CardTitle>
-                  <CardDescription>
-                    Pick a source type to preview the safe setup contract and
-                    current stubbed state.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className='grid gap-3'>
-                  {wizardSources.map((source) => (
-                    <SourceCard
-                      key={source.id}
-                      source={source}
-                      selected={source.id === selectedSource.id}
-                      onSelect={() => setSelectedId(source.id)}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className='flex items-start justify-between gap-3'>
-                    <div>
-                      <CardTitle className='flex items-center gap-2'>
-                        <SourceIcon source={selectedSource} />
-                        {selectedSource.title}
-                      </CardTitle>
-                      <CardDescription>{selectedSource.kind}</CardDescription>
-                    </div>
-                    <Badge variant={statusVariant[selectedSource.status]}>
-                      {statusCopy[selectedSource.status]}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className='space-y-5'>
-                  <section className='space-y-2'>
-                    <h3 className='font-medium'>Safe example</h3>
-                    <SafeExample value={selectedSource.safeExample} />
-                    <p className='text-sm text-muted-foreground'>
-                      Examples intentionally use SecretRef-style identifiers and
-                      hidden generated values only.
-                    </p>
-                  </section>
-
-                  <section className='space-y-2'>
-                    <h3 className='font-medium'>Affected refs and services</h3>
-                    <div className='flex flex-wrap gap-2'>
-                      {selectedSource.affected.map((item) => (
-                        <Badge key={item} variant='outline'>
-                          {item}
-                        </Badge>
-                      ))}
-                    </div>
-                  </section>
-
-                  {selectedSource.warning ? (
-                    <div className='flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100'>
-                      <AlertTriangle className='mt-0.5 size-4 shrink-0' />
-                      <span>{selectedSource.warning}</span>
-                    </div>
-                  ) : null}
-
-                  <section className='space-y-2'>
-                    <h3 className='font-medium'>Next safe action</h3>
-                    <p className='text-sm text-muted-foreground'>
-                      {selectedSource.nextAction}
-                    </p>
-                  </section>
-
-                  <div className='rounded-lg border p-3 text-sm'>
-                    <div className='mb-2 flex items-center gap-2 font-medium'>
-                      <ShieldCheck className='size-4' /> Security gates
-                    </div>
-                    <ul className='list-disc space-y-1 pl-5 text-muted-foreground'>
-                      <li>
-                        Require preview before destructive or broad changes.
-                      </li>
-                      <li>
-                        Require explicit confirmation and an audit reason before
-                        save/write.
-                      </li>
-                      <li>
-                        Show policy decisions and audit links without values.
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className='flex flex-wrap gap-2'>
-                    <Button type='button'>Test selected source</Button>
-                    <Button type='button' variant='outline'>
-                      Cancel setup
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className='flex items-center gap-2'>
-                  <CheckCircle2 className='size-4' /> Covered setup states
-                </CardTitle>
-                <CardDescription>
-                  This first slice makes the states visible before wiring live
-                  Secrets Broker APIs.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className='grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-3'>
-                <div>
-                  Blank install: choose local/file/exec/external source.
-                </div>
-                <div>Existing vault on new machine: import or re-wrap.</div>
-                <div>External auth required: show affected refs first.</div>
-                <div>
-                  Service dependency blocked: explain source/policy reason.
-                </div>
-                <div>OpenClaw exec adapter: namespace and last check only.</div>
-                <div>
-                  Generated secret write-back: policy and audit, value hidden.
-                </div>
-              </CardContent>
-            </Card>
-          </>
         ) : null}
       </Main>
     </>

@@ -4,7 +4,7 @@ import {
   collectBrowserLeakSurfaces,
   serviceLassoSecretLeakSentinels,
 } from '@/test/secret-leak-harness'
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
@@ -111,19 +111,17 @@ const topologyTestServices = [
   },
 ] as DashboardService[]
 
-describe('Secrets Broker setup wizard', () => {
-  it('shows the safe setup contract without plaintext values', async () => {
+describe('Secrets Broker overview dashboard', () => {
+  it('shows the operator overview without setup-wall or plaintext values', async () => {
     await renderRoute('/secrets-broker')
 
     expect(
-      await screen.findByRole('heading', { name: /Secrets Broker setup/i })
+      await screen.findByRole('heading', { name: /^Overview$/i })
     ).toBeVisible()
     expect(screen.getAllByText(/Values hidden/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Local encrypted vault/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/OpenClaw exec adapter/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Generated secret write-back/i)[0]).toBeVisible()
-    expect(screen.getByText(/SecretRef:/i)).toBeVisible()
-    expect(screen.getAllByText(/value hidden/i)[0]).toBeVisible()
+    expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
+    expect(screen.getByText(/Ready providers/i)).toBeVisible()
+    expect(screen.getByText(/Needs operator action/i)).toBeVisible()
     expect(
       screen.getByRole('link', { name: /View audit\/events/i })
     ).toHaveAttribute('href', '/secrets-broker/audit-events')
@@ -133,6 +131,8 @@ describe('Secrets Broker setup wizard', () => {
     expect(
       screen.queryByRole('heading', { name: /Secret Sources \/ Backends/i })
     ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Source setup paths/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cancel setup/i)).not.toBeInTheDocument()
     expect(
       screen.queryByRole('heading', {
         name: /Privileged single-secret reveal/i,
@@ -274,41 +274,33 @@ describe('Secrets Broker setup wizard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   }, 30000)
 
-  it('covers locked, auth-required, degraded, policy-denied, cancel, and ready states', async () => {
-    const user = userEvent.setup()
+  it('keeps overview action-oriented and provider setup detail on the providers page', async () => {
     await renderRoute('/secrets-broker')
 
-    expect(screen.getAllByText(/Locked/i)[0]).toBeVisible()
-    expect(screen.getByText(/import portable master key/i)).toBeVisible()
-
-    await user.click(screen.getByRole('button', { name: /File source/i }))
-    expect(screen.getAllByText(/Degraded/i)[0]).toBeVisible()
-    expect(screen.getByText(/Risky broad paths are rejected/i)).toBeVisible()
-
-    await user.click(
-      screen.getByRole('button', { name: /OpenClaw exec adapter/i })
-    )
-    expect(screen.getAllByText(/Policy denied/i)[0]).toBeVisible()
-    expect(screen.getByText(/namespace allowlist/i)).toBeVisible()
-
-    await user.click(
-      screen.getByRole('button', { name: /External source auth/i })
-    )
-    expect(screen.getAllByText(/Auth required/i)[0]).toBeVisible()
+    expect(screen.getByRole('heading', { name: /^Overview$/i })).toBeVisible()
+    expect(screen.getByText(/Reconnect required/i)).toBeVisible()
+    expect(screen.getByText(/Recent denied requests/i)).toBeVisible()
     expect(
-      screen.getAllByText(/Authenticate the external source/i)[0]
-    ).toBeVisible()
-    expect(screen.getByText(/payments-api:STRIPE_KEY/i)).toBeVisible()
+      screen.queryByText(/Affected refs and services/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cancel setup/i)).not.toBeInTheDocument()
 
-    await user.click(
-      screen.getByRole('button', { name: /Generated secret write-back/i })
-    )
-    expect(screen.getAllByText(/Generated secret write-back/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Ready/i)[0]).toBeVisible()
+    await renderRoute('/secrets-broker/sources')
+
     expect(
-      screen.getByText(/Confirm operation, policy decision, and audit reason/i)
+      screen.getByRole('heading', { name: /Secrets Broker providers/i })
     ).toBeVisible()
-    expect(screen.getByRole('button', { name: /Cancel setup/i })).toBeVisible()
+    expect(screen.getByText(/Credentials as refs only/i)).toBeVisible()
+    expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
+    expect(screen.getByText(/Authentication required/i)).toBeVisible()
+    expect(
+      screen.getByText(/HashiCorp Vault \/ OpenBao provider/i)
+    ).toBeVisible()
+    expect(screen.getByText(/tokens hidden/i)).toBeVisible()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
   }, 30000)
 
   it('keeps single-secret reveal safe surfaces free of raw material', () => {
@@ -1449,27 +1441,18 @@ describe('Secrets Broker setup wizard', () => {
     ).toBe(true)
   })
 
-  it('shows affected refs before unlock or auth prompts', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
+  it('shows provider refs and warnings on the dedicated providers page', async () => {
+    await renderRoute('/secrets-broker/sources')
 
-    const affectedSection = screen.getByText(
-      /Affected refs and services/i
-    ).parentElement
-    expect(affectedSection).toBeTruthy()
     expect(
-      within(affectedSection!).getByText(/echo-service:DB_PASSWORD/i)
+      screen.getByText(/secret:\/\/providers\/vault\/payments\/STRIPE_KEY/i)
     ).toBeVisible()
-
-    await user.click(
-      screen.getByRole('button', { name: /External source auth/i })
-    )
-    const updatedSection = screen.getByText(
-      /Affected refs and services/i
-    ).parentElement
-    expect(updatedSection).toBeTruthy()
     expect(
-      within(updatedSection!).getByText(/backup-worker:AWS_SECRET_ACCESS_KEY/i)
+      screen.getByText(/secret:\/\/providers\/aws\/default\/backup-worker/i)
     ).toBeVisible()
+    expect(screen.getByText(/Sealed, locked, auth_required/i)).toBeVisible()
+    expect(
+      screen.queryByText(/fixture-provider-credential-value/i)
+    ).not.toBeInTheDocument()
   })
 })
