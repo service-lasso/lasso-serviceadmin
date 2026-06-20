@@ -231,14 +231,17 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.getByRole('heading', { name: /Secrets Broker providers/i })
     ).toBeVisible()
-    expect(screen.getByText(/Credentials as refs only/i)).toBeVisible()
-    expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
-    expect(screen.getByText(/Authentication required/i)).toBeVisible()
     expect(
-      screen.getByText(/HashiCorp Vault \/ OpenBao provider/i)
+      screen.getByRole('button', { name: /^Add provider$/i })
     ).toBeVisible()
-    expect(screen.getByText(/tokens hidden/i)).toBeVisible()
+    expect(screen.getByPlaceholderText(/Search providers/i)).toBeVisible()
+    expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
+    expect(
+      screen.queryByText(/HashiCorp Vault \/ OpenBao provider/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Authentication required/i)
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)
     ).not.toBeInTheDocument()
@@ -351,7 +354,7 @@ describe('Secrets Broker overview dashboard', () => {
     })
   })
 
-  it('renders Providers management with local default and addable provider options', async () => {
+  it('renders Providers management as one enabled-provider table', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/sources')
 
@@ -359,111 +362,74 @@ describe('Secrets Broker overview dashboard', () => {
       screen.getByRole('heading', { name: /Secrets Broker providers/i })
     ).toBeVisible()
     expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/Configured provider table/i)).toBeVisible()
-    expect(screen.getByText(/^Add Provider$/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /^Add provider$/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('columnheader', { name: /Provider/i })
+    ).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: /Enabled/i })).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: /Health/i })).toBeVisible()
     expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
     expect(screen.getAllByText(/local-encrypted-store/i)[0]).toBeVisible()
-    expect(screen.getByText(/Priority 0/i)).toBeVisible()
-    expect(screen.getByText(/^default$/i)).toBeVisible()
-    expect(screen.getByRole('button', { name: /^Configure$/i })).toBeVisible()
-    expect(screen.getByRole('button', { name: /^Test$/i })).toBeVisible()
-    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
+    expect(screen.getByText(/^0$/i)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: /^Actions$/i }))
+    expect(
+      screen.getByRole('menuitem', { name: /View\/Edit configuration/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('menuitem', { name: /Test connection/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('menuitem', { name: /Reconnect \/ reauth/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('menuitem', { name: /Disable provider/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('menuitem', { name: /Remove provider/i })
+    ).toBeVisible()
+    await user.keyboard('{Escape}')
     expect(screen.getAllByText(/reconnect_required/i)[0]).toBeVisible()
     expect(screen.getAllByText(/locked/i)[0]).toBeVisible()
     expect(screen.getAllByText(/unlock_or_unseal_source/i)[0]).toBeVisible()
-    expect(screen.getByText(/default fallback provider/i)).toBeVisible()
-    expect(screen.getByText(/Local bootstrap providers/i)).toBeVisible()
-    expect(screen.getAllByText(/Read-only by default/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/configured_metadata/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/policy_denied/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/not_configured/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/read-only bootstrap source/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/path policy denied/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/command not executed/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/metadata event only/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/HashiCorp Vault CLI/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/1Password CLI/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Bitwarden \/ BWS CLI/i)[0]).toBeVisible()
     expect(
-      screen.getAllByText(/Docker\/Kubernetes mounted secrets/i)[0]
-    ).toBeVisible()
-    expect(screen.getAllByText(/Broad env allowlist/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Insecure path override/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Untrusted command path/i)[0]).toBeVisible()
+      screen.queryByText(/Local bootstrap providers/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Environment provider/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/HashiCorp Vault CLI/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Broad env allowlist/i)).not.toBeInTheDocument()
     expect(
-      screen.getAllByText(/Missing timeout\/output limits/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getAllByRole('button', { name: /Add Environment provider/i })[0]
-    ).toBeVisible()
+      screen.queryByText(/Insecure path override/i)
+    ).not.toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(/Search providers/i), 'aws')
-    expect(screen.getByText(/No configured providers match/i)).toBeVisible()
-    expect(screen.getAllByText(/AWS Secrets Manager CLI/i)[0]).toBeVisible()
+    await user.type(screen.getByPlaceholderText(/Search providers/i), 'aws')
+    expect(screen.getByText(/No enabled providers match/i)).toBeVisible()
+    expect(
+      screen.queryByText(/AWS Secrets Manager CLI/i)
+    ).not.toBeInTheDocument()
     expect(screen.queryByText(/Environment provider/i)).not.toBeInTheDocument()
   })
 
-  it('renders Env File Exec provider details with safe state coverage', async () => {
+  it('keeps addable provider details off the focused providers page', async () => {
     await renderRoute('/secrets-broker/sources')
 
-    expect(screen.getByText(/Local bootstrap providers/i)).toBeVisible()
-    expect(screen.getAllByText(/Environment provider/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/File provider/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Exec provider/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/^reachable$/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/^failing$/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/^untested$/i)[0]).toBeVisible()
+    expect(screen.queryByText(/Local bootstrap providers/i)).toBeNull()
+    expect(screen.queryByText(/Environment provider/i)).toBeNull()
+    expect(screen.queryByText(/File provider/i)).toBeNull()
+    expect(screen.queryByText(/Exec provider/i)).toBeNull()
+    expect(screen.queryByText(/narrow_allowlist_before_production/i)).toBeNull()
+    expect(screen.queryByText(/fix_path_scope_and_symlink_policy/i)).toBeNull()
     expect(
-      screen.getAllByText(/narrow_allowlist_before_production/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getAllByText(/fix_path_scope_and_symlink_policy/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getAllByText(
-        /configure_trusted_command_timeout_and_output_limits/i
-      )[0]
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Matches explicit env ref mappings only/i)
-    ).toBeVisible()
-    expect(screen.getByText(/Blocks unsafe paths/i)).toBeVisible()
-    expect(screen.getByText(/Runs only explicitly allowlisted/i)).toBeVisible()
+      screen.queryByText(/configure_trusted_command_timeout_and_output_limits/i)
+    ).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
-  it('renders Vault OpenBao provider configuration metadata safely', async () => {
-    const user = userEvent.setup()
+  it('keeps Vault OpenBao addable metadata safe but off the table page', async () => {
     await renderRoute('/secrets-broker/sources')
-
-    expect(
-      screen.getAllByText(/HashiCorp Vault \/ OpenBao provider/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Vault\/OpenBao configuration metadata/i)
-    ).toBeVisible()
-    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/configure_vault_address_mount_auth_ref_and_policy/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/address, mount, token-env handle, auth identity ref/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/secret:\/\/providers\/vault\/payments\/STRIPE_KEY/i)
-    ).toBeVisible()
-    expect(screen.getAllByText(/kv\/service-lasso/i)[0]).toBeVisible()
-    expect(screen.getByText(/payments\/api/i)).toBeVisible()
-    expect(screen.getAllByText(/stripe_key/i)[0]).toBeVisible()
-    expect(screen.getByText(/Sealed, locked, auth_required/i)).toBeVisible()
-    expect(screen.getAllByText(/policy metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/no raw Vault\/OpenBao output/i)).toBeVisible()
 
     const vaultProvider = secretsBrokerSourceBackends.find(
       (source) => source.id === 'vault-cli'
@@ -485,26 +451,12 @@ describe('Secrets Broker overview dashboard', () => {
       ])
     )
 
-    await user.click(
-      screen.getByRole('button', { name: /Configure Vault\/OpenBao/i })
-    )
     expect(
-      screen.getByRole('dialog', { name: /Configure Vault\/OpenBao/i })
-    ).toBeVisible()
-    expect(screen.getByLabelText(/Address/i)).toHaveValue(
-      'https://vault.service-lasso.local'
-    )
-    expect(screen.getByLabelText(/^Mount$/i)).toHaveValue('kv/service-lasso')
-    expect(screen.getByLabelText(/Auth identity reference/i)).toHaveValue(
-      'secret://providers/vault/operator-session'
-    )
-    expect(screen.getByLabelText(/Token env handle/i)).toHaveValue(
-      'VAULT_TOKEN via broker-managed env ref'
-    )
-    expect(screen.getByLabelText(/Namespace/i)).toHaveValue('providers/vault/*')
+      screen.queryByText(/HashiCorp Vault \/ OpenBao provider/i)
+    ).toBeNull()
     expect(
-      screen.getByText(/Metadata-only Vault\/OpenBao status check/i)
-    ).toBeVisible()
+      screen.queryByText(/secret:\/\/providers\/vault\/payments\/STRIPE_KEY/i)
+    ).toBeNull()
 
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
@@ -512,32 +464,8 @@ describe('Secrets Broker overview dashboard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
-  it('renders AWS Secrets Manager provider configuration metadata safely', async () => {
-    const user = userEvent.setup()
+  it('keeps AWS Secrets Manager addable metadata safe but off the table page', async () => {
     await renderRoute('/secrets-broker/sources')
-
-    expect(
-      screen.getAllByText(/AWS Secrets Manager CLI provider/i)[0]
-    ).toBeVisible()
-    expect(screen.getByText(/AWS configuration metadata/i)).toBeVisible()
-    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/configure_region_profile_token_env/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(
-        /region, account\/profile, token-env handle, endpoint override/i
-      )
-    ).toBeVisible()
-    expect(
-      screen.getByText(/secret:\/\/providers\/aws\/default\/backup-worker/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/\/service-lasso\/payments\/signing/i)
-    ).toBeVisible()
-    expect(screen.getByText(/AWS auth reference required/i)).toBeVisible()
-    expect(screen.getAllByText(/IAM metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/no raw AWS output/i)).toBeVisible()
 
     const awsProvider = secretsBrokerSourceBackends.find(
       (source) => source.id === 'aws-secrets-manager-cli'
@@ -559,32 +487,10 @@ describe('Secrets Broker overview dashboard', () => {
       ])
     )
 
-    await user.click(
-      screen.getByRole('button', { name: /Configure AWS Secrets Manager/i })
-    )
+    expect(screen.queryByText(/AWS Secrets Manager CLI provider/i)).toBeNull()
     expect(
-      screen.getByRole('dialog', { name: /Configure AWS Secrets Manager/i })
-    ).toBeVisible()
-    expect(screen.getByLabelText(/^Region$/i)).toHaveValue('ap-southeast-2')
-    expect(screen.getByLabelText(/Account \/ profile/i)).toHaveValue(
-      'service-lasso-ops profile metadata'
-    )
-    expect(screen.getByLabelText(/Token env handle/i)).toHaveValue(
-      'AWS_SESSION_TOKEN presence check only'
-    )
-    expect(screen.getByLabelText(/Endpoint override/i)).toHaveValue(
-      'http://127.0.0.1:4566 for tests'
-    )
-    expect(screen.getByLabelText(/Secret id mapping/i)).toHaveValue(
-      '/service-lasso/{service}/{ref}'
-    )
-    expect(screen.getByLabelText(/Path \/ field mapping/i)).toHaveValue(
-      'JSON field selector metadata only'
-    )
-    expect(screen.getByLabelText(/Namespace ownership/i)).toHaveValue(
-      'providers/aws/*'
-    )
-    expect(screen.getByText(/Metadata-only AWS CLI probe/i)).toBeVisible()
+      screen.queryByText(/secret:\/\/providers\/aws\/default\/backup-worker/i)
+    ).toBeNull()
 
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
@@ -593,29 +499,8 @@ describe('Secrets Broker overview dashboard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
-  it('renders 1Password CLI provider configuration metadata safely', async () => {
-    const user = userEvent.setup()
+  it('keeps 1Password CLI addable metadata safe but off the table page', async () => {
     await renderRoute('/secrets-broker/sources')
-
-    expect(screen.getByText(/1Password CLI provider/i)).toBeVisible()
-    expect(screen.getByText(/Safe configuration metadata/i)).toBeVisible()
-    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
-    expect(screen.getByText(/sign_in_and_map_item_fields/i)).toBeVisible()
-    expect(
-      screen.getByText(
-        /vault, account, item, field, command-path, auth, namespace/i
-      )
-    ).toBeVisible()
-    expect(
-      screen.getByText(
-        /secret:\/\/providers\/onepassword\/default\/OPENCLAW_API_KEY/i
-      )
-    ).toBeVisible()
-    expect(screen.getByText(/OpenClaw \/ API key/i)).toBeVisible()
-    expect(screen.getByText(/Release \/ signing key/i)).toBeVisible()
-    expect(screen.getAllByText(/^sign-in required$/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/audit metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/no raw CLI output/i)).toBeVisible()
 
     const onePasswordProvider = secretsBrokerSourceBackends.find(
       (source) => source.id === 'onepassword-cli'
@@ -631,59 +516,19 @@ describe('Secrets Broker overview dashboard', () => {
       'edit-configuration'
     )
 
-    await user.click(
-      screen.getByRole('button', { name: /Configure 1Password CLI/i })
-    )
+    expect(screen.queryByText(/1Password CLI provider/i)).toBeNull()
     expect(
-      screen.getByRole('dialog', { name: /Configure 1Password CLI/i })
-    ).toBeVisible()
-    expect(screen.getByLabelText(/Account context/i)).toHaveValue(
-      'service-lasso.1password.com'
-    )
-    expect(screen.getByLabelText(/CLI command path/i)).toHaveValue('op')
-    expect(screen.getByLabelText(/Trusted command dirs/i)).toHaveValue(
-      'C:/Program Files/1Password CLI'
-    )
-    expect(screen.getByLabelText(/Auth state/i)).toHaveValue(
-      'operator sign-in required'
-    )
-    expect(screen.getByLabelText(/Credential handle/i)).toHaveValue(
-      'secret://providers/onepassword/cli-session'
-    )
-    expect(screen.getByText(/Metadata-only CLI status check/i)).toBeVisible()
+      screen.queryByText(
+        /secret:\/\/providers\/onepassword\/default\/OPENCLAW_API_KEY/i
+      )
+    ).toBeNull()
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
-  it('renders Bitwarden BWS provider configuration metadata safely', async () => {
-    const user = userEvent.setup()
+  it('keeps Bitwarden BWS addable metadata safe but off the table page', async () => {
     await renderRoute('/secrets-broker/sources')
-
-    expect(
-      screen.getAllByText(/Bitwarden \/ BWS CLI provider/i)[0]
-    ).toBeVisible()
-    expect(screen.getByText(/Safe BWS configuration metadata/i)).toBeVisible()
-    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(/add_bws_project_mappings_and_token_ref/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(
-        /project, source, token-reference, secret mapping, selector/i
-      )
-    ).toBeVisible()
-    expect(
-      screen.getByText(
-        /secret:\/\/providers\/bitwarden\/default\/OPENCLAW_API_KEY/i
-      )
-    ).toBeVisible()
-    expect(
-      screen.getByText(/bws:\/\/project\/service-lasso\/openclaw-api-key/i)
-    ).toBeVisible()
-    expect(screen.getByText(/BWS token reference required/i)).toBeVisible()
-    expect(screen.getAllByText(/audit metadata only/i)[0]).toBeVisible()
-    expect(screen.getByText(/no raw BWS output/i)).toBeVisible()
 
     const bitwardenProvider = secretsBrokerSourceBackends.find(
       (source) => source.id === 'bitwarden-bws-cli'
@@ -705,24 +550,12 @@ describe('Secrets Broker overview dashboard', () => {
       ])
     )
 
-    await user.click(
-      screen.getByRole('button', { name: /Configure Bitwarden BWS/i })
-    )
+    expect(screen.queryByText(/Bitwarden \/ BWS CLI provider/i)).toBeNull()
     expect(
-      screen.getByRole('dialog', { name: /Configure Bitwarden BWS/i })
-    ).toBeVisible()
-    expect(screen.getByLabelText(/Project id/i)).toHaveValue(
-      'service-lasso-platform'
-    )
-    expect(screen.getByLabelText(/Source id/i)).toHaveValue('bitwarden-bws-cli')
-    expect(screen.getByLabelText(/CLI command path/i)).toHaveValue('bws')
-    expect(screen.getByLabelText(/Token reference/i)).toHaveValue(
-      'secret://providers/bitwarden/bws-access-token'
-    )
-    expect(screen.getByLabelText(/Secret selector/i)).toHaveValue(
-      'value metadata only'
-    )
-    expect(screen.getByText(/Metadata-only BWS project/i)).toBeVisible()
+      screen.queryByText(
+        /secret:\/\/providers\/bitwarden\/default\/OPENCLAW_API_KEY/i
+      )
+    ).toBeNull()
 
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
@@ -730,32 +563,8 @@ describe('Secrets Broker overview dashboard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
-  it('renders mounted secrets provider configuration metadata safely', async () => {
-    const user = userEvent.setup()
+  it('keeps mounted secrets addable metadata safe but off the table page', async () => {
     await renderRoute('/secrets-broker/sources')
-
-    expect(
-      screen.getAllByText(/Docker\/Kubernetes mounted secrets/i)[0]
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Mounted file configuration metadata/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(
-        /mount root, allowed paths, symlink policy, file mappings/i
-      )
-    ).toBeVisible()
-    expect(
-      screen.getByText(/configure_mount_root_allowed_paths/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/mounted:\/\/run-secrets\/postgres-password/i)
-    ).toBeVisible()
-    expect(screen.getByText('/run/secrets/postgres-password')).toBeVisible()
-    expect(screen.getByText(/services\/@serviceadmin\/runtime/i)).toBeVisible()
-    expect(screen.getAllByText(/symlink check passed/i)[0]).toBeVisible()
-    expect(screen.getByText(/path metadata only/i)).toBeVisible()
-    expect(screen.getByText(/no file contents/i)).toBeVisible()
 
     const mountedProvider = secretsBrokerSourceBackends.find(
       (source) => source.id === 'mounted-secrets'
@@ -777,19 +586,10 @@ describe('Secrets Broker overview dashboard', () => {
       ])
     )
 
-    await user.click(
-      screen.getByRole('button', { name: /Configure mounted secrets/i })
-    )
+    expect(screen.queryByText(/Docker\/Kubernetes mounted secrets/i)).toBeNull()
     expect(
-      screen.getByRole('dialog', { name: /Configure mounted secrets/i })
-    ).toBeVisible()
-    expect(screen.getByLabelText(/Root path/i)).toHaveValue('/run/secrets')
-    expect(screen.getByLabelText(/Allowed paths/i)).toHaveValue(
-      '/run/secrets/postgres-password, /run/secrets/serviceadmin-session'
-    )
-    expect(screen.getByLabelText(/Follow symlinks/i)).toHaveValue('false')
-    expect(screen.getByLabelText(/Max bytes per file/i)).toHaveValue('4096')
-    expect(screen.getByText(/Metadata-only path existence/i)).toBeVisible()
+      screen.queryByText(/mounted:\/\/run-secrets\/postgres-password/i)
+    ).toBeNull()
 
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
@@ -847,8 +647,9 @@ describe('Secrets Broker overview dashboard', () => {
     })
 
     expect(
-      screen.getByRole('button', { name: /Add AWS Secrets Manager CLI/i })
+      screen.getByRole('button', { name: /^Add provider$/i })
     ).toBeVisible()
+    expect(screen.queryByText(/AWS Secrets Manager CLI/i)).toBeNull()
   })
 
   it('keeps source backend fixtures free of secret values', () => {
@@ -1362,16 +1163,18 @@ describe('Secrets Broker overview dashboard', () => {
     ).toBe(true)
   })
 
-  it('shows provider refs and warnings on the dedicated providers page', async () => {
+  it('keeps provider refs and warning detail off the focused providers table', async () => {
     await renderRoute('/secrets-broker/sources')
 
     expect(
-      screen.getByText(/secret:\/\/providers\/vault\/payments\/STRIPE_KEY/i)
-    ).toBeVisible()
+      screen.queryByText(/secret:\/\/providers\/vault\/payments\/STRIPE_KEY/i)
+    ).not.toBeInTheDocument()
     expect(
-      screen.getByText(/secret:\/\/providers\/aws\/default\/backup-worker/i)
-    ).toBeVisible()
-    expect(screen.getByText(/Sealed, locked, auth_required/i)).toBeVisible()
+      screen.queryByText(/secret:\/\/providers\/aws\/default\/backup-worker/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Sealed, locked, auth_required/i)
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText(/fixture-provider-credential-value/i)
     ).not.toBeInTheDocument()
