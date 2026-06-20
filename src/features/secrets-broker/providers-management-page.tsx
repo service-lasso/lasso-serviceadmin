@@ -33,6 +33,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { BitwardenBwsProviderDetail } from './bitwarden-bws-provider-detail'
 import { LocalBootstrapProviderDetails } from './local-bootstrap-provider-details'
 import { LocalEncryptedStoreProviderDetail } from './local-encrypted-store-detail'
 import { OnePasswordCliProviderDetail } from './onepassword-cli-provider-detail'
@@ -327,6 +328,8 @@ export function ProvidersManagementPage() {
         <LocalBootstrapProviderDetails query={query} />
 
         <OnePasswordCliProviderDetail query={query} />
+
+        <BitwardenBwsProviderDetail query={query} />
 
         <Card>
           <CardHeader>
