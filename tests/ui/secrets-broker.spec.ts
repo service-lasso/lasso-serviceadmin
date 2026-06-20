@@ -201,6 +201,10 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/targetPolicyRef/i)).toBeVisible()
 
     await expect(page.getByText(/Single-secret preview gate/i)).toBeVisible()
+    await expect(
+      page.getByText(/Single-secret operation history/i)
+    ).toBeVisible()
+    await expect(page.getByText(/0 submitted/i)).toBeVisible()
     await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
     await expect(
       page.getByRole('button', { name: /Simulate stub apply/i })
@@ -247,6 +251,9 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/Single-secret operation result: submitted/i)
     ).toBeVisible()
+    await expect(page.getByText(/1 submitted/i)).toBeVisible()
+    await expect(page.getByText(/audit-reset-serviceadmin/i)).toBeVisible()
+    await expect(page.getByText(/submitted to stub broker/i)).toBeVisible()
     await expect(page.getByText(/raw value was not revealed/i)).toBeVisible()
     await expect(
       page.getByText(/rotation can be requested without controlled reveal/i)

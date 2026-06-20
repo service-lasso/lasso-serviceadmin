@@ -6,6 +6,7 @@ import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
+  buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
@@ -14,6 +15,7 @@ import {
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
+  managedSecretSingleHistoryHasSecretMaterial,
   managedSecretsHaveSecretMaterial,
   valueSearchManagedSecrets,
 } from './secrets-management'
@@ -55,6 +57,8 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/Stub preview · values hidden/i)).toBeVisible()
     expect(screen.getByText(/Single-secret preview gate/i)).toBeVisible()
     expect(screen.getAllByText(/Stub API · preview only/i)[0]).toBeVisible()
+    expect(screen.getByText(/Single-secret operation history/i)).toBeVisible()
+    expect(screen.getByText(/0 submitted/i)).toBeVisible()
     expect(screen.getAllByText(/SESSION_SIGNING_KEY/i)[0]).toBeVisible()
     expect(screen.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
     expect(screen.getAllByText(/Controlled reveal/i)[0]).toBeVisible()
@@ -554,6 +558,10 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/Single-secret operation result: submitted/i)
     ).toBeVisible()
+    expect(screen.getByText(/Single-secret operation history/i)).toBeVisible()
+    expect(screen.getByText(/1 submitted/i)).toBeVisible()
+    expect(screen.getByText(/audit-reset-serviceadmin/i)).toBeVisible()
+    expect(screen.getByText(/submitted to stub broker/i)).toBeVisible()
     expect(screen.getByText(/raw value was not revealed/i)).toBeVisible()
     expect(
       screen.getByText(/rotation can be requested without controlled reveal/i)
@@ -724,6 +732,22 @@ describe('Secrets Broker secrets management page', () => {
         'raw value was not revealed',
         'rotation can be requested without controlled reveal',
       ])
+    )
+    const historyEntry = buildSingleSecretOperationHistoryEntry(
+      managedSecretRows[0],
+      rotatePlan,
+      1
+    )
+    expect(historyEntry).toMatchObject({
+      operationId: rotatePlan.operationId,
+      rowName: 'SESSION_SIGNING_KEY',
+      provider: 'local encrypted store',
+      auditEventId: 'audit-reset-serviceadmin-session-signing-1',
+      statusBadge: 'submitted to stub broker',
+      submittedAt: 'stub-sequence-1',
+    })
+    expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
+      false
     )
 
     const missingDeletePlan = buildSingleSecretOperationPlan(
