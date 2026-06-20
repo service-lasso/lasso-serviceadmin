@@ -526,7 +526,7 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/OpenClaw \/ API key/i)).toBeVisible()
     expect(screen.getByText(/Release \/ signing key/i)).toBeVisible()
     expect(screen.getAllByText(/^sign-in required$/i)[0]).toBeVisible()
-    expect(screen.getByText(/audit metadata only/i)).toBeVisible()
+    expect(screen.getAllByText(/audit metadata only/i)[0]).toBeVisible()
     expect(screen.getByText(/no raw CLI output/i)).toBeVisible()
 
     const onePasswordProvider = secretsBrokerSourceBackends.find(
@@ -565,6 +565,80 @@ describe('Secrets Broker setup wizard', () => {
     expect(screen.getByText(/Metadata-only CLI status check/i)).toBeVisible()
     expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
     expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  })
+
+  it('renders Bitwarden BWS provider configuration metadata safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/sources')
+
+    expect(
+      screen.getAllByText(/Bitwarden \/ BWS CLI provider/i)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Safe BWS configuration metadata/i)).toBeVisible()
+    expect(screen.getAllByText(/auth_required/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/add_bws_project_mappings_and_token_ref/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /project, source, token-reference, secret mapping, selector/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /secret:\/\/providers\/bitwarden\/default\/OPENCLAW_API_KEY/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/bws:\/\/project\/service-lasso\/openclaw-api-key/i)
+    ).toBeVisible()
+    expect(screen.getByText(/BWS token reference required/i)).toBeVisible()
+    expect(screen.getAllByText(/audit metadata only/i)[0]).toBeVisible()
+    expect(screen.getByText(/no raw BWS output/i)).toBeVisible()
+
+    const bitwardenProvider = secretsBrokerSourceBackends.find(
+      (source) => source.id === 'bitwarden-bws-cli'
+    )
+    expect(bitwardenProvider).toMatchObject({
+      configured: false,
+      enabled: false,
+      defaultRole: 'addable',
+      lifecycle: 'setup-needed',
+      brokerState: 'auth_required',
+      kind: 'bitwarden-bws',
+    })
+    expect(bitwardenProvider?.supportedActions).toEqual(
+      expect.arrayContaining([
+        'test-source',
+        'view-diagnostics',
+        'edit-configuration',
+        'view-examples',
+      ])
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Configure Bitwarden BWS/i })
+    )
+    expect(
+      screen.getByRole('dialog', { name: /Configure Bitwarden BWS/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/Project id/i)).toHaveValue(
+      'service-lasso-platform'
+    )
+    expect(screen.getByLabelText(/Source id/i)).toHaveValue('bitwarden-bws-cli')
+    expect(screen.getByLabelText(/CLI command path/i)).toHaveValue('bws')
+    expect(screen.getByLabelText(/Token reference/i)).toHaveValue(
+      'secret://providers/bitwarden/bws-access-token'
+    )
+    expect(screen.getByLabelText(/Secret selector/i)).toHaveValue(
+      'value metadata only'
+    )
+    expect(screen.getByText(/Metadata-only BWS project/i)).toBeVisible()
+
+    expect(screen.queryByText(/fixture-provider-credential-value/i)).toBeNull()
+    expect(screen.queryByText(/correct-horse-battery-staple/i)).toBeNull()
+    expect(screen.queryByText(/SERVICE_LASSO_FAKE_SECRET_SENTINEL/i)).toBeNull()
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 

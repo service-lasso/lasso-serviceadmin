@@ -480,6 +480,24 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     type: 'bitwarden-bws-cli',
     provider: 'bitwarden',
     source: 'addable:bitwarden-bws',
+    sourceId: 'bitwarden-bws-cli',
+    kind: 'bitwarden-bws',
+    brokerState: 'auth_required',
+    critical: false,
+    capabilities: [
+      'read',
+      'project mapping',
+      'secret selector',
+      'metadata test',
+      'auth state',
+      'audit',
+    ],
+    lifecycleDetail: {
+      state: 'auth_required',
+      outcome: 'not_configured',
+      nextAction: 'add_bws_project_mappings_and_token_ref',
+      retryable: true,
+    },
     connection: 'Add provider to configure BWS project mappings',
     configured: false,
     enabled: false,
@@ -493,20 +511,41 @@ export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
     mode: 'external cli metadata probe',
     lastCheckedAt: 'never',
     summary:
-      'Optional external BWS source placeholder for future Service Lasso refs.',
-    warnings: [],
+      'Bitwarden Secrets Manager source for managed refs with project, secret, selector, and token-handle metadata only.',
+    warnings: [
+      {
+        code: 'auth_required',
+        title: 'BWS token reference required',
+        severity: 'warning',
+        description:
+          'BWS access tokens must be supplied through a broker-managed SecretRef handle, not Service Admin input.',
+      },
+    ],
     testResult: {
       outcome: 'not-run',
       checkedAt: 'never',
-      metadata: ['not configured', 'no values requested'],
+      metadata: [
+        'auth required',
+        'project mapping pending',
+        'values not requested',
+      ],
     },
-    exampleRefs: ['bws://service-lasso/project/openclaw-api-key'],
+    exampleRefs: [
+      'secret://providers/bitwarden/default/OPENCLAW_API_KEY',
+      'bws://project/service-lasso/openclaw-api-key',
+    ],
     exampleConfig: [
-      'project=service-lasso',
-      'auth=operator-required',
+      'projectId=service-lasso-platform',
+      'tokenRef=secret://providers/bitwarden/bws-access-token',
+      'selector=value',
       'value=hidden',
     ],
-    supportedActions: ['edit-configuration', 'view-examples'],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
   },
   {
     id: 'mounted-secrets',
