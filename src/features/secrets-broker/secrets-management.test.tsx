@@ -845,6 +845,26 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/provider outage/i)[0]).toBeVisible()
     expect(screen.getByText(/connector status metadata only/i)).toBeVisible()
 
+    await user.selectOptions(
+      screen.getByLabelText(/Result status/i),
+      'stale-plan'
+    )
+    await user.selectOptions(screen.getByLabelText(/Stub API state/i), 'ready')
+    await user.click(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    )
+    expect(
+      screen.getByText(/Single-secret operation result: stale-plan/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/stale plan/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/dry-run plan token expired before final broker/i)
+    ).toBeVisible()
+    expect(screen.getByText(/stale preview: broker rejected/i)).toBeVisible()
+    expect(
+      screen.getByText(/stale-plan recovery creates a new dry-run/i)
+    ).toBeVisible()
+
     await user.click(
       screen.getByRole('button', { name: /Cancel stub preview/i })
     )
@@ -1168,9 +1188,44 @@ describe('Secrets Broker secrets management page', () => {
       outcome: 'stale-plan',
       applied: false,
       resultBadge: 'stale plan',
+      auditStatus: 'stub stale-plan rejection recorded; mutation failed closed',
       recoveryStatus: 'stale plan recovery requires a fresh audited preview',
+      retryPolicy: 'fresh plan required before any retry',
       nextAction: 'create a fresh dry-run plan before retry',
     })
+    expect(staleResult.resultStatus).toMatch(
+      /dry-run plan token expired before final broker revalidation/i
+    )
+    expect(staleResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'discard the expired dry-run token and operation submit envelope',
+        'refresh policy, provider capability, audit sink, and ref metadata before retry',
+        'create a fresh audited preview before any broker submit is attempted',
+      ])
+    )
+    expect(staleResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'stale-plan evidence is limited to operation id, ref, action, and expired preview metadata',
+      ])
+    )
+    expect(staleResult.auditFeedback).toMatchObject({
+      eventState: 'recorded as stale-plan rejection',
+    })
+    expect(staleResult.auditFeedback.evidenceRows).toEqual(
+      expect.arrayContaining([
+        'stale-plan evidence contains expired preview metadata only and never request or response bodies',
+      ])
+    )
+    expect(
+      managedSecretSingleHistoryHasSecretMaterial([
+        buildSingleSecretOperationHistoryEntry(
+          managedSecretRows[0],
+          rotatePlan,
+          2,
+          'stale-plan'
+        ),
+      ])
+    ).toBe(false)
 
     const historyEntry = buildSingleSecretOperationHistoryEntry(
       managedSecretRows[0],
@@ -1373,6 +1428,46 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       managedSecretStatusMonitorHasSecretMaterial(providerUnavailableMonitor)
     ).toBe(false)
+    const stalePlanTrail = buildSingleSecretOperationAuditTrail(
+      managedSecretRows[0],
+      rotatePlan,
+      'stale-plan'
+    )
+    expect(stalePlanTrail[2]).toMatchObject({
+      status: 'terminal stale-plan rejection',
+      terminal: true,
+    })
+    expect(managedSecretSingleAuditTrailHasSecretMaterial(stalePlanTrail)).toBe(
+      false
+    )
+    const stalePlanMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      staleResult
+    )
+    expect(stalePlanMonitor).toMatchObject({
+      terminalState: 'terminal stale-plan rejection',
+      stateBadge: 'stale-plan',
+      retryAllowed: false,
+      retryToken: 'fresh broker preview required before retry',
+      operatorNextAction: 'create a fresh dry-run plan before retry',
+    })
+    expect(stalePlanMonitor.stalePlanGuard).toMatch(
+      /existing dry-run token rejected/i
+    )
+    expect(stalePlanMonitor.statusRows).toEqual(
+      expect.arrayContaining([
+        'stale preview: broker rejected the expired dry-run token',
+      ])
+    )
+    expect(stalePlanMonitor.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'stale-plan recovery creates a new dry-run and omits request and response body echoes',
+      ])
+    )
+    expect(managedSecretStatusMonitorHasSecretMaterial(stalePlanMonitor)).toBe(
+      false
+    )
 
     const actionReadiness = buildManagedSecretActionReadiness(
       managedSecretRows[0]

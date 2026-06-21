@@ -491,6 +491,30 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/provider recovery happens in broker/i)
     ).toBeVisible()
     await expect(page.getByText(/5 submitted/i)).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('stale-plan')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: stale-plan/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/dry-run plan token expired before final broker/i)
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(/stale plan recovery requires a fresh audited preview/i)
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/stale preview: broker rejected/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/terminal stale-plan rejection/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/stale-plan recovery creates a new dry-run/i)
+    ).toBeVisible()
+    await expect(page.getByText(/6 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
