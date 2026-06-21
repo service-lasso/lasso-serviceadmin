@@ -520,7 +520,7 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
-  test('shows bulk campaign audit policy-denied and provider-unavailable apply outcomes without secret material', async ({
+  test('shows bulk campaign audit auth policy-denied and provider-unavailable apply outcomes without secret material', async ({
     page,
   }) => {
     await page.goto('/secrets-broker/secrets')
@@ -582,6 +582,29 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(
       page.getByText(/request least-privilege policy approval/i)
+    ).toBeVisible()
+    await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+
+    await page.getByLabel(/Apply result mode/i).selectOption('auth-required')
+    await page.getByRole('button', { name: /Apply bulk campaign/i }).click()
+
+    await expect(
+      page.getByText(/Campaign apply result: auth_required/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Auth 2/i)).toBeVisible()
+    await expect(
+      page.getByText(/provider reauthentication required/i)
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(
+          /campaign audit recorded; provider auth required and item mutation not applied/i
+        )
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/complete provider reauthentication/i)
     ).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
