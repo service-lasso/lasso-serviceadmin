@@ -74,6 +74,16 @@ export type SingleSecretOperationOutcome =
   | 'failed'
   | 'stale-plan'
 
+export type SingleSecretAuditFeedback = {
+  auditEventId: string
+  correlationId: string
+  eventState: string
+  redactionStatus: string
+  dependentServiceStatus: string
+  sinkStatus: string
+  evidenceRows: string[]
+}
+
 export type SingleSecretOperationResult = {
   operationId: string
   ref: string
@@ -86,6 +96,7 @@ export type SingleSecretOperationResult = {
   recoveryStatus: string
   retryPolicy: string
   recoverySteps: string[]
+  auditFeedback: SingleSecretAuditFeedback
   safetyRows: string[]
   nextAction: string
 }
@@ -1287,6 +1298,14 @@ function safeOperationSlug(action: ManagedSecretAction, row: ManagedSecretRow) {
     .replace(/^-+|-+$/g, '')
 }
 
+function auditEventIdForSingleSecretAction(
+  action: ManagedSecretAction,
+  row: ManagedSecretRow,
+  suffix = 'preview'
+) {
+  return `audit-${safeOperationSlug(action, row)}-${suffix}`
+}
+
 function safePayloadFieldsForSingleSecretAction(action: ManagedSecretAction) {
   const baseFields = [
     'ref',
@@ -1546,6 +1565,12 @@ export function buildSingleSecretOperationResult(
           : plan.action === 'delete' || plan.action === 'policy'
             ? 'fresh plan required before any retry'
             : 'retry only by operation id when broker marks the attempt retry-safe'
+  const auditFeedback = buildSingleSecretAuditFeedback(
+    row,
+    plan,
+    outcome,
+    auditEventIdForSingleSecretAction(plan.action, row)
+  )
 
   return {
     operationId: plan.operationId,
@@ -1559,6 +1584,7 @@ export function buildSingleSecretOperationResult(
     recoveryStatus,
     retryPolicy,
     recoverySteps,
+    auditFeedback,
     safetyRows: [
       'raw value was not revealed',
       'request body is limited to ref, operation id, action, owner, provider, policy, and audit reason metadata',
@@ -1575,6 +1601,53 @@ export function buildSingleSecretOperationResult(
   }
 }
 
+export function buildSingleSecretAuditFeedback(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  outcome: SingleSecretOperationOutcome,
+  auditEventId: string
+): SingleSecretAuditFeedback {
+  const eventState =
+    outcome === 'applied'
+      ? 'settled with broker success metadata'
+      : outcome === 'submitted'
+        ? 'recorded and waiting for broker terminal status'
+        : outcome === 'policy-denied'
+          ? 'recorded as policy denial with no source access'
+          : outcome === 'auth-required'
+            ? 'recorded as auth challenge with no source access'
+            : outcome === 'stale-plan'
+              ? 'recorded as stale-plan rejection'
+              : 'recorded as safe broker failure metadata'
+  const dependentServiceStatus =
+    plan.action === 'reset'
+      ? outcome === 'applied'
+        ? 'dependent service restart metadata ready for operator review'
+        : 'dependent service restart remains pending broker success metadata'
+      : plan.action === 'delete'
+        ? 'dependent service refs retained for decommission review'
+        : plan.action === 'policy'
+          ? 'policy consumers require fresh authorization metadata review'
+          : 'no dependent service restart requested by this action'
+
+  return {
+    auditEventId,
+    correlationId: `corr-${safeOperationSlug(plan.action, row)}-${outcome}`,
+    eventState,
+    redactionStatus:
+      'allowlisted fields only: ref, action, operation id, policy, owner, provider, outcome, and timestamps',
+    dependentServiceStatus,
+    sinkStatus: row.auditStatus.includes('available')
+      ? 'audit sink available in stub metadata model'
+      : 'audit sink requires broker confirmation before apply',
+    evidenceRows: [
+      'audit payload excludes raw values and credential material',
+      'operator reason is stored as metadata, not as a secret field',
+      'route, query string, local storage, and diagnostics receive no secret material',
+    ],
+  }
+}
+
 export function buildSingleSecretOperationHistoryEntry(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -1586,10 +1659,22 @@ export function buildSingleSecretOperationHistoryEntry(
 
   return {
     ...result,
+    auditFeedback: {
+      ...result.auditFeedback,
+      auditEventId: auditEventIdForSingleSecretAction(
+        plan.action,
+        row,
+        String(safeSequence)
+      ),
+    },
     rowName: row.name,
     provider: row.provider,
     policy: row.policy,
-    auditEventId: `audit-${safeOperationSlug(plan.action, row)}-${safeSequence}`,
+    auditEventId: auditEventIdForSingleSecretAction(
+      plan.action,
+      row,
+      String(safeSequence)
+    ),
     statusBadge: result.resultBadge,
     submittedAt: `stub-sequence-${safeSequence}`,
   }

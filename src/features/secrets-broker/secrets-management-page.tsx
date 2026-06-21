@@ -1704,6 +1704,40 @@ export function SecretsManagementPage() {
                     <div className='mt-1'>{singleApplyResult.auditStatus}</div>
                   </div>
                 </div>
+                <div className='mt-3 grid gap-3 lg:grid-cols-4'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Audit event
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.auditFeedback.auditEventId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Correlation
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.auditFeedback.correlationId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Audit status
+                    </div>
+                    <div className='mt-1'>
+                      {singleApplyResult.auditFeedback.eventState}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Sink
+                    </div>
+                    <div className='mt-1'>
+                      {singleApplyResult.auditFeedback.sinkStatus}
+                    </div>
+                  </div>
+                </div>
                 <div className='mt-3 rounded-md border bg-muted/40 p-3'>
                   <div>{singleApplyResult.resultStatus}</div>
                   <div className='mt-2 text-muted-foreground'>
@@ -1732,6 +1766,22 @@ export function SecretsManagementPage() {
                       ))}
                     </ul>
                   </div>
+                </div>
+                <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Redaction and dependent service evidence
+                  </div>
+                  <div className='mt-2'>
+                    {singleApplyResult.auditFeedback.redactionStatus}
+                  </div>
+                  <div className='mt-2 text-muted-foreground'>
+                    {singleApplyResult.auditFeedback.dependentServiceStatus}
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleApplyResult.auditFeedback.evidenceRows.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
                 </div>
                 <ul className='mt-3 list-disc space-y-1 ps-5 text-muted-foreground'>
                   {singleApplyResult.safetyRows.map((row) => (
@@ -1787,6 +1837,12 @@ export function SecretsManagementPage() {
                               {entry.auditEventId}
                             </div>
                             <div className='mt-2 text-xs break-all text-muted-foreground'>
+                              {entry.auditFeedback.correlationId}
+                            </div>
+                            <div className='mt-2 text-xs text-muted-foreground'>
+                              {entry.auditFeedback.eventState}
+                            </div>
+                            <div className='mt-2 text-xs break-all text-muted-foreground'>
                               {entry.policy}
                             </div>
                           </TableCell>
@@ -1794,6 +1850,9 @@ export function SecretsManagementPage() {
                             <div>{entry.nextAction}</div>
                             <div className='mt-2 text-muted-foreground'>
                               {entry.recoveryStatus}
+                            </div>
+                            <div className='mt-2 text-muted-foreground'>
+                              {entry.auditFeedback.dependentServiceStatus}
                             </div>
                             <div className='mt-2 text-xs text-muted-foreground'>
                               {entry.retryPolicy}

@@ -568,11 +568,29 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/Single-secret operation history/i)).toBeVisible()
     expect(screen.getByText(/1 submitted/i)).toBeVisible()
-    expect(screen.getByText(/audit-reset-serviceadmin/i)).toBeVisible()
+    expect(screen.getAllByText(/audit-reset-serviceadmin/i)[0]).toBeVisible()
     expect(screen.getAllByText(/submitted to broker/i)[0]).toBeVisible()
     expect(screen.getByText(/raw value was not revealed/i)).toBeVisible()
     expect(
       screen.getByText(/rotation can be requested without controlled reveal/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Audit event/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/audit-reset-serviceadmin-session-signing-preview/i)
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(
+        /corr-reset-serviceadmin-session-signing-submitted/i
+      )[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/recorded and waiting for broker terminal status/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getByText(/allowlisted fields only: ref, action/i)
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/dependent service restart remains pending/i)[0]
     ).toBeVisible()
     expect(
       screen.getAllByText(/rotation retry is operation-id scoped/i)[0]
@@ -815,6 +833,20 @@ describe('Secrets Broker secrets management page', () => {
       nextAction:
         'monitor dependent service restart notes and rotation freshness',
     })
+    expect(appliedResult.auditFeedback).toMatchObject({
+      auditEventId: 'audit-reset-serviceadmin-session-signing-preview',
+      correlationId: 'corr-reset-serviceadmin-session-signing-applied',
+      eventState: 'settled with broker success metadata',
+      dependentServiceStatus:
+        'dependent service restart metadata ready for operator review',
+      sinkStatus: 'audit sink available in stub metadata model',
+    })
+    expect(appliedResult.auditFeedback.evidenceRows).toEqual(
+      expect.arrayContaining([
+        'audit payload excludes raw values and credential material',
+        'route, query string, local storage, and diagnostics receive no secret material',
+      ])
+    )
 
     const deniedResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
@@ -858,6 +890,11 @@ describe('Secrets Broker secrets management page', () => {
       auditEventId: 'audit-reset-serviceadmin-session-signing-1',
       statusBadge: 'apply failed',
       submittedAt: 'stub-sequence-1',
+    })
+    expect(historyEntry.auditFeedback).toMatchObject({
+      auditEventId: 'audit-reset-serviceadmin-session-signing-1',
+      correlationId: 'corr-reset-serviceadmin-session-signing-failed',
+      eventState: 'recorded as safe broker failure metadata',
     })
     expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
       false
