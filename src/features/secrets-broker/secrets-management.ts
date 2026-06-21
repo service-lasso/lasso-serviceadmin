@@ -1838,7 +1838,13 @@ export function buildSingleSecretOperationResult(
             'keep the current operation id for support evidence only',
             'create a fresh audited preview after provider capability metadata refreshes',
           ]
-        : []
+        : outcome === 'stale-plan'
+          ? [
+              'discard the expired dry-run token and operation submit envelope',
+              'refresh policy, provider capability, audit sink, and ref metadata before retry',
+              'create a fresh audited preview before any broker submit is attempted',
+            ]
+          : []
   const recoverySteps = [...actionRecoverySteps, ...outcomeRecoverySteps]
   const applied = outcome === 'applied'
   const resultBadge =
@@ -1866,7 +1872,9 @@ export function buildSingleSecretOperationResult(
           ? 'stub audit outage metadata recorded; mutation failed closed'
           : outcome === 'provider-unavailable'
             ? 'stub provider outage metadata recorded; mutation failed closed'
-            : 'stub audit event recorded with typed failure metadata only'
+            : outcome === 'stale-plan'
+              ? 'stub stale-plan rejection recorded; mutation failed closed'
+              : 'stub audit event recorded with typed failure metadata only'
   const resultStatus =
     outcome === 'submitted'
       ? `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`
@@ -1881,7 +1889,7 @@ export function buildSingleSecretOperationResult(
               : outcome === 'provider-unavailable'
                 ? `${actionLabel} blocked because the provider connector is unavailable or unsupported; no value was read or written`
                 : outcome === 'stale-plan'
-                  ? `${actionLabel} rejected because the dry-run plan is stale`
+                  ? `${actionLabel} rejected because the dry-run plan token expired before final broker revalidation; no value was read or written`
                   : `${actionLabel} failed with broker-owned safe error metadata`
   const nextAction =
     outcome === 'applied'
@@ -1975,7 +1983,9 @@ export function buildSingleSecretOperationResult(
         ? 'provider reauthentication uses broker-owned challenge refs; credentials are never entered in the Service Admin table'
         : outcome === 'provider-unavailable'
           ? 'provider outage details are limited to connector state, capability metadata, and correlation id'
-          : 'broker result metadata excludes provider auth challenge secrets',
+          : outcome === 'stale-plan'
+            ? 'stale-plan evidence is limited to operation id, ref, action, and expired preview metadata'
+            : 'broker result metadata excludes provider auth challenge secrets',
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
     nextAction,
@@ -2034,7 +2044,9 @@ export function buildSingleSecretAuditFeedback(
         ? 'provider auth challenge refs contain status metadata only and never provider credentials'
         : outcome === 'provider-unavailable'
           ? 'provider outage evidence contains connector status metadata only and never provider credentials'
-          : 'provider auth material is omitted from audit evidence',
+          : outcome === 'stale-plan'
+            ? 'stale-plan evidence contains expired preview metadata only and never request or response bodies'
+            : 'provider auth material is omitted from audit evidence',
       'route, query string, local storage, and diagnostics receive no secret material',
     ],
   }
@@ -2231,7 +2243,9 @@ export function buildSingleSecretStatusMonitor(
         ? 'auth challenge: broker-owned provider reauthentication required'
         : result.outcome === 'provider-unavailable'
           ? 'provider status: connector unavailable or unsupported'
-          : 'auth challenge: not requested by broker status',
+          : result.outcome === 'stale-plan'
+            ? 'stale preview: broker rejected the expired dry-run token'
+            : 'auth challenge: not requested by broker status',
     ],
     operatorNextAction: result.nextAction,
     safeEvidenceRows: [
@@ -2241,7 +2255,9 @@ export function buildSingleSecretStatusMonitor(
         ? 'provider reauthentication happens outside Service Admin and omits provider credentials'
         : result.outcome === 'provider-unavailable'
           ? 'provider recovery happens in broker/provider configuration and omits provider credentials'
-          : 'provider credentials remain omitted from status polling',
+          : result.outcome === 'stale-plan'
+            ? 'stale-plan recovery creates a new dry-run and omits request and response body echoes'
+            : 'provider credentials remain omitted from status polling',
       'retry guidance never reuses stale previews or blocked policy decisions',
       'support evidence may include ids, timestamps, and typed outcomes only',
     ],
