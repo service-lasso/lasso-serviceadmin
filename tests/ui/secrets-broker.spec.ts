@@ -326,6 +326,16 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/Single-secret operation result: submitted/i)
     ).toBeVisible()
     await expect(page.getByText(/1 submitted/i)).toBeVisible()
+    await expect(page.getByText(/Operation audit timeline/i)).toBeVisible()
+    await expect(page.getByText(/Dry-run preview recorded/i)).toBeVisible()
+    await expect(page.getByText(/Apply gate evaluated/i)).toBeVisible()
+    await expect(page.getByText(/Broker status callback/i)).toBeVisible()
+    await expect(page.getByText(/Audit sink retention/i)).toBeVisible()
+    await expect(page.getByText(/serviceadmin-ui/i)).toBeVisible()
+    await expect(page.getByText(/@secretsbroker/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/callback evidence stores typed outcome/i)
+    ).toBeVisible()
     await expect(
       page.getByText(/audit-reset-serviceadmin/i).first()
     ).toBeVisible()
@@ -335,7 +345,9 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/rotation can be requested without controlled reveal/i)
     ).toBeVisible()
     await expect(
-      page.getByText(/audit-reset-serviceadmin-session-signing-preview/i)
+      page
+        .getByText(/audit-reset-serviceadmin-session-signing-preview/i)
+        .first()
     ).toBeVisible()
     await expect(
       page
