@@ -101,6 +101,22 @@ export type SingleSecretOperationResult = {
   nextAction: string
 }
 
+export type SingleSecretDecommissionPreview = {
+  ref: string
+  operationId: string
+  mode: 'disable' | 'decommission'
+  eligible: boolean
+  badge: string
+  dependentServiceRefs: string[]
+  recoveryPlanRef: string
+  tombstoneRef: string
+  retentionStatus: string
+  auditTrail: string
+  applyGate: string
+  blockers: string[]
+  safeMetadataRows: string[]
+}
+
 export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
   rowName: string
   provider: string
@@ -413,6 +429,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:stub-mutation-preview',
     'secrets-management:stub-mutation-apply-status',
     'secrets-management:single-secret-operation-history',
+    'secrets-management:single-secret-decommission-preview',
     'secrets-management:stub-delete-preview',
     'secrets-management:bulk-campaign-dry-run',
     'secrets-management:bulk-campaign-apply',
@@ -1441,6 +1458,58 @@ export function buildSingleSecretOperationPlan(
   }
 }
 
+export function buildSingleSecretDecommissionPreview(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretDecommissionPreview {
+  const blockers = [...plan.blockers]
+
+  if (plan.action !== 'delete') {
+    blockers.push('select delete action')
+  }
+
+  const providerBacked = row.provider === 'provider connection'
+  const dependentServiceRefs =
+    row.owningService === '@serviceadmin'
+      ? ['@serviceadmin runtime session loader', '@secretsbroker audit sink']
+      : [
+          `${row.owningService} runtime binding`,
+          `${row.workspace} workspace policy reference`,
+        ]
+  const mode = providerBacked ? 'disable' : 'decommission'
+  const eligible = blockers.length === 0
+  const actionLabel = mode === 'disable' ? 'disable' : 'decommission'
+
+  return {
+    ref: row.ref,
+    operationId: plan.operationId,
+    mode,
+    eligible,
+    badge: eligible
+      ? `${actionLabel} preview ready`
+      : `${actionLabel} preview blocked`,
+    dependentServiceRefs,
+    recoveryPlanRef: `recovery-${safeOperationSlug('delete', row)}-metadata`,
+    tombstoneRef: `tombstone-${safeOperationSlug('delete', row)}-metadata`,
+    retentionStatus: eligible
+      ? 'redacted tombstone and recovery metadata retained for audit review'
+      : 'no tombstone or recovery metadata will be written while blocked',
+    auditTrail: eligible
+      ? 'audit reason, operation id, dependency refs, and policy metadata are ready for broker submit'
+      : 'audit trail records blocker metadata only; no source access or deletion attempted',
+    applyGate: eligible
+      ? 'ready for broker-owned delete/decommission submit after final revalidation'
+      : blockers[0],
+    blockers,
+    safeMetadataRows: [
+      'current secret value is not read before delete/decommission preview',
+      'dependent service refs are names only and contain no environment values',
+      'recovery plan reference is metadata-only and does not embed secret material',
+      'tombstone reference is redacted and cannot restore a value by itself',
+    ],
+  }
+}
+
 export function buildSingleSecretOperationResult(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -1707,6 +1776,12 @@ export function managedSecretSingleHistoryHasSecretMaterial(
   entries: SingleSecretOperationHistoryEntry[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretDecommissionPreviewHasSecretMaterial(
+  preview: SingleSecretDecommissionPreview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(preview))
 }
 
 export function managedSecretActionReadinessHasSecretMaterial(

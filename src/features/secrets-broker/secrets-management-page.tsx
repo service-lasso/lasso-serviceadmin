@@ -62,6 +62,7 @@ import {
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionPreview,
   buildManagedSecretActionReadiness,
+  buildSingleSecretDecommissionPreview,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
@@ -203,6 +204,10 @@ export function SecretsManagementPage() {
     confirmed,
     stubState
   )
+  const decommissionPreview =
+    selectedAction === 'delete'
+      ? buildSingleSecretDecommissionPreview(selectedRow, singleOperationPlan)
+      : null
   const bulkPlan = useMemo(
     () =>
       buildBulkSecretCampaignPlan(
@@ -1501,6 +1506,88 @@ export function SecretsManagementPage() {
                 )}
               </div>
             </div>
+            {decommissionPreview ? (
+              <div className='rounded-md border p-3'>
+                <div className='mb-3 flex flex-wrap items-center gap-2'>
+                  <Trash2 className='size-4 text-primary' />
+                  <div className='font-medium'>
+                    Delete/decommission safety preview
+                  </div>
+                  <Badge
+                    variant={
+                      decommissionPreview.eligible ? 'default' : 'secondary'
+                    }
+                  >
+                    {decommissionPreview.badge}
+                  </Badge>
+                  <Badge variant='outline'>{decommissionPreview.mode}</Badge>
+                </div>
+                <div className='grid gap-3 lg:grid-cols-4'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Recovery plan
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {decommissionPreview.recoveryPlanRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Tombstone
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {decommissionPreview.tombstoneRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Retention
+                    </div>
+                    <div className='mt-1'>
+                      {decommissionPreview.retentionStatus}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Apply gate
+                    </div>
+                    <div className='mt-1'>{decommissionPreview.applyGate}</div>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Dependent services
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {decommissionPreview.dependentServiceRefs.map((ref) => (
+                        <li key={ref}>{ref}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Safe metadata proof
+                    </div>
+                    <div className='mt-2'>{decommissionPreview.auditTrail}</div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {decommissionPreview.safeMetadataRows.map((row) => (
+                        <li key={row}>{row}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                {decommissionPreview.blockers.length > 0 ? (
+                  <div className='mt-3 flex flex-wrap gap-1'>
+                    {decommissionPreview.blockers.map((blocker) => (
+                      <Badge key={blocker} variant='outline'>
+                        {blocker}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className='flex flex-wrap gap-2'>
               <Button type='button' disabled>
                 Apply disabled until dry-run preview is accepted

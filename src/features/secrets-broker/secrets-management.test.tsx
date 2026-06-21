@@ -7,6 +7,7 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionReadiness,
+  buildSingleSecretDecommissionPreview,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
@@ -15,6 +16,7 @@ import {
   managedSecretBulkApplyResultHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
+  managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretSingleHistoryHasSecretMaterial,
@@ -629,6 +631,22 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/recovery guidance/i)[0]).toBeVisible()
     expect(screen.getByText(/dependent service references/i)).toBeVisible()
     expect(screen.getByText(/recoveryPlanRef/i)).toBeVisible()
+    expect(
+      screen.getByText(/Delete\/decommission safety preview/i)
+    ).toBeVisible()
+    expect(screen.getByText(/decommission preview ready/i)).toBeVisible()
+    expect(
+      screen.getByText(/recovery-delete-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /tombstone-delete-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/@serviceadmin runtime session loader/i)
+    ).toBeVisible()
+    expect(screen.getByText(/current secret value is not read/i)).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Apply policy preview/i })[0]
@@ -982,6 +1000,50 @@ describe('Secrets Broker secrets management page', () => {
       true,
       'ready'
     )
+    const decommissionPreview = buildSingleSecretDecommissionPreview(
+      managedSecretRows[0],
+      deletePlan
+    )
+    expect(decommissionPreview).toMatchObject({
+      mode: 'decommission',
+      eligible: true,
+      badge: 'decommission preview ready',
+      recoveryPlanRef: 'recovery-delete-serviceadmin-session-signing-metadata',
+      tombstoneRef: 'tombstone-delete-serviceadmin-session-signing-metadata',
+      applyGate:
+        'ready for broker-owned delete/decommission submit after final revalidation',
+    })
+    expect(decommissionPreview.dependentServiceRefs).toEqual(
+      expect.arrayContaining(['@serviceadmin runtime session loader'])
+    )
+    expect(decommissionPreview.safeMetadataRows).toEqual(
+      expect.arrayContaining([
+        'current secret value is not read before delete/decommission preview',
+        'recovery plan reference is metadata-only and does not embed secret material',
+      ])
+    )
+    expect(
+      managedSecretDecommissionPreviewHasSecretMaterial(decommissionPreview)
+    ).toBe(false)
+
+    const blockedDecommissionPreview = buildSingleSecretDecommissionPreview(
+      managedSecretRows[3],
+      missingDeletePlan
+    )
+    expect(blockedDecommissionPreview).toMatchObject({
+      eligible: false,
+      badge: 'disable preview blocked',
+      applyGate: 'ref unavailable',
+    })
+    expect(blockedDecommissionPreview.blockers).toEqual(
+      expect.arrayContaining(['ref unavailable', 'delete dry-run unsupported'])
+    )
+    expect(
+      managedSecretDecommissionPreviewHasSecretMaterial(
+        blockedDecommissionPreview
+      )
+    ).toBe(false)
+
     const deleteResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
       deletePlan
