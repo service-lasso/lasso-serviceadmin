@@ -353,6 +353,19 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/rotation can be requested without controlled reveal/i)
     ).toBeVisible()
     await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    await expect(page.getByText(/Broker status monitor/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /GET \/v1\/management\/secret-operations\/\{operationId\}/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/poll every 5 seconds until broker terminal metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/pending broker terminal status/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/Fresh preview first/i)).toBeVisible()
     await expect(
       page.getByText(/idem-reset-serviceadmin-session-signing-metadata-submit/i)
     ).toBeVisible()
@@ -360,7 +373,7 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/corr-reset-serviceadmin-session-signing-metadata-submit/i)
     ).toBeVisible()
     await expect(page.getByText(/rotationReason/i).first()).toBeVisible()
-    await expect(page.getByText(/providerCredentials/i)).toBeVisible()
+    await expect(page.getByText(/providerCredentials/i).first()).toBeVisible()
     await expect(
       page.getByText(/allowlisted from the dry-run plan fields only/i)
     ).toBeVisible()
@@ -401,6 +414,10 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/broker applied/i).first()).toBeVisible()
     await expect(
       page.getByText(/operation settled with broker success metadata/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/terminal success/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/polling stopped after terminal metadata/i)
     ).toBeVisible()
     await expect(
       page.getByText(/no retry needed after broker success/i).first()
