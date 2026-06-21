@@ -389,7 +389,25 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.getByRole('menuitem', { name: /Remove provider/i })
     ).toBeVisible()
-    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('menuitem', { name: /Test connection/i }))
+    expect(screen.getByLabelText(/Provider action detail/i)).toBeVisible()
+    expect(screen.getByText(/Provider connection test/i)).toBeVisible()
+    expect(
+      screen.getByText(/latest metadata test failed closed/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/refs, namespaces, state, and audit metadata only/i)
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /^Actions$/i }))
+    await user.click(screen.getByRole('menuitem', { name: /Reconnect/i }))
+    expect(screen.getByText(/Provider reconnect workflow/i)).toBeVisible()
+    expect(
+      screen.getByText(/reconnect required before provider-backed actions/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/raw provider credentials are never entered here/i)
+    ).toBeVisible()
     expect(screen.getAllByText(/reconnect_required/i)[0]).toBeVisible()
     expect(screen.getAllByText(/locked/i)[0]).toBeVisible()
     expect(screen.getAllByText(/unlock_or_unseal_source/i)[0]).toBeVisible()
@@ -402,6 +420,24 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.queryByText(/Insecure path override/i)
     ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Add provider$/i }))
+    expect(
+      screen.getByRole('dialog', { name: /^Add provider$/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Choose a provider setup path/i)).toBeVisible()
+    expect(screen.getByText(/Environment provider/i)).toBeVisible()
+    expect(screen.getByText(/AWS Secrets Manager CLI/i)).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: /Environment provider/i })
+    )
+    expect(screen.queryByRole('dialog', { name: /^Add provider$/i })).toBeNull()
+    expect(screen.getByText(/Add provider metadata setup/i)).toBeVisible()
+    expect(screen.getByText(/setup preview ready/i)).toBeVisible()
+    expect(
+      screen.getByText(/provider credentials stay outside Service Admin/i)
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: /^Clear$/i }))
 
     await user.type(screen.getByPlaceholderText(/Search providers/i), 'aws')
     expect(screen.getByText(/No enabled providers match/i)).toBeVisible()
