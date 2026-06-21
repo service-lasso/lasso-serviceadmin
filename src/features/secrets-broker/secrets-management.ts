@@ -115,6 +115,22 @@ export type SingleSecretOperationResult = {
   nextAction: string
 }
 
+export type SingleSecretStatusMonitor = {
+  operationId: string
+  statusEndpoint: string
+  pollCadence: string
+  terminalState: string
+  stateBadge: string
+  retryAllowed: boolean
+  retryToken: string
+  stalePlanGuard: string
+  allowedStatusFields: string[]
+  omittedStatusFields: string[]
+  statusRows: string[]
+  operatorNextAction: string
+  safeEvidenceRows: string[]
+}
+
 export type SingleSecretDecommissionPreview = {
   ref: string
   operationId: string
@@ -2069,6 +2085,85 @@ export function buildSingleSecretOperationAuditTrail(
   ]
 }
 
+export function buildSingleSecretStatusMonitor(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  result: SingleSecretOperationResult
+): SingleSecretStatusMonitor {
+  const retryAllowed = result.outcome === 'failed' && plan.action !== 'reveal'
+  const terminalState =
+    result.outcome === 'applied'
+      ? 'terminal success'
+      : result.outcome === 'submitted'
+        ? 'pending broker terminal status'
+        : result.outcome === 'policy-denied'
+          ? 'terminal policy denial'
+          : result.outcome === 'auth-required'
+            ? 'paused for broker authentication'
+            : result.outcome === 'stale-plan'
+              ? 'terminal stale-plan rejection'
+              : 'terminal safe failure'
+
+  return {
+    operationId: result.operationId,
+    statusEndpoint: 'GET /v1/management/secret-operations/{operationId}',
+    pollCadence:
+      result.outcome === 'submitted'
+        ? 'poll every 5 seconds until broker terminal metadata arrives'
+        : 'polling stopped after terminal metadata is recorded',
+    terminalState,
+    stateBadge:
+      result.outcome === 'applied'
+        ? 'settled'
+        : result.outcome === 'submitted'
+          ? 'monitoring'
+          : result.outcome === 'failed'
+            ? 'safe failure'
+            : result.outcome,
+    retryAllowed,
+    retryToken: retryAllowed
+      ? `retry-${safeOperationSlug(plan.action, row)}-operation-id-only`
+      : 'fresh broker preview required before retry',
+    stalePlanGuard:
+      result.outcome === 'stale-plan'
+        ? 'existing dry-run token rejected; generate a fresh audited preview'
+        : 'status updates are accepted only when operation id, ref, action, and correlation id match the latest preview',
+    allowedStatusFields: [
+      'operationId',
+      'ref',
+      'action',
+      'outcome',
+      'correlationId',
+      'auditEventId',
+      'retrySafe',
+      'updatedAt',
+    ],
+    omittedStatusFields: [
+      'rawValue',
+      'requestBodyEcho',
+      'responseBodyEcho',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'environmentValues',
+    ],
+    statusRows: [
+      `broker outcome: ${result.outcome}`,
+      `audit event: ${result.auditFeedback.auditEventId}`,
+      `correlation: ${result.auditFeedback.correlationId}`,
+      `dependent status: ${result.auditFeedback.dependentServiceStatus}`,
+    ],
+    operatorNextAction: result.nextAction,
+    safeEvidenceRows: [
+      'status polling is keyed by operation id, not by secret value',
+      'terminal status records typed broker metadata only',
+      'retry guidance never reuses stale previews or blocked policy decisions',
+      'support evidence may include ids, timestamps, and typed outcomes only',
+    ],
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -2102,6 +2197,12 @@ export function managedSecretSingleAuditTrailHasSecretMaterial(
   entries: SingleSecretOperationAuditTrailStep[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretStatusMonitorHasSecretMaterial(
+  monitor: SingleSecretStatusMonitor
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(monitor))
 }
 
 export function managedSecretSubmitEnvelopeHasSecretMaterial(

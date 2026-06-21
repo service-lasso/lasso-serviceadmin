@@ -14,6 +14,7 @@ import {
   buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
+  buildSingleSecretStatusMonitor,
   buildSingleSecretSubmitEnvelope,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
@@ -24,6 +25,7 @@ import {
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
   managedSecretSingleAuditTrailHasSecretMaterial,
+  managedSecretStatusMonitorHasSecretMaterial,
   managedSecretSubmitEnvelopeHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
@@ -1068,6 +1070,47 @@ describe('Secrets Broker secrets management page', () => {
       /omits payloads, tokens, cookies, keys, and raw secret material/i
     )
     expect(managedSecretSingleAuditTrailHasSecretMaterial(auditTrail)).toBe(
+      false
+    )
+    const statusMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      appliedResult
+    )
+    expect(statusMonitor).toMatchObject({
+      operationId: rotatePlan.operationId,
+      statusEndpoint: 'GET /v1/management/secret-operations/{operationId}',
+      terminalState: 'terminal success',
+      stateBadge: 'settled',
+      retryAllowed: false,
+      retryToken: 'fresh broker preview required before retry',
+      operatorNextAction:
+        'monitor dependent service restart notes and rotation freshness',
+    })
+    expect(statusMonitor.allowedStatusFields).toEqual(
+      expect.arrayContaining([
+        'operationId',
+        'ref',
+        'action',
+        'outcome',
+        'correlationId',
+      ])
+    )
+    expect(statusMonitor.omittedStatusFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBodyEcho',
+        'providerCredentials',
+        'environmentValues',
+      ])
+    )
+    expect(statusMonitor.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'status polling is keyed by operation id, not by secret value',
+        'terminal status records typed broker metadata only',
+      ])
+    )
+    expect(managedSecretStatusMonitorHasSecretMaterial(statusMonitor)).toBe(
       false
     )
 

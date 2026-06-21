@@ -69,6 +69,7 @@ import {
   buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
+  buildSingleSecretStatusMonitor,
   buildSingleSecretSubmitEnvelope,
   buildStubSecretMutationPreview,
   bulkSecretCampaignApplyModes,
@@ -248,6 +249,13 @@ export function SecretsManagementPage() {
         singleApplyResult.outcome
       )
     : []
+  const singleStatusMonitor = singleApplyResult
+    ? buildSingleSecretStatusMonitor(
+        selectedRow,
+        singleOperationPlan,
+        singleApplyResult
+      )
+    : null
 
   const resetBulkApplyGate = useCallback(() => {
     setBulkRevalidated(false)
@@ -2214,6 +2222,125 @@ export function SecretsManagementPage() {
                     <li key={row}>{row}</li>
                   ))}
                 </ul>
+                {singleStatusMonitor ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <div className='font-medium'>Broker status monitor</div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge variant='outline'>
+                        {singleStatusMonitor.stateBadge}
+                      </Badge>
+                      <Badge
+                        variant={
+                          singleStatusMonitor.retryAllowed
+                            ? 'default'
+                            : 'outline'
+                        }
+                      >
+                        {singleStatusMonitor.retryAllowed
+                          ? 'Retry safe'
+                          : 'Fresh preview first'}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 lg:grid-cols-4'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Status endpoint
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleStatusMonitor.statusEndpoint}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Polling
+                        </div>
+                        <div className='mt-1'>
+                          {singleStatusMonitor.pollCadence}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Terminal state
+                        </div>
+                        <div className='mt-1'>
+                          {singleStatusMonitor.terminalState}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Retry token
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleStatusMonitor.retryToken}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Stale-plan guard
+                      </div>
+                      <div className='mt-2'>
+                        {singleStatusMonitor.stalePlanGuard}
+                      </div>
+                      <div className='mt-2 text-muted-foreground'>
+                        {singleStatusMonitor.operatorNextAction}
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed status fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleStatusMonitor.allowedStatusFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted unsafe status fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleStatusMonitor.omittedStatusFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Status rows
+                        </div>
+                        <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {singleStatusMonitor.statusRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe status evidence
+                        </div>
+                        <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {singleStatusMonitor.safeEvidenceRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className='mt-3 rounded-md border bg-muted/30 p-3'>
                   <div className='text-xs font-medium text-muted-foreground uppercase'>
                     Operation audit timeline
