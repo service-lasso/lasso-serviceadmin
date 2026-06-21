@@ -6,6 +6,7 @@ import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
+  buildManagedSecretActionReadiness,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
@@ -13,6 +14,7 @@ import {
   filterManagedSecrets,
   managedSecretBulkApplyResultHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
+  managedSecretActionReadinessHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretSingleHistoryHasSecretMaterial,
@@ -59,6 +61,11 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/Stub API · preview only/i)[0]).toBeVisible()
     expect(screen.getByText(/Single-secret operation history/i)).toBeVisible()
     expect(screen.getByText(/0 submitted/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/Readiness: 5 ready \/ 0 blocked/i)[0]
+    ).toBeVisible()
+    expect(screen.getAllByText(/Reveal: preview ready/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/Delete: preview ready/i)[0]).toBeVisible()
     expect(screen.getAllByText(/SESSION_SIGNING_KEY/i)[0]).toBeVisible()
     expect(screen.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
     expect(screen.getAllByText(/Controlled reveal/i)[0]).toBeVisible()
@@ -109,6 +116,7 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(screen.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
     expect(screen.getByText(/Metadata matches: 1/i)).toBeVisible()
+    expect(screen.getByText(/Readiness: 0 ready \/ 5 blocked/i)).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
@@ -598,6 +606,16 @@ describe('Secrets Broker secrets management page', () => {
         name: /Apply disabled until dry-run preview is accepted/i,
       })
     ).toBeDisabled()
+
+    await user.type(
+      screen.getByPlaceholderText(/Search secret metadata/i),
+      'payments'
+    )
+    await user.click(screen.getByRole('button', { name: /Delete dry-run/i }))
+    expect(screen.getByText(/Selected action readiness/i)).toBeVisible()
+    expect(screen.getAllByText(/blocked fail closed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/ref unavailable/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/delete dry-run unsupported/i)[0]).toBeVisible()
   })
 
   it('covers stub update reset delete reveal preview states and gated apply readiness', async () => {
@@ -749,6 +767,27 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
       false
     )
+
+    const actionReadiness = buildManagedSecretActionReadiness(
+      managedSecretRows[0]
+    )
+    expect(actionReadiness).toHaveLength(5)
+    expect(actionReadiness.every((item) => item.canPreview)).toBe(true)
+    expect(managedSecretActionReadinessHasSecretMaterial(actionReadiness)).toBe(
+      false
+    )
+
+    const missingActionReadiness = buildManagedSecretActionReadiness(
+      managedSecretRows[3]
+    )
+    expect(missingActionReadiness.every((item) => !item.canPreview)).toBe(true)
+    expect(missingActionReadiness[0].blockers).toContain('ref unavailable')
+    expect(missingActionReadiness[3].blockers).toContain(
+      'delete dry-run unsupported'
+    )
+    expect(
+      managedSecretActionReadinessHasSecretMaterial(missingActionReadiness)
+    ).toBe(false)
 
     const missingDeletePlan = buildSingleSecretOperationPlan(
       managedSecretRows[3],

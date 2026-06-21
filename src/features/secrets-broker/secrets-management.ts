@@ -40,6 +40,17 @@ export type ManagedSecretActionPreview = {
   requiresConfirmation: boolean
 }
 
+export type ManagedSecretActionReadiness = {
+  action: Exclude<ManagedSecretAction, 'metadata'>
+  label: string
+  status: 'ready' | 'blocked'
+  badge: string
+  blockers: string[]
+  safeChecks: string[]
+  nextStep: string
+  canPreview: boolean
+}
+
 export type SingleSecretOperationPlan = {
   action: ManagedSecretAction
   operationId: string
@@ -1153,6 +1164,80 @@ function capabilityRequirementForAction(action: ManagedSecretAction) {
   }
 }
 
+function managedSecretActionLabel(action: ManagedSecretAction) {
+  switch (action) {
+    case 'reveal':
+      return 'Reveal'
+    case 'edit':
+      return 'Edit'
+    case 'reset':
+      return 'Rotate'
+    case 'delete':
+      return 'Delete'
+    case 'policy':
+      return 'Policy'
+    case 'metadata':
+    default:
+      return 'Metadata'
+  }
+}
+
+export function buildManagedSecretActionReadiness(
+  row: ManagedSecretRow
+): ManagedSecretActionReadiness[] {
+  const actions: Array<Exclude<ManagedSecretAction, 'metadata'>> = [
+    'reveal',
+    'edit',
+    'reset',
+    'delete',
+    'policy',
+  ]
+
+  return actions.map((action) => {
+    const requirement = capabilityRequirementForAction(action)
+    const blockers: string[] = []
+
+    if (row.state === 'missing') {
+      blockers.push('ref unavailable')
+    }
+    if (!row.backendCapability.includes(requirement)) {
+      blockers.push(`${requirement} unsupported`)
+    }
+    if (
+      action !== 'reveal' &&
+      row.policy.includes('readonly') &&
+      !blockers.includes('readonly policy review required')
+    ) {
+      blockers.push('readonly policy review required')
+    }
+    if (
+      row.auditStatus.includes('required before reveal') &&
+      action === 'reveal'
+    ) {
+      blockers.push('fresh audit reason required')
+    }
+
+    const canPreview = blockers.length === 0
+
+    return {
+      action,
+      label: managedSecretActionLabel(action),
+      status: canPreview ? 'ready' : 'blocked',
+      badge: canPreview ? 'preview ready' : 'blocked fail closed',
+      blockers,
+      safeChecks: [
+        `${requirement} capability evaluated from broker metadata`,
+        'policy and audit posture shown before dry-run',
+        'raw value remains hidden from table, route, storage, and diagnostics',
+      ],
+      nextStep: canPreview
+        ? `Open ${managedSecretActionLabel(action).toLowerCase()} dry-run preview with audit reason and confirmation.`
+        : `Resolve ${blockers[0]} before this action can preview.`,
+      canPreview,
+    }
+  })
+}
+
 function endpointForSingleSecretAction(action: ManagedSecretAction) {
   switch (action) {
     case 'reveal':
@@ -1401,4 +1486,10 @@ export function managedSecretSingleHistoryHasSecretMaterial(
   entries: SingleSecretOperationHistoryEntry[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretActionReadinessHasSecretMaterial(
+  readiness: ManagedSecretActionReadiness[]
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(readiness))
 }

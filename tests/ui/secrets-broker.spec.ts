@@ -143,10 +143,16 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Stub preview · values hidden/i)).toBeVisible()
     await expect(page.getByText(/SESSION_SIGNING_KEY/i).first()).toBeVisible()
     await expect(page.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
+    await expect(
+      page.getByText(/Readiness: 5 ready \/ 0 blocked/i).first()
+    ).toBeVisible()
 
     await page.getByPlaceholder(/Search secret metadata/i).fill('payments')
     await expect(page.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
     await expect(page.getByText(/Metadata matches: 1/i)).toBeVisible()
+    await expect(
+      page.getByText(/Readiness: 0 ready \/ 5 blocked/i)
+    ).toBeVisible()
 
     await page.getByLabel(/Broker-backed value search/i).fill('session')
     await expect(page.getByText(/Value search unsupported/i)).toBeVisible()
@@ -200,6 +206,20 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/targetPolicyRef/i)).toBeVisible()
 
+    await page.getByPlaceholder(/Search secret metadata/i).fill('payments')
+    await page.getByRole('button', { name: /Delete dry-run/ }).click()
+    await expect(page.getByText(/Selected action readiness/i)).toBeVisible()
+    await expect(page.getByText(/blocked fail closed/i).first()).toBeVisible()
+    await expect(page.getByText(/ref unavailable/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/delete dry-run unsupported/i).first()
+    ).toBeVisible()
+
+    await page.getByPlaceholder(/Search secret metadata/i).fill('')
+    await page
+      .getByRole('button', { name: /Reset\/rotate dry-run/i })
+      .first()
+      .click()
     await expect(page.getByText(/Single-secret preview gate/i)).toBeVisible()
     await expect(
       page.getByText(/Single-secret operation history/i)

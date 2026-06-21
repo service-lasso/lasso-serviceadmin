@@ -61,6 +61,7 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionPreview,
+  buildManagedSecretActionReadiness,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
@@ -105,6 +106,17 @@ const providerOptions = Array.from(
 )
   .sort()
   .map((provider) => ({ label: provider, value: provider }))
+
+const actionButtonLabels: Record<
+  Exclude<ManagedSecretAction, 'metadata'>,
+  string
+> = {
+  reveal: 'Controlled reveal',
+  edit: 'Edit/update dry-run',
+  reset: 'Reset/rotate dry-run',
+  delete: 'Delete dry-run',
+  policy: 'Apply policy preview',
+}
 
 export function SecretsManagementPage() {
   const stubModeEnabled = isServiceAdminStubModeEnabled()
@@ -167,6 +179,10 @@ export function SecretsManagementPage() {
     selectedRow,
     selectedAction
   )
+  const selectedActionReadiness = buildManagedSecretActionReadiness(selectedRow)
+  const selectedActionReadinessDetail =
+    selectedActionReadiness.find((item) => item.action === selectedAction) ??
+    null
   const stubMutationPreview = buildStubSecretMutationPreview(
     selectedRow,
     selectedAction === 'metadata' || selectedAction === 'policy'
@@ -375,58 +391,50 @@ export function SecretsManagementPage() {
       {
         id: 'actions',
         header: 'Actions',
-        cell: ({ row }) => (
-          <div className='flex min-w-72 flex-wrap gap-2 align-top'>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => chooseAction(row.original.id, 'metadata')}
-            >
-              View metadata
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => chooseAction(row.original.id, 'reveal')}
-            >
-              Controlled reveal
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => chooseAction(row.original.id, 'edit')}
-            >
-              Edit/update dry-run
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => chooseAction(row.original.id, 'reset')}
-            >
-              Reset/rotate dry-run
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => chooseAction(row.original.id, 'delete')}
-            >
-              Delete dry-run
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => chooseAction(row.original.id, 'policy')}
-            >
-              Apply policy preview
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const readiness = buildManagedSecretActionReadiness(row.original)
+          const readyCount = readiness.filter((item) => item.canPreview).length
+
+          return (
+            <div className='min-w-80 space-y-3 align-top'>
+              <div className='text-xs text-muted-foreground'>
+                Readiness: {readyCount} ready / {readiness.length - readyCount}{' '}
+                blocked
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='outline'
+                  onClick={() => chooseAction(row.original.id, 'metadata')}
+                >
+                  View metadata
+                </Button>
+                {readiness.map((item) => (
+                  <Button
+                    key={item.action}
+                    type='button'
+                    size='sm'
+                    variant={item.canPreview ? 'outline' : 'secondary'}
+                    onClick={() => chooseAction(row.original.id, item.action)}
+                  >
+                    {actionButtonLabels[item.action]}
+                  </Button>
+                ))}
+              </div>
+              <div className='flex flex-wrap gap-1'>
+                {readiness.map((item) => (
+                  <Badge
+                    key={`${item.action}-${item.status}`}
+                    variant={item.canPreview ? 'outline' : 'secondary'}
+                  >
+                    {item.label}: {item.badge}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )
+        },
         enableSorting: false,
       },
     ],
@@ -1364,6 +1372,56 @@ export function SecretsManagementPage() {
               </div>
               <div>{actionPreview.nextStep}</div>
             </div>
+            {selectedActionReadinessDetail ? (
+              <div className='grid gap-3 rounded-md border p-3 md:grid-cols-3'>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Selected action readiness
+                  </div>
+                  <Badge
+                    className='mt-1'
+                    variant={
+                      selectedActionReadinessDetail.canPreview
+                        ? 'default'
+                        : 'secondary'
+                    }
+                  >
+                    {selectedActionReadinessDetail.badge}
+                  </Badge>
+                  <div className='mt-2 text-muted-foreground'>
+                    {selectedActionReadinessDetail.nextStep}
+                  </div>
+                </div>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Readiness blockers
+                  </div>
+                  {selectedActionReadinessDetail.blockers.length > 0 ? (
+                    <div className='mt-2 flex flex-wrap gap-1'>
+                      {selectedActionReadinessDetail.blockers.map((blocker) => (
+                        <Badge key={blocker} variant='outline'>
+                          {blocker}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className='mt-2 text-muted-foreground'>
+                      No row-level blockers before the dry-run gate.
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Safe readiness checks
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {selectedActionReadinessDetail.safeChecks.map((check) => (
+                      <li key={check}>{check}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
             <div className='grid gap-3 rounded-md border p-3 md:grid-cols-3'>
               <div>
                 <div className='text-xs font-medium text-muted-foreground uppercase'>
