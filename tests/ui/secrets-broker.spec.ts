@@ -423,6 +423,31 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/no retry needed after broker success/i).first()
     ).toBeVisible()
     await expect(page.getByText(/2 submitted/i)).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('auth-required')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: auth-required/i)
+    ).toBeVisible()
+    await expect(page.getByText(/auth required/i).first()).toBeVisible()
+    await expect(
+      page.getByText(
+        /requires fresh operator authentication before source access/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/provider reauthentication must complete/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/broker-owned provider reauthentication required/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/provider reauthentication happens outside Service Admin/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/paused for broker reauthentication/i)
+    ).toBeVisible()
+    await expect(page.getByText(/3 submitted/i)).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('audit-unavailable')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -443,7 +468,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/restore audit sink availability/i).first()
     ).toBeVisible()
-    await expect(page.getByText(/3 submitted/i)).toBeVisible()
+    await expect(page.getByText(/4 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])

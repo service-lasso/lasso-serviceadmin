@@ -1003,6 +1003,55 @@ describe('Secrets Broker secrets management page', () => {
         'update policy assignment or request least-privilege approval',
     })
 
+    const authRequiredResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'auth-required'
+    )
+    expect(authRequiredResult).toMatchObject({
+      outcome: 'auth-required',
+      applied: false,
+      resultBadge: 'auth required',
+      recoveryStatus:
+        'provider reauthentication must complete in the broker-owned auth flow',
+      retryPolicy: 'fresh plan required before any retry',
+      nextAction:
+        'complete broker provider reauthentication and create a fresh preview',
+    })
+    expect(authRequiredResult.resultStatus).toMatch(
+      /requires fresh operator authentication before source access/i
+    )
+    expect(authRequiredResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'complete provider reauthentication in the broker-owned auth flow',
+        'discard this dry-run token after auth challenge starts',
+        'create a fresh audited preview after provider session is refreshed',
+      ])
+    )
+    expect(authRequiredResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'provider reauthentication uses broker-owned challenge refs; credentials are never entered in the Service Admin table',
+      ])
+    )
+    expect(authRequiredResult.auditFeedback).toMatchObject({
+      eventState: 'recorded as auth challenge with no source access',
+    })
+    expect(authRequiredResult.auditFeedback.evidenceRows).toEqual(
+      expect.arrayContaining([
+        'provider auth challenge refs contain status metadata only and never provider credentials',
+      ])
+    )
+    expect(
+      managedSecretSingleHistoryHasSecretMaterial([
+        buildSingleSecretOperationHistoryEntry(
+          managedSecretRows[0],
+          rotatePlan,
+          2,
+          'auth-required'
+        ),
+      ])
+    ).toBe(false)
+
     const auditUnavailableResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
       rotatePlan,
@@ -1107,6 +1156,18 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretSingleAuditTrailHasSecretMaterial(auditTrail)).toBe(
       false
     )
+    const authRequiredTrail = buildSingleSecretOperationAuditTrail(
+      managedSecretRows[0],
+      rotatePlan,
+      'auth-required'
+    )
+    expect(authRequiredTrail[2]).toMatchObject({
+      status: 'paused for broker reauthentication',
+      terminal: true,
+    })
+    expect(
+      managedSecretSingleAuditTrailHasSecretMaterial(authRequiredTrail)
+    ).toBe(false)
     const statusMonitor = buildSingleSecretStatusMonitor(
       managedSecretRows[0],
       rotatePlan,
@@ -1148,6 +1209,32 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretStatusMonitorHasSecretMaterial(statusMonitor)).toBe(
       false
     )
+    const authRequiredMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredResult
+    )
+    expect(authRequiredMonitor).toMatchObject({
+      terminalState: 'paused for broker authentication',
+      stateBadge: 'auth challenge',
+      retryAllowed: false,
+      retryToken: 'fresh broker preview required before retry',
+      operatorNextAction:
+        'complete broker provider reauthentication and create a fresh preview',
+    })
+    expect(authRequiredMonitor.statusRows).toEqual(
+      expect.arrayContaining([
+        'auth challenge: broker-owned provider reauthentication required',
+      ])
+    )
+    expect(authRequiredMonitor.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'provider reauthentication happens outside Service Admin and omits provider credentials',
+      ])
+    )
+    expect(
+      managedSecretStatusMonitorHasSecretMaterial(authRequiredMonitor)
+    ).toBe(false)
     const auditUnavailableTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],
       rotatePlan,
