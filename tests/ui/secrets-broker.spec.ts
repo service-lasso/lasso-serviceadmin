@@ -212,7 +212,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/dependent service references and recovery guidance/i)
     ).toBeVisible()
-    await expect(page.getByText(/recoveryPlanRef/i)).toBeVisible()
+    await expect(page.getByText(/recoveryPlanRef/i).first()).toBeVisible()
     await expect(
       page.getByText(/Delete\/decommission safety preview/i)
     ).toBeVisible()
@@ -238,7 +238,7 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/target policy assignment diff checked/i).first()
     ).toBeVisible()
     await expect(
-      page.getByText('targetPolicyRef', { exact: true })
+      page.getByText('targetPolicyRef', { exact: true }).first()
     ).toBeVisible()
     await expect(
       page.getByText(/Policy assignment safety preview/i)
@@ -277,6 +277,14 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Single-secret preview gate/i)).toBeVisible()
     await expect(
       page.getByText(/Single-secret operation history/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    await expect(page.getByText(/No raw payload/i)).toBeVisible()
+    await expect(page.getByText(/Omitted unsafe fields/i)).toBeVisible()
+    await expect(page.getByText(/requestBodyEcho/i)).toBeVisible()
+    await expect(page.getByText(/not copied into query strings/i)).toBeVisible()
+    await expect(
+      page.getByText(/no local storage or session storage/i)
     ).toBeVisible()
     await expect(page.getByText(/0 submitted/i)).toBeVisible()
     await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
@@ -343,6 +351,18 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/raw value was not revealed/i)).toBeVisible()
     await expect(
       page.getByText(/rotation can be requested without controlled reveal/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    await expect(
+      page.getByText(/idem-reset-serviceadmin-session-signing-metadata-submit/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/corr-reset-serviceadmin-session-signing-metadata-submit/i)
+    ).toBeVisible()
+    await expect(page.getByText(/rotationReason/i).first()).toBeVisible()
+    await expect(page.getByText(/providerCredentials/i)).toBeVisible()
+    await expect(
+      page.getByText(/allowlisted from the dry-run plan fields only/i)
     ).toBeVisible()
     await expect(
       page

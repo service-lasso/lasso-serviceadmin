@@ -69,6 +69,7 @@ import {
   buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
+  buildSingleSecretSubmitEnvelope,
   buildStubSecretMutationPreview,
   bulkSecretCampaignApplyModes,
   bulkSecretCampaignOperations,
@@ -206,6 +207,10 @@ export function SecretsManagementPage() {
     auditReason,
     confirmed,
     stubState
+  )
+  const singleSubmitEnvelope = buildSingleSecretSubmitEnvelope(
+    selectedRow,
+    singleOperationPlan
   )
   const revealPreview =
     selectedAction === 'reveal'
@@ -1522,6 +1527,116 @@ export function SecretsManagementPage() {
                     policy, and broker-state checks pass.
                   </div>
                 )}
+              </div>
+            </div>
+            <div className='rounded-md border p-3'>
+              <div className='mb-3 flex flex-wrap items-center gap-2'>
+                <ShieldCheck className='size-4 text-primary' />
+                <div className='font-medium'>Metadata-only submit envelope</div>
+                <Badge
+                  variant={
+                    singleSubmitEnvelope.readyForSubmit
+                      ? 'default'
+                      : 'secondary'
+                  }
+                >
+                  {singleSubmitEnvelope.readyForSubmit
+                    ? 'Ready for broker submit'
+                    : 'Submit blocked'}
+                </Badge>
+                <Badge variant='outline'>No raw payload</Badge>
+              </div>
+              <div className='grid gap-3 lg:grid-cols-4'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Endpoint
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleSubmitEnvelope.endpoint}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Idempotency
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleSubmitEnvelope.idempotencyKey}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Correlation
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleSubmitEnvelope.correlationId}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Gate
+                  </div>
+                  <div className='mt-1'>
+                    {singleSubmitEnvelope.blockedReason}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 lg:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Allowed payload fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleSubmitEnvelope.payloadFields.map((field) => (
+                      <Badge key={field} variant='outline'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Omitted unsafe fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleSubmitEnvelope.omittedFields.map((field) => (
+                      <Badge key={field} variant='secondary'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Transport
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleSubmitEnvelope.transportGuardrails.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Storage
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleSubmitEnvelope.storageGuardrails.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Diagnostics
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleSubmitEnvelope.diagnosticsGuardrails.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
             {revealPreview ? (
