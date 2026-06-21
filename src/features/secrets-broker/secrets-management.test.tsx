@@ -14,6 +14,7 @@ import {
   buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
+  buildSingleSecretSubmitEnvelope,
   buildStubSecretMutationPreview,
   filterManagedSecrets,
   managedSecretBulkApplyResultHasSecretMaterial,
@@ -23,6 +24,7 @@ import {
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
   managedSecretSingleAuditTrailHasSecretMaterial,
+  managedSecretSubmitEnvelopeHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretSingleHistoryHasSecretMaterial,
@@ -84,7 +86,16 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/Broker operation contract/i)).toBeVisible()
     expect(screen.getByText(/single-metadata/i)).toBeVisible()
     expect(
-      screen.getByText(/GET \/v1\/management\/secrets\/\{ref\}\/metadata/i)
+      screen.getAllByText(
+        /GET \/v1\/management\/secrets\/\{ref\}\/metadata/i
+      )[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    expect(screen.getByText(/Submit blocked/i)).toBeVisible()
+    expect(screen.getByText(/No raw payload/i)).toBeVisible()
+    expect(screen.getByText(/Omitted unsafe fields/i)).toBeVisible()
+    expect(
+      screen.getByText(/no local storage or session storage/i)
     ).toBeVisible()
     expect(screen.getAllByText(/Raw values hidden/i)[0]).toBeVisible()
     expect(screen.getByText(/No bulk mutation/i)).toBeVisible()
@@ -581,9 +592,9 @@ describe('Secrets Broker secrets management page', () => {
       screen.getByText(/rotation preview required before apply/i)
     ).toBeVisible()
     expect(
-      screen.getByText(
+      screen.getAllByText(
         /POST \/v1\/management\/secrets\/\{ref\}\/rotate:dry-run/i
-      )
+      )[0]
     ).toBeVisible()
     expect(screen.getByText(/reset dry-run capability checked/i)).toBeVisible()
     await user.type(
@@ -671,7 +682,7 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getAllByText(/recovery guidance/i)[0]).toBeVisible()
     expect(screen.getByText(/dependent service references/i)).toBeVisible()
-    expect(screen.getByText(/recoveryPlanRef/i)).toBeVisible()
+    expect(screen.getAllByText(/recoveryPlanRef/i)[0]).toBeVisible()
     expect(
       screen.getByText(/Delete\/decommission safety preview/i)
     ).toBeVisible()
@@ -701,7 +712,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getAllByText(/target policy assignment diff checked/i)[0]
     ).toBeVisible()
-    expect(screen.getByText('targetPolicyRef', { exact: true })).toBeVisible()
+    expect(
+      screen.getAllByText('targetPolicyRef', { exact: true })[0]
+    ).toBeVisible()
     expect(screen.getByText(/Policy assignment safety preview/i)).toBeVisible()
     expect(screen.getByText(/policy preview ready/i)).toBeVisible()
     expect(
@@ -894,6 +907,54 @@ describe('Secrets Broker secrets management page', () => {
         'rotation can be requested without controlled reveal',
       ])
     )
+    const rotateSubmitEnvelope = buildSingleSecretSubmitEnvelope(
+      managedSecretRows[0],
+      rotatePlan
+    )
+    expect(rotateSubmitEnvelope).toMatchObject({
+      operationId: rotatePlan.operationId,
+      endpoint: 'POST /v1/management/secrets/{ref}/rotate:dry-run',
+      idempotencyKey: 'idem-reset-serviceadmin-session-signing-metadata-submit',
+      correlationId: 'corr-reset-serviceadmin-session-signing-metadata-submit',
+      readyForSubmit: true,
+      blockedReason: 'ready after final broker revalidation',
+    })
+    expect(rotateSubmitEnvelope.payloadFields).toEqual(
+      expect.arrayContaining([
+        'ref',
+        'operationId',
+        'auditReasonMetadata',
+        'rotationReason',
+      ])
+    )
+    expect(rotateSubmitEnvelope.omittedFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'providerCredentials',
+        'providerTokens',
+        'environmentValues',
+        'requestBodyEcho',
+      ])
+    )
+    expect(rotateSubmitEnvelope.transportGuardrails).toEqual(
+      expect.arrayContaining([
+        'ref stays in the broker route template and is not copied into query strings',
+      ])
+    )
+    expect(rotateSubmitEnvelope.storageGuardrails).toEqual(
+      expect.arrayContaining([
+        'no local storage or session storage writes are required for submit',
+      ])
+    )
+    expect(rotateSubmitEnvelope.diagnosticsGuardrails).toEqual(
+      expect.arrayContaining([
+        'failure evidence records typed status and correlation id only',
+      ])
+    )
+    expect(
+      managedSecretSubmitEnvelopeHasSecretMaterial(rotateSubmitEnvelope)
+    ).toBe(false)
+
     const appliedResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
       rotatePlan,
@@ -1108,6 +1169,20 @@ describe('Secrets Broker secrets management page', () => {
         'dependent service references and recovery guidance checked',
       ])
     )
+    const blockedDeleteSubmitEnvelope = buildSingleSecretSubmitEnvelope(
+      managedSecretRows[3],
+      missingDeletePlan
+    )
+    expect(blockedDeleteSubmitEnvelope).toMatchObject({
+      readyForSubmit: false,
+      blockedReason: 'ref unavailable',
+    })
+    expect(blockedDeleteSubmitEnvelope.payloadFields).toEqual(
+      expect.arrayContaining(['recoveryPlanRef', 'dependentServiceRefs'])
+    )
+    expect(
+      managedSecretSubmitEnvelopeHasSecretMaterial(blockedDeleteSubmitEnvelope)
+    ).toBe(false)
 
     const singlePolicyPlan = buildSingleSecretOperationPlan(
       managedSecretRows[0],

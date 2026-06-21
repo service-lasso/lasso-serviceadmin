@@ -66,6 +66,20 @@ export type SingleSecretOperationPlan = {
   canSubmit: boolean
 }
 
+export type SingleSecretSubmitEnvelope = {
+  operationId: string
+  endpoint: string
+  idempotencyKey: string
+  correlationId: string
+  payloadFields: string[]
+  omittedFields: string[]
+  transportGuardrails: string[]
+  storageGuardrails: string[]
+  diagnosticsGuardrails: string[]
+  readyForSubmit: boolean
+  blockedReason: string
+}
+
 export type SingleSecretOperationOutcome =
   | 'submitted'
   | 'applied'
@@ -1507,6 +1521,50 @@ export function buildSingleSecretOperationPlan(
   }
 }
 
+export function buildSingleSecretSubmitEnvelope(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretSubmitEnvelope {
+  const slug = safeOperationSlug(plan.action, row)
+
+  return {
+    operationId: plan.operationId,
+    endpoint: plan.endpoint,
+    idempotencyKey: `idem-${slug}-metadata-submit`,
+    correlationId: `corr-${slug}-metadata-submit`,
+    payloadFields: plan.safePayloadFields,
+    omittedFields: [
+      'rawValue',
+      'clearValueBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'environmentValues',
+      'requestBodyEcho',
+    ],
+    transportGuardrails: [
+      'ref stays in the broker route template and is not copied into query strings',
+      'operation id and correlation id are metadata-only and retry scoped',
+      'submit body is allowlisted from the dry-run plan fields only',
+    ],
+    storageGuardrails: [
+      'no local storage or session storage writes are required for submit',
+      'audit reason is retained as broker audit metadata only',
+      'recovery, rollback, and tombstone refs never embed secret values',
+    ],
+    diagnosticsGuardrails: [
+      'console events use action and operation id only',
+      'screenshots and support bundles may include metadata ids but not payload values',
+      'failure evidence records typed status and correlation id only',
+    ],
+    readyForSubmit: plan.canSubmit,
+    blockedReason: plan.canSubmit
+      ? 'ready after final broker revalidation'
+      : (plan.blockers[0] ?? plan.applyGate),
+  }
+}
+
 function revealConsumerRefsForRow(row: ManagedSecretRow) {
   if (row.owningService === '@serviceadmin') {
     return ['@serviceadmin operator session', '@secretsbroker audit writer']
@@ -2044,6 +2102,12 @@ export function managedSecretSingleAuditTrailHasSecretMaterial(
   entries: SingleSecretOperationAuditTrailStep[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretSubmitEnvelopeHasSecretMaterial(
+  envelope: SingleSecretSubmitEnvelope
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(envelope))
 }
 
 export function managedSecretDecommissionPreviewHasSecretMaterial(
