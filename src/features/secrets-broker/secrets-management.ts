@@ -162,6 +162,17 @@ export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
   submittedAt: string
 }
 
+export type SingleSecretOperationAuditTrailStep = {
+  id: string
+  label: string
+  status: string
+  actorRef: string
+  evidence: string
+  redaction: string
+  occurredAt: string
+  terminal: boolean
+}
+
 export type StubSecretMutationState =
   | 'ready'
   | 'denied'
@@ -465,6 +476,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:stub-mutation-preview',
     'secrets-management:stub-mutation-apply-status',
     'secrets-management:single-secret-operation-history',
+    'secrets-management:single-secret-operation-audit-trail',
     'secrets-management:single-secret-decommission-preview',
     'secrets-management:single-secret-policy-preview',
     'secrets-management:stub-delete-preview',
@@ -1926,6 +1938,79 @@ export function buildSingleSecretOperationHistoryEntry(
   }
 }
 
+export function buildSingleSecretOperationAuditTrail(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  outcome: SingleSecretOperationOutcome = 'submitted'
+): SingleSecretOperationAuditTrailStep[] {
+  const auditEventId = auditEventIdForSingleSecretAction(plan.action, row)
+  const slug = safeOperationSlug(plan.action, row)
+  const terminalStatus =
+    outcome === 'applied'
+      ? 'terminal success'
+      : outcome === 'submitted'
+        ? 'pending broker terminal status'
+        : outcome === 'policy-denied'
+          ? 'terminal policy denial'
+          : outcome === 'auth-required'
+            ? 'paused for broker auth'
+            : outcome === 'stale-plan'
+              ? 'terminal stale-plan rejection'
+              : 'terminal safe failure'
+
+  return [
+    {
+      id: `${auditEventId}:preview`,
+      label: 'Dry-run preview recorded',
+      status: plan.dryRunStatus,
+      actorRef: 'serviceadmin-ui',
+      evidence: `${plan.operationId} created for ${row.name}`,
+      redaction:
+        'preview evidence stores ref, action, policy, provider, owner, and audit metadata only',
+      occurredAt: 'stub-step-1',
+      terminal: false,
+    },
+    {
+      id: `${auditEventId}:gate`,
+      label: 'Apply gate evaluated',
+      status: plan.applyGate,
+      actorRef: 'secretsbroker-policy',
+      evidence:
+        plan.blockers.length > 0
+          ? `blocked by ${plan.blockers.join(', ')}`
+          : 'confirmation, capability, policy, and audit metadata accepted',
+      redaction:
+        'gate evidence excludes raw values, request bodies, credentials, and environment values',
+      occurredAt: 'stub-step-2',
+      terminal: false,
+    },
+    {
+      id: `${auditEventId}:broker-status`,
+      label: 'Broker status callback',
+      status: terminalStatus,
+      actorRef: '@secretsbroker',
+      evidence: `corr-${slug}-${outcome}`,
+      redaction:
+        'callback evidence stores typed outcome and correlation id only',
+      occurredAt: 'stub-step-3',
+      terminal: outcome !== 'submitted',
+    },
+    {
+      id: `${auditEventId}:audit-sink`,
+      label: 'Audit sink retention',
+      status: row.auditStatus.includes('available')
+        ? 'retained by available audit sink'
+        : 'waiting for audit sink confirmation',
+      actorRef: '@secretsbroker-audit',
+      evidence: auditEventId,
+      redaction:
+        'audit payload uses allowlisted fields and omits payloads, tokens, cookies, keys, and raw secret material',
+      occurredAt: 'stub-step-4',
+      terminal: false,
+    },
+  ]
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -1951,6 +2036,12 @@ export function managedSecretBulkApplyResultHasSecretMaterial(
 
 export function managedSecretSingleHistoryHasSecretMaterial(
   entries: SingleSecretOperationHistoryEntry[]
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretSingleAuditTrailHasSecretMaterial(
+  entries: SingleSecretOperationAuditTrailStep[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
 }

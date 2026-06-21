@@ -63,6 +63,7 @@ import {
   buildManagedSecretActionPreview,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
+  buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
   buildSingleSecretRevealPreview,
@@ -235,6 +236,13 @@ export function SecretsManagementPage() {
     bulkRevalidated,
     bulkPlan.applyAvailable
   )
+  const singleOperationAuditTrail = singleApplyResult
+    ? buildSingleSecretOperationAuditTrail(
+        selectedRow,
+        singleOperationPlan,
+        singleApplyResult.outcome
+      )
+    : []
 
   const resetBulkApplyGate = useCallback(() => {
     setBulkRevalidated(false)
@@ -2091,6 +2099,52 @@ export function SecretsManagementPage() {
                     <li key={row}>{row}</li>
                   ))}
                 </ul>
+                <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Operation audit timeline
+                  </div>
+                  <div className='mt-2 overflow-x-auto rounded-md border bg-background'>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Step</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actor</TableHead>
+                          <TableHead>Evidence</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {singleOperationAuditTrail.map((step) => (
+                          <TableRow key={step.id}>
+                            <TableCell className='min-w-56 align-top'>
+                              <div className='font-medium'>{step.label}</div>
+                              <div className='text-xs text-muted-foreground'>
+                                {step.occurredAt}
+                              </div>
+                            </TableCell>
+                            <TableCell className='min-w-64 align-top'>
+                              <Badge
+                                variant={step.terminal ? 'default' : 'outline'}
+                              >
+                                {step.terminal ? 'Terminal' : 'In progress'}
+                              </Badge>
+                              <div className='mt-2'>{step.status}</div>
+                            </TableCell>
+                            <TableCell className='min-w-44 align-top'>
+                              {step.actorRef}
+                            </TableCell>
+                            <TableCell className='min-w-80 align-top'>
+                              <div className='break-all'>{step.evidence}</div>
+                              <div className='mt-2 text-xs text-muted-foreground'>
+                                {step.redaction}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
               </div>
             ) : null}
 

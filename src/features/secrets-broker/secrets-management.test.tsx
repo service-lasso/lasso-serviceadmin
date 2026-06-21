@@ -8,6 +8,7 @@ import {
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
+  buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
   buildSingleSecretRevealPreview,
@@ -21,6 +22,7 @@ import {
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
+  managedSecretSingleAuditTrailHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretSingleHistoryHasSecretMaterial,
@@ -597,6 +599,16 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/Single-secret operation history/i)).toBeVisible()
     expect(screen.getByText(/1 submitted/i)).toBeVisible()
+    expect(screen.getByText(/Operation audit timeline/i)).toBeVisible()
+    expect(screen.getByText(/Dry-run preview recorded/i)).toBeVisible()
+    expect(screen.getByText(/Apply gate evaluated/i)).toBeVisible()
+    expect(screen.getByText(/Broker status callback/i)).toBeVisible()
+    expect(screen.getByText(/Audit sink retention/i)).toBeVisible()
+    expect(screen.getByText(/serviceadmin-ui/i)).toBeVisible()
+    expect(screen.getAllByText(/@secretsbroker/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/callback evidence stores typed outcome/i)
+    ).toBeVisible()
     expect(screen.getAllByText(/audit-reset-serviceadmin/i)[0]).toBeVisible()
     expect(screen.getAllByText(/submitted to broker/i)[0]).toBeVisible()
     expect(screen.getByText(/raw value was not revealed/i)).toBeVisible()
@@ -605,7 +617,9 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getAllByText(/Audit event/i)[0]).toBeVisible()
     expect(
-      screen.getByText(/audit-reset-serviceadmin-session-signing-preview/i)
+      screen.getAllByText(
+        /audit-reset-serviceadmin-session-signing-preview/i
+      )[0]
     ).toBeVisible()
     expect(
       screen.getAllByText(
@@ -959,6 +973,40 @@ describe('Secrets Broker secrets management page', () => {
       eventState: 'recorded as safe broker failure metadata',
     })
     expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
+      false
+    )
+    const auditTrail = buildSingleSecretOperationAuditTrail(
+      managedSecretRows[0],
+      rotatePlan,
+      'applied'
+    )
+    expect(auditTrail).toHaveLength(4)
+    expect(auditTrail[0]).toMatchObject({
+      label: 'Dry-run preview recorded',
+      actorRef: 'serviceadmin-ui',
+      terminal: false,
+    })
+    expect(auditTrail[1]).toMatchObject({
+      label: 'Apply gate evaluated',
+      actorRef: 'secretsbroker-policy',
+      evidence: 'confirmation, capability, policy, and audit metadata accepted',
+    })
+    expect(auditTrail[2]).toMatchObject({
+      label: 'Broker status callback',
+      actorRef: '@secretsbroker',
+      status: 'terminal success',
+      evidence: 'corr-reset-serviceadmin-session-signing-applied',
+      terminal: true,
+    })
+    expect(auditTrail[3]).toMatchObject({
+      label: 'Audit sink retention',
+      actorRef: '@secretsbroker-audit',
+      evidence: 'audit-reset-serviceadmin-session-signing-preview',
+    })
+    expect(auditTrail.map((step) => step.redaction).join(' ')).toMatch(
+      /omits payloads, tokens, cookies, keys, and raw secret material/i
+    )
+    expect(managedSecretSingleAuditTrailHasSecretMaterial(auditTrail)).toBe(
       false
     )
 
