@@ -197,6 +197,23 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/dependent service references and recovery guidance/i)
     ).toBeVisible()
     await expect(page.getByText(/recoveryPlanRef/i)).toBeVisible()
+    await expect(
+      page.getByText(/Delete\/decommission safety preview/i)
+    ).toBeVisible()
+    await expect(page.getByText(/decommission preview blocked/i)).toBeVisible()
+    await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/recovery-delete-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/tombstone-delete-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/@serviceadmin runtime session loader/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/current secret value is not read/i)
+    ).toBeVisible()
     await page
       .getByRole('button', { name: /Apply policy preview/i })
       .first()
