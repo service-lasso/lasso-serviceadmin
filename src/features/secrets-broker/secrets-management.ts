@@ -300,6 +300,7 @@ export type BulkSecretCampaignApplyMode =
   | 'success'
   | 'partial-failure'
   | 'policy-denied'
+  | 'auth-required'
   | 'audit-unavailable'
   | 'provider-unavailable'
   | 'retryable-failure'
@@ -342,6 +343,7 @@ export type BulkSecretCampaignApplyResult = {
     | 'partial_failure'
     | 'failed'
     | 'policy_denied'
+    | 'auth_required'
     | 'audit_unavailable'
     | 'provider_unavailable'
     | 'stale_plan'
@@ -508,6 +510,7 @@ export const bulkSecretCampaignApplyModes: Array<{
   { id: 'success', label: 'Apply success' },
   { id: 'partial-failure', label: 'Partial failure' },
   { id: 'policy-denied', label: 'Policy denied after submit' },
+  { id: 'auth-required', label: 'Provider auth required after submit' },
   { id: 'audit-unavailable', label: 'Audit unavailable after submit' },
   { id: 'provider-unavailable', label: 'Provider unavailable after submit' },
   { id: 'retryable-failure', label: 'Retryable failure' },
@@ -1081,6 +1084,7 @@ function applyOutcomeForItem(
   const blockerOutcome = itemOutcomeFromBlockers(item)
   if (blockerOutcome) return blockerOutcome
   if (mode === 'policy-denied') return 'denied'
+  if (mode === 'auth-required') return 'auth-required'
   if (mode === 'audit-unavailable') return 'audit-unavailable'
   if (mode === 'provider-unavailable') return 'provider-unavailable'
   if (mode === 'stale-plan') return 'stale-plan'
@@ -1131,6 +1135,9 @@ function recoveryForApplyOutcome(
   if (outcome === 'denied') {
     return 'mutation failed closed because broker policy denied this item after final revalidation'
   }
+  if (outcome === 'auth-required') {
+    return 'mutation failed closed because broker requires provider reauthentication'
+  }
   if (outcome === 'audit-unavailable') {
     return 'mutation failed closed because item audit could not be persisted'
   }
@@ -1168,11 +1175,13 @@ export function buildBulkSecretCampaignApplyResult(
           ? 'campaign and item audit recorded'
           : outcome === 'denied'
             ? 'campaign audit recorded; policy denied and item mutation not applied'
-            : outcome === 'audit-unavailable'
-              ? 'campaign audit unavailable; item mutation not applied'
-              : outcome === 'provider-unavailable'
-                ? 'campaign audit recorded; provider unavailable and item mutation not applied'
-                : 'campaign audit recorded; item mutation not applied',
+            : outcome === 'auth-required'
+              ? 'campaign audit recorded; provider auth required and item mutation not applied'
+              : outcome === 'audit-unavailable'
+                ? 'campaign audit unavailable; item mutation not applied'
+                : outcome === 'provider-unavailable'
+                  ? 'campaign audit recorded; provider unavailable and item mutation not applied'
+                  : 'campaign audit recorded; item mutation not applied',
       recovery: recoveryForApplyOutcome(item, outcome, mode),
       nextAction: nextActionForApplyOutcome(outcome),
     }
@@ -1211,15 +1220,19 @@ export function buildBulkSecretCampaignApplyResult(
       ? 'audit_unavailable'
       : providerUnavailableCount > 0
         ? 'provider_unavailable'
-        : staleCount > 0
-          ? 'stale_plan'
-          : appliedCount === 0 && deniedCount > 0
-            ? 'policy_denied'
-            : appliedCount > 0 && nonAppliedCount === 0
-              ? 'applied'
-              : appliedCount > 0
-                ? 'partial_failure'
-                : 'failed'
+        : mode === 'auth-required' &&
+            authRequiredCount > 0 &&
+            appliedCount === 0
+          ? 'auth_required'
+          : staleCount > 0
+            ? 'stale_plan'
+            : appliedCount === 0 && deniedCount > 0
+              ? 'policy_denied'
+              : appliedCount > 0 && nonAppliedCount === 0
+                ? 'applied'
+                : appliedCount > 0
+                  ? 'partial_failure'
+                  : 'failed'
 
   return {
     campaignId: plan.campaignId,
@@ -1242,9 +1255,11 @@ export function buildBulkSecretCampaignApplyResult(
         ? 'campaign-level audit unavailable; no item mutation applied without audit persistence'
         : providerUnavailableCount > 0
           ? 'campaign-level audit recorded; provider connector unavailable and no item mutation applied'
-          : outcome === 'policy_denied'
-            ? 'campaign-level audit recorded; broker policy denied item mutation and no values were read or written'
-            : 'campaign-level audit summary recorded',
+          : outcome === 'auth_required'
+            ? 'campaign-level audit recorded; provider reauthentication required and no values were read or written'
+            : outcome === 'policy_denied'
+              ? 'campaign-level audit recorded; broker policy denied item mutation and no values were read or written'
+              : 'campaign-level audit summary recorded',
     nextAction:
       outcome === 'applied'
         ? 'monitor campaign status'
@@ -1252,11 +1267,13 @@ export function buildBulkSecretCampaignApplyResult(
           ? 'restore audit sink availability and create a fresh campaign preview'
           : outcome === 'provider_unavailable'
             ? 'restore provider connectivity and create a fresh campaign preview'
-            : outcome === 'stale_plan'
-              ? 'create a fresh plan'
-              : outcome === 'policy_denied'
-                ? 'request least-privilege policy approval and create a fresh campaign preview'
-                : 'review per-item outcomes and retry only by operation id',
+            : outcome === 'auth_required'
+              ? 'complete provider reauthentication and create a fresh campaign preview'
+              : outcome === 'stale_plan'
+                ? 'create a fresh plan'
+                : outcome === 'policy_denied'
+                  ? 'request least-privilege policy approval and create a fresh campaign preview'
+                  : 'review per-item outcomes and retry only by operation id',
     items,
   }
 }

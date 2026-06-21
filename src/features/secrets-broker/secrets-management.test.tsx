@@ -1842,6 +1842,33 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretBulkApplyResultHasSecretMaterial(bulkPolicyDeniedResult)
     ).toBe(false)
 
+    const bulkAuthRequiredResult = buildBulkSecretCampaignApplyResult(
+      cleanPlan,
+      'auth-required'
+    )
+    expect(bulkAuthRequiredResult.outcome).toBe('auth_required')
+    expect(bulkAuthRequiredResult.appliedCount).toBe(0)
+    expect(bulkAuthRequiredResult.authRequiredCount).toBe(1)
+    expect(bulkAuthRequiredResult.auditStatus).toMatch(
+      /provider reauthentication required/i
+    )
+    expect(bulkAuthRequiredResult.nextAction).toMatch(
+      /complete provider reauthentication/i
+    )
+    expect(bulkAuthRequiredResult.items[0]).toMatchObject({
+      outcome: 'auth-required',
+      applied: false,
+      retrySafe: false,
+      auditStatus:
+        'campaign audit recorded; provider auth required and item mutation not applied',
+      recovery:
+        'mutation failed closed because broker requires provider reauthentication',
+      nextAction: 'complete provider auth then create a fresh plan',
+    })
+    expect(
+      managedSecretBulkApplyResultHasSecretMaterial(bulkAuthRequiredResult)
+    ).toBe(false)
+
     const bulkAuditUnavailableResult = buildBulkSecretCampaignApplyResult(
       cleanPlan,
       'audit-unavailable'
