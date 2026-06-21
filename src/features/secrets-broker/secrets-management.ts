@@ -111,6 +111,7 @@ export type SingleSecretOperationResult = {
   resultStatus: string
   recoveryStatus: string
   retryPolicy: string
+  providerAuthChallengeRef: string | null
   recoverySteps: string[]
   auditFeedback: SingleSecretAuditFeedback
   safetyRows: string[]
@@ -2040,6 +2041,10 @@ export function buildSingleSecretOperationResult(
           : plan.action === 'delete' || plan.action === 'policy'
             ? 'fresh plan required before any retry'
             : 'retry only by operation id when broker marks the attempt retry-safe'
+  const providerAuthChallengeRef =
+    outcome === 'auth-required'
+      ? `auth-challenge-${safeOperationSlug(plan.action, row)}-metadata`
+      : null
   const auditFeedback = buildSingleSecretAuditFeedback(
     row,
     plan,
@@ -2058,6 +2063,7 @@ export function buildSingleSecretOperationResult(
     resultStatus,
     recoveryStatus,
     retryPolicy,
+    providerAuthChallengeRef,
     recoverySteps,
     auditFeedback,
     safetyRows: [

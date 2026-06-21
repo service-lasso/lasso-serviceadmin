@@ -459,6 +459,17 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/broker-owned provider reauthentication required/i)
     ).toBeVisible()
     await expect(
+      page.getByText('Provider auth challenge', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /auth-challenge-reset-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Broker-owned challenge metadata only/i)
+    ).toBeVisible()
+    await expect(
       page.getByText(/provider reauthentication happens outside Service Admin/i)
     ).toBeVisible()
     await expect(
