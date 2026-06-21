@@ -299,6 +299,7 @@ export type BulkSecretCampaignApplyGate = {
 export type BulkSecretCampaignApplyMode =
   | 'success'
   | 'partial-failure'
+  | 'audit-unavailable'
   | 'retryable-failure'
   | 'non-retryable-failure'
   | 'stale-plan'
@@ -310,6 +311,7 @@ export type BulkSecretCampaignApplyItemOutcome =
   | 'skipped'
   | 'unsupported'
   | 'auth-required'
+  | 'audit-unavailable'
   | 'stale-plan'
 
 export type BulkSecretCampaignApplyItem = {
@@ -332,13 +334,19 @@ export type BulkSecretCampaignApplyResult = {
   planToken: string
   operation: BulkSecretCampaignOperation
   mode: 'apply'
-  outcome: 'applied' | 'partial_failure' | 'failed' | 'stale_plan'
+  outcome:
+    | 'applied'
+    | 'partial_failure'
+    | 'failed'
+    | 'audit_unavailable'
+    | 'stale_plan'
   appliedCount: number
   failedCount: number
   deniedCount: number
   skippedCount: number
   unsupportedCount: number
   authRequiredCount: number
+  auditUnavailableCount: number
   staleCount: number
   auditStatus: string
   nextAction: string
@@ -493,6 +501,7 @@ export const bulkSecretCampaignApplyModes: Array<{
 }> = [
   { id: 'success', label: 'Apply success' },
   { id: 'partial-failure', label: 'Partial failure' },
+  { id: 'audit-unavailable', label: 'Audit unavailable after submit' },
   { id: 'retryable-failure', label: 'Retryable failure' },
   { id: 'non-retryable-failure', label: 'Non-retryable failure' },
   { id: 'stale-plan', label: 'Stale plan rejected' },
@@ -1063,6 +1072,7 @@ function applyOutcomeForItem(
 ): BulkSecretCampaignApplyItemOutcome {
   const blockerOutcome = itemOutcomeFromBlockers(item)
   if (blockerOutcome) return blockerOutcome
+  if (mode === 'audit-unavailable') return 'audit-unavailable'
   if (mode === 'stale-plan') return 'stale-plan'
   if (mode === 'retryable-failure' || mode === 'non-retryable-failure') {
     return 'failed'
@@ -1085,6 +1095,8 @@ function nextActionForApplyOutcome(
       return 'choose a supported operation family or provider-specific workflow'
     case 'auth-required':
       return 'complete provider auth then create a fresh plan'
+    case 'audit-unavailable':
+      return 'restore audit persistence then create a fresh campaign preview'
     case 'stale-plan':
       return 'create a fresh dry-run plan before applying'
     case 'skipped':
@@ -1103,6 +1115,9 @@ function recoveryForApplyOutcome(
   }
   if (outcome === 'failed') {
     return 'retry with the same idempotency key after fixing the safe error'
+  }
+  if (outcome === 'audit-unavailable') {
+    return 'mutation failed closed because item audit could not be persisted'
   }
   if (outcome === 'applied') return item.recovery
   return 'create a fresh plan after resolving the typed blocker'
@@ -1133,7 +1148,9 @@ export function buildBulkSecretCampaignApplyResult(
       auditStatus:
         outcome === 'applied'
           ? 'campaign and item audit recorded'
-          : 'campaign audit recorded; item mutation not applied',
+          : outcome === 'audit-unavailable'
+            ? 'campaign audit unavailable; item mutation not applied'
+            : 'campaign audit recorded; item mutation not applied',
       recovery: recoveryForApplyOutcome(item, outcome, mode),
       nextAction: nextActionForApplyOutcome(outcome),
     }
@@ -1151,6 +1168,9 @@ export function buildBulkSecretCampaignApplyResult(
   const authRequiredCount = items.filter(
     (item) => item.outcome === 'auth-required'
   ).length
+  const auditUnavailableCount = items.filter(
+    (item) => item.outcome === 'audit-unavailable'
+  ).length
   const skippedCount = items.filter((item) => item.outcome === 'skipped').length
   const nonAppliedCount =
     failedCount +
@@ -1158,15 +1178,18 @@ export function buildBulkSecretCampaignApplyResult(
     deniedCount +
     unsupportedCount +
     authRequiredCount +
+    auditUnavailableCount +
     skippedCount
   const outcome =
-    staleCount > 0
-      ? 'stale_plan'
-      : appliedCount > 0 && nonAppliedCount === 0
-        ? 'applied'
-        : appliedCount > 0
-          ? 'partial_failure'
-          : 'failed'
+    auditUnavailableCount > 0
+      ? 'audit_unavailable'
+      : staleCount > 0
+        ? 'stale_plan'
+        : appliedCount > 0 && nonAppliedCount === 0
+          ? 'applied'
+          : appliedCount > 0
+            ? 'partial_failure'
+            : 'failed'
 
   return {
     campaignId: plan.campaignId,
@@ -1181,14 +1204,20 @@ export function buildBulkSecretCampaignApplyResult(
     skippedCount,
     unsupportedCount,
     authRequiredCount,
+    auditUnavailableCount,
     staleCount,
-    auditStatus: 'campaign-level audit summary recorded',
+    auditStatus:
+      auditUnavailableCount > 0
+        ? 'campaign-level audit unavailable; no item mutation applied without audit persistence'
+        : 'campaign-level audit summary recorded',
     nextAction:
       outcome === 'applied'
         ? 'monitor campaign status'
-        : outcome === 'stale_plan'
-          ? 'create a fresh plan'
-          : 'review per-item outcomes and retry only by operation id',
+        : outcome === 'audit_unavailable'
+          ? 'restore audit sink availability and create a fresh campaign preview'
+          : outcome === 'stale_plan'
+            ? 'create a fresh plan'
+            : 'review per-item outcomes and retry only by operation id',
     items,
   }
 }

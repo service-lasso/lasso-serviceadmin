@@ -1817,6 +1817,29 @@ describe('Secrets Broker secrets management page', () => {
       false
     )
 
+    const bulkAuditUnavailableResult = buildBulkSecretCampaignApplyResult(
+      cleanPlan,
+      'audit-unavailable'
+    )
+    expect(bulkAuditUnavailableResult.outcome).toBe('audit_unavailable')
+    expect(bulkAuditUnavailableResult.appliedCount).toBe(0)
+    expect(bulkAuditUnavailableResult.auditUnavailableCount).toBe(1)
+    expect(bulkAuditUnavailableResult.auditStatus).toMatch(/audit unavailable/i)
+    expect(bulkAuditUnavailableResult.nextAction).toMatch(/restore audit sink/i)
+    expect(bulkAuditUnavailableResult.items[0]).toMatchObject({
+      outcome: 'audit-unavailable',
+      applied: false,
+      retrySafe: false,
+      auditStatus: 'campaign audit unavailable; item mutation not applied',
+      recovery:
+        'mutation failed closed because item audit could not be persisted',
+      nextAction:
+        'restore audit persistence then create a fresh campaign preview',
+    })
+    expect(
+      managedSecretBulkApplyResultHasSecretMaterial(bulkAuditUnavailableResult)
+    ).toBe(false)
+
     const policyPlan = buildBulkSecretCampaignPlan(
       managedSecretRows,
       managedSecretRows.map((row) => row.id),

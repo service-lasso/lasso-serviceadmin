@@ -520,6 +520,53 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
+  test('shows bulk campaign audit-unavailable apply outcomes without secret material', async ({
+    page,
+  }) => {
+    await page.goto('/secrets-broker/secrets')
+    await expectNoBlankScreen(page)
+
+    await expect(page.getByText(/Bulk campaign dry-run planner/i)).toBeVisible()
+    await page
+      .getByRole('button', { name: /Generate bulk dry-run plan/i })
+      .click()
+    await expect(
+      page.getByText(/Campaign confirmation and revalidation/i)
+    ).toBeVisible()
+    await page
+      .getByLabel(/Campaign audit reason/i)
+      .fill('operator requested bulk audit outage coverage')
+    await page
+      .getByLabel(/Explicit confirmation/i)
+      .fill('CONFIRM HIGH RISK CAMPAIGN')
+    await page.getByRole('button', { name: /Revalidate dry-run/i }).click()
+    await expect(page.getByText(/revalidation passed/i).first()).toBeVisible()
+
+    await page
+      .getByLabel(/Apply result mode/i)
+      .selectOption('audit-unavailable')
+    await expect(
+      page.getByRole('button', { name: /Apply bulk campaign/i })
+    ).toBeEnabled()
+    await page.getByRole('button', { name: /Apply bulk campaign/i }).click()
+
+    await expect(
+      page.getByText(/Campaign apply result: audit_unavailable/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Audit 1/i)).toBeVisible()
+    await expect(
+      page.getByText(/campaign-level audit unavailable/i)
+    ).toBeVisible()
+    await expect(page.getByText(/audit-unavailable/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/campaign audit unavailable; item mutation not applied/i)
+    ).toBeVisible()
+    await expect(page.getByText(/restore audit persistence/i)).toBeVisible()
+    await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
   test('covers healthy degraded offline and unconfigured broker states', async ({
     page,
   }) => {
