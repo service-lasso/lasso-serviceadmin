@@ -469,6 +469,28 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/restore audit sink availability/i).first()
     ).toBeVisible()
     await expect(page.getByText(/4 submitted/i)).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('provider-unavailable')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: provider-unavailable/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/provider connector is unavailable or unsupported/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/provider outage is fail-closed/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/provider status: connector unavailable or unsupported/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/terminal provider unavailable/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/provider recovery happens in broker/i)
+    ).toBeVisible()
+    await expect(page.getByText(/5 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])

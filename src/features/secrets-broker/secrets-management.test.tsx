@@ -824,6 +824,27 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/policy denied/i)[0]).toBeVisible()
     expect(screen.getByText(/no value was read or written/i)).toBeVisible()
 
+    await user.selectOptions(
+      screen.getByLabelText(/Result status/i),
+      'provider-unavailable'
+    )
+    await user.selectOptions(screen.getByLabelText(/Stub API state/i), 'ready')
+    await user.click(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    )
+    expect(
+      screen.getByText(/Single-secret operation result: provider-unavailable/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/provider unavailable/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/provider connector is unavailable or unsupported/i)
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/terminal provider unavailable/i)[0]
+    ).toBeVisible()
+    expect(screen.getAllByText(/provider outage/i)[0]).toBeVisible()
+    expect(screen.getByText(/connector status metadata only/i)).toBeVisible()
+
     await user.click(
       screen.getByRole('button', { name: /Cancel stub preview/i })
     )
@@ -1087,6 +1108,57 @@ describe('Secrets Broker secrets management page', () => {
       ])
     ).toBe(false)
 
+    const providerUnavailableResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'provider-unavailable'
+    )
+    expect(providerUnavailableResult).toMatchObject({
+      outcome: 'provider-unavailable',
+      applied: false,
+      resultBadge: 'provider unavailable',
+      auditStatus:
+        'stub provider outage metadata recorded; mutation failed closed',
+      recoveryStatus:
+        'provider outage is fail-closed and requires a fresh audited preview',
+      retryPolicy: 'fresh plan required before any retry',
+      nextAction:
+        'restore provider connectivity or capability support and create a fresh preview',
+    })
+    expect(providerUnavailableResult.resultStatus).toMatch(
+      /provider connector is unavailable or unsupported/i
+    )
+    expect(providerUnavailableResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'wait for broker health to confirm the provider connector is reachable',
+        'keep the current operation id for support evidence only',
+        'create a fresh audited preview after provider capability metadata refreshes',
+      ])
+    )
+    expect(providerUnavailableResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'provider outage details are limited to connector state, capability metadata, and correlation id',
+      ])
+    )
+    expect(providerUnavailableResult.auditFeedback).toMatchObject({
+      eventState: 'recorded as provider unavailable with no source access',
+    })
+    expect(providerUnavailableResult.auditFeedback.evidenceRows).toEqual(
+      expect.arrayContaining([
+        'provider outage evidence contains connector status metadata only and never provider credentials',
+      ])
+    )
+    expect(
+      managedSecretSingleHistoryHasSecretMaterial([
+        buildSingleSecretOperationHistoryEntry(
+          managedSecretRows[0],
+          rotatePlan,
+          2,
+          'provider-unavailable'
+        ),
+      ])
+    ).toBe(false)
+
     const staleResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
       rotatePlan,
@@ -1262,6 +1334,44 @@ describe('Secrets Broker secrets management page', () => {
     })
     expect(
       managedSecretStatusMonitorHasSecretMaterial(auditUnavailableMonitor)
+    ).toBe(false)
+    const providerUnavailableTrail = buildSingleSecretOperationAuditTrail(
+      managedSecretRows[0],
+      rotatePlan,
+      'provider-unavailable'
+    )
+    expect(providerUnavailableTrail[2]).toMatchObject({
+      status: 'terminal provider unavailable',
+      terminal: true,
+    })
+    expect(
+      managedSecretSingleAuditTrailHasSecretMaterial(providerUnavailableTrail)
+    ).toBe(false)
+    const providerUnavailableMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      providerUnavailableResult
+    )
+    expect(providerUnavailableMonitor).toMatchObject({
+      terminalState: 'terminal provider unavailable',
+      stateBadge: 'provider outage',
+      retryAllowed: false,
+      retryToken: 'fresh broker preview required before retry',
+      operatorNextAction:
+        'restore provider connectivity or capability support and create a fresh preview',
+    })
+    expect(providerUnavailableMonitor.statusRows).toEqual(
+      expect.arrayContaining([
+        'provider status: connector unavailable or unsupported',
+      ])
+    )
+    expect(providerUnavailableMonitor.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'provider recovery happens in broker/provider configuration and omits provider credentials',
+      ])
+    )
+    expect(
+      managedSecretStatusMonitorHasSecretMaterial(providerUnavailableMonitor)
     ).toBe(false)
 
     const actionReadiness = buildManagedSecretActionReadiness(
