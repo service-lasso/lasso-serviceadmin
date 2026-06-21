@@ -1790,7 +1790,7 @@ export function buildSingleSecretOperationResult(
           : plan.action === 'policy'
             ? 'policy change'
             : plan.action
-  const recoverySteps =
+  const actionRecoverySteps =
     plan.action === 'delete'
       ? [
           'verify dependent service references before broker decommission',
@@ -1820,6 +1820,15 @@ export function buildSingleSecretOperationResult(
                 'let the short-lived reveal expire after the audit window',
                 'request a fresh reveal instead of reusing stale metadata',
               ]
+  const outcomeRecoverySteps =
+    outcome === 'auth-required'
+      ? [
+          'complete provider reauthentication in the broker-owned auth flow',
+          'discard this dry-run token after auth challenge starts',
+          'create a fresh audited preview after provider session is refreshed',
+        ]
+      : []
+  const recoverySteps = [...actionRecoverySteps, ...outcomeRecoverySteps]
   const applied = outcome === 'applied'
   const resultBadge =
     outcome === 'applied'
@@ -1851,7 +1860,7 @@ export function buildSingleSecretOperationResult(
         : outcome === 'policy-denied'
           ? `${actionLabel} denied by broker policy after final revalidation; no value was read or written`
           : outcome === 'auth-required'
-            ? `${actionLabel} paused because broker requires fresh operator authentication`
+            ? `${actionLabel} paused because broker requires fresh operator authentication before source access`
             : outcome === 'audit-unavailable'
               ? `${actionLabel} blocked because audit persistence is unavailable; no value was read or written`
               : outcome === 'stale-plan'
@@ -1865,7 +1874,7 @@ export function buildSingleSecretOperationResult(
       : outcome === 'policy-denied'
         ? 'update policy assignment or request least-privilege approval'
         : outcome === 'auth-required'
-          ? 'complete broker auth challenge and create a fresh preview'
+          ? 'complete broker provider reauthentication and create a fresh preview'
           : outcome === 'audit-unavailable'
             ? 'restore audit sink availability and create a fresh preview'
             : outcome === 'stale-plan'
@@ -1881,7 +1890,7 @@ export function buildSingleSecretOperationResult(
       : outcome === 'policy-denied'
         ? 'policy denial is fail-closed and requires a new authorized plan'
         : outcome === 'auth-required'
-          ? 'authentication challenge must complete outside the table'
+          ? 'provider reauthentication must complete in the broker-owned auth flow'
           : outcome === 'audit-unavailable'
             ? 'audit outage is fail-closed and requires a fresh audited preview'
             : outcome === 'stale-plan'
@@ -1940,6 +1949,9 @@ export function buildSingleSecretOperationResult(
           : plan.action === 'policy'
             ? 'policy change carries target policy metadata only'
             : 'operator action used the selected dry-run gate',
+      outcome === 'auth-required'
+        ? 'provider reauthentication uses broker-owned challenge refs; credentials are never entered in the Service Admin table'
+        : 'broker result metadata excludes provider auth challenge secrets',
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
     nextAction,
@@ -1992,6 +2004,9 @@ export function buildSingleSecretAuditFeedback(
     evidenceRows: [
       'audit payload excludes raw values and credential material',
       'operator reason is stored as metadata, not as a secret field',
+      outcome === 'auth-required'
+        ? 'provider auth challenge refs contain status metadata only and never provider credentials'
+        : 'provider auth material is omitted from audit evidence',
       'route, query string, local storage, and diagnostics receive no secret material',
     ],
   }
@@ -2044,7 +2059,7 @@ export function buildSingleSecretOperationAuditTrail(
         : outcome === 'policy-denied'
           ? 'terminal policy denial'
           : outcome === 'auth-required'
-            ? 'paused for broker auth'
+            ? 'paused for broker reauthentication'
             : outcome === 'audit-unavailable'
               ? 'terminal audit unavailable'
               : outcome === 'stale-plan'
@@ -2142,7 +2157,9 @@ export function buildSingleSecretStatusMonitor(
             ? 'safe failure'
             : result.outcome === 'audit-unavailable'
               ? 'audit blocked'
-              : result.outcome,
+              : result.outcome === 'auth-required'
+                ? 'auth challenge'
+                : result.outcome,
     retryAllowed,
     retryToken: retryAllowed
       ? `retry-${safeOperationSlug(plan.action, row)}-operation-id-only`
@@ -2176,11 +2193,17 @@ export function buildSingleSecretStatusMonitor(
       `audit event: ${result.auditFeedback.auditEventId}`,
       `correlation: ${result.auditFeedback.correlationId}`,
       `dependent status: ${result.auditFeedback.dependentServiceStatus}`,
+      result.outcome === 'auth-required'
+        ? 'auth challenge: broker-owned provider reauthentication required'
+        : 'auth challenge: not requested by broker status',
     ],
     operatorNextAction: result.nextAction,
     safeEvidenceRows: [
       'status polling is keyed by operation id, not by secret value',
       'terminal status records typed broker metadata only',
+      result.outcome === 'auth-required'
+        ? 'provider reauthentication happens outside Service Admin and omits provider credentials'
+        : 'provider credentials remain omitted from status polling',
       'retry guidance never reuses stale previews or blocked policy decisions',
       'support evidence may include ids, timestamps, and typed outcomes only',
     ],
