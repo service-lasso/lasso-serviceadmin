@@ -9,6 +9,7 @@ import {
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretOperationHistoryEntry,
+  buildSingleSecretPolicyPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
@@ -17,6 +18,7 @@ import {
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
+  managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretSingleHistoryHasSecretMaterial,
@@ -658,9 +660,26 @@ describe('Secrets Broker secrets management page', () => {
       screen.getAllByText(/policy preview required before apply/i)[0]
     ).toBeVisible()
     expect(
-      screen.getByText(/target policy assignment diff checked/i)
+      screen.getAllByText(/target policy assignment diff checked/i)[0]
     ).toBeVisible()
-    expect(screen.getByText(/targetPolicyRef/i)).toBeVisible()
+    expect(screen.getByText('targetPolicyRef', { exact: true })).toBeVisible()
+    expect(screen.getByText(/Policy assignment safety preview/i)).toBeVisible()
+    expect(screen.getByText(/policy preview ready/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        'policy/openclaw/service-lasso/serviceadmin/least-privilege-single-ref',
+        { exact: true }
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/rollback-policy-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    expect(screen.getByText(/@serviceadmin operator API/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        /policy preview never reads or writes the current secret value/i
+      )
+    ).toBeVisible()
     expect(
       screen.getByRole('button', {
         name: /Apply disabled until dry-run preview is accepted/i,
@@ -992,6 +1011,69 @@ describe('Secrets Broker secrets management page', () => {
         'reapply previous policy only through a fresh audited preview',
       ])
     )
+    const policyPreview = buildSingleSecretPolicyPreview(
+      managedSecretRows[0],
+      singlePolicyPlan
+    )
+    expect(policyPreview).toMatchObject({
+      eligible: true,
+      badge: 'policy preview ready',
+      currentPolicyRef: 'policy/openclaw/service-lasso/read-single-secret',
+      targetPolicyRef:
+        'policy/openclaw/service-lasso/serviceadmin/least-privilege-single-ref',
+      rollbackPlanRef: 'rollback-policy-serviceadmin-session-signing-metadata',
+      applyGate:
+        'ready for broker-owned policy assignment submit after final revalidation',
+    })
+    expect(policyPreview.policyDiffMetadata).toEqual(
+      expect.arrayContaining([
+        'previousPolicyRef: policy/openclaw/service-lasso/read-single-secret',
+        'targetPolicyRef: policy/openclaw/service-lasso/serviceadmin/least-privilege-single-ref',
+      ])
+    )
+    expect(policyPreview.affectedConsumerRefs).toEqual(
+      expect.arrayContaining(['@serviceadmin operator API'])
+    )
+    expect(policyPreview.enforcementChecks).toEqual(
+      expect.arrayContaining([
+        'per-service resolve policy is revalidated before submit',
+        'audit writer availability is required before apply',
+      ])
+    )
+    expect(policyPreview.safeMetadataRows).toEqual(
+      expect.arrayContaining([
+        'policy preview never reads or writes the current secret value',
+        'rollback plan reference contains previous policy metadata only',
+      ])
+    )
+    expect(managedSecretPolicyPreviewHasSecretMaterial(policyPreview)).toBe(
+      false
+    )
+
+    const missingPolicyPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[3],
+      'policy',
+      'operator requested policy assignment preview',
+      true,
+      'ready'
+    )
+    const blockedPolicyPreview = buildSingleSecretPolicyPreview(
+      managedSecretRows[3],
+      missingPolicyPlan
+    )
+    expect(blockedPolicyPreview).toMatchObject({
+      eligible: false,
+      badge: 'policy preview blocked',
+      targetPolicyRef:
+        'policy/openclaw/service-lasso/payments-single-ref-review',
+      applyGate: 'ref unavailable',
+    })
+    expect(blockedPolicyPreview.blockers).toEqual(
+      expect.arrayContaining(['ref unavailable', 'policy preview unsupported'])
+    )
+    expect(
+      managedSecretPolicyPreviewHasSecretMaterial(blockedPolicyPreview)
+    ).toBe(false)
 
     const deletePlan = buildSingleSecretOperationPlan(
       managedSecretRows[0],

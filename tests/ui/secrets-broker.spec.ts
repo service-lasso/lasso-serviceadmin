@@ -219,9 +219,30 @@ test.describe('Secrets Broker browser coverage', () => {
       .first()
       .click()
     await expect(
-      page.getByText(/target policy assignment diff checked/i)
+      page.getByText(/target policy assignment diff checked/i).first()
     ).toBeVisible()
-    await expect(page.getByText(/targetPolicyRef/i)).toBeVisible()
+    await expect(
+      page.getByText('targetPolicyRef', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Policy assignment safety preview/i)
+    ).toBeVisible()
+    await expect(page.getByText(/policy preview blocked/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        'policy/openclaw/service-lasso/serviceadmin/least-privilege-single-ref',
+        { exact: true }
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/rollback-policy-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    await expect(page.getByText(/@serviceadmin operator API/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /policy preview never reads or writes the current secret value/i
+      )
+    ).toBeVisible()
 
     await page.getByPlaceholder(/Search secret metadata/i).fill('payments')
     await page.getByRole('button', { name: /Delete dry-run/ }).click()

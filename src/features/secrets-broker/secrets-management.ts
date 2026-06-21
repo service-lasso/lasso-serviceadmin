@@ -117,6 +117,23 @@ export type SingleSecretDecommissionPreview = {
   safeMetadataRows: string[]
 }
 
+export type SingleSecretPolicyPreview = {
+  ref: string
+  operationId: string
+  eligible: boolean
+  badge: string
+  currentPolicyRef: string
+  targetPolicyRef: string
+  policyDiffMetadata: string[]
+  affectedConsumerRefs: string[]
+  rollbackPlanRef: string
+  auditTrail: string
+  applyGate: string
+  blockers: string[]
+  enforcementChecks: string[]
+  safeMetadataRows: string[]
+}
+
 export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
   rowName: string
   provider: string
@@ -430,6 +447,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:stub-mutation-apply-status',
     'secrets-management:single-secret-operation-history',
     'secrets-management:single-secret-decommission-preview',
+    'secrets-management:single-secret-policy-preview',
     'secrets-management:stub-delete-preview',
     'secrets-management:bulk-campaign-dry-run',
     'secrets-management:bulk-campaign-apply',
@@ -1510,6 +1528,82 @@ export function buildSingleSecretDecommissionPreview(
   }
 }
 
+function singlePolicyTargetForRow(row: ManagedSecretRow) {
+  if (row.owningService === 'payments-api') {
+    return 'policy/openclaw/service-lasso/payments-single-ref-review'
+  }
+
+  const ownerSlug = row.owningService
+    .replace(/^@/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return `policy/openclaw/service-lasso/${ownerSlug || 'service'}/least-privilege-single-ref`
+}
+
+function policyConsumerRefsForRow(row: ManagedSecretRow) {
+  if (row.owningService === '@serviceadmin') {
+    return ['@serviceadmin operator API', '@serviceadmin secret action UI']
+  }
+
+  return [
+    `${row.owningService} runtime resolve policy`,
+    `${row.workspace} workspace authorization map`,
+  ]
+}
+
+export function buildSingleSecretPolicyPreview(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretPolicyPreview {
+  const blockers = [...plan.blockers]
+
+  if (plan.action !== 'policy') {
+    blockers.push('select policy action')
+  }
+
+  const eligible = blockers.length === 0
+  const targetPolicyRef = singlePolicyTargetForRow(row)
+  const affectedConsumerRefs = policyConsumerRefsForRow(row)
+
+  return {
+    ref: row.ref,
+    operationId: plan.operationId,
+    eligible,
+    badge: eligible ? 'policy preview ready' : 'policy preview blocked',
+    currentPolicyRef: row.policy,
+    targetPolicyRef,
+    policyDiffMetadata: [
+      `previousPolicyRef: ${row.policy}`,
+      `targetPolicyRef: ${targetPolicyRef}`,
+      `scope: ${row.owningService} / ${row.workspace}`,
+      'decision fields: allow, deny, audit-required, auth-required',
+    ],
+    affectedConsumerRefs,
+    rollbackPlanRef: `rollback-${safeOperationSlug('policy', row)}-metadata`,
+    auditTrail: eligible
+      ? 'audit reason, operation id, previous policy, target policy, and consumer refs are ready for broker submit'
+      : 'audit trail records blocker metadata only; no policy assignment will be written while blocked',
+    applyGate: eligible
+      ? 'ready for broker-owned policy assignment submit after final revalidation'
+      : blockers[0],
+    blockers,
+    enforcementChecks: [
+      'target policy assignment diff checked as metadata only',
+      'per-service resolve policy is revalidated before submit',
+      'audit writer availability is required before apply',
+      'readonly or missing refs fail closed before policy assignment',
+    ],
+    safeMetadataRows: [
+      'policy preview never reads or writes the current secret value',
+      'affected consumers are service or workspace refs, not environment values',
+      'rollback plan reference contains previous policy metadata only',
+      'policy diff excludes raw payloads, tokens, cookies, keys, and provider credentials',
+    ],
+  }
+}
+
 export function buildSingleSecretOperationResult(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -1780,6 +1874,12 @@ export function managedSecretSingleHistoryHasSecretMaterial(
 
 export function managedSecretDecommissionPreviewHasSecretMaterial(
   preview: SingleSecretDecommissionPreview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(preview))
+}
+
+export function managedSecretPolicyPreviewHasSecretMaterial(
+  preview: SingleSecretPolicyPreview
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(preview))
 }

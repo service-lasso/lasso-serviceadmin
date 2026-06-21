@@ -64,6 +64,7 @@ import {
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretOperationHistoryEntry,
+  buildSingleSecretPolicyPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
@@ -207,6 +208,10 @@ export function SecretsManagementPage() {
   const decommissionPreview =
     selectedAction === 'delete'
       ? buildSingleSecretDecommissionPreview(selectedRow, singleOperationPlan)
+      : null
+  const policyPreview =
+    selectedAction === 'policy'
+      ? buildSingleSecretPolicyPreview(selectedRow, singleOperationPlan)
       : null
   const bulkPlan = useMemo(
     () =>
@@ -1580,6 +1585,108 @@ export function SecretsManagementPage() {
                 {decommissionPreview.blockers.length > 0 ? (
                   <div className='mt-3 flex flex-wrap gap-1'>
                     {decommissionPreview.blockers.map((blocker) => (
+                      <Badge key={blocker} variant='outline'>
+                        {blocker}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {policyPreview ? (
+              <div className='rounded-md border p-3'>
+                <div className='mb-3 flex flex-wrap items-center gap-2'>
+                  <ShieldCheck className='size-4 text-primary' />
+                  <div className='font-medium'>
+                    Policy assignment safety preview
+                  </div>
+                  <Badge
+                    variant={policyPreview.eligible ? 'default' : 'secondary'}
+                  >
+                    {policyPreview.badge}
+                  </Badge>
+                  <Badge variant='outline'>Metadata only</Badge>
+                </div>
+                <div className='grid gap-3 lg:grid-cols-4'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Current policy
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {policyPreview.currentPolicyRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Target policy
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {policyPreview.targetPolicyRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Rollback plan
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {policyPreview.rollbackPlanRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Apply gate
+                    </div>
+                    <div className='mt-1'>{policyPreview.applyGate}</div>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Policy diff metadata
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {policyPreview.policyDiffMetadata.map((row) => (
+                        <li key={row}>{row}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Affected consumers
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {policyPreview.affectedConsumerRefs.map((ref) => (
+                        <li key={ref}>{ref}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Enforcement checks
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {policyPreview.enforcementChecks.map((check) => (
+                        <li key={check}>{check}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Safe metadata proof
+                    </div>
+                    <div className='mt-2'>{policyPreview.auditTrail}</div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {policyPreview.safeMetadataRows.map((row) => (
+                        <li key={row}>{row}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                {policyPreview.blockers.length > 0 ? (
+                  <div className='mt-3 flex flex-wrap gap-1'>
+                    {policyPreview.blockers.map((blocker) => (
                       <Badge key={blocker} variant='outline'>
                         {blocker}
                       </Badge>
