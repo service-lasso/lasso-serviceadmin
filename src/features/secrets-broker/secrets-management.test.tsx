@@ -1043,6 +1043,13 @@ describe('Secrets Broker secrets management page', () => {
       nextAction:
         'update policy assignment or request least-privilege approval',
     })
+    expect(deniedResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'preserve the denied operation id for audit review only',
+        'request least-privilege policy approval before any new submit',
+        'create a fresh audited preview after policy assignment changes',
+      ])
+    )
 
     const authRequiredResult = buildSingleSecretOperationResult(
       managedSecretRows[0],

@@ -423,6 +423,23 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/no retry needed after broker success/i).first()
     ).toBeVisible()
     await expect(page.getByText(/2 submitted/i)).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('policy-denied')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: policy-denied/i)
+    ).toBeVisible()
+    await expect(page.getByText(/no value was read or written/i)).toBeVisible()
+    await expect(
+      page.getByText(/policy denial is fail-closed/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/request least-privilege policy approval/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/fresh plan required before any retry/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/3 submitted/i)).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('auth-required')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -447,7 +464,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/paused for broker reauthentication/i)
     ).toBeVisible()
-    await expect(page.getByText(/3 submitted/i)).toBeVisible()
+    await expect(page.getByText(/4 submitted/i)).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('audit-unavailable')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -468,7 +485,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/restore audit sink availability/i).first()
     ).toBeVisible()
-    await expect(page.getByText(/4 submitted/i)).toBeVisible()
+    await expect(page.getByText(/5 submitted/i)).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('provider-unavailable')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -490,7 +507,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/provider recovery happens in broker/i)
     ).toBeVisible()
-    await expect(page.getByText(/5 submitted/i)).toBeVisible()
+    await expect(page.getByText(/6 submitted/i)).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('stale-plan')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -514,7 +531,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/stale-plan recovery creates a new dry-run/i)
     ).toBeVisible()
-    await expect(page.getByText(/6 submitted/i)).toBeVisible()
+    await expect(page.getByText(/7 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
