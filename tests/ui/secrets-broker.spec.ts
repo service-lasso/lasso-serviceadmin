@@ -392,4 +392,51 @@ test.describe('Secrets Broker browser coverage', () => {
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })
+
+  test('covers Providers page actions and add-provider setup dialog', async ({
+    page,
+  }) => {
+    await page.goto('/secrets-broker/sources')
+    await expectNoBlankScreen(page)
+    await expect(
+      page.getByRole('heading', { name: /Secrets Broker providers/i })
+    ).toBeVisible()
+    await expect(page.getByText(/Local encrypted store/i).first()).toBeVisible()
+
+    await page.getByRole('button', { name: /^Actions$/i }).click()
+    await page.getByRole('menuitem', { name: /Test connection/i }).click()
+    await expect(page.getByText(/Provider connection test/i)).toBeVisible()
+    await expect(
+      page.getByText(/latest metadata test failed closed/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/refs, namespaces, state, and audit metadata only/i)
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: /^Actions$/i }).click()
+    await page.getByRole('menuitem', { name: /Reconnect/i }).click()
+    await expect(page.getByText(/Provider reconnect workflow/i)).toBeVisible()
+    await expect(
+      page.getByText(/raw provider credentials are never entered here/i)
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: /^Add provider$/i }).click()
+    await expect(
+      page.getByRole('dialog', { name: /^Add provider$/i })
+    ).toBeVisible()
+    await expect(page.getByText(/Environment provider/i)).toBeVisible()
+    await expect(page.getByText(/AWS Secrets Manager CLI/i)).toBeVisible()
+    await page.getByRole('button', { name: /Environment provider/i }).click()
+    await expect(page.getByText(/Add provider metadata setup/i)).toBeVisible()
+    await expect(page.getByText(/setup preview ready/i)).toBeVisible()
+    await expect(
+      page.getByText(/provider credentials stay outside Service Admin/i)
+    ).toBeVisible()
+
+    await page.getByPlaceholder(/Search providers/i).fill('aws')
+    await expect(page.getByText(/No enabled providers match/i)).toBeVisible()
+    await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
 })
