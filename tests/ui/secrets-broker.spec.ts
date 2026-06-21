@@ -520,7 +520,7 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
-  test('shows bulk campaign audit and provider-unavailable apply outcomes without secret material', async ({
+  test('shows bulk campaign audit policy-denied and provider-unavailable apply outcomes without secret material', async ({
     page,
   }) => {
     await page.goto('/secrets-broker/secrets')
@@ -562,6 +562,27 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/campaign audit unavailable; item mutation not applied/i)
     ).toBeVisible()
     await expect(page.getByText(/restore audit persistence/i)).toBeVisible()
+    await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+
+    await page.getByLabel(/Apply result mode/i).selectOption('policy-denied')
+    await page.getByRole('button', { name: /Apply bulk campaign/i }).click()
+
+    await expect(
+      page.getByText(/Campaign apply result: policy_denied/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Denied 1/i)).toBeVisible()
+    await expect(
+      page.getByText(/broker policy denied item mutation/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /campaign audit recorded; policy denied and item mutation not applied/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/request least-privilege policy approval/i)
+    ).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 
