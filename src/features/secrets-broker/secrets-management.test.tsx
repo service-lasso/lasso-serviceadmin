@@ -1003,6 +1003,41 @@ describe('Secrets Broker secrets management page', () => {
         'update policy assignment or request least-privilege approval',
     })
 
+    const auditUnavailableResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'audit-unavailable'
+    )
+    expect(auditUnavailableResult).toMatchObject({
+      outcome: 'audit-unavailable',
+      applied: false,
+      resultBadge: 'audit unavailable',
+      auditStatus:
+        'stub audit outage metadata recorded; mutation failed closed',
+      recoveryStatus:
+        'audit outage is fail-closed and requires a fresh audited preview',
+      retryPolicy: 'fresh plan required before any retry',
+      nextAction: 'restore audit sink availability and create a fresh preview',
+    })
+    expect(auditUnavailableResult.resultStatus).toMatch(
+      /blocked because audit persistence is unavailable/i
+    )
+    expect(auditUnavailableResult.auditFeedback).toMatchObject({
+      eventState: 'recorded as audit unavailable with no source access',
+      sinkStatus:
+        'audit sink unavailable; mutation is blocked until broker confirms retention',
+    })
+    expect(
+      managedSecretSingleHistoryHasSecretMaterial([
+        buildSingleSecretOperationHistoryEntry(
+          managedSecretRows[0],
+          rotatePlan,
+          2,
+          'audit-unavailable'
+        ),
+      ])
+    ).toBe(false)
+
     const staleResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
       rotatePlan,
@@ -1113,6 +1148,34 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretStatusMonitorHasSecretMaterial(statusMonitor)).toBe(
       false
     )
+    const auditUnavailableTrail = buildSingleSecretOperationAuditTrail(
+      managedSecretRows[0],
+      rotatePlan,
+      'audit-unavailable'
+    )
+    expect(auditUnavailableTrail[2]).toMatchObject({
+      status: 'terminal audit unavailable',
+      terminal: true,
+    })
+    expect(
+      managedSecretSingleAuditTrailHasSecretMaterial(auditUnavailableTrail)
+    ).toBe(false)
+    const auditUnavailableMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      auditUnavailableResult
+    )
+    expect(auditUnavailableMonitor).toMatchObject({
+      terminalState: 'terminal audit unavailable',
+      stateBadge: 'audit blocked',
+      retryAllowed: false,
+      retryToken: 'fresh broker preview required before retry',
+      operatorNextAction:
+        'restore audit sink availability and create a fresh preview',
+    })
+    expect(
+      managedSecretStatusMonitorHasSecretMaterial(auditUnavailableMonitor)
+    ).toBe(false)
 
     const actionReadiness = buildManagedSecretActionReadiness(
       managedSecretRows[0]

@@ -423,6 +423,27 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/no retry needed after broker success/i).first()
     ).toBeVisible()
     await expect(page.getByText(/2 submitted/i)).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('audit-unavailable')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: audit-unavailable/i)
+    ).toBeVisible()
+    await expect(page.getByText(/stub audit outage metadata/i)).toBeVisible()
+    await expect(
+      page.getByText(/mutation failed closed/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/blocked because audit persistence is unavailable/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/terminal audit unavailable/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/audit blocked/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/restore audit sink availability/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/3 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
