@@ -1911,25 +1911,31 @@ export function buildSingleSecretOperationResult(
                 'request a fresh reveal instead of reusing stale metadata',
               ]
   const outcomeRecoverySteps =
-    outcome === 'auth-required'
+    outcome === 'policy-denied'
       ? [
-          'complete provider reauthentication in the broker-owned auth flow',
-          'discard this dry-run token after auth challenge starts',
-          'create a fresh audited preview after provider session is refreshed',
+          'preserve the denied operation id for audit review only',
+          'request least-privilege policy approval before any new submit',
+          'create a fresh audited preview after policy assignment changes',
         ]
-      : outcome === 'provider-unavailable'
+      : outcome === 'auth-required'
         ? [
-            'wait for broker health to confirm the provider connector is reachable',
-            'keep the current operation id for support evidence only',
-            'create a fresh audited preview after provider capability metadata refreshes',
+            'complete provider reauthentication in the broker-owned auth flow',
+            'discard this dry-run token after auth challenge starts',
+            'create a fresh audited preview after provider session is refreshed',
           ]
-        : outcome === 'stale-plan'
+        : outcome === 'provider-unavailable'
           ? [
-              'discard the expired dry-run token and operation submit envelope',
-              'refresh policy, provider capability, audit sink, and ref metadata before retry',
-              'create a fresh audited preview before any broker submit is attempted',
+              'wait for broker health to confirm the provider connector is reachable',
+              'keep the current operation id for support evidence only',
+              'create a fresh audited preview after provider capability metadata refreshes',
             ]
-          : []
+          : outcome === 'stale-plan'
+            ? [
+                'discard the expired dry-run token and operation submit envelope',
+                'refresh policy, provider capability, audit sink, and ref metadata before retry',
+                'create a fresh audited preview before any broker submit is attempted',
+              ]
+            : []
   const recoverySteps = [...actionRecoverySteps, ...outcomeRecoverySteps]
   const applied = outcome === 'applied'
   const resultBadge =
