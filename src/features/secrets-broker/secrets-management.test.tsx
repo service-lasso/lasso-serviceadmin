@@ -574,6 +574,13 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/rotation can be requested without controlled reveal/i)
     ).toBeVisible()
+    expect(
+      screen.getAllByText(/rotation retry is operation-id scoped/i)[0]
+    ).toBeVisible()
+    expect(screen.getAllByText(/retry only by operation id/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/track rotation operation id until provider status/i)
+    ).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Delete dry-run/i })[0]
@@ -744,7 +751,17 @@ describe('Secrets Broker secrets management page', () => {
       auditStatus: 'stub audit event recorded with metadata only',
       nextAction:
         'monitor broker rotation outcome and dependent service restart notes',
+      recoveryStatus:
+        'rotation retry is operation-id scoped and provider-owned',
+      retryPolicy:
+        'retry only by operation id when broker marks the attempt retry-safe',
     })
+    expect(rotateResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'track rotation operation id until provider status settles',
+        'retry by operation id when the provider marks the retry safe',
+      ])
+    )
     expect(rotateResult.safetyRows).toEqual(
       expect.arrayContaining([
         'raw value was not revealed',
@@ -830,6 +847,39 @@ describe('Secrets Broker secrets management page', () => {
     expect(policyResult.safetyRows).toEqual(
       expect.arrayContaining([
         'policy change carries target policy metadata only',
+      ])
+    )
+    expect(policyResult).toMatchObject({
+      recoveryStatus: 'policy rollback requires a fresh audited preview',
+      retryPolicy: 'fresh plan required before any retry',
+    })
+    expect(policyResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'record previous policy reference as audit metadata',
+        'reapply previous policy only through a fresh audited preview',
+      ])
+    )
+
+    const deletePlan = buildSingleSecretOperationPlan(
+      managedSecretRows[0],
+      'delete',
+      'operator requested delete preview',
+      true,
+      'ready'
+    )
+    const deleteResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      deletePlan
+    )
+    expect(deleteResult).toMatchObject({
+      recoveryStatus:
+        'delete/decommission requires recovery-guided broker ownership',
+      retryPolicy: 'fresh plan required before any retry',
+    })
+    expect(deleteResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'verify dependent service references before broker decommission',
+        'restore only through a fresh broker plan if apply fails',
       ])
     )
 
