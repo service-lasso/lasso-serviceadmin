@@ -273,7 +273,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/1 submitted/i)).toBeVisible()
     await expect(page.getByText(/audit-reset-serviceadmin/i)).toBeVisible()
-    await expect(page.getByText(/submitted to stub broker/i)).toBeVisible()
+    await expect(page.getByText(/submitted to broker/i).first()).toBeVisible()
     await expect(page.getByText(/raw value was not revealed/i)).toBeVisible()
     await expect(
       page.getByText(/rotation can be requested without controlled reveal/i)
@@ -287,6 +287,20 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/track rotation operation id until provider status/i)
     ).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('applied')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: applied/i)
+    ).toBeVisible()
+    await expect(page.getByText(/broker applied/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/operation settled with broker success metadata/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/no retry needed after broker success/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/2 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])

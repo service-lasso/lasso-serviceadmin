@@ -66,12 +66,21 @@ export type SingleSecretOperationPlan = {
   canSubmit: boolean
 }
 
+export type SingleSecretOperationOutcome =
+  | 'submitted'
+  | 'applied'
+  | 'policy-denied'
+  | 'auth-required'
+  | 'failed'
+  | 'stale-plan'
+
 export type SingleSecretOperationResult = {
   operationId: string
   ref: string
   action: ManagedSecretAction
-  outcome: 'submitted'
-  applied: false
+  outcome: SingleSecretOperationOutcome
+  applied: boolean
+  resultBadge: string
   auditStatus: string
   resultStatus: string
   recoveryStatus: string
@@ -327,6 +336,18 @@ export const stubSecretMutationStates: Array<{
   { id: 'cancelled', label: 'Operator cancelled' },
   { id: 'success', label: 'Stub apply success' },
   { id: 'failure', label: 'Stub apply failure' },
+]
+
+export const singleSecretOperationOutcomes: Array<{
+  id: SingleSecretOperationOutcome
+  label: string
+}> = [
+  { id: 'submitted', label: 'Submitted for broker status' },
+  { id: 'applied', label: 'Broker apply success' },
+  { id: 'policy-denied', label: 'Policy denied after submit' },
+  { id: 'auth-required', label: 'Auth required after submit' },
+  { id: 'failed', label: 'Broker apply failed' },
+  { id: 'stale-plan', label: 'Stale plan rejected' },
 ]
 
 export const bulkSecretCampaignOperations: Array<{
@@ -1403,7 +1424,8 @@ export function buildSingleSecretOperationPlan(
 
 export function buildSingleSecretOperationResult(
   row: ManagedSecretRow,
-  plan: SingleSecretOperationPlan
+  plan: SingleSecretOperationPlan,
+  outcome: SingleSecretOperationOutcome = 'submitted'
 ): SingleSecretOperationResult {
   const actionLabel =
     plan.action === 'reset'
@@ -1445,29 +1467,97 @@ export function buildSingleSecretOperationResult(
                 'let the short-lived reveal expire after the audit window',
                 'request a fresh reveal instead of reusing stale metadata',
               ]
+  const applied = outcome === 'applied'
+  const resultBadge =
+    outcome === 'applied'
+      ? 'broker applied'
+      : outcome === 'policy-denied'
+        ? 'policy denied'
+        : outcome === 'auth-required'
+          ? 'auth required'
+          : outcome === 'failed'
+            ? 'apply failed'
+            : outcome === 'stale-plan'
+              ? 'stale plan'
+              : 'submitted to broker'
+  const auditStatus =
+    outcome === 'submitted'
+      ? 'stub audit event recorded with metadata only'
+      : outcome === 'applied'
+        ? 'stub audit event and broker success metadata recorded'
+        : 'stub audit event recorded with typed failure metadata only'
+  const resultStatus =
+    outcome === 'submitted'
+      ? `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`
+      : outcome === 'applied'
+        ? `${actionLabel} accepted by broker status callback; Service Admin records metadata only`
+        : outcome === 'policy-denied'
+          ? `${actionLabel} denied by broker policy after final revalidation; no value was read or written`
+          : outcome === 'auth-required'
+            ? `${actionLabel} paused because broker requires fresh operator authentication`
+            : outcome === 'stale-plan'
+              ? `${actionLabel} rejected because the dry-run plan is stale`
+              : `${actionLabel} failed with broker-owned safe error metadata`
+  const nextAction =
+    outcome === 'applied'
+      ? plan.action === 'reset'
+        ? 'monitor dependent service restart notes and rotation freshness'
+        : 'monitor broker operation audit and dependent service status'
+      : outcome === 'policy-denied'
+        ? 'update policy assignment or request least-privilege approval'
+        : outcome === 'auth-required'
+          ? 'complete broker auth challenge and create a fresh preview'
+          : outcome === 'stale-plan'
+            ? 'create a fresh dry-run plan before retry'
+            : outcome === 'failed'
+              ? 'review safe broker failure metadata and retry only when marked safe'
+              : plan.action === 'reset'
+                ? 'monitor broker rotation outcome and dependent service restart notes'
+                : 'monitor broker operation status and typed policy/audit result'
+  const recoveryStatus =
+    outcome === 'applied'
+      ? 'operation settled with broker success metadata'
+      : outcome === 'policy-denied'
+        ? 'policy denial is fail-closed and requires a new authorized plan'
+        : outcome === 'auth-required'
+          ? 'authentication challenge must complete outside the table'
+          : outcome === 'stale-plan'
+            ? 'stale plan recovery requires a fresh audited preview'
+            : outcome === 'failed'
+              ? 'broker failure recovery depends on retry-safe operation metadata'
+              : plan.action === 'delete'
+                ? 'delete/decommission requires recovery-guided broker ownership'
+                : plan.action === 'policy'
+                  ? 'policy rollback requires a fresh audited preview'
+                  : plan.action === 'reset'
+                    ? 'rotation retry is operation-id scoped and provider-owned'
+                    : plan.action === 'edit'
+                      ? 'edit retry waits for broker retry-safe metadata'
+                      : 'reveal recovery is fresh-challenge only'
+  const retryPolicy =
+    outcome === 'applied'
+      ? 'no retry needed after broker success'
+      : outcome === 'policy-denied' ||
+          outcome === 'auth-required' ||
+          outcome === 'stale-plan'
+        ? 'fresh plan required before any retry'
+        : outcome === 'failed'
+          ? 'retry only with the same operation id when broker marks retry safe'
+          : plan.action === 'delete' || plan.action === 'policy'
+            ? 'fresh plan required before any retry'
+            : 'retry only by operation id when broker marks the attempt retry-safe'
 
   return {
     operationId: plan.operationId,
     ref: row.ref,
     action: plan.action,
-    outcome: 'submitted',
-    applied: false,
-    auditStatus: 'stub audit event recorded with metadata only',
-    resultStatus: `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`,
-    recoveryStatus:
-      plan.action === 'delete'
-        ? 'delete/decommission requires recovery-guided broker ownership'
-        : plan.action === 'policy'
-          ? 'policy rollback requires a fresh audited preview'
-          : plan.action === 'reset'
-            ? 'rotation retry is operation-id scoped and provider-owned'
-            : plan.action === 'edit'
-              ? 'edit retry waits for broker retry-safe metadata'
-              : 'reveal recovery is fresh-challenge only',
-    retryPolicy:
-      plan.action === 'delete' || plan.action === 'policy'
-        ? 'fresh plan required before any retry'
-        : 'retry only by operation id when broker marks the attempt retry-safe',
+    outcome,
+    applied,
+    resultBadge,
+    auditStatus,
+    resultStatus,
+    recoveryStatus,
+    retryPolicy,
     recoverySteps,
     safetyRows: [
       'raw value was not revealed',
@@ -1481,19 +1571,17 @@ export function buildSingleSecretOperationResult(
             : 'operator action used the selected dry-run gate',
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
-    nextAction:
-      plan.action === 'reset'
-        ? 'monitor broker rotation outcome and dependent service restart notes'
-        : 'monitor broker operation status and typed policy/audit result',
+    nextAction,
   }
 }
 
 export function buildSingleSecretOperationHistoryEntry(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
-  sequence: number
+  sequence: number,
+  outcome: SingleSecretOperationOutcome = 'submitted'
 ): SingleSecretOperationHistoryEntry {
-  const result = buildSingleSecretOperationResult(row, plan)
+  const result = buildSingleSecretOperationResult(row, plan, outcome)
   const safeSequence = Math.max(1, sequence)
 
   return {
@@ -1502,7 +1590,7 @@ export function buildSingleSecretOperationHistoryEntry(
     provider: row.provider,
     policy: row.policy,
     auditEventId: `audit-${safeOperationSlug(plan.action, row)}-${safeSequence}`,
-    statusBadge: 'submitted to stub broker',
+    statusBadge: result.resultBadge,
     submittedAt: `stub-sequence-${safeSequence}`,
   }
 }
