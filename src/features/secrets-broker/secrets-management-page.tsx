@@ -1280,6 +1280,9 @@ export function SecretsManagementPage() {
                       Auth {bulkApplyResult.authRequiredCount}
                     </Badge>
                     <Badge variant='outline'>
+                      Audit {bulkApplyResult.auditUnavailableCount}
+                    </Badge>
+                    <Badge variant='outline'>
                       Stale {bulkApplyResult.staleCount}
                     </Badge>
                   </div>
@@ -1339,7 +1342,9 @@ export function SecretsManagementPage() {
                                   ? 'default'
                                   : item.outcome === 'failed'
                                     ? 'destructive'
-                                    : 'outline'
+                                    : item.outcome === 'audit-unavailable'
+                                      ? 'secondary'
+                                      : 'outline'
                               }
                             >
                               {item.outcome}
