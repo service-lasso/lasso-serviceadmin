@@ -74,6 +74,9 @@ export type SingleSecretOperationResult = {
   applied: false
   auditStatus: string
   resultStatus: string
+  recoveryStatus: string
+  retryPolicy: string
+  recoverySteps: string[]
   safetyRows: string[]
   nextAction: string
 }
@@ -1412,6 +1415,36 @@ export function buildSingleSecretOperationResult(
           : plan.action === 'policy'
             ? 'policy change'
             : plan.action
+  const recoverySteps =
+    plan.action === 'delete'
+      ? [
+          'verify dependent service references before broker decommission',
+          'retain recovery plan reference until audit review completes',
+          'restore only through a fresh broker plan if apply fails',
+        ]
+      : plan.action === 'policy'
+        ? [
+            'compare target policy metadata before broker submit',
+            'record previous policy reference as audit metadata',
+            'reapply previous policy only through a fresh audited preview',
+          ]
+        : plan.action === 'reset'
+          ? [
+              'track rotation operation id until provider status settles',
+              'restart dependent service only after broker success metadata',
+              'retry by operation id when the provider marks the retry safe',
+            ]
+          : plan.action === 'edit'
+            ? [
+                'review metadata diff before broker submit',
+                'retry by operation id only when broker marks the update safe',
+                'create a fresh preview after policy or provider state changes',
+              ]
+            : [
+                'complete controlled reveal challenge outside the table',
+                'let the short-lived reveal expire after the audit window',
+                'request a fresh reveal instead of reusing stale metadata',
+              ]
 
   return {
     operationId: plan.operationId,
@@ -1421,6 +1454,21 @@ export function buildSingleSecretOperationResult(
     applied: false,
     auditStatus: 'stub audit event recorded with metadata only',
     resultStatus: `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`,
+    recoveryStatus:
+      plan.action === 'delete'
+        ? 'delete/decommission requires recovery-guided broker ownership'
+        : plan.action === 'policy'
+          ? 'policy rollback requires a fresh audited preview'
+          : plan.action === 'reset'
+            ? 'rotation retry is operation-id scoped and provider-owned'
+            : plan.action === 'edit'
+              ? 'edit retry waits for broker retry-safe metadata'
+              : 'reveal recovery is fresh-challenge only',
+    retryPolicy:
+      plan.action === 'delete' || plan.action === 'policy'
+        ? 'fresh plan required before any retry'
+        : 'retry only by operation id when broker marks the attempt retry-safe',
+    recoverySteps,
     safetyRows: [
       'raw value was not revealed',
       'request body is limited to ref, operation id, action, owner, provider, policy, and audit reason metadata',

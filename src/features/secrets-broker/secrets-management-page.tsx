@@ -1676,6 +1676,29 @@ export function SecretsManagementPage() {
                     {singleApplyResult.nextAction}
                   </div>
                 </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Recovery guidance
+                    </div>
+                    <div className='mt-1'>
+                      {singleApplyResult.recoveryStatus}
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      {singleApplyResult.retryPolicy}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Recovery steps
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {singleApplyResult.recoverySteps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
                 <ul className='mt-3 list-disc space-y-1 ps-5 text-muted-foreground'>
                   {singleApplyResult.safetyRows.map((row) => (
                     <li key={row}>{row}</li>
@@ -1703,7 +1726,7 @@ export function SecretsManagementPage() {
                         <TableHead>Ref</TableHead>
                         <TableHead>Action / status</TableHead>
                         <TableHead>Audit event</TableHead>
-                        <TableHead>Next action</TableHead>
+                        <TableHead>Recovery</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1734,7 +1757,13 @@ export function SecretsManagementPage() {
                             </div>
                           </TableCell>
                           <TableCell className='min-w-64 align-top'>
-                            {entry.nextAction}
+                            <div>{entry.nextAction}</div>
+                            <div className='mt-2 text-muted-foreground'>
+                              {entry.recoveryStatus}
+                            </div>
+                            <div className='mt-2 text-xs text-muted-foreground'>
+                              {entry.retryPolicy}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

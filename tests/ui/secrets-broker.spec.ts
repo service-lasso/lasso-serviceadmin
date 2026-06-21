@@ -278,6 +278,15 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/rotation can be requested without controlled reveal/i)
     ).toBeVisible()
+    await expect(
+      page.getByText(/rotation retry is operation-id scoped/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/retry only by operation id/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/track rotation operation id until provider status/i)
+    ).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
