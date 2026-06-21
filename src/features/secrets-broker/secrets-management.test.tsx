@@ -1840,6 +1840,36 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretBulkApplyResultHasSecretMaterial(bulkAuditUnavailableResult)
     ).toBe(false)
 
+    const bulkProviderUnavailableResult = buildBulkSecretCampaignApplyResult(
+      cleanPlan,
+      'provider-unavailable'
+    )
+    expect(bulkProviderUnavailableResult.outcome).toBe('provider_unavailable')
+    expect(bulkProviderUnavailableResult.appliedCount).toBe(0)
+    expect(bulkProviderUnavailableResult.providerUnavailableCount).toBe(1)
+    expect(bulkProviderUnavailableResult.auditStatus).toMatch(
+      /provider connector unavailable/i
+    )
+    expect(bulkProviderUnavailableResult.nextAction).toMatch(
+      /restore provider connectivity/i
+    )
+    expect(bulkProviderUnavailableResult.items[0]).toMatchObject({
+      outcome: 'provider-unavailable',
+      applied: false,
+      retrySafe: false,
+      auditStatus:
+        'campaign audit recorded; provider unavailable and item mutation not applied',
+      recovery:
+        'mutation failed closed because provider connector was unavailable',
+      nextAction:
+        'restore provider connectivity then create a fresh campaign preview',
+    })
+    expect(
+      managedSecretBulkApplyResultHasSecretMaterial(
+        bulkProviderUnavailableResult
+      )
+    ).toBe(false)
+
     const policyPlan = buildBulkSecretCampaignPlan(
       managedSecretRows,
       managedSecretRows.map((row) => row.id),

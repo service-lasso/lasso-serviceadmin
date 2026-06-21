@@ -1283,6 +1283,9 @@ export function SecretsManagementPage() {
                       Audit {bulkApplyResult.auditUnavailableCount}
                     </Badge>
                     <Badge variant='outline'>
+                      Provider {bulkApplyResult.providerUnavailableCount}
+                    </Badge>
+                    <Badge variant='outline'>
                       Stale {bulkApplyResult.staleCount}
                     </Badge>
                   </div>
@@ -1342,7 +1345,8 @@ export function SecretsManagementPage() {
                                   ? 'default'
                                   : item.outcome === 'failed'
                                     ? 'destructive'
-                                    : item.outcome === 'audit-unavailable'
+                                    : item.outcome === 'audit-unavailable' ||
+                                        item.outcome === 'provider-unavailable'
                                       ? 'secondary'
                                       : 'outline'
                               }
