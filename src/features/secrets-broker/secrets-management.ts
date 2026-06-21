@@ -85,6 +85,7 @@ export type SingleSecretOperationOutcome =
   | 'applied'
   | 'policy-denied'
   | 'auth-required'
+  | 'audit-unavailable'
   | 'failed'
   | 'stale-plan'
 
@@ -450,6 +451,7 @@ export const singleSecretOperationOutcomes: Array<{
   { id: 'applied', label: 'Broker apply success' },
   { id: 'policy-denied', label: 'Policy denied after submit' },
   { id: 'auth-required', label: 'Auth required after submit' },
+  { id: 'audit-unavailable', label: 'Audit unavailable after submit' },
   { id: 'failed', label: 'Broker apply failed' },
   { id: 'stale-plan', label: 'Stale plan rejected' },
 ]
@@ -1826,17 +1828,21 @@ export function buildSingleSecretOperationResult(
         ? 'policy denied'
         : outcome === 'auth-required'
           ? 'auth required'
-          : outcome === 'failed'
-            ? 'apply failed'
-            : outcome === 'stale-plan'
-              ? 'stale plan'
-              : 'submitted to broker'
+          : outcome === 'audit-unavailable'
+            ? 'audit unavailable'
+            : outcome === 'failed'
+              ? 'apply failed'
+              : outcome === 'stale-plan'
+                ? 'stale plan'
+                : 'submitted to broker'
   const auditStatus =
     outcome === 'submitted'
       ? 'stub audit event recorded with metadata only'
       : outcome === 'applied'
         ? 'stub audit event and broker success metadata recorded'
-        : 'stub audit event recorded with typed failure metadata only'
+        : outcome === 'audit-unavailable'
+          ? 'stub audit outage metadata recorded; mutation failed closed'
+          : 'stub audit event recorded with typed failure metadata only'
   const resultStatus =
     outcome === 'submitted'
       ? `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`
@@ -1846,9 +1852,11 @@ export function buildSingleSecretOperationResult(
           ? `${actionLabel} denied by broker policy after final revalidation; no value was read or written`
           : outcome === 'auth-required'
             ? `${actionLabel} paused because broker requires fresh operator authentication`
-            : outcome === 'stale-plan'
-              ? `${actionLabel} rejected because the dry-run plan is stale`
-              : `${actionLabel} failed with broker-owned safe error metadata`
+            : outcome === 'audit-unavailable'
+              ? `${actionLabel} blocked because audit persistence is unavailable; no value was read or written`
+              : outcome === 'stale-plan'
+                ? `${actionLabel} rejected because the dry-run plan is stale`
+                : `${actionLabel} failed with broker-owned safe error metadata`
   const nextAction =
     outcome === 'applied'
       ? plan.action === 'reset'
@@ -1858,13 +1866,15 @@ export function buildSingleSecretOperationResult(
         ? 'update policy assignment or request least-privilege approval'
         : outcome === 'auth-required'
           ? 'complete broker auth challenge and create a fresh preview'
-          : outcome === 'stale-plan'
-            ? 'create a fresh dry-run plan before retry'
-            : outcome === 'failed'
-              ? 'review safe broker failure metadata and retry only when marked safe'
-              : plan.action === 'reset'
-                ? 'monitor broker rotation outcome and dependent service restart notes'
-                : 'monitor broker operation status and typed policy/audit result'
+          : outcome === 'audit-unavailable'
+            ? 'restore audit sink availability and create a fresh preview'
+            : outcome === 'stale-plan'
+              ? 'create a fresh dry-run plan before retry'
+              : outcome === 'failed'
+                ? 'review safe broker failure metadata and retry only when marked safe'
+                : plan.action === 'reset'
+                  ? 'monitor broker rotation outcome and dependent service restart notes'
+                  : 'monitor broker operation status and typed policy/audit result'
   const recoveryStatus =
     outcome === 'applied'
       ? 'operation settled with broker success metadata'
@@ -1872,24 +1882,27 @@ export function buildSingleSecretOperationResult(
         ? 'policy denial is fail-closed and requires a new authorized plan'
         : outcome === 'auth-required'
           ? 'authentication challenge must complete outside the table'
-          : outcome === 'stale-plan'
-            ? 'stale plan recovery requires a fresh audited preview'
-            : outcome === 'failed'
-              ? 'broker failure recovery depends on retry-safe operation metadata'
-              : plan.action === 'delete'
-                ? 'delete/decommission requires recovery-guided broker ownership'
-                : plan.action === 'policy'
-                  ? 'policy rollback requires a fresh audited preview'
-                  : plan.action === 'reset'
-                    ? 'rotation retry is operation-id scoped and provider-owned'
-                    : plan.action === 'edit'
-                      ? 'edit retry waits for broker retry-safe metadata'
-                      : 'reveal recovery is fresh-challenge only'
+          : outcome === 'audit-unavailable'
+            ? 'audit outage is fail-closed and requires a fresh audited preview'
+            : outcome === 'stale-plan'
+              ? 'stale plan recovery requires a fresh audited preview'
+              : outcome === 'failed'
+                ? 'broker failure recovery depends on retry-safe operation metadata'
+                : plan.action === 'delete'
+                  ? 'delete/decommission requires recovery-guided broker ownership'
+                  : plan.action === 'policy'
+                    ? 'policy rollback requires a fresh audited preview'
+                    : plan.action === 'reset'
+                      ? 'rotation retry is operation-id scoped and provider-owned'
+                      : plan.action === 'edit'
+                        ? 'edit retry waits for broker retry-safe metadata'
+                        : 'reveal recovery is fresh-challenge only'
   const retryPolicy =
     outcome === 'applied'
       ? 'no retry needed after broker success'
       : outcome === 'policy-denied' ||
           outcome === 'auth-required' ||
+          outcome === 'audit-unavailable' ||
           outcome === 'stale-plan'
         ? 'fresh plan required before any retry'
         : outcome === 'failed'
@@ -1948,9 +1961,11 @@ export function buildSingleSecretAuditFeedback(
           ? 'recorded as policy denial with no source access'
           : outcome === 'auth-required'
             ? 'recorded as auth challenge with no source access'
-            : outcome === 'stale-plan'
-              ? 'recorded as stale-plan rejection'
-              : 'recorded as safe broker failure metadata'
+            : outcome === 'audit-unavailable'
+              ? 'recorded as audit unavailable with no source access'
+              : outcome === 'stale-plan'
+                ? 'recorded as stale-plan rejection'
+                : 'recorded as safe broker failure metadata'
   const dependentServiceStatus =
     plan.action === 'reset'
       ? outcome === 'applied'
@@ -1970,7 +1985,9 @@ export function buildSingleSecretAuditFeedback(
       'allowlisted fields only: ref, action, operation id, policy, owner, provider, outcome, and timestamps',
     dependentServiceStatus,
     sinkStatus: row.auditStatus.includes('available')
-      ? 'audit sink available in stub metadata model'
+      ? outcome === 'audit-unavailable'
+        ? 'audit sink unavailable; mutation is blocked until broker confirms retention'
+        : 'audit sink available in stub metadata model'
       : 'audit sink requires broker confirmation before apply',
     evidenceRows: [
       'audit payload excludes raw values and credential material',
@@ -2028,9 +2045,11 @@ export function buildSingleSecretOperationAuditTrail(
           ? 'terminal policy denial'
           : outcome === 'auth-required'
             ? 'paused for broker auth'
-            : outcome === 'stale-plan'
-              ? 'terminal stale-plan rejection'
-              : 'terminal safe failure'
+            : outcome === 'audit-unavailable'
+              ? 'terminal audit unavailable'
+              : outcome === 'stale-plan'
+                ? 'terminal stale-plan rejection'
+                : 'terminal safe failure'
 
   return [
     {
@@ -2100,9 +2119,11 @@ export function buildSingleSecretStatusMonitor(
           ? 'terminal policy denial'
           : result.outcome === 'auth-required'
             ? 'paused for broker authentication'
-            : result.outcome === 'stale-plan'
-              ? 'terminal stale-plan rejection'
-              : 'terminal safe failure'
+            : result.outcome === 'audit-unavailable'
+              ? 'terminal audit unavailable'
+              : result.outcome === 'stale-plan'
+                ? 'terminal stale-plan rejection'
+                : 'terminal safe failure'
 
   return {
     operationId: result.operationId,
@@ -2119,7 +2140,9 @@ export function buildSingleSecretStatusMonitor(
           ? 'monitoring'
           : result.outcome === 'failed'
             ? 'safe failure'
-            : result.outcome,
+            : result.outcome === 'audit-unavailable'
+              ? 'audit blocked'
+              : result.outcome,
     retryAllowed,
     retryToken: retryAllowed
       ? `retry-${safeOperationSlug(plan.action, row)}-operation-id-only`
