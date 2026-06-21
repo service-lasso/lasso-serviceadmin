@@ -1817,6 +1817,31 @@ describe('Secrets Broker secrets management page', () => {
       false
     )
 
+    const bulkPolicyDeniedResult = buildBulkSecretCampaignApplyResult(
+      cleanPlan,
+      'policy-denied'
+    )
+    expect(bulkPolicyDeniedResult.outcome).toBe('policy_denied')
+    expect(bulkPolicyDeniedResult.appliedCount).toBe(0)
+    expect(bulkPolicyDeniedResult.deniedCount).toBe(1)
+    expect(bulkPolicyDeniedResult.auditStatus).toMatch(/policy denied/i)
+    expect(bulkPolicyDeniedResult.nextAction).toMatch(
+      /least-privilege policy approval/i
+    )
+    expect(bulkPolicyDeniedResult.items[0]).toMatchObject({
+      outcome: 'denied',
+      applied: false,
+      retrySafe: false,
+      auditStatus:
+        'campaign audit recorded; policy denied and item mutation not applied',
+      recovery:
+        'mutation failed closed because broker policy denied this item after final revalidation',
+      nextAction: 'request policy change or remove this ref from the campaign',
+    })
+    expect(
+      managedSecretBulkApplyResultHasSecretMaterial(bulkPolicyDeniedResult)
+    ).toBe(false)
+
     const bulkAuditUnavailableResult = buildBulkSecretCampaignApplyResult(
       cleanPlan,
       'audit-unavailable'
