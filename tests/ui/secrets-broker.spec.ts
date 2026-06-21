@@ -171,6 +171,22 @@ test.describe('Secrets Broker browser coverage', () => {
       .first()
       .click()
     await expect(page.getByText(/Uses the #38 reveal pattern/i)).toBeVisible()
+    await expect(
+      page.getByText(/Controlled reveal challenge preview/i)
+    ).toBeVisible()
+    await expect(page.getByText(/reveal challenge blocked/i)).toBeVisible()
+    await expect(
+      page.getByText(/challenge-reveal-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/audit-reveal-serviceadmin-session-signing-preview/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/no reveal window is opened while blocked/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/value stays hidden until the broker returns/i)
+    ).toBeVisible()
     await page
       .getByRole('button', { name: /Edit\/update dry-run/i })
       .first()

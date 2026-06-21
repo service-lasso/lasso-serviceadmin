@@ -134,6 +134,25 @@ export type SingleSecretPolicyPreview = {
   safeMetadataRows: string[]
 }
 
+export type SingleSecretRevealPreview = {
+  ref: string
+  operationId: string
+  eligible: boolean
+  badge: string
+  revealChallengeId: string
+  challengeExpiresAt: string
+  revealWindow: string
+  auditEventId: string
+  auditSinkStatus: string
+  policyDecision: string
+  authRequirement: string
+  dependentConsumerRefs: string[]
+  displayGuardrails: string[]
+  applyGate: string
+  blockers: string[]
+  safeMetadataRows: string[]
+}
+
 export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
   rowName: string
   provider: string
@@ -1476,6 +1495,70 @@ export function buildSingleSecretOperationPlan(
   }
 }
 
+function revealConsumerRefsForRow(row: ManagedSecretRow) {
+  if (row.owningService === '@serviceadmin') {
+    return ['@serviceadmin operator session', '@secretsbroker audit writer']
+  }
+
+  return [
+    `${row.owningService} controlled reveal request`,
+    `${row.workspace} workspace audit trail`,
+  ]
+}
+
+export function buildSingleSecretRevealPreview(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretRevealPreview {
+  const blockers = [...plan.blockers]
+
+  if (plan.action !== 'reveal') {
+    blockers.push('select reveal action')
+  }
+
+  const eligible = blockers.length === 0
+  const challengeSlug = safeOperationSlug('reveal', row)
+
+  return {
+    ref: row.ref,
+    operationId: plan.operationId,
+    eligible,
+    badge: eligible ? 'reveal challenge ready' : 'reveal challenge blocked',
+    revealChallengeId: `challenge-${challengeSlug}-metadata`,
+    challengeExpiresAt: '2026-06-21T07:20:00Z',
+    revealWindow: eligible
+      ? 'short-lived display window starts only after broker authorization'
+      : 'no reveal window is opened while blocked',
+    auditEventId: auditEventIdForSingleSecretAction('reveal', row),
+    auditSinkStatus: row.auditStatus.includes('available')
+      ? 'audit sink ready for challenge metadata'
+      : 'audit sink must be confirmed before reveal challenge',
+    policyDecision: plan.policyDecision,
+    authRequirement:
+      row.auditStatus.includes('required before reveal') ||
+      blockers.includes('operator auth required')
+        ? 'fresh operator authentication required before reveal'
+        : 'operator session can request broker challenge',
+    dependentConsumerRefs: revealConsumerRefsForRow(row),
+    displayGuardrails: [
+      'value stays hidden until the broker returns an authorized short-lived display',
+      'copy and export remain unavailable from this management table',
+      'expired challenge metadata cannot be reused to show a value',
+      'screen and diagnostics evidence contain challenge ids only',
+    ],
+    applyGate: eligible
+      ? 'ready for broker-owned reveal challenge after final revalidation'
+      : blockers[0],
+    blockers,
+    safeMetadataRows: [
+      'reveal preview carries challenge id, ref, policy, owner, provider, and audit metadata only',
+      'raw secret value is not fetched during preview generation',
+      'route, query string, local storage, diagnostics, and support bundles receive no secret material',
+      'audit event id and correlation metadata are safe to retain for review',
+    ],
+  }
+}
+
 export function buildSingleSecretDecommissionPreview(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan
@@ -1880,6 +1963,12 @@ export function managedSecretDecommissionPreviewHasSecretMaterial(
 
 export function managedSecretPolicyPreviewHasSecretMaterial(
   preview: SingleSecretPolicyPreview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(preview))
+}
+
+export function managedSecretRevealPreviewHasSecretMaterial(
+  preview: SingleSecretRevealPreview
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(preview))
 }
