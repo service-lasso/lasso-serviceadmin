@@ -1063,6 +1063,8 @@ describe('Secrets Broker secrets management page', () => {
       recoveryStatus:
         'provider reauthentication must complete in the broker-owned auth flow',
       retryPolicy: 'fresh plan required before any retry',
+      providerAuthChallengeRef:
+        'auth-challenge-reset-serviceadmin-session-signing-metadata',
       nextAction:
         'complete broker provider reauthentication and create a fresh preview',
     })
@@ -1099,6 +1101,9 @@ describe('Secrets Broker secrets management page', () => {
         ),
       ])
     ).toBe(false)
+    expect(authRequiredResult.providerAuthChallengeRef).not.toMatch(
+      /credential|token|cookie|private key|DEMO_REVEAL_VALUE_42/i
+    )
 
     const auditUnavailableResult = buildSingleSecretOperationResult(
       managedSecretRows[0],

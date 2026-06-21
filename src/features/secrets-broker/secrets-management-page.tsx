@@ -2187,6 +2187,21 @@ export function SecretsManagementPage() {
                     {singleApplyResult.nextAction}
                   </div>
                 </div>
+                {singleApplyResult.providerAuthChallengeRef ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Provider auth challenge
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.providerAuthChallengeRef}
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      Broker-owned challenge metadata only; provider
+                      credentials, tokens, cookies, and recovery material stay
+                      outside Service Admin.
+                    </div>
+                  </div>
+                ) : null}
                 <div className='mt-3 grid gap-3 md:grid-cols-2'>
                   <div className='rounded-md border bg-muted/30 p-3'>
                     <div className='text-xs font-medium text-muted-foreground uppercase'>
