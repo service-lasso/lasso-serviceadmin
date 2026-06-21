@@ -272,11 +272,30 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/Single-secret operation result: submitted/i)
     ).toBeVisible()
     await expect(page.getByText(/1 submitted/i)).toBeVisible()
-    await expect(page.getByText(/audit-reset-serviceadmin/i)).toBeVisible()
+    await expect(
+      page.getByText(/audit-reset-serviceadmin/i).first()
+    ).toBeVisible()
     await expect(page.getByText(/submitted to broker/i).first()).toBeVisible()
     await expect(page.getByText(/raw value was not revealed/i)).toBeVisible()
     await expect(
       page.getByText(/rotation can be requested without controlled reveal/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/audit-reset-serviceadmin-session-signing-preview/i)
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(/corr-reset-serviceadmin-session-signing-submitted/i)
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/recorded and waiting for broker terminal status/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/allowlisted fields only: ref, action/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/dependent service restart remains pending/i).first()
     ).toBeVisible()
     await expect(
       page.getByText(/rotation retry is operation-id scoped/i).first()
