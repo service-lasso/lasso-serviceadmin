@@ -65,6 +65,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
@@ -205,6 +206,10 @@ export function SecretsManagementPage() {
     confirmed,
     stubState
   )
+  const revealPreview =
+    selectedAction === 'reveal'
+      ? buildSingleSecretRevealPreview(selectedRow, singleOperationPlan)
+      : null
   const decommissionPreview =
     selectedAction === 'delete'
       ? buildSingleSecretDecommissionPreview(selectedRow, singleOperationPlan)
@@ -1511,6 +1516,110 @@ export function SecretsManagementPage() {
                 )}
               </div>
             </div>
+            {revealPreview ? (
+              <div className='rounded-md border p-3'>
+                <div className='mb-3 flex flex-wrap items-center gap-2'>
+                  <Eye className='size-4 text-primary' />
+                  <div className='font-medium'>
+                    Controlled reveal challenge preview
+                  </div>
+                  <Badge
+                    variant={revealPreview.eligible ? 'default' : 'secondary'}
+                  >
+                    {revealPreview.badge}
+                  </Badge>
+                  <Badge variant='outline'>Value hidden</Badge>
+                </div>
+                <div className='grid gap-3 lg:grid-cols-4'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Challenge
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {revealPreview.revealChallengeId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Expires
+                    </div>
+                    <div className='mt-1'>
+                      {revealPreview.challengeExpiresAt}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Audit event
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {revealPreview.auditEventId}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Apply gate
+                    </div>
+                    <div className='mt-1'>{revealPreview.applyGate}</div>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Reveal window and auth
+                    </div>
+                    <div className='mt-2'>{revealPreview.revealWindow}</div>
+                    <div className='mt-2 text-muted-foreground'>
+                      {revealPreview.authRequirement}
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      {revealPreview.auditSinkStatus}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Dependent consumers
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {revealPreview.dependentConsumerRefs.map((ref) => (
+                        <li key={ref}>{ref}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Display guardrails
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {revealPreview.displayGuardrails.map((guardrail) => (
+                        <li key={guardrail}>{guardrail}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Safe metadata proof
+                    </div>
+                    <div className='mt-2'>{revealPreview.policyDecision}</div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {revealPreview.safeMetadataRows.map((row) => (
+                        <li key={row}>{row}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                {revealPreview.blockers.length > 0 ? (
+                  <div className='mt-3 flex flex-wrap gap-1'>
+                    {revealPreview.blockers.map((blocker) => (
+                      <Badge key={blocker} variant='outline'>
+                        {blocker}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {decommissionPreview ? (
               <div className='rounded-md border p-3'>
                 <div className='mb-3 flex flex-wrap items-center gap-2'>

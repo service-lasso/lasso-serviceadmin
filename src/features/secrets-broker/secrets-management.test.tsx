@@ -10,6 +10,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildStubSecretMutationPreview,
@@ -19,6 +20,7 @@ import {
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
+  managedSecretRevealPreviewHasSecretMaterial,
   managedSecretRows,
   managedSecretSafeSurfacesIncludeSecretMaterial,
   managedSecretSingleHistoryHasSecretMaterial,
@@ -533,6 +535,29 @@ describe('Secrets Broker secrets management page', () => {
       screen.getByText(/ready for controlled reveal handoff/i)
     ).toBeVisible()
     expect(screen.getByText(/Uses the #38 reveal pattern/i)).toBeVisible()
+    expect(
+      screen.getByText(/Controlled reveal challenge preview/i)
+    ).toBeVisible()
+    expect(screen.getByText(/reveal challenge blocked/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        /challenge-reveal-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/audit-reveal-serviceadmin-session-signing-preview/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/no reveal window is opened while blocked/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/value stays hidden until the broker returns/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /raw secret value is not fetched during preview generation/i
+      )
+    ).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Edit\/update dry-run/i })[0]
@@ -956,6 +981,65 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(
       managedSecretActionReadinessHasSecretMaterial(missingActionReadiness)
+    ).toBe(false)
+
+    const revealPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[0],
+      'reveal',
+      'operator requested controlled reveal',
+      true,
+      'ready'
+    )
+    const revealPreview = buildSingleSecretRevealPreview(
+      managedSecretRows[0],
+      revealPlan
+    )
+    expect(revealPreview).toMatchObject({
+      eligible: true,
+      badge: 'reveal challenge ready',
+      revealChallengeId:
+        'challenge-reveal-serviceadmin-session-signing-metadata',
+      auditEventId: 'audit-reveal-serviceadmin-session-signing-preview',
+      applyGate:
+        'ready for broker-owned reveal challenge after final revalidation',
+    })
+    expect(revealPreview.displayGuardrails).toEqual(
+      expect.arrayContaining([
+        'value stays hidden until the broker returns an authorized short-lived display',
+        'copy and export remain unavailable from this management table',
+      ])
+    )
+    expect(revealPreview.safeMetadataRows).toEqual(
+      expect.arrayContaining([
+        'raw secret value is not fetched during preview generation',
+        'route, query string, local storage, diagnostics, and support bundles receive no secret material',
+      ])
+    )
+    expect(managedSecretRevealPreviewHasSecretMaterial(revealPreview)).toBe(
+      false
+    )
+
+    const missingRevealPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[3],
+      'reveal',
+      'operator requested controlled reveal',
+      true,
+      'ready'
+    )
+    const blockedRevealPreview = buildSingleSecretRevealPreview(
+      managedSecretRows[3],
+      missingRevealPlan
+    )
+    expect(blockedRevealPreview).toMatchObject({
+      eligible: false,
+      badge: 'reveal challenge blocked',
+      applyGate: 'ref unavailable',
+    })
+    expect(blockedRevealPreview.blockers).toEqual(
+      expect.arrayContaining(['ref unavailable', 'reveal unsupported'])
+    )
+    expect(
+      managedSecretRevealPreviewHasSecretMaterial(blockedRevealPreview)
     ).toBe(false)
 
     const missingDeletePlan = buildSingleSecretOperationPlan(
