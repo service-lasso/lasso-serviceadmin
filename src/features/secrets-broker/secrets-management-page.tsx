@@ -70,6 +70,7 @@ import {
   bulkSecretCampaignOperations,
   bulkSecretCampaignRevalidationStates,
   managedSecretRows,
+  singleSecretOperationOutcomes,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
   type BulkSecretCampaignApplyMode,
@@ -80,6 +81,7 @@ import {
   type ManagedSecretRow,
   type ManagedSecretState,
   type SingleSecretOperationHistoryEntry,
+  type SingleSecretOperationOutcome,
   type SingleSecretOperationResult,
   type StubSecretMutationState,
 } from './secrets-management'
@@ -130,6 +132,8 @@ export function SecretsManagementPage() {
   const [confirmed, setConfirmed] = useState(false)
   const [singleApplyResult, setSingleApplyResult] =
     useState<SingleSecretOperationResult | null>(null)
+  const [singleOperationOutcome, setSingleOperationOutcome] =
+    useState<SingleSecretOperationOutcome>('submitted')
   const [singleOperationHistory, setSingleOperationHistory] = useState<
     SingleSecretOperationHistoryEntry[]
   >([])
@@ -263,14 +267,16 @@ export function SecretsManagementPage() {
   function applySingleSecretOperation() {
     const result = buildSingleSecretOperationResult(
       selectedRow,
-      singleOperationPlan
+      singleOperationPlan,
+      singleOperationOutcome
     )
     setSingleApplyResult(result)
     setSingleOperationHistory((current) => [
       buildSingleSecretOperationHistoryEntry(
         selectedRow,
         singleOperationPlan,
-        current.length + 1
+        current.length + 1,
+        singleOperationOutcome
       ),
       ...current,
     ])
@@ -1514,7 +1520,7 @@ export function SecretsManagementPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4 text-sm'>
-            <div className='grid gap-4 lg:grid-cols-3'>
+            <div className='grid gap-4 lg:grid-cols-4'>
               <div className='rounded-lg border p-3'>
                 <div className='text-xs font-medium text-muted-foreground uppercase'>
                   Selected ref
@@ -1542,6 +1548,31 @@ export function SecretsManagementPage() {
                   {stubSecretMutationStates.map((state) => (
                     <option key={state.id} value={state.id}>
                       {state.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <label
+                  htmlFor='single-operation-outcome'
+                  className='text-xs font-medium text-muted-foreground uppercase'
+                >
+                  Result status
+                </label>
+                <select
+                  id='single-operation-outcome'
+                  className='mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={singleOperationOutcome}
+                  onChange={(event) => {
+                    setSingleOperationOutcome(
+                      event.target.value as SingleSecretOperationOutcome
+                    )
+                    setSingleApplyResult(null)
+                  }}
+                >
+                  {singleSecretOperationOutcomes.map((outcome) => (
+                    <option key={outcome.id} value={outcome.id}>
+                      {outcome.label}
                     </option>
                   ))}
                 </select>
@@ -1642,6 +1673,9 @@ export function SecretsManagementPage() {
                     Single-secret operation result: {singleApplyResult.outcome}
                   </div>
                   <Badge variant='secondary'>Metadata only</Badge>
+                  <Badge variant='outline'>
+                    {singleApplyResult.resultBadge}
+                  </Badge>
                   <Badge variant='outline'>
                     {singleApplyResult.applied ? 'Applied' : 'Not applied'}
                   </Badge>

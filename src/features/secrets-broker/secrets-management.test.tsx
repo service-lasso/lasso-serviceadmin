@@ -569,7 +569,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/Single-secret operation history/i)).toBeVisible()
     expect(screen.getByText(/1 submitted/i)).toBeVisible()
     expect(screen.getByText(/audit-reset-serviceadmin/i)).toBeVisible()
-    expect(screen.getByText(/submitted to stub broker/i)).toBeVisible()
+    expect(screen.getAllByText(/submitted to broker/i)[0]).toBeVisible()
     expect(screen.getByText(/raw value was not revealed/i)).toBeVisible()
     expect(
       screen.getByText(/rotation can be requested without controlled reveal/i)
@@ -581,6 +581,23 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/track rotation operation id until provider status/i)
     ).toBeVisible()
+
+    await user.selectOptions(screen.getByLabelText(/Result status/i), 'applied')
+    await user.selectOptions(screen.getByLabelText(/Stub API state/i), 'ready')
+    await user.click(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    )
+    expect(
+      screen.getByText(/Single-secret operation result: applied/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/broker applied/i)[0]).toBeVisible()
+    expect(
+      screen.getAllByText(/operation settled with broker success metadata/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/no retry needed after broker success/i)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/2 submitted/i)).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Delete dry-run/i })[0]
@@ -684,6 +701,20 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/Stub apply failure/i)[0]).toBeVisible()
     expect(screen.getByText(/deterministic fake apply failed/i)).toBeVisible()
 
+    await user.selectOptions(
+      screen.getByLabelText(/Result status/i),
+      'policy-denied'
+    )
+    await user.selectOptions(screen.getByLabelText(/Stub API state/i), 'ready')
+    await user.click(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    )
+    expect(
+      screen.getByText(/Single-secret operation result: policy-denied/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/policy denied/i)[0]).toBeVisible()
+    expect(screen.getByText(/no value was read or written/i)).toBeVisible()
+
     await user.click(
       screen.getByRole('button', { name: /Cancel stub preview/i })
     )
@@ -748,6 +779,7 @@ describe('Secrets Broker secrets management page', () => {
       action: 'reset',
       outcome: 'submitted',
       applied: false,
+      resultBadge: 'submitted to broker',
       auditStatus: 'stub audit event recorded with metadata only',
       nextAction:
         'monitor broker rotation outcome and dependent service restart notes',
@@ -768,17 +800,63 @@ describe('Secrets Broker secrets management page', () => {
         'rotation can be requested without controlled reveal',
       ])
     )
+    const appliedResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'applied'
+    )
+    expect(appliedResult).toMatchObject({
+      outcome: 'applied',
+      applied: true,
+      resultBadge: 'broker applied',
+      auditStatus: 'stub audit event and broker success metadata recorded',
+      recoveryStatus: 'operation settled with broker success metadata',
+      retryPolicy: 'no retry needed after broker success',
+      nextAction:
+        'monitor dependent service restart notes and rotation freshness',
+    })
+
+    const deniedResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'policy-denied'
+    )
+    expect(deniedResult).toMatchObject({
+      outcome: 'policy-denied',
+      applied: false,
+      resultBadge: 'policy denied',
+      recoveryStatus:
+        'policy denial is fail-closed and requires a new authorized plan',
+      retryPolicy: 'fresh plan required before any retry',
+      nextAction:
+        'update policy assignment or request least-privilege approval',
+    })
+
+    const staleResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'stale-plan'
+    )
+    expect(staleResult).toMatchObject({
+      outcome: 'stale-plan',
+      applied: false,
+      resultBadge: 'stale plan',
+      recoveryStatus: 'stale plan recovery requires a fresh audited preview',
+      nextAction: 'create a fresh dry-run plan before retry',
+    })
+
     const historyEntry = buildSingleSecretOperationHistoryEntry(
       managedSecretRows[0],
       rotatePlan,
-      1
+      1,
+      'failed'
     )
     expect(historyEntry).toMatchObject({
       operationId: rotatePlan.operationId,
       rowName: 'SESSION_SIGNING_KEY',
       provider: 'local encrypted store',
       auditEventId: 'audit-reset-serviceadmin-session-signing-1',
-      statusBadge: 'submitted to stub broker',
+      statusBadge: 'apply failed',
       submittedAt: 'stub-sequence-1',
     })
     expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
