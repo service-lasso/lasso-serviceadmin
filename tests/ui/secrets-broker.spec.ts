@@ -554,6 +554,35 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/stale-plan recovery creates a new dry-run/i)
     ).toBeVisible()
     await expect(page.getByText(/7 submitted/i)).toBeVisible()
+    await page.getByLabel(/Result status/i).selectOption('failed')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: failed/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/failed with broker-owned safe error metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText('Broker failure evidence', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /broker-failure-reset-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    await expect(page.getByText(/provider_retryable_safe_error/i)).toBeVisible()
+    await expect(
+      page.getByText(/Metadata-only safe failure evidence/i)
+    ).toBeVisible()
+    await expect(page.getByText(/terminal safe failure/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/retry-reset-serviceadmin-session-signing/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/retry only with the same operation id/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/8 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
