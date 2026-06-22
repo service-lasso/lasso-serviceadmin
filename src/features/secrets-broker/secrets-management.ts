@@ -187,6 +187,20 @@ export type SingleSecretStatusMonitor = {
   safeEvidenceRows: string[]
 }
 
+export type SingleSecretEvidenceBundle = {
+  bundleId: string
+  operationId: string
+  ref: string
+  reportRef: string
+  screenshotRedaction: string
+  diagnosticsRef: string
+  storageEvidence: string
+  supportBundleStatus: string
+  allowedFields: string[]
+  omittedArtifacts: string[]
+  safeEvidenceRows: string[]
+}
+
 export type SingleSecretDecommissionPreview = {
   ref: string
   operationId: string
@@ -2885,6 +2899,65 @@ export function buildSingleSecretStatusMonitor(
   }
 }
 
+export function buildSingleSecretEvidenceBundle(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  result: SingleSecretOperationResult,
+  monitor: SingleSecretStatusMonitor
+): SingleSecretEvidenceBundle {
+  const slug = safeOperationSlug(plan.action, row)
+
+  return {
+    bundleId: `support-evidence-${slug}-${result.outcome}`,
+    operationId: result.operationId,
+    ref: row.ref,
+    reportRef: `report-${slug}-${result.outcome}-metadata`,
+    screenshotRedaction:
+      'screenshots may include refs, badges, and typed outcomes only; value display regions stay hidden or redacted',
+    diagnosticsRef: `diagnostics-${slug}-${monitor.stateBadge}-metadata`,
+    storageEvidence:
+      'localStorage/sessionStorage evidence contains no secret operation payloads',
+    supportBundleStatus:
+      result.outcome === 'applied'
+        ? 'safe support bundle ready after terminal broker metadata'
+        : result.outcome === 'submitted'
+          ? 'support bundle pending terminal broker metadata'
+          : 'safe support bundle records fail-closed metadata only',
+    allowedFields: [
+      'bundleId',
+      'operationId',
+      'ref',
+      'action',
+      'outcome',
+      'auditEventId',
+      'correlationId',
+      'dependentServiceRefs',
+      'statusBadge',
+      'updatedAt',
+    ],
+    omittedArtifacts: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+    ],
+    safeEvidenceRows: [
+      'support reports are generated from typed broker metadata, not from secret payloads',
+      'screenshots and report rows use operation ids, refs, audit ids, correlation ids, and typed outcomes only',
+      'diagnostics and support bundles omit request bodies, response bodies, provider auth material, and raw environment values',
+      'storage checks prove no raw value, provider credential, token, cookie, key, recovery material, or request body is persisted',
+      `next operator action: ${result.nextAction}`,
+    ],
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -2924,6 +2997,12 @@ export function managedSecretStatusMonitorHasSecretMaterial(
   monitor: SingleSecretStatusMonitor
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(monitor))
+}
+
+export function managedSecretEvidenceBundleHasSecretMaterial(
+  bundle: SingleSecretEvidenceBundle
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(bundle))
 }
 
 export function managedSecretSubmitEnvelopeHasSecretMaterial(
