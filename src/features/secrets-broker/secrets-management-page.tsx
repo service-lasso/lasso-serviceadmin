@@ -66,6 +66,7 @@ import {
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
@@ -76,6 +77,7 @@ import {
   bulkSecretCampaignOperations,
   bulkSecretCampaignRevalidationStates,
   managedSecretRows,
+  singleSecretRevealLifecycleStates,
   singleSecretOperationOutcomes,
   stubSecretMutationStates,
   valueSearchManagedSecrets,
@@ -86,6 +88,7 @@ import {
   type ManagedSecretAction,
   type ManagedSecretRow,
   type ManagedSecretState,
+  type SingleSecretRevealLifecycleState,
   type SingleSecretOperationHistoryEntry,
   type SingleSecretOperationOutcome,
   type SingleSecretOperationResult,
@@ -140,6 +143,8 @@ export function SecretsManagementPage() {
     useState<SingleSecretOperationResult | null>(null)
   const [singleOperationOutcome, setSingleOperationOutcome] =
     useState<SingleSecretOperationOutcome>('submitted')
+  const [singleRevealLifecycleState, setSingleRevealLifecycleState] =
+    useState<SingleSecretRevealLifecycleState>('pending')
   const [singleOperationHistory, setSingleOperationHistory] = useState<
     SingleSecretOperationHistoryEntry[]
   >([])
@@ -217,6 +222,13 @@ export function SecretsManagementPage() {
     selectedAction === 'reveal'
       ? buildSingleSecretRevealPreview(selectedRow, singleOperationPlan)
       : null
+  const revealLifecycle = revealPreview
+    ? buildSingleSecretRevealLifecycle(
+        selectedRow,
+        revealPreview,
+        singleRevealLifecycleState
+      )
+    : null
   const decommissionPreview =
     selectedAction === 'delete'
       ? buildSingleSecretDecommissionPreview(selectedRow, singleOperationPlan)
@@ -1771,6 +1783,116 @@ export function SecretsManagementPage() {
                     </ul>
                   </div>
                 </div>
+                {revealLifecycle ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <div className='font-medium'>
+                        Reveal challenge lifecycle
+                      </div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge variant='outline'>{revealLifecycle.badge}</Badge>
+                    </div>
+                    <div className='mb-3 max-w-sm space-y-2'>
+                      <label
+                        htmlFor='reveal-lifecycle-state'
+                        className='text-sm font-medium text-muted-foreground'
+                      >
+                        Reveal lifecycle state
+                      </label>
+                      <select
+                        id='reveal-lifecycle-state'
+                        className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                        value={singleRevealLifecycleState}
+                        onChange={(event) =>
+                          setSingleRevealLifecycleState(
+                            event.target
+                              .value as SingleSecretRevealLifecycleState
+                          )
+                        }
+                      >
+                        {singleSecretRevealLifecycleStates.map((state) => (
+                          <option key={state.id} value={state.id}>
+                            {state.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className='grid gap-3 lg:grid-cols-4'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Session ref
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {revealLifecycle.revealSessionRef}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Correlation
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {revealLifecycle.correlationId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Revocation
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {revealLifecycle.revocationRef}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Value status
+                        </div>
+                        <div className='mt-1'>
+                          {revealLifecycle.valueStatus}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Display status
+                        </div>
+                        <div className='mt-2'>
+                          {revealLifecycle.displayStatus}
+                        </div>
+                        <div className='mt-2 text-muted-foreground'>
+                          {revealLifecycle.nextAction}
+                        </div>
+                        {revealLifecycle.blockedReason ? (
+                          <Badge className='mt-2' variant='outline'>
+                            {revealLifecycle.blockedReason}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted unsafe fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {revealLifecycle.omittedUnsafeFields.map((field) => (
+                            <Badge key={field} variant='secondary'>
+                              {field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Safe lifecycle evidence
+                      </div>
+                      <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                        {revealLifecycle.safeEvidenceRows.map((row) => (
+                          <li key={row}>{row}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
                 {revealPreview.blockers.length > 0 ? (
                   <div className='mt-3 flex flex-wrap gap-1'>
                     {revealPreview.blockers.map((blocker) => (

@@ -187,6 +187,33 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/value stays hidden until the broker returns/i)
     ).toBeVisible()
+    await expect(page.getByText(/Reveal challenge lifecycle/i)).toBeVisible()
+    await expect(page.getByLabel(/Reveal lifecycle state/i)).toBeVisible()
+    await expect(
+      page.getByText(/waiting for broker authorization/i)
+    ).toBeVisible()
+    await page.getByLabel(/Reveal lifecycle state/i).selectOption('authorized')
+    await expect(
+      page.getByText('authorized display metadata', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByText(/reveal-session-reveal-serviceadmin/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/value remains outside table fixtures/i)
+    ).toBeVisible()
+    await page.getByLabel(/Reveal lifecycle state/i).selectOption('revoked')
+    await expect(
+      page.getByText(/display not opened because the challenge was revoked/i)
+    ).toBeVisible()
+    await page
+      .getByLabel(/Reveal lifecycle state/i)
+      .selectOption('audit-unavailable')
+    await expect(
+      page.getByText(
+        /display blocked because audit persistence is unavailable/i
+      )
+    ).toBeVisible()
     await page
       .getByRole('button', { name: /Edit\/update dry-run/i })
       .first()
