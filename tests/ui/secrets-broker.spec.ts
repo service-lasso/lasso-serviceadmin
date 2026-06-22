@@ -384,12 +384,32 @@ test.describe('Secrets Broker browser coverage', () => {
       .first()
       .click()
     await expect(page.getByText(/Single-secret preview gate/i)).toBeVisible()
+    await expect(page.getByText(/Rotation safety preview/i)).toBeVisible()
+    await expect(page.getByText(/rotation preview blocked/i)).toBeVisible()
+    await expect(page.getByText(/No reveal required/i)).toBeVisible()
+    await expect(
+      page.getByText(/rotation-plan-reset-serviceadmin-session-signing/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/retry-window-reset-serviceadmin-session-signing/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/restart-serviceadmin-runtime-session-loader/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/dependent service restart and reload plan checked/i)
+    ).toBeVisible()
+    await expect(page.getByText(/generatedValue/i).first()).toBeVisible()
+    await expect(page.getByText(/replacementValue/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/operator can rotate without opening a controlled reveal/i)
+    ).toBeVisible()
     await expect(
       page.getByText(/Single-secret operation history/i)
     ).toBeVisible()
     await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
     await expect(page.getByText(/No raw payload/i)).toBeVisible()
-    await expect(page.getByText(/Omitted unsafe fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted unsafe fields/i).first()).toBeVisible()
     await expect(page.getByText(/requestBodyEcho/i)).toBeVisible()
     await expect(page.getByText(/not copied into query strings/i)).toBeVisible()
     await expect(
@@ -489,7 +509,9 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/Fresh preview first/i)).toBeVisible()
     await expect(
-      page.getByText(/idem-reset-serviceadmin-session-signing-metadata-submit/i)
+      page
+        .getByText(/idem-reset-serviceadmin-session-signing-metadata-submit/i)
+        .first()
     ).toBeVisible()
     await expect(
       page.getByText(/corr-reset-serviceadmin-session-signing-metadata-submit/i)

@@ -16,6 +16,7 @@ The secret inventory surface is an advanced Secrets Broker planning view for met
 - Single-secret cancellation is recorded as metadata-only operator intent: operation id, ref, action, audit/correlation refs, and fresh-preview recovery guidance. Cancellation evidence never submits a mutation and never stores request/response bodies or secret material.
 - Controlled reveal previews include a challenge lifecycle model for pending, authorized, expired, revoked, denied, and audit-unavailable states. Lifecycle evidence records challenge/session refs, expiry, revocation, actor/audit/correlation refs, omitted unsafe fields, and next action guidance only; revealed values stay broker-controlled and hidden from the management table.
 - Edit/update previews now show metadata-only change evidence before any submit: operation id, patch plan hash, schema validation status, conflict check ref, rollback ref, dependent consumers, immutable fields, omitted unsafe fields, and safe diff rows. The preview never accepts spreadsheet-style plaintext values and never renders request/response bodies or provider credential material.
+- Reset/rotate previews now show metadata-only rotation safety evidence before any submit: operation id, rotation plan ref, idempotency/retry refs, dependent service restart/reload refs, provider capability checks, audit event refs, omitted unsafe fields, and fail-closed blockers. Rotation does not require controlled reveal and never renders generated replacement values.
 
 ## Not implemented in this slice
 

@@ -69,6 +69,7 @@ import {
   buildSingleSecretPolicyPreview,
   buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
+  buildSingleSecretRotationPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildSingleSecretStatusMonitor,
@@ -234,6 +235,10 @@ export function SecretsManagementPage() {
         singleRevealLifecycleState
       )
     : null
+  const rotationPreview =
+    selectedAction === 'reset'
+      ? buildSingleSecretRotationPreview(selectedRow, singleOperationPlan)
+      : null
   const decommissionPreview =
     selectedAction === 'delete'
       ? buildSingleSecretDecommissionPreview(selectedRow, singleOperationPlan)
@@ -1901,6 +1906,111 @@ export function SecretsManagementPage() {
                 {revealPreview.blockers.length > 0 ? (
                   <div className='mt-3 flex flex-wrap gap-1'>
                     {revealPreview.blockers.map((blocker) => (
+                      <Badge key={blocker} variant='outline'>
+                        {blocker}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {rotationPreview ? (
+              <div className='rounded-md border p-3'>
+                <div className='mb-3 flex flex-wrap items-center gap-2'>
+                  <RotateCcw className='size-4 text-primary' />
+                  <div className='font-medium'>Rotation safety preview</div>
+                  <Badge
+                    variant={rotationPreview.eligible ? 'default' : 'secondary'}
+                  >
+                    {rotationPreview.badge}
+                  </Badge>
+                  <Badge variant='outline'>No reveal required</Badge>
+                </div>
+                <div className='grid gap-3 lg:grid-cols-4'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Rotation plan
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {rotationPreview.rotationPlanRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Idempotency
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {rotationPreview.idempotencyRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Retry window
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {rotationPreview.retryWindowRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Apply gate
+                    </div>
+                    <div className='mt-1'>{rotationPreview.applyGate}</div>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Dependent services
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {rotationPreview.dependentServiceRefs.map((ref) => (
+                        <li key={ref}>{ref}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Restart/reload refs
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {rotationPreview.restartPlanRefs.map((ref) => (
+                        <li key={ref}>{ref}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Safe rotation proof
+                  </div>
+                  <div className='mt-2'>
+                    {rotationPreview.providerCapabilityCheck}
+                  </div>
+                  <div className='mt-2 break-all text-muted-foreground'>
+                    {rotationPreview.auditEventId}
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {rotationPreview.safeMetadataRows.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Omitted unsafe fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {rotationPreview.omittedUnsafeFields.map((field) => (
+                      <Badge key={field} variant='secondary'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                {rotationPreview.blockers.length > 0 ? (
+                  <div className='mt-3 flex flex-wrap gap-1'>
+                    {rotationPreview.blockers.map((blocker) => (
                       <Badge key={blocker} variant='outline'>
                         {blocker}
                       </Badge>
