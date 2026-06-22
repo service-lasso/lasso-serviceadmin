@@ -226,6 +226,27 @@ test.describe('Secrets Broker browser coverage', () => {
         name: /Apply disabled until dry-run preview is accepted/i,
       })
     ).toBeDisabled()
+    await expect(page.getByText(/Edit\/update safety preview/i)).toBeVisible()
+    await expect(page.getByText(/edit preview blocked/i)).toBeVisible()
+    await expect(
+      page.getByText(/patch-edit-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/conflict-edit-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /update-rollback-edit-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    await expect(page.getByText('rotationPolicyRef').first()).toBeVisible()
+    await expect(page.getByText('providerCredential').first()).toBeVisible()
+    await expect(
+      page.getByText(/metadata diff contains field names/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/clear-value table editing is unavailable/i)
+    ).toBeVisible()
     await page
       .getByRole('button', { name: /Delete dry-run/i })
       .first()
