@@ -64,6 +64,7 @@ import {
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
+  buildSingleSecretEvidenceBundle,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
@@ -278,6 +279,15 @@ export function SecretsManagementPage() {
         singleApplyResult
       )
     : null
+  const singleEvidenceBundle =
+    singleApplyResult && singleStatusMonitor
+      ? buildSingleSecretEvidenceBundle(
+          selectedRow,
+          singleOperationPlan,
+          singleApplyResult,
+          singleStatusMonitor
+        )
+      : null
 
   const resetBulkApplyGate = useCallback(() => {
     setBulkRevalidated(false)
@@ -2870,6 +2880,97 @@ export function SecretsManagementPage() {
                           ))}
                         </ul>
                       </div>
+                    </div>
+                  </div>
+                ) : null}
+                {singleEvidenceBundle ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <div className='font-medium'>Support evidence bundle</div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge variant='outline'>
+                        {singleEvidenceBundle.supportBundleStatus}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 lg:grid-cols-4'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Bundle
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleEvidenceBundle.bundleId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Report
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleEvidenceBundle.reportRef}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Diagnostics
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleEvidenceBundle.diagnosticsRef}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Storage
+                        </div>
+                        <div className='mt-1'>
+                          {singleEvidenceBundle.storageEvidence}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Screenshot redaction
+                      </div>
+                      <div className='mt-2'>
+                        {singleEvidenceBundle.screenshotRedaction}
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed evidence fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleEvidenceBundle.allowedFields.map((field) => (
+                            <Badge key={field} variant='outline'>
+                              {field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted evidence artifacts
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleEvidenceBundle.omittedArtifacts.map(
+                            (artifact) => (
+                              <Badge key={artifact} variant='secondary'>
+                                {artifact}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Safe evidence rows
+                      </div>
+                      <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                        {singleEvidenceBundle.safeEvidenceRows.map((row) => (
+                          <li key={row}>{row}</li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 ) : null}

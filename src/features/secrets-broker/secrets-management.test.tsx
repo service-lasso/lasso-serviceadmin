@@ -9,6 +9,7 @@ import {
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
+  buildSingleSecretEvidenceBundle,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
@@ -26,6 +27,7 @@ import {
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretEditPreviewHasSecretMaterial,
+  managedSecretEvidenceBundleHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
@@ -703,6 +705,21 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/raw value was not revealed/i)).toBeVisible()
     expect(
       screen.getByText(/rotation can be requested without controlled reveal/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Support evidence bundle/i)).toBeVisible()
+    expect(
+      screen.getByText(/support-evidence-reset-serviceadmin-session-signing/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Screenshot redaction/i)).toBeVisible()
+    expect(
+      screen.getByText(/screenshots may include refs, badges/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Allowed evidence fields/i)).toBeVisible()
+    expect(screen.getByText(/Omitted evidence artifacts/i)).toBeVisible()
+    expect(screen.getByText(/screenshotsWithVisibleValues/i)).toBeVisible()
+    expect(screen.getByText(/diagnosticPayloadsWithBodies/i)).toBeVisible()
+    expect(
+      screen.getByText(/localStorage\/sessionStorage evidence contains no/i)
     ).toBeVisible()
     expect(screen.getAllByText(/Audit event/i)[0]).toBeVisible()
     expect(
@@ -1660,6 +1677,50 @@ describe('Secrets Broker secrets management page', () => {
       ])
     )
     expect(managedSecretStatusMonitorHasSecretMaterial(statusMonitor)).toBe(
+      false
+    )
+    const evidenceBundle = buildSingleSecretEvidenceBundle(
+      managedSecretRows[0],
+      rotatePlan,
+      appliedResult,
+      statusMonitor
+    )
+    expect(evidenceBundle).toMatchObject({
+      bundleId: 'support-evidence-reset-serviceadmin-session-signing-applied',
+      operationId: rotatePlan.operationId,
+      reportRef: 'report-reset-serviceadmin-session-signing-applied-metadata',
+      diagnosticsRef:
+        'diagnostics-reset-serviceadmin-session-signing-settled-metadata',
+      supportBundleStatus:
+        'safe support bundle ready after terminal broker metadata',
+    })
+    expect(evidenceBundle.allowedFields).toEqual(
+      expect.arrayContaining([
+        'operationId',
+        'ref',
+        'outcome',
+        'auditEventId',
+        'correlationId',
+        'dependentServiceRefs',
+      ])
+    )
+    expect(evidenceBundle.omittedArtifacts).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'screenshotsWithVisibleValues',
+        'diagnosticPayloadsWithBodies',
+      ])
+    )
+    expect(evidenceBundle.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'support reports are generated from typed broker metadata, not from secret payloads',
+        'diagnostics and support bundles omit request bodies, response bodies, provider auth material, and raw environment values',
+      ])
+    )
+    expect(managedSecretEvidenceBundleHasSecretMaterial(evidenceBundle)).toBe(
       false
     )
     const authRequiredMonitor = buildSingleSecretStatusMonitor(
