@@ -1254,6 +1254,49 @@ describe('Secrets Broker secrets management page', () => {
       ])
     ).toBe(false)
 
+    const failedResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'failed'
+    )
+    expect(failedResult).toMatchObject({
+      outcome: 'failed',
+      applied: false,
+      resultBadge: 'apply failed',
+      brokerFailureRef:
+        'broker-failure-reset-serviceadmin-session-signing-metadata',
+      brokerFailureCategory: 'provider_retryable_safe_error',
+      recoveryStatus:
+        'broker failure recovery depends on retry-safe operation metadata',
+      retryPolicy:
+        'retry only with the same operation id when broker marks retry safe',
+      nextAction:
+        'review safe broker failure metadata and retry only when marked safe',
+    })
+    expect(failedResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'preserve the broker failure reference for support evidence only',
+        'retry only when the broker marks the same operation id retry safe',
+        'create a fresh preview if the failure category changes before retry',
+      ])
+    )
+    expect(failedResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'broker failure evidence is limited to operation id, category, retry-safe status, and correlation id',
+      ])
+    )
+    expect(failedResult.auditFeedback).toMatchObject({
+      eventState: 'recorded as safe broker failure metadata',
+    })
+    expect(failedResult.auditFeedback.evidenceRows).toEqual(
+      expect.arrayContaining([
+        'broker failure evidence contains typed category metadata only and never request or response bodies',
+      ])
+    )
+    expect(failedResult.brokerFailureRef).not.toMatch(
+      /credential|token|cookie|private key|request body|response body|DEMO_REVEAL_VALUE_42/i
+    )
+
     const historyEntry = buildSingleSecretOperationHistoryEntry(
       managedSecretRows[0],
       rotatePlan,

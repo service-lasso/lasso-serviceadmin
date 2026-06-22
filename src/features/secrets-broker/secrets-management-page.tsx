@@ -2218,6 +2218,25 @@ export function SecretsManagementPage() {
                     </div>
                   </div>
                 ) : null}
+                {singleApplyResult.brokerFailureRef ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Broker failure evidence
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.brokerFailureRef}
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      {singleApplyResult.brokerFailureCategory}
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      Metadata-only safe failure evidence; retry decisions stay
+                      scoped to the operation id and omit request bodies,
+                      response bodies, provider credentials, tokens, cookies,
+                      environment values, and raw secret material.
+                    </div>
+                  </div>
+                ) : null}
                 <div className='mt-3 grid gap-3 md:grid-cols-2'>
                   <div className='rounded-md border bg-muted/30 p-3'>
                     <div className='text-xs font-medium text-muted-foreground uppercase'>

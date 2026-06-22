@@ -113,6 +113,8 @@ export type SingleSecretOperationResult = {
   retryPolicy: string
   providerAuthChallengeRef: string | null
   providerRecoveryRef: string | null
+  brokerFailureRef: string | null
+  brokerFailureCategory: string | null
   recoverySteps: string[]
   auditFeedback: SingleSecretAuditFeedback
   safetyRows: string[]
@@ -1937,7 +1939,13 @@ export function buildSingleSecretOperationResult(
                 'refresh policy, provider capability, audit sink, and ref metadata before retry',
                 'create a fresh audited preview before any broker submit is attempted',
               ]
-            : []
+            : outcome === 'failed'
+              ? [
+                  'preserve the broker failure reference for support evidence only',
+                  'retry only when the broker marks the same operation id retry safe',
+                  'create a fresh preview if the failure category changes before retry',
+                ]
+              : []
   const recoverySteps = [...actionRecoverySteps, ...outcomeRecoverySteps]
   const applied = outcome === 'applied'
   const resultBadge =
@@ -2050,6 +2058,22 @@ export function buildSingleSecretOperationResult(
     outcome === 'provider-unavailable'
       ? `provider-recovery-${safeOperationSlug(plan.action, row)}-metadata`
       : null
+  const brokerFailureRef =
+    outcome === 'failed'
+      ? `broker-failure-${safeOperationSlug(plan.action, row)}-metadata`
+      : null
+  const brokerFailureCategory =
+    outcome === 'failed'
+      ? plan.action === 'reset'
+        ? 'provider_retryable_safe_error'
+        : plan.action === 'edit'
+          ? 'metadata_update_retryable_safe_error'
+          : plan.action === 'delete'
+            ? 'decommission_non_retryable_safe_error'
+            : plan.action === 'policy'
+              ? 'policy_assignment_safe_error'
+              : 'reveal_safe_error'
+      : null
   const auditFeedback = buildSingleSecretAuditFeedback(
     row,
     plan,
@@ -2070,6 +2094,8 @@ export function buildSingleSecretOperationResult(
     retryPolicy,
     providerAuthChallengeRef,
     providerRecoveryRef,
+    brokerFailureRef,
+    brokerFailureCategory,
     recoverySteps,
     auditFeedback,
     safetyRows: [
@@ -2088,7 +2114,9 @@ export function buildSingleSecretOperationResult(
           ? 'provider outage details are limited to connector state, capability metadata, and correlation id'
           : outcome === 'stale-plan'
             ? 'stale-plan evidence is limited to operation id, ref, action, and expired preview metadata'
-            : 'broker result metadata excludes provider auth challenge secrets',
+            : outcome === 'failed'
+              ? 'broker failure evidence is limited to operation id, category, retry-safe status, and correlation id'
+              : 'broker result metadata excludes provider auth challenge secrets',
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
     nextAction,
@@ -2149,7 +2177,9 @@ export function buildSingleSecretAuditFeedback(
           ? 'provider outage evidence contains connector status metadata only and never provider credentials'
           : outcome === 'stale-plan'
             ? 'stale-plan evidence contains expired preview metadata only and never request or response bodies'
-            : 'provider auth material is omitted from audit evidence',
+            : outcome === 'failed'
+              ? 'broker failure evidence contains typed category metadata only and never request or response bodies'
+              : 'provider auth material is omitted from audit evidence',
       'route, query string, local storage, and diagnostics receive no secret material',
     ],
   }
