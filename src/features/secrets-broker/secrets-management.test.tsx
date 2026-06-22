@@ -843,6 +843,15 @@ describe('Secrets Broker secrets management page', () => {
       screen.getAllByText(/terminal provider unavailable/i)[0]
     ).toBeVisible()
     expect(screen.getAllByText(/provider outage/i)[0]).toBeVisible()
+    expect(screen.getByText(/Provider recovery evidence/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        /provider-recovery-[a-z-]+-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Broker-owned recovery metadata only/i)
+    ).toBeVisible()
     expect(screen.getByText(/connector status metadata only/i)).toBeVisible()
 
     await user.selectOptions(
@@ -1154,6 +1163,9 @@ describe('Secrets Broker secrets management page', () => {
       recoveryStatus:
         'provider outage is fail-closed and requires a fresh audited preview',
       retryPolicy: 'fresh plan required before any retry',
+      providerAuthChallengeRef: null,
+      providerRecoveryRef:
+        'provider-recovery-reset-serviceadmin-session-signing-metadata',
       nextAction:
         'restore provider connectivity or capability support and create a fresh preview',
     })
@@ -1190,6 +1202,9 @@ describe('Secrets Broker secrets management page', () => {
         ),
       ])
     ).toBe(false)
+    expect(providerUnavailableResult.providerRecoveryRef).not.toMatch(
+      /credential|token|cookie|private key|request body|response body|DEMO_REVEAL_VALUE_42/i
+    )
 
     const staleResult = buildSingleSecretOperationResult(
       managedSecretRows[0],

@@ -112,6 +112,7 @@ export type SingleSecretOperationResult = {
   recoveryStatus: string
   retryPolicy: string
   providerAuthChallengeRef: string | null
+  providerRecoveryRef: string | null
   recoverySteps: string[]
   auditFeedback: SingleSecretAuditFeedback
   safetyRows: string[]
@@ -2045,6 +2046,10 @@ export function buildSingleSecretOperationResult(
     outcome === 'auth-required'
       ? `auth-challenge-${safeOperationSlug(plan.action, row)}-metadata`
       : null
+  const providerRecoveryRef =
+    outcome === 'provider-unavailable'
+      ? `provider-recovery-${safeOperationSlug(plan.action, row)}-metadata`
+      : null
   const auditFeedback = buildSingleSecretAuditFeedback(
     row,
     plan,
@@ -2064,6 +2069,7 @@ export function buildSingleSecretOperationResult(
     recoveryStatus,
     retryPolicy,
     providerAuthChallengeRef,
+    providerRecoveryRef,
     recoverySteps,
     auditFeedback,
     safetyRows: [
