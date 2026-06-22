@@ -63,6 +63,7 @@ import {
   buildManagedSecretActionPreview,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
+  buildSingleSecretEditPreview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
@@ -218,6 +219,10 @@ export function SecretsManagementPage() {
     selectedRow,
     singleOperationPlan
   )
+  const editPreview =
+    selectedAction === 'edit'
+      ? buildSingleSecretEditPreview(selectedRow, singleOperationPlan)
+      : null
   const revealPreview =
     selectedAction === 'reveal'
       ? buildSingleSecretRevealPreview(selectedRow, singleOperationPlan)
@@ -1896,6 +1901,125 @@ export function SecretsManagementPage() {
                 {revealPreview.blockers.length > 0 ? (
                   <div className='mt-3 flex flex-wrap gap-1'>
                     {revealPreview.blockers.map((blocker) => (
+                      <Badge key={blocker} variant='outline'>
+                        {blocker}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {editPreview ? (
+              <div className='rounded-md border p-3'>
+                <div className='mb-3 flex flex-wrap items-center gap-2'>
+                  <SlidersHorizontal className='size-4 text-primary' />
+                  <div className='font-medium'>Edit/update safety preview</div>
+                  <Badge
+                    variant={editPreview.eligible ? 'default' : 'secondary'}
+                  >
+                    {editPreview.badge}
+                  </Badge>
+                  <Badge variant='outline'>Metadata diff only</Badge>
+                </div>
+                <div className='grid gap-3 lg:grid-cols-4'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Patch plan
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {editPreview.patchPlanHash}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Conflict check
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {editPreview.conflictCheckRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Rollback plan
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {editPreview.rollbackPlanRef}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Apply gate
+                    </div>
+                    <div className='mt-1'>{editPreview.applyGate}</div>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Metadata fields
+                    </div>
+                    <div className='mt-2 flex flex-wrap gap-1'>
+                      {editPreview.targetMetadataFields.map((field) => (
+                        <Badge key={field} variant='outline'>
+                          {field}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Immutable fields
+                    </div>
+                    <div className='mt-2 flex flex-wrap gap-1'>
+                      {editPreview.immutableFields.map((field) => (
+                        <Badge key={field} variant='secondary'>
+                          {field}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Affected consumers
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {editPreview.affectedConsumerRefs.map((ref) => (
+                        <li key={ref}>{ref}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Safe metadata proof
+                    </div>
+                    <div className='mt-2'>{editPreview.validationStatus}</div>
+                    <div className='mt-2 text-muted-foreground'>
+                      {editPreview.auditTrail}
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {editPreview.safeDiffRows.map((row) => (
+                        <li key={row}>{row}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Omitted unsafe fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {editPreview.omittedUnsafeFields.map((field) => (
+                      <Badge key={field} variant='secondary'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                {editPreview.blockers.length > 0 ? (
+                  <div className='mt-3 flex flex-wrap gap-1'>
+                    {editPreview.blockers.map((blocker) => (
                       <Badge key={blocker} variant='outline'>
                         {blocker}
                       </Badge>

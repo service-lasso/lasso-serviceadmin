@@ -80,6 +80,25 @@ export type SingleSecretSubmitEnvelope = {
   blockedReason: string
 }
 
+export type SingleSecretEditPreview = {
+  ref: string
+  operationId: string
+  eligible: boolean
+  badge: string
+  patchPlanHash: string
+  validationStatus: string
+  conflictCheckRef: string
+  rollbackPlanRef: string
+  targetMetadataFields: string[]
+  immutableFields: string[]
+  affectedConsumerRefs: string[]
+  auditTrail: string
+  applyGate: string
+  blockers: string[]
+  omittedUnsafeFields: string[]
+  safeDiffRows: string[]
+}
+
 export type SingleSecretOperationOutcome =
   | 'submitted'
   | 'applied'
@@ -1568,7 +1587,7 @@ function safePayloadFieldsForSingleSecretAction(action: ManagedSecretAction) {
     case 'reveal':
       return [...baseFields, 'revealChallengeId']
     case 'edit':
-      return [...baseFields, 'metadataDiff']
+      return [...baseFields, 'metadataDiff', 'patchPlanHash', 'rollbackPlanRef']
     case 'reset':
       return [...baseFields, 'rotationReason']
     case 'delete':
@@ -1597,6 +1616,9 @@ function revalidationChecksForSingleSecretAction(
 
   if (action === 'delete') {
     checks.push('dependent service references and recovery guidance checked')
+  }
+  if (action === 'edit') {
+    checks.push('metadata diff, schema guard, and conflict check reviewed')
   }
   if (action === 'policy') {
     checks.push('target policy assignment diff checked as metadata only')
@@ -1729,6 +1751,85 @@ export function buildSingleSecretSubmitEnvelope(
     blockedReason: plan.canSubmit
       ? 'ready after final broker revalidation'
       : (plan.blockers[0] ?? plan.applyGate),
+  }
+}
+
+function editConsumerRefsForRow(row: ManagedSecretRow) {
+  if (row.owningService === '@serviceadmin') {
+    return ['@serviceadmin operator API', '@serviceadmin runtime config loader']
+  }
+
+  return [
+    `${row.owningService} runtime config consumer`,
+    `${row.workspace} workspace dependency map`,
+  ]
+}
+
+export function buildSingleSecretEditPreview(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretEditPreview {
+  const blockers = [...plan.blockers]
+
+  if (plan.action !== 'edit') {
+    blockers.push('select edit action')
+  }
+
+  const eligible = blockers.length === 0
+  const slug = safeOperationSlug('edit', row)
+  const affectedConsumerRefs = editConsumerRefsForRow(row)
+
+  return {
+    ref: row.ref,
+    operationId: plan.operationId,
+    eligible,
+    badge: eligible ? 'edit preview ready' : 'edit preview blocked',
+    patchPlanHash: `patch-${slug}-metadata-sha256`,
+    validationStatus: eligible
+      ? 'schema and policy validation ready for final broker revalidation'
+      : 'schema validation deferred while preview is blocked',
+    conflictCheckRef: `conflict-${slug}-metadata`,
+    rollbackPlanRef: `update-rollback-${slug}-metadata`,
+    targetMetadataFields: [
+      'label',
+      'description',
+      'rotationPolicyRef',
+      'ownerServiceRef',
+      'safeTagSet',
+    ],
+    immutableFields: [
+      'ref',
+      'providerCredential',
+      'rawValue',
+      'providerToken',
+      'environmentValue',
+    ],
+    affectedConsumerRefs,
+    auditTrail: eligible
+      ? 'audit reason, operation id, metadata patch hash, rollback ref, and consumer refs are ready for broker submit'
+      : 'audit trail records blocker metadata only; no update patch will be submitted while blocked',
+    applyGate: eligible
+      ? 'ready for broker-owned edit/update submit after final conflict and policy revalidation'
+      : blockers[0],
+    blockers,
+    omittedUnsafeFields: [
+      'rawValue',
+      'clearValueBody',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    safeDiffRows: [
+      'metadata diff contains field names, old/new metadata refs, and validation status only',
+      'clear-value table editing is unavailable and cannot be represented in the patch plan',
+      'conflict checks compare operation id, ref, patch hash, policy, and latest metadata version',
+      'rollback reference stores previous metadata refs only and never stores secret material',
+    ],
   }
 }
 
@@ -2733,6 +2834,12 @@ export function managedSecretSubmitEnvelopeHasSecretMaterial(
   envelope: SingleSecretSubmitEnvelope
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(envelope))
+}
+
+export function managedSecretEditPreviewHasSecretMaterial(
+  preview: SingleSecretEditPreview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(preview))
 }
 
 export function managedSecretDecommissionPreviewHasSecretMaterial(

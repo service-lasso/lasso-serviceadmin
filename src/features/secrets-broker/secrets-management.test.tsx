@@ -8,6 +8,7 @@ import {
   buildBulkSecretCampaignApplyResult,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
+  buildSingleSecretEditPreview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
@@ -23,6 +24,7 @@ import {
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
+  managedSecretEditPreviewHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
@@ -614,6 +616,27 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(
       screen.getAllByText(/dry-run required before apply/i)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Edit\/update safety preview/i)).toBeVisible()
+    expect(screen.getByText(/edit preview blocked/i)).toBeVisible()
+    expect(
+      screen.getByText(/patch-edit-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/conflict-edit-serviceadmin-session-signing-metadata/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /update-rollback-edit-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    expect(screen.getAllByText('rotationPolicyRef')[0]).toBeVisible()
+    expect(screen.getAllByText('providerCredential')[0]).toBeVisible()
+    expect(
+      screen.getByText(/metadata diff contains field names/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/clear-value table editing is unavailable/i)
     ).toBeVisible()
 
     await user.click(
@@ -1926,6 +1949,75 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretPolicyPreviewHasSecretMaterial(policyPreview)).toBe(
       false
     )
+
+    const editPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[0],
+      'edit',
+      'operator requested metadata update preview',
+      true,
+      'ready'
+    )
+    expect(editPlan.safePayloadFields).toEqual(
+      expect.arrayContaining([
+        'metadataDiff',
+        'patchPlanHash',
+        'rollbackPlanRef',
+      ])
+    )
+    expect(editPlan.revalidationChecks).toEqual(
+      expect.arrayContaining([
+        'metadata diff, schema guard, and conflict check reviewed',
+      ])
+    )
+    const editPreview = buildSingleSecretEditPreview(
+      managedSecretRows[0],
+      editPlan
+    )
+    expect(editPreview).toMatchObject({
+      eligible: true,
+      badge: 'edit preview ready',
+      patchPlanHash: 'patch-edit-serviceadmin-session-signing-metadata-sha256',
+      conflictCheckRef: 'conflict-edit-serviceadmin-session-signing-metadata',
+      rollbackPlanRef:
+        'update-rollback-edit-serviceadmin-session-signing-metadata',
+      applyGate:
+        'ready for broker-owned edit/update submit after final conflict and policy revalidation',
+    })
+    expect(editPreview.targetMetadataFields).toEqual(
+      expect.arrayContaining(['rotationPolicyRef', 'ownerServiceRef'])
+    )
+    expect(editPreview.immutableFields).toEqual(
+      expect.arrayContaining([
+        'ref',
+        'providerCredential',
+        'rawValue',
+        'providerToken',
+        'environmentValue',
+      ])
+    )
+    expect(editPreview.affectedConsumerRefs).toEqual(
+      expect.arrayContaining(['@serviceadmin runtime config loader'])
+    )
+    expect(editPreview.omittedUnsafeFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(editPreview.safeDiffRows).toEqual(
+      expect.arrayContaining([
+        'metadata diff contains field names, old/new metadata refs, and validation status only',
+        'clear-value table editing is unavailable and cannot be represented in the patch plan',
+      ])
+    )
+    expect(managedSecretEditPreviewHasSecretMaterial(editPreview)).toBe(false)
 
     const missingPolicyPlan = buildSingleSecretOperationPlan(
       managedSecretRows[3],
