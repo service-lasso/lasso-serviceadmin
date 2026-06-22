@@ -513,6 +513,17 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/provider status: connector unavailable or unsupported/i)
     ).toBeVisible()
     await expect(
+      page.getByText('Provider recovery evidence', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /provider-recovery-reset-serviceadmin-session-signing-metadata/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Broker-owned recovery metadata only/i)
+    ).toBeVisible()
+    await expect(
       page.getByText(/terminal provider unavailable/i).first()
     ).toBeVisible()
     await expect(

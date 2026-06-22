@@ -2202,6 +2202,22 @@ export function SecretsManagementPage() {
                     </div>
                   </div>
                 ) : null}
+                {singleApplyResult.providerRecoveryRef ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Provider recovery evidence
+                    </div>
+                    <div className='mt-1 break-all'>
+                      {singleApplyResult.providerRecoveryRef}
+                    </div>
+                    <div className='mt-2 text-muted-foreground'>
+                      Broker-owned recovery metadata only; connector health,
+                      capability refresh, and correlation refs are tracked
+                      without provider credentials, tokens, cookies, request
+                      bodies, response bodies, or raw secret material.
+                    </div>
+                  </div>
+                ) : null}
                 <div className='mt-3 grid gap-3 md:grid-cols-2'>
                   <div className='rounded-md border bg-muted/30 p-3'>
                     <div className='text-xs font-medium text-muted-foreground uppercase'>
