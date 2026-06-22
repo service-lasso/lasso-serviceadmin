@@ -319,6 +319,28 @@ export function SecretsManagementPage() {
     setStubState('success')
   }
 
+  function cancelSingleSecretOperation() {
+    const result = buildSingleSecretOperationResult(
+      selectedRow,
+      singleOperationPlan,
+      'cancelled'
+    )
+    setSingleApplyResult(result)
+    setSingleOperationHistory((current) => [
+      buildSingleSecretOperationHistoryEntry(
+        selectedRow,
+        singleOperationPlan,
+        current.length + 1,
+        'cancelled'
+      ),
+      ...current,
+    ])
+    setAuditReason('')
+    setConfirmed(false)
+    setStubState('cancelled')
+    setSingleOperationOutcome('submitted')
+  }
+
   const columns = useMemo<ColumnDef<ManagedSecretRow>[]>(
     () => [
       {
@@ -2635,12 +2657,7 @@ export function SecretsManagementPage() {
               <Button
                 type='button'
                 variant='outline'
-                onClick={() => {
-                  setAuditReason('')
-                  setConfirmed(false)
-                  setStubState('cancelled')
-                  setSingleApplyResult(null)
-                }}
+                onClick={cancelSingleSecretOperation}
               >
                 Cancel stub preview
               </Button>

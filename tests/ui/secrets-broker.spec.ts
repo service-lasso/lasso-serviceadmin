@@ -347,7 +347,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/no local storage or session storage/i)
     ).toBeVisible()
-    await expect(page.getByText(/2 submitted/i)).toBeVisible()
+    await expect(page.getByText(/3 submitted/i)).toBeVisible()
     await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
     await expect(
       page.getByRole('button', { name: /Simulate stub apply/i })
@@ -366,7 +366,19 @@ test.describe('Secrets Broker browser coverage', () => {
     await page.getByLabel(/Stub API state/i).selectOption('failure')
     await expect(page.getByText(/Stub apply failure/i).last()).toBeVisible()
     await page.getByRole('button', { name: /Cancel stub preview/i }).click()
-    await expect(page.getByText(/cancelled by operator/i)).toBeVisible()
+    await expect(page.getByText(/cancelled by operator/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/Single-secret operation result: cancelled/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/cancelled by operator before broker mutation/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/terminal operator cancellation/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/cancelled preview recovery creates a fresh dry-run/i)
+    ).toBeVisible()
 
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
@@ -645,6 +657,22 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/retry only with the same operation id/i).first()
     ).toBeVisible()
     await expect(page.getByText(/8 submitted/i)).toBeVisible()
+    await page.getByRole('button', { name: /Cancel stub preview/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: cancelled/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /cancelled preview: operator stopped before broker mutation/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/terminal operator cancellation/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/cancellation evidence contains typed operator intent/i)
+    ).toBeVisible()
+    await expect(page.getByText(/9 submitted/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])

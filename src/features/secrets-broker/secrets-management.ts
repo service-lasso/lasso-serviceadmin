@@ -89,6 +89,7 @@ export type SingleSecretOperationOutcome =
   | 'provider-unavailable'
   | 'failed'
   | 'stale-plan'
+  | 'cancelled'
 
 export type SingleSecretAuditFeedback = {
   auditEventId: string
@@ -491,6 +492,7 @@ export const singleSecretOperationOutcomes: Array<{
   },
   { id: 'failed', label: 'Broker apply failed' },
   { id: 'stale-plan', label: 'Stale plan rejected' },
+  { id: 'cancelled', label: 'Operator cancelled before submit' },
 ]
 
 export const bulkSecretCampaignOperations: Array<{
@@ -1962,7 +1964,13 @@ export function buildSingleSecretOperationResult(
                   'retry only when the broker marks the same operation id retry safe',
                   'create a fresh preview if the failure category changes before retry',
                 ]
-              : []
+              : outcome === 'cancelled'
+                ? [
+                    'record the cancelled operation id as audit metadata only',
+                    'discard the cancelled submit envelope before any broker mutation',
+                    'create a fresh audited preview if the operator resumes',
+                  ]
+                : []
   const recoverySteps = [...actionRecoverySteps, ...outcomeRecoverySteps]
   const applied = outcome === 'applied'
   const resultBadge =
@@ -1980,7 +1988,9 @@ export function buildSingleSecretOperationResult(
                 ? 'apply failed'
                 : outcome === 'stale-plan'
                   ? 'stale plan'
-                  : 'submitted to broker'
+                  : outcome === 'cancelled'
+                    ? 'cancelled by operator'
+                    : 'submitted to broker'
   const auditStatus =
     outcome === 'submitted'
       ? 'stub audit event recorded with metadata only'
@@ -1992,7 +2002,9 @@ export function buildSingleSecretOperationResult(
             ? 'stub provider outage metadata recorded; mutation failed closed'
             : outcome === 'stale-plan'
               ? 'stub stale-plan rejection recorded; mutation failed closed'
-              : 'stub audit event recorded with typed failure metadata only'
+              : outcome === 'cancelled'
+                ? 'stub cancellation metadata recorded; mutation not submitted'
+                : 'stub audit event recorded with typed failure metadata only'
   const resultStatus =
     outcome === 'submitted'
       ? `${actionLabel} dry-run accepted for broker submission; production mutation remains external to this stub`
@@ -2008,7 +2020,9 @@ export function buildSingleSecretOperationResult(
                 ? `${actionLabel} blocked because the provider connector is unavailable or unsupported; no value was read or written`
                 : outcome === 'stale-plan'
                   ? `${actionLabel} rejected because the dry-run plan token expired before final broker revalidation; no value was read or written`
-                  : `${actionLabel} failed with broker-owned safe error metadata`
+                  : outcome === 'cancelled'
+                    ? `${actionLabel} cancelled by operator before broker mutation; the cancelled operation id is retained as metadata only`
+                    : `${actionLabel} failed with broker-owned safe error metadata`
   const nextAction =
     outcome === 'applied'
       ? plan.action === 'reset'
@@ -2026,9 +2040,11 @@ export function buildSingleSecretOperationResult(
                 ? 'create a fresh dry-run plan before retry'
                 : outcome === 'failed'
                   ? 'review safe broker failure metadata and retry only when marked safe'
-                  : plan.action === 'reset'
-                    ? 'monitor broker rotation outcome and dependent service restart notes'
-                    : 'monitor broker operation status and typed policy/audit result'
+                  : outcome === 'cancelled'
+                    ? 'create a fresh dry-run preview if the operator resumes this action'
+                    : plan.action === 'reset'
+                      ? 'monitor broker rotation outcome and dependent service restart notes'
+                      : 'monitor broker operation status and typed policy/audit result'
   const recoveryStatus =
     outcome === 'applied'
       ? 'operation settled with broker success metadata'
@@ -2044,15 +2060,17 @@ export function buildSingleSecretOperationResult(
                 ? 'stale plan recovery requires a fresh audited preview'
                 : outcome === 'failed'
                   ? 'broker failure recovery depends on retry-safe operation metadata'
-                  : plan.action === 'delete'
-                    ? 'delete/decommission requires recovery-guided broker ownership'
-                    : plan.action === 'policy'
-                      ? 'policy rollback requires a fresh audited preview'
-                      : plan.action === 'reset'
-                        ? 'rotation retry is operation-id scoped and provider-owned'
-                        : plan.action === 'edit'
-                          ? 'edit retry waits for broker retry-safe metadata'
-                          : 'reveal recovery is fresh-challenge only'
+                  : outcome === 'cancelled'
+                    ? 'cancelled preview was not submitted and can only resume with a fresh dry-run'
+                    : plan.action === 'delete'
+                      ? 'delete/decommission requires recovery-guided broker ownership'
+                      : plan.action === 'policy'
+                        ? 'policy rollback requires a fresh audited preview'
+                        : plan.action === 'reset'
+                          ? 'rotation retry is operation-id scoped and provider-owned'
+                          : plan.action === 'edit'
+                            ? 'edit retry waits for broker retry-safe metadata'
+                            : 'reveal recovery is fresh-challenge only'
   const retryPolicy =
     outcome === 'applied'
       ? 'no retry needed after broker success'
@@ -2060,7 +2078,8 @@ export function buildSingleSecretOperationResult(
           outcome === 'auth-required' ||
           outcome === 'audit-unavailable' ||
           outcome === 'provider-unavailable' ||
-          outcome === 'stale-plan'
+          outcome === 'stale-plan' ||
+          outcome === 'cancelled'
         ? 'fresh plan required before any retry'
         : outcome === 'failed'
           ? 'retry only with the same operation id when broker marks retry safe'
@@ -2140,7 +2159,9 @@ export function buildSingleSecretOperationResult(
             ? 'stale-plan evidence is limited to operation id, ref, action, and expired preview metadata'
             : outcome === 'failed'
               ? 'broker failure evidence is limited to operation id, category, retry-safe status, and correlation id'
-              : 'broker result metadata excludes provider auth challenge secrets',
+              : outcome === 'cancelled'
+                ? 'cancellation evidence is limited to operation id, ref, action, audit reason metadata, and correlation id'
+                : 'broker result metadata excludes provider auth challenge secrets',
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
     nextAction,
@@ -2245,7 +2266,9 @@ export function buildSingleSecretAuditFeedback(
                 ? 'recorded as provider unavailable with no source access'
                 : outcome === 'stale-plan'
                   ? 'recorded as stale-plan rejection'
-                  : 'recorded as safe broker failure metadata'
+                  : outcome === 'cancelled'
+                    ? 'recorded as operator cancellation with no broker mutation'
+                    : 'recorded as safe broker failure metadata'
   const dependentServiceStatus =
     plan.action === 'reset'
       ? outcome === 'applied'
@@ -2280,7 +2303,9 @@ export function buildSingleSecretAuditFeedback(
             ? 'stale-plan evidence contains expired preview metadata only and never request or response bodies'
             : outcome === 'failed'
               ? 'broker failure evidence contains typed category metadata only and never request or response bodies'
-              : 'provider auth material is omitted from audit evidence',
+              : outcome === 'cancelled'
+                ? 'cancellation evidence contains typed operator intent metadata only and never request or response bodies'
+                : 'provider auth material is omitted from audit evidence',
       'route, query string, local storage, and diagnostics receive no secret material',
     ],
   }
@@ -2340,7 +2365,9 @@ export function buildSingleSecretOperationAuditTrail(
                 ? 'terminal provider unavailable'
                 : outcome === 'stale-plan'
                   ? 'terminal stale-plan rejection'
-                  : 'terminal safe failure'
+                  : outcome === 'cancelled'
+                    ? 'terminal operator cancellation'
+                    : 'terminal safe failure'
 
   return [
     {
@@ -2416,7 +2443,9 @@ export function buildSingleSecretStatusMonitor(
                 ? 'terminal provider unavailable'
                 : result.outcome === 'stale-plan'
                   ? 'terminal stale-plan rejection'
-                  : 'terminal safe failure'
+                  : result.outcome === 'cancelled'
+                    ? 'terminal operator cancellation'
+                    : 'terminal safe failure'
 
   return {
     operationId: result.operationId,
@@ -2439,7 +2468,9 @@ export function buildSingleSecretStatusMonitor(
                 ? 'auth challenge'
                 : result.outcome === 'provider-unavailable'
                   ? 'provider outage'
-                  : result.outcome,
+                  : result.outcome === 'cancelled'
+                    ? 'cancelled'
+                    : result.outcome,
     retryAllowed,
     retryToken: retryAllowed
       ? `retry-${safeOperationSlug(plan.action, row)}-operation-id-only`
@@ -2479,7 +2510,9 @@ export function buildSingleSecretStatusMonitor(
           ? 'provider status: connector unavailable or unsupported'
           : result.outcome === 'stale-plan'
             ? 'stale preview: broker rejected the expired dry-run token'
-            : 'auth challenge: not requested by broker status',
+            : result.outcome === 'cancelled'
+              ? 'cancelled preview: operator stopped before broker mutation'
+              : 'auth challenge: not requested by broker status',
     ],
     operatorNextAction: result.nextAction,
     safeEvidenceRows: [
@@ -2491,7 +2524,9 @@ export function buildSingleSecretStatusMonitor(
           ? 'provider recovery happens in broker/provider configuration and omits provider credentials'
           : result.outcome === 'stale-plan'
             ? 'stale-plan recovery creates a new dry-run and omits request and response body echoes'
-            : 'provider credentials remain omitted from status polling',
+            : result.outcome === 'cancelled'
+              ? 'cancelled preview recovery creates a fresh dry-run and omits request and response body echoes'
+              : 'provider credentials remain omitted from status polling',
       'retry guidance never reuses stale previews or blocked policy decisions',
       'support evidence may include ids, timestamps, and typed outcomes only',
     ],

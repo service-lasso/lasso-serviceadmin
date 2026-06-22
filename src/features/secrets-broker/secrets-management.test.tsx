@@ -878,7 +878,20 @@ describe('Secrets Broker secrets management page', () => {
       screen.getByRole('button', { name: /Cancel stub preview/i })
     )
     expect(screen.getAllByText(/Cancelled/i)[0]).toBeVisible()
-    expect(screen.getByText(/cancelled by operator/i)).toBeVisible()
+    expect(screen.getAllByText(/cancelled by operator/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/Single-secret operation result: cancelled/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/cancelled by operator before broker mutation/i)
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/terminal operator cancellation/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getByText(/cancelled preview recovery creates a fresh dry-run/i)
+    ).toBeVisible()
+    expect(screen.getByText(/4 submitted/i)).toBeVisible()
   })
 
   it('keeps fixtures and modeled safe surfaces free of secret material', () => {
@@ -1319,6 +1332,79 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
       false
     )
+
+    const cancelledResult = buildSingleSecretOperationResult(
+      managedSecretRows[0],
+      rotatePlan,
+      'cancelled'
+    )
+    expect(cancelledResult).toMatchObject({
+      outcome: 'cancelled',
+      applied: false,
+      resultBadge: 'cancelled by operator',
+      auditStatus:
+        'stub cancellation metadata recorded; mutation not submitted',
+      recoveryStatus:
+        'cancelled preview was not submitted and can only resume with a fresh dry-run',
+      retryPolicy: 'fresh plan required before any retry',
+      nextAction:
+        'create a fresh dry-run preview if the operator resumes this action',
+    })
+    expect(cancelledResult.recoverySteps).toEqual(
+      expect.arrayContaining([
+        'record the cancelled operation id as audit metadata only',
+        'discard the cancelled submit envelope before any broker mutation',
+        'create a fresh audited preview if the operator resumes',
+      ])
+    )
+    expect(cancelledResult.safetyRows).toEqual(
+      expect.arrayContaining([
+        'cancellation evidence is limited to operation id, ref, action, audit reason metadata, and correlation id',
+      ])
+    )
+    expect(cancelledResult.auditFeedback).toMatchObject({
+      eventState: 'recorded as operator cancellation with no broker mutation',
+    })
+    expect(cancelledResult.auditFeedback.evidenceRows).toEqual(
+      expect.arrayContaining([
+        'cancellation evidence contains typed operator intent metadata only and never request or response bodies',
+      ])
+    )
+    const cancelledTrail = buildSingleSecretOperationAuditTrail(
+      managedSecretRows[0],
+      rotatePlan,
+      'cancelled'
+    )
+    expect(cancelledTrail[2]).toMatchObject({
+      status: 'terminal operator cancellation',
+      terminal: true,
+    })
+    const cancelledMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      cancelledResult
+    )
+    expect(cancelledMonitor).toMatchObject({
+      terminalState: 'terminal operator cancellation',
+      stateBadge: 'cancelled',
+      retryAllowed: false,
+      stalePlanGuard:
+        'status updates are accepted only when operation id, ref, action, and correlation id match the latest preview',
+    })
+    expect(cancelledMonitor.statusRows).toEqual(
+      expect.arrayContaining([
+        'cancelled preview: operator stopped before broker mutation',
+      ])
+    )
+    expect(cancelledMonitor.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'cancelled preview recovery creates a fresh dry-run and omits request and response body echoes',
+      ])
+    )
+    expect(managedSecretStatusMonitorHasSecretMaterial(cancelledMonitor)).toBe(
+      false
+    )
+
     const auditTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],
       rotatePlan,
