@@ -100,6 +100,17 @@ export type SingleSecretAuditFeedback = {
   evidenceRows: string[]
 }
 
+export type SingleSecretImpactEvidence = {
+  title: string
+  impactRef: string
+  dependentServiceRefs: string[]
+  auditRefs: string[]
+  rollbackRef: string
+  freshPreviewRequirement: string
+  omittedUnsafeFields: string[]
+  safeEvidenceRows: string[]
+}
+
 export type SingleSecretOperationResult = {
   operationId: string
   ref: string
@@ -117,6 +128,7 @@ export type SingleSecretOperationResult = {
   brokerFailureCategory: string | null
   recoverySteps: string[]
   auditFeedback: SingleSecretAuditFeedback
+  impactEvidence: SingleSecretImpactEvidence
   safetyRows: string[]
   nextAction: string
 }
@@ -1741,6 +1753,17 @@ export function buildSingleSecretRevealPreview(
   }
 }
 
+function decommissionDependentServiceRefsForRow(row: ManagedSecretRow) {
+  if (row.owningService === '@serviceadmin') {
+    return ['@serviceadmin runtime session loader', '@secretsbroker audit sink']
+  }
+
+  return [
+    `${row.owningService} runtime binding`,
+    `${row.workspace} workspace policy reference`,
+  ]
+}
+
 export function buildSingleSecretDecommissionPreview(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan
@@ -1752,13 +1775,7 @@ export function buildSingleSecretDecommissionPreview(
   }
 
   const providerBacked = row.provider === 'provider connection'
-  const dependentServiceRefs =
-    row.owningService === '@serviceadmin'
-      ? ['@serviceadmin runtime session loader', '@secretsbroker audit sink']
-      : [
-          `${row.owningService} runtime binding`,
-          `${row.workspace} workspace policy reference`,
-        ]
+  const dependentServiceRefs = decommissionDependentServiceRefsForRow(row)
   const mode = providerBacked ? 'disable' : 'decommission'
   const eligible = blockers.length === 0
   const actionLabel = mode === 'disable' ? 'disable' : 'decommission'
@@ -2080,6 +2097,12 @@ export function buildSingleSecretOperationResult(
     outcome,
     auditEventIdForSingleSecretAction(plan.action, row)
   )
+  const impactEvidence = buildSingleSecretImpactEvidence(
+    row,
+    plan,
+    outcome,
+    auditFeedback
+  )
 
   return {
     operationId: plan.operationId,
@@ -2098,6 +2121,7 @@ export function buildSingleSecretOperationResult(
     brokerFailureCategory,
     recoverySteps,
     auditFeedback,
+    impactEvidence,
     safetyRows: [
       'raw value was not revealed',
       'request body is limited to ref, operation id, action, owner, provider, policy, and audit reason metadata',
@@ -2120,6 +2144,83 @@ export function buildSingleSecretOperationResult(
       'no copy, export, route, query string, local storage, or diagnostic payload contains secret material',
     ],
     nextAction,
+  }
+}
+
+export function buildSingleSecretImpactEvidence(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  outcome: SingleSecretOperationOutcome,
+  auditFeedback: SingleSecretAuditFeedback
+): SingleSecretImpactEvidence {
+  const slug = safeOperationSlug(plan.action, row)
+  const dependentServiceRefs =
+    plan.action === 'delete'
+      ? decommissionDependentServiceRefsForRow(row)
+      : plan.action === 'policy'
+        ? policyConsumerRefsForRow(row)
+        : plan.action === 'reset'
+          ? ['@serviceadmin runtime session loader']
+          : plan.action === 'edit'
+            ? [row.owningService]
+            : ['@serviceadmin operator session']
+  const rollbackRef =
+    plan.action === 'delete'
+      ? `recovery-${slug}-metadata`
+      : plan.action === 'policy'
+        ? `rollback-${slug}-metadata`
+        : plan.action === 'reset'
+          ? `rotation-monitor-${slug}-metadata`
+          : plan.action === 'edit'
+            ? `update-rollback-${slug}-metadata`
+            : `reveal-window-${slug}-metadata`
+  const freshPreviewRequirement =
+    outcome === 'applied'
+      ? plan.action === 'delete'
+        ? 'restore or recreate only through a fresh audited broker recovery plan'
+        : plan.action === 'policy'
+          ? 'rollback requires a fresh audited policy assignment preview'
+          : 'future changes require a fresh audited dry-run preview'
+      : outcome === 'submitted'
+        ? 'wait for broker terminal metadata before any follow-up preview'
+        : 'discard this result before retry and create a fresh audited dry-run preview'
+
+  return {
+    title:
+      plan.action === 'delete'
+        ? 'Delete/decommission impact evidence'
+        : plan.action === 'policy'
+          ? 'Policy assignment impact evidence'
+          : plan.action === 'reset'
+            ? 'Rotation impact evidence'
+            : plan.action === 'edit'
+              ? 'Edit impact evidence'
+              : 'Reveal impact evidence',
+    impactRef: `impact-${slug}-${outcome}-metadata`,
+    dependentServiceRefs,
+    auditRefs: [auditFeedback.auditEventId, auditFeedback.correlationId],
+    rollbackRef,
+    freshPreviewRequirement,
+    omittedUnsafeFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    safeEvidenceRows: [
+      'impact evidence stores refs, operation ids, typed outcome, audit refs, and dependent service metadata only',
+      plan.action === 'delete'
+        ? 'decommission impact keeps tombstone and recovery references separate from secret material'
+        : plan.action === 'policy'
+          ? 'policy impact keeps previous and target policy refs as metadata-only rollback context'
+          : 'impact evidence keeps follow-up guidance metadata-only',
+      'support bundles and diagnostics may include this impact reference but never secret payloads',
+    ],
   }
 }
 

@@ -219,7 +219,9 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/decommission preview blocked/i)).toBeVisible()
     await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
     await expect(
-      page.getByText(/recovery-delete-serviceadmin-session-signing-metadata/i)
+      page
+        .getByText(/recovery-delete-serviceadmin-session-signing-metadata/i)
+        .first()
     ).toBeVisible()
     await expect(
       page.getByText(/tombstone-delete-serviceadmin-session-signing-metadata/i)
@@ -230,6 +232,36 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/current secret value is not read/i)
     ).toBeVisible()
+    await page
+      .getByLabel(/Audit reason for stub preview/i)
+      .fill('operator requested decommission preview')
+    await page.getByLabel(/I confirm this is a stub preview/i).check()
+    await page.getByLabel(/Result status/i).selectOption('applied')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Single-secret operation result: applied/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Delete\/decommission impact evidence/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /impact-delete-serviceadmin-session-signing-applied-metadata/i
+      )
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(/recovery-delete-serviceadmin-session-signing-metadata/i)
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /restore or recreate only through a fresh audited broker recovery plan/i
+      )
+    ).toBeVisible()
+    await expect(page.getByText(/requestBody/i).first()).toBeVisible()
+    await expect(page.getByText(/responseBody/i).first()).toBeVisible()
+    await expect(page.getByText(/recoveryMaterial/i).first()).toBeVisible()
     await page
       .getByRole('button', { name: /Apply policy preview/i })
       .first()
@@ -243,7 +275,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/Policy assignment safety preview/i)
     ).toBeVisible()
-    await expect(page.getByText(/policy preview blocked/i)).toBeVisible()
+    await expect(page.getByText(/policy preview ready/i)).toBeVisible()
     await expect(
       page.getByText(
         'policy/openclaw/service-lasso/serviceadmin/least-privilege-single-ref',
@@ -251,7 +283,9 @@ test.describe('Secrets Broker browser coverage', () => {
       )
     ).toBeVisible()
     await expect(
-      page.getByText(/rollback-policy-serviceadmin-session-signing-metadata/i)
+      page
+        .getByText(/rollback-policy-serviceadmin-session-signing-metadata/i)
+        .first()
     ).toBeVisible()
     await expect(page.getByText(/@serviceadmin operator API/i)).toBeVisible()
     await expect(
@@ -259,6 +293,33 @@ test.describe('Secrets Broker browser coverage', () => {
         /policy preview never reads or writes the current secret value/i
       )
     ).toBeVisible()
+    await page
+      .getByLabel(/Audit reason for stub preview/i)
+      .fill('operator requested least privilege policy assignment')
+    await page.getByLabel(/I confirm this is a stub preview/i).check()
+    await page.getByLabel(/Result status/i).selectOption('applied')
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
+    await page.getByRole('button', { name: /Simulate stub apply/i }).click()
+    await expect(
+      page.getByText(/Policy assignment impact evidence/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /impact-policy-serviceadmin-session-signing-applied-metadata/i
+      )
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(/rollback-policy-serviceadmin-session-signing-metadata/i)
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/rollback requires a fresh audited policy assignment/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/policy impact keeps previous and target policy refs/i)
+    ).toBeVisible()
+    await page.getByRole('button', { name: /Cancel stub preview/i }).click()
 
     await page.getByPlaceholder(/Search secret metadata/i).fill('payments')
     await page.getByRole('button', { name: /Delete dry-run/ }).click()
@@ -286,11 +347,12 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/no local storage or session storage/i)
     ).toBeVisible()
-    await expect(page.getByText(/0 submitted/i)).toBeVisible()
+    await expect(page.getByText(/2 submitted/i)).toBeVisible()
     await expect(page.getByText(/audit reason required/i).first()).toBeVisible()
     await expect(
       page.getByRole('button', { name: /Simulate stub apply/i })
     ).toBeDisabled()
+    await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page
       .getByLabel(/Audit reason for stub preview/i)
       .fill('operator requested preview')
