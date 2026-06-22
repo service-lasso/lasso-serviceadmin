@@ -13,6 +13,7 @@ The secret inventory surface is an advanced Secrets Broker planning view for met
 - The Secrets Broker Secrets page also exposes a bulk campaign workflow. Operators can select multiple metadata rows, choose a campaign operation, and generate safe per-ref/aggregate capability, policy, risk, audit, operation ID, idempotency, and blocker metadata.
 - Supported rotate/reset, update/edit, policy apply/change, and provider migration/remap campaigns can apply only after audit reason, explicit confirmation, and immediate revalidation. Apply results show campaign ID, operation ID, plan token, per-item operation IDs, idempotency keys, typed outcomes, audit status, retry/recovery guidance, and skipped/denied/unsupported/auth-required rows without raw values.
 - Single-secret apply results include post-apply impact evidence: dependent service refs, audit/rollback/recovery refs, fresh-preview requirements, and omitted unsafe fields. Delete/decommission and policy assignment evidence is metadata-only and never includes current values, request/response bodies, provider credentials, cookies, tokens, private keys, recovery material, or raw environment values.
+- Single-secret cancellation is recorded as metadata-only operator intent: operation id, ref, action, audit/correlation refs, and fresh-preview recovery guidance. Cancellation evidence never submits a mutation and never stores request/response bodies or secret material.
 
 ## Not implemented in this slice
 
