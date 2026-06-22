@@ -2187,6 +2187,101 @@ export function SecretsManagementPage() {
                     {singleApplyResult.nextAction}
                   </div>
                 </div>
+                <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                  <div className='mb-3 flex flex-wrap items-center gap-2'>
+                    <div className='font-medium'>
+                      {singleApplyResult.impactEvidence.title}
+                    </div>
+                    <Badge variant='secondary'>Metadata only</Badge>
+                  </div>
+                  <div className='grid gap-3 md:grid-cols-3'>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Impact ref
+                      </div>
+                      <div className='mt-1 break-all'>
+                        {singleApplyResult.impactEvidence.impactRef}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Rollback / recovery ref
+                      </div>
+                      <div className='mt-1 break-all'>
+                        {singleApplyResult.impactEvidence.rollbackRef}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Fresh preview
+                      </div>
+                      <div className='mt-1'>
+                        {
+                          singleApplyResult.impactEvidence
+                            .freshPreviewRequirement
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Dependent service refs
+                      </div>
+                      <div className='mt-2 flex flex-wrap gap-1'>
+                        {singleApplyResult.impactEvidence.dependentServiceRefs.map(
+                          (ref) => (
+                            <Badge key={ref} variant='outline'>
+                              {ref}
+                            </Badge>
+                          )
+                        )}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Audit refs
+                      </div>
+                      <div className='mt-2 flex flex-wrap gap-1'>
+                        {singleApplyResult.impactEvidence.auditRefs.map(
+                          (ref) => (
+                            <Badge key={ref} variant='outline'>
+                              {ref}
+                            </Badge>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Omitted unsafe fields
+                      </div>
+                      <div className='mt-2 flex flex-wrap gap-1'>
+                        {singleApplyResult.impactEvidence.omittedUnsafeFields.map(
+                          (field) => (
+                            <Badge key={field} variant='secondary'>
+                              {field}
+                            </Badge>
+                          )
+                        )}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Safe impact rows
+                      </div>
+                      <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                        {singleApplyResult.impactEvidence.safeEvidenceRows.map(
+                          (row) => (
+                            <li key={row}>{row}</li>
+                          )
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
                 {singleApplyResult.providerAuthChallengeRef ? (
                   <div className='mt-3 rounded-md border bg-muted/30 p-3'>
                     <div className='text-xs font-medium text-muted-foreground uppercase'>

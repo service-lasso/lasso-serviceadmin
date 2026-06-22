@@ -1671,6 +1671,35 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretRows[0],
       singlePolicyPlan
     )
+    expect(policyResult.impactEvidence).toMatchObject({
+      title: 'Policy assignment impact evidence',
+      impactRef:
+        'impact-policy-serviceadmin-session-signing-submitted-metadata',
+      rollbackRef: 'rollback-policy-serviceadmin-session-signing-metadata',
+      freshPreviewRequirement:
+        'wait for broker terminal metadata before any follow-up preview',
+    })
+    expect(policyResult.impactEvidence.dependentServiceRefs).toEqual(
+      expect.arrayContaining(['@serviceadmin operator API'])
+    )
+    expect(policyResult.impactEvidence.omittedUnsafeFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(policyResult.impactEvidence.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'policy impact keeps previous and target policy refs as metadata-only rollback context',
+      ])
+    )
     expect(policyResult.safetyRows).toEqual(
       expect.arrayContaining([
         'policy change carries target policy metadata only',
@@ -1804,6 +1833,20 @@ describe('Secrets Broker secrets management page', () => {
     const deleteResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
       deletePlan
+    )
+    expect(deleteResult.impactEvidence).toMatchObject({
+      title: 'Delete/decommission impact evidence',
+      impactRef:
+        'impact-delete-serviceadmin-session-signing-submitted-metadata',
+      rollbackRef: 'recovery-delete-serviceadmin-session-signing-metadata',
+    })
+    expect(deleteResult.impactEvidence.dependentServiceRefs).toEqual(
+      expect.arrayContaining(['@serviceadmin runtime session loader'])
+    )
+    expect(deleteResult.impactEvidence.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'decommission impact keeps tombstone and recovery references separate from secret material',
+      ])
     )
     expect(deleteResult).toMatchObject({
       recoveryStatus:
