@@ -99,6 +99,24 @@ export type SingleSecretEditPreview = {
   safeDiffRows: string[]
 }
 
+export type SingleSecretRotationPreview = {
+  ref: string
+  operationId: string
+  eligible: boolean
+  badge: string
+  rotationPlanRef: string
+  idempotencyRef: string
+  retryWindowRef: string
+  providerCapabilityCheck: string
+  dependentServiceRefs: string[]
+  restartPlanRefs: string[]
+  auditEventId: string
+  applyGate: string
+  blockers: string[]
+  omittedUnsafeFields: string[]
+  safeMetadataRows: string[]
+}
+
 export type SingleSecretOperationOutcome =
   | 'submitted'
   | 'applied'
@@ -1589,7 +1607,14 @@ function safePayloadFieldsForSingleSecretAction(action: ManagedSecretAction) {
     case 'edit':
       return [...baseFields, 'metadataDiff', 'patchPlanHash', 'rollbackPlanRef']
     case 'reset':
-      return [...baseFields, 'rotationReason']
+      return [
+        ...baseFields,
+        'rotationReason',
+        'rotationPlanRef',
+        'dependentServiceRefs',
+        'restartPlanRefs',
+        'idempotencyRef',
+      ]
     case 'delete':
       return [...baseFields, 'recoveryPlanRef', 'dependentServiceRefs']
     case 'policy':
@@ -1625,6 +1650,7 @@ function revalidationChecksForSingleSecretAction(
   }
   if (action === 'reset') {
     checks.push('rotation can submit without controlled reveal')
+    checks.push('dependent service restart and reload plan checked')
   }
 
   return checks
@@ -1763,6 +1789,76 @@ function editConsumerRefsForRow(row: ManagedSecretRow) {
     `${row.owningService} runtime config consumer`,
     `${row.workspace} workspace dependency map`,
   ]
+}
+
+function rotationDependentServiceRefsForRow(row: ManagedSecretRow) {
+  if (row.owningService === '@serviceadmin') {
+    return [
+      '@serviceadmin runtime session loader',
+      '@serviceadmin operator API',
+    ]
+  }
+
+  return [
+    `${row.owningService} runtime secret consumer`,
+    `${row.workspace} restart coordination ref`,
+  ]
+}
+
+export function buildSingleSecretRotationPreview(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan
+): SingleSecretRotationPreview {
+  const blockers = [...plan.blockers]
+
+  if (plan.action !== 'reset') {
+    blockers.push('select reset action')
+  }
+
+  const eligible = blockers.length === 0
+  const slug = safeOperationSlug('reset', row)
+  const dependentServiceRefs = rotationDependentServiceRefsForRow(row)
+
+  return {
+    ref: row.ref,
+    operationId: plan.operationId,
+    eligible,
+    badge: eligible ? 'rotation preview ready' : 'rotation preview blocked',
+    rotationPlanRef: `rotation-plan-${slug}-metadata`,
+    idempotencyRef: `idem-${slug}-metadata-submit`,
+    retryWindowRef: `retry-window-${slug}-operation-id-only`,
+    providerCapabilityCheck: eligible
+      ? 'rotate/reset capability, provider state, policy, and audit metadata ready for final broker revalidation'
+      : 'rotation capability and provider state deferred while preview is blocked',
+    dependentServiceRefs,
+    restartPlanRefs: dependentServiceRefs.map(
+      (ref) => `restart-${safeCampaignSlug(ref)}-after-rotation-metadata`
+    ),
+    auditEventId: auditEventIdForSingleSecretAction('reset', row),
+    applyGate: eligible
+      ? 'ready for broker-owned rotate/reset submit after final service impact revalidation'
+      : blockers[0],
+    blockers,
+    omittedUnsafeFields: [
+      'rawValue',
+      'generatedValue',
+      'replacementValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    safeMetadataRows: [
+      'rotation preview never reveals the current value or generated replacement value',
+      'dependent service restart refs are names only and contain no environment values',
+      'idempotency and retry refs are scoped to the broker operation id',
+      'operator can rotate without opening a controlled reveal session',
+    ],
+  }
 }
 
 export function buildSingleSecretEditPreview(
@@ -2838,6 +2934,12 @@ export function managedSecretSubmitEnvelopeHasSecretMaterial(
 
 export function managedSecretEditPreviewHasSecretMaterial(
   preview: SingleSecretEditPreview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(preview))
+}
+
+export function managedSecretRotationPreviewHasSecretMaterial(
+  preview: SingleSecretRotationPreview
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(preview))
 }

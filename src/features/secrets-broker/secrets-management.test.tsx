@@ -14,6 +14,7 @@ import {
   buildSingleSecretPolicyPreview,
   buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
+  buildSingleSecretRotationPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
   buildSingleSecretStatusMonitor,
@@ -28,6 +29,7 @@ import {
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
+  managedSecretRotationPreviewHasSecretMaterial,
   managedSecretSingleAuditTrailHasSecretMaterial,
   managedSecretStatusMonitorHasSecretMaterial,
   managedSecretSubmitEnvelopeHasSecretMaterial,
@@ -654,6 +656,25 @@ describe('Secrets Broker secrets management page', () => {
       )[0]
     ).toBeVisible()
     expect(screen.getByText(/reset dry-run capability checked/i)).toBeVisible()
+    expect(screen.getByText(/Rotation safety preview/i)).toBeVisible()
+    expect(screen.getByText(/rotation preview blocked/i)).toBeVisible()
+    expect(screen.getByText(/No reveal required/i)).toBeVisible()
+    expect(
+      screen.getByText(/rotation-plan-reset-serviceadmin-session-signing/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/retry-window-reset-serviceadmin-session-signing/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/restart-serviceadmin-runtime-session-loader/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        /operator can rotate without opening a controlled reveal/i
+      )
+    ).toBeVisible()
+    expect(screen.getByText(/generatedValue/i)).toBeVisible()
+    expect(screen.getByText(/replacementValue/i)).toBeVisible()
     await user.type(
       screen.getByLabelText(/Audit reason for stub preview/i),
       'operator requested rotation preview'
@@ -994,7 +1015,101 @@ describe('Secrets Broker secrets management page', () => {
       canSubmit: true,
     })
     expect(rotatePlan.safePayloadFields).toEqual(
-      expect.arrayContaining(['ref', 'operationId', 'auditReasonMetadata'])
+      expect.arrayContaining([
+        'ref',
+        'operationId',
+        'auditReasonMetadata',
+        'rotationPlanRef',
+        'dependentServiceRefs',
+        'restartPlanRefs',
+        'idempotencyRef',
+      ])
+    )
+    expect(rotatePlan.revalidationChecks).toEqual(
+      expect.arrayContaining([
+        'rotation can submit without controlled reveal',
+        'dependent service restart and reload plan checked',
+      ])
+    )
+    const rotationPreview = buildSingleSecretRotationPreview(
+      managedSecretRows[0],
+      rotatePlan
+    )
+    expect(rotationPreview).toMatchObject({
+      eligible: true,
+      badge: 'rotation preview ready',
+      rotationPlanRef:
+        'rotation-plan-reset-serviceadmin-session-signing-metadata',
+      idempotencyRef: 'idem-reset-serviceadmin-session-signing-metadata-submit',
+      retryWindowRef:
+        'retry-window-reset-serviceadmin-session-signing-operation-id-only',
+      applyGate:
+        'ready for broker-owned rotate/reset submit after final service impact revalidation',
+      auditEventId: 'audit-reset-serviceadmin-session-signing-preview',
+    })
+    expect(rotationPreview.dependentServiceRefs).toEqual(
+      expect.arrayContaining([
+        '@serviceadmin runtime session loader',
+        '@serviceadmin operator API',
+      ])
+    )
+    expect(rotationPreview.restartPlanRefs).toEqual(
+      expect.arrayContaining([
+        'restart-serviceadmin-runtime-session-loader-after-rotation-metadata',
+      ])
+    )
+    expect(rotationPreview.omittedUnsafeFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'generatedValue',
+        'replacementValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(rotationPreview.safeMetadataRows).toEqual(
+      expect.arrayContaining([
+        'rotation preview never reveals the current value or generated replacement value',
+        'operator can rotate without opening a controlled reveal session',
+      ])
+    )
+    expect(managedSecretRotationPreviewHasSecretMaterial(rotationPreview)).toBe(
+      false
+    )
+    const blockedRotationPreview = buildSingleSecretRotationPreview(
+      managedSecretRows[3],
+      buildSingleSecretOperationPlan(
+        managedSecretRows[3],
+        'reset',
+        'operator requested rotation preview',
+        true,
+        'ready'
+      )
+    )
+    expect(blockedRotationPreview).toMatchObject({
+      eligible: false,
+      badge: 'rotation preview blocked',
+      applyGate: 'ref unavailable',
+    })
+    expect(blockedRotationPreview.blockers).toEqual(
+      expect.arrayContaining(['ref unavailable', 'reset dry-run unsupported'])
+    )
+    expect(
+      managedSecretRotationPreviewHasSecretMaterial(blockedRotationPreview)
+    ).toBe(false)
+    expect(rotatePlan.safePayloadFields).toEqual(
+      expect.arrayContaining([
+        'rotationReason',
+        'rotationPlanRef',
+        'dependentServiceRefs',
+        'restartPlanRefs',
+      ])
     )
     const rotateResult = buildSingleSecretOperationResult(
       managedSecretRows[0],
