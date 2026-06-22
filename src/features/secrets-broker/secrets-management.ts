@@ -202,6 +202,35 @@ export type SingleSecretRevealPreview = {
   safeMetadataRows: string[]
 }
 
+export type SingleSecretRevealLifecycleState =
+  | 'pending'
+  | 'authorized'
+  | 'expired'
+  | 'revoked'
+  | 'denied'
+  | 'audit-unavailable'
+
+export type SingleSecretRevealLifecycle = {
+  ref: string
+  operationId: string
+  state: SingleSecretRevealLifecycleState
+  badge: string
+  revealChallengeId: string
+  revealSessionRef: string
+  displayStatus: string
+  valueStatus: string
+  actorRef: string
+  auditEventId: string
+  correlationId: string
+  expiresAt: string
+  revocationRef: string
+  policyDecisionRef: string
+  nextAction: string
+  blockedReason: string | null
+  omittedUnsafeFields: string[]
+  safeEvidenceRows: string[]
+}
+
 export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
   rowName: string
   provider: string
@@ -493,6 +522,18 @@ export const singleSecretOperationOutcomes: Array<{
   { id: 'failed', label: 'Broker apply failed' },
   { id: 'stale-plan', label: 'Stale plan rejected' },
   { id: 'cancelled', label: 'Operator cancelled before submit' },
+]
+
+export const singleSecretRevealLifecycleStates: Array<{
+  id: SingleSecretRevealLifecycleState
+  label: string
+}> = [
+  { id: 'pending', label: 'Challenge pending' },
+  { id: 'authorized', label: 'Authorized short-lived display' },
+  { id: 'expired', label: 'Challenge expired' },
+  { id: 'revoked', label: 'Challenge revoked' },
+  { id: 'denied', label: 'Policy denied' },
+  { id: 'audit-unavailable', label: 'Audit unavailable' },
 ]
 
 export const bulkSecretCampaignOperations: Array<{
@@ -1755,6 +1796,120 @@ export function buildSingleSecretRevealPreview(
   }
 }
 
+export function buildSingleSecretRevealLifecycle(
+  row: ManagedSecretRow,
+  preview: SingleSecretRevealPreview,
+  state: SingleSecretRevealLifecycleState
+): SingleSecretRevealLifecycle {
+  const slug = safeOperationSlug('reveal', row)
+  const blockedReason =
+    preview.blockers.length > 0
+      ? preview.blockers[0]
+      : state === 'denied'
+        ? 'broker policy denied reveal after challenge review'
+        : state === 'audit-unavailable'
+          ? 'audit sink unavailable; reveal display fails closed'
+          : state === 'expired'
+            ? 'challenge expired before broker display authorization'
+            : state === 'revoked'
+              ? 'operator or broker revoked challenge before display'
+              : null
+  const badge =
+    state === 'authorized'
+      ? 'authorized display metadata'
+      : state === 'expired'
+        ? 'expired'
+        : state === 'revoked'
+          ? 'revoked'
+          : state === 'denied'
+            ? 'policy denied'
+            : state === 'audit-unavailable'
+              ? 'audit blocked'
+              : 'pending'
+  const displayStatus =
+    state === 'authorized'
+      ? 'broker authorized a short-lived display session; value remains outside table fixtures and diagnostics'
+      : state === 'expired'
+        ? 'display not opened because the challenge expired'
+        : state === 'revoked'
+          ? 'display not opened because the challenge was revoked'
+          : state === 'denied'
+            ? 'display blocked by policy; no source access occurred'
+            : state === 'audit-unavailable'
+              ? 'display blocked because audit persistence is unavailable'
+              : 'waiting for broker authorization; no display session yet'
+  const nextAction =
+    state === 'authorized'
+      ? 'wait for broker display expiry, then require a fresh reveal challenge for any later view'
+      : state === 'expired'
+        ? 'create a fresh audited reveal preview before retry'
+        : state === 'revoked'
+          ? 'review revocation reason and create a fresh challenge only if policy still permits'
+          : state === 'denied'
+            ? 'request least-privilege approval or choose metadata-only review'
+            : state === 'audit-unavailable'
+              ? 'restore audit persistence before any new reveal challenge'
+              : 'complete broker authorization and audit retention checks before opening display'
+
+  return {
+    ref: row.ref,
+    operationId: preview.operationId,
+    state,
+    badge,
+    revealChallengeId: preview.revealChallengeId,
+    revealSessionRef:
+      state === 'authorized'
+        ? `reveal-session-${slug}-metadata`
+        : 'no active display session',
+    displayStatus,
+    valueStatus: 'hidden; no value is stored, copied, exported, or logged',
+    actorRef:
+      state === 'authorized'
+        ? 'broker-authorized-operator-session'
+        : 'serviceadmin-ui',
+    auditEventId: preview.auditEventId,
+    correlationId: `corr-reveal-${slug}-${state}`,
+    expiresAt:
+      state === 'authorized' || state === 'pending'
+        ? preview.challengeExpiresAt
+        : 'expired or revoked before display',
+    revocationRef:
+      state === 'revoked'
+        ? `revoke-reveal-${slug}-metadata`
+        : `revocation-ready-${slug}-metadata`,
+    policyDecisionRef: `policy-decision-reveal-${slug}-${state}-metadata`,
+    nextAction,
+    blockedReason,
+    omittedUnsafeFields: [
+      'rawValue',
+      'displayPayload',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    safeEvidenceRows: [
+      'lifecycle evidence stores challenge id, session ref, expiry, actor ref, audit event, correlation id, and typed state only',
+      'authorized display metadata does not place the revealed value in the table, route, query string, local storage, diagnostics, screenshots, or support bundles',
+      state === 'authorized'
+        ? 'short-lived display can be revoked or expire without persisting value payloads'
+        : state === 'audit-unavailable'
+          ? 'audit-unavailable state fails closed before broker display authorization'
+          : state === 'denied'
+            ? 'policy-denied state records decision refs without source access'
+            : state === 'expired'
+              ? 'expired challenge metadata cannot be reused for display'
+              : state === 'revoked'
+                ? 'revoked challenge metadata requires a fresh audited preview before retry'
+                : 'pending challenge metadata cannot display a value',
+    ],
+  }
+}
+
 function decommissionDependentServiceRefsForRow(row: ManagedSecretRow) {
   if (row.owningService === '@serviceadmin') {
     return ['@serviceadmin runtime session loader', '@secretsbroker audit sink']
@@ -2596,6 +2751,12 @@ export function managedSecretRevealPreviewHasSecretMaterial(
   preview: SingleSecretRevealPreview
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(preview))
+}
+
+export function managedSecretRevealLifecycleHasSecretMaterial(
+  lifecycle: SingleSecretRevealLifecycle
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(lifecycle))
 }
 
 export function managedSecretActionReadinessHasSecretMaterial(

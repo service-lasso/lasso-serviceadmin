@@ -11,6 +11,7 @@ import {
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
@@ -23,6 +24,7 @@ import {
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
+  managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
   managedSecretSingleAuditTrailHasSecretMaterial,
   managedSecretStatusMonitorHasSecretMaterial,
@@ -571,6 +573,36 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(
         /raw secret value is not fetched during preview generation/i
+      )
+    ).toBeVisible()
+    expect(screen.getByText(/Reveal challenge lifecycle/i)).toBeVisible()
+    expect(screen.getByLabelText(/Reveal lifecycle state/i)).toBeVisible()
+    expect(screen.getByText(/waiting for broker authorization/i)).toBeVisible()
+    await user.selectOptions(
+      screen.getByLabelText(/Reveal lifecycle state/i),
+      'authorized'
+    )
+    expect(screen.getAllByText(/authorized display metadata/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/reveal-session-reveal-serviceadmin/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/value remains outside table fixtures/i)
+    ).toBeVisible()
+    await user.selectOptions(
+      screen.getByLabelText(/Reveal lifecycle state/i),
+      'expired'
+    )
+    expect(
+      screen.getByText(/display not opened because the challenge expired/i)
+    ).toBeVisible()
+    await user.selectOptions(
+      screen.getByLabelText(/Reveal lifecycle state/i),
+      'audit-unavailable'
+    )
+    expect(
+      screen.getByText(
+        /display blocked because audit persistence is unavailable/i
       )
     ).toBeVisible()
 
@@ -1681,6 +1713,61 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretRevealPreviewHasSecretMaterial(revealPreview)).toBe(
       false
     )
+    const authorizedRevealLifecycle = buildSingleSecretRevealLifecycle(
+      managedSecretRows[0],
+      revealPreview,
+      'authorized'
+    )
+    expect(authorizedRevealLifecycle).toMatchObject({
+      state: 'authorized',
+      badge: 'authorized display metadata',
+      revealSessionRef:
+        'reveal-session-reveal-serviceadmin-session-signing-metadata',
+      valueStatus: 'hidden; no value is stored, copied, exported, or logged',
+      blockedReason: null,
+    })
+    expect(authorizedRevealLifecycle.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'short-lived display can be revoked or expire without persisting value payloads',
+      ])
+    )
+    expect(authorizedRevealLifecycle.omittedUnsafeFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'displayPayload',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(
+      managedSecretRevealLifecycleHasSecretMaterial(authorizedRevealLifecycle)
+    ).toBe(false)
+
+    const deniedRevealLifecycle = buildSingleSecretRevealLifecycle(
+      managedSecretRows[0],
+      revealPreview,
+      'denied'
+    )
+    expect(deniedRevealLifecycle).toMatchObject({
+      state: 'denied',
+      badge: 'policy denied',
+      revealSessionRef: 'no active display session',
+      blockedReason: 'broker policy denied reveal after challenge review',
+    })
+    expect(deniedRevealLifecycle.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'policy-denied state records decision refs without source access',
+      ])
+    )
+    expect(
+      managedSecretRevealLifecycleHasSecretMaterial(deniedRevealLifecycle)
+    ).toBe(false)
 
     const missingRevealPlan = buildSingleSecretOperationPlan(
       managedSecretRows[3],
