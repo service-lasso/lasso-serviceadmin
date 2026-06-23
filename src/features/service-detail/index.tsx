@@ -90,6 +90,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { buildMetadataTableRows } from './metadata-table'
 
 const REDACTED_CONFIG_VALUE = '[redacted by Service Admin]'
 const SENSITIVE_CONFIG_KEY_PATTERN =
@@ -695,6 +696,76 @@ function MetadataRow({ label, value }: { label: string; value?: string }) {
   )
 }
 
+function ServiceMetadataTable({ service }: { service: DashboardService }) {
+  const rows = buildMetadataTableRows(service.metadata)
+
+  return (
+    <Card data-testid='service-detail-overview-metadata'>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <ScanSearch className='size-4' /> Metadata
+        </CardTitle>
+        <CardDescription>
+          Runtime metadata recorded for this service.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div
+          className='overflow-x-auto rounded-md border'
+          data-testid='service-detail-metadata-table'
+        >
+          <Table className='min-w-[640px] table-fixed'>
+            <colgroup>
+              <col className='w-[28%]' />
+              <col className='w-[60%]' />
+              <col className='w-[12%]' />
+            </colgroup>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Key</TableHead>
+                <TableHead>Value</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length ? (
+                rows.map((row) => (
+                  <TableRow key={row.label}>
+                    <TableCell className='align-top font-medium whitespace-normal'>
+                      {row.label}
+                    </TableCell>
+                    <TableCell className='min-w-0 align-top text-sm whitespace-normal text-muted-foreground'>
+                      <div
+                        className='max-w-full overflow-hidden leading-relaxed break-all text-ellipsis'
+                        title={row.value}
+                        data-testid='service-detail-metadata-value'
+                      >
+                        {row.value}
+                      </div>
+                    </TableCell>
+                    <TableCell className='align-top'>
+                      <CopyValueButton
+                        value={row.value}
+                        label={`Copy ${row.label}`}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={3} className='h-16 text-center'>
+                    No runtime metadata fields are recorded for this service.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function FullConfigJsonDialog({ service }: { service: DashboardService }) {
   const configJson = useMemo(() => buildServiceConfigJson(service), [service])
 
@@ -942,12 +1013,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const serviceQuery = useDashboardService(serviceId)
   const serviceName = serviceQuery.data?.name ?? serviceId
   const [activeTab, setActiveTab] = useState<
-    | 'overview'
-    | 'dependencies'
-    | 'metadata'
-    | 'endpoints'
-    | 'variables'
-    | 'logs'
+    'overview' | 'dependencies' | 'endpoints' | 'variables' | 'logs'
   >('overview')
 
   useEffect(() => {
@@ -962,14 +1028,12 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
       const nextTab = {
         '1': 'overview',
         '2': 'dependencies',
-        '3': 'metadata',
-        '4': 'endpoints',
-        '5': 'variables',
-        '6': 'logs',
+        '3': 'endpoints',
+        '4': 'variables',
+        '5': 'logs',
       }[event.key] as
         | 'overview'
         | 'dependencies'
-        | 'metadata'
         | 'endpoints'
         | 'variables'
         | 'logs'
@@ -1109,35 +1173,28 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       <span className='ml-1 italic opacity-80'>(2)</span>
                     </TabsTrigger>
                     <TabsTrigger
-                      value='metadata'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Metadata{' '}
-                      <span className='ml-1 italic opacity-80'>(3)</span>
-                    </TabsTrigger>
-                    <TabsTrigger
                       value='endpoints'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Endpoints{' '}
-                      <span className='ml-1 italic opacity-80'>(4)</span>
+                      <span className='ml-1 italic opacity-80'>(3)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='variables'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Variables{' '}
-                      <span className='ml-1 italic opacity-80'>(5)</span>
+                      <span className='ml-1 italic opacity-80'>(4)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='logs'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Logs <span className='ml-1 italic opacity-80'>(6)</span>
+                      Logs <span className='ml-1 italic opacity-80'>(5)</span>
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value='overview' className='mt-0'>
+                  <TabsContent value='overview' className='mt-0 space-y-4'>
                     <div className='grid gap-4 md:grid-cols-3'>
                       <Card>
                         <CardHeader className='pb-2'>
@@ -1198,6 +1255,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         </CardContent>
                       </Card>
                     </div>
+                    <ServiceMetadataTable service={service} />
                   </TabsContent>
 
                   <TabsContent value='dependencies' className='mt-0 space-y-4'>
@@ -1219,51 +1277,6 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           title='Dependents'
                           items={service.dependents}
                         />
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value='metadata' className='mt-0'>
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className='flex items-center gap-2'>
-                          <ScanSearch className='size-4' /> Runtime metadata
-                        </CardTitle>
-                        <CardDescription>
-                          Concrete service facts useful during operator review.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className='space-y-3 text-sm'>
-                        <MetadataRow
-                          label='Package'
-                          value={service.metadata.packageId}
-                        />
-                        <MetadataRow
-                          label='Install path'
-                          value={service.metadata.installPath}
-                        />
-                        <MetadataRow
-                          label='Config path'
-                          value={service.metadata.configPath}
-                        />
-                        <MetadataRow
-                          label='Data path'
-                          value={service.metadata.dataPath}
-                        />
-                        <MetadataRow
-                          label='Log path'
-                          value={service.metadata.logPath}
-                        />
-                        <MetadataRow
-                          label='Work path'
-                          value={service.metadata.workPath}
-                        />
-                        <div className='rounded-lg border p-3'>
-                          <div className='font-medium'>Profile</div>
-                          <div className='text-sm text-muted-foreground'>
-                            {service.metadata.profile ?? 'Not recorded'}
-                          </div>
-                        </div>
                       </CardContent>
                     </Card>
                   </TabsContent>
