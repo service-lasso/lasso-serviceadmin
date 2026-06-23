@@ -129,3 +129,40 @@ export type DashboardAction =
       serviceId: string
       action: 'start' | 'stop' | 'restart'
     }
+
+export type ServiceConfigRevision = {
+  id: string
+  createdAt: string
+  actor: string
+  reason: string | null
+  path: string
+  previousHash: string
+  currentHash: string
+  validationStatus: 'valid'
+  content: string
+}
+
+export type ServiceConfigDocument = {
+  serviceId: string
+  fileName: 'server.json'
+  path: string
+  content: string
+  hash: string
+  updatedAt: string
+  backupCount: number
+  revisions: ServiceConfigRevision[]
+  safety: {
+    rawSecretValuesLoaded: false
+    omittedSensitiveFields: string[]
+  }
+}
+
+export type ServiceConfigSaveResult = {
+  serviceId: string
+  fileName: 'server.json'
+  path: string
+  hash: string
+  savedAt: string
+  backup: ServiceConfigRevision
+  validationStatus: 'valid'
+}
