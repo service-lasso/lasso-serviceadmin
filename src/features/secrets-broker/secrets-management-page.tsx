@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   type ColumnDef,
-  type ColumnFiltersState,
-  type PaginationState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -26,6 +24,7 @@ import {
 import { usePageMetadata } from '@/lib/page-metadata'
 import { isServiceAdminStubModeEnabled } from '@/lib/service-lasso-dashboard/stub'
 import { cn } from '@/lib/utils'
+import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -134,7 +133,15 @@ const actionButtonLabels: Record<
   policy: 'Apply policy preview',
 }
 
-export function SecretsManagementPage() {
+type SecretsManagementPageProps = {
+  search: Record<string, unknown>
+  navigate: NavigateFn
+}
+
+export function SecretsManagementPage({
+  search,
+  navigate,
+}: SecretsManagementPageProps) {
   const stubModeEnabled = isServiceAdminStubModeEnabled()
   const [valueQuery, setValueQuery] = useState('')
   const [valueSearchSupported, setValueSearchSupported] = useState(false)
@@ -176,11 +183,24 @@ export function SecretsManagementPage() {
   const [bulkApplyResult, setBulkApplyResult] =
     useState<BulkSecretCampaignApplyResult | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = useState('')
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
+
+  const {
+    globalFilter,
+    onGlobalFilterChange,
+    columnFilters,
+    onColumnFiltersChange,
+    pagination,
+    onPaginationChange,
+    ensurePageInRange,
+  } = useTableUrlState({
+    search,
+    navigate,
+    pagination: { defaultPage: 1, defaultPageSize: 10 },
+    globalFilter: { key: 'secret' },
+    columnFilters: [
+      { columnId: 'provider', searchKey: 'provider', type: 'array' },
+      { columnId: 'state', searchKey: 'state', type: 'array' },
+    ],
   })
 
   usePageMetadata({
@@ -564,9 +584,9 @@ export function SecretsManagementPage() {
       pagination,
     },
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    onPaginationChange: setPagination,
+    onColumnFiltersChange,
+    onGlobalFilterChange,
+    onPaginationChange,
     globalFilterFn: (row, _columnId, filterValue) => {
       const query = String(filterValue ?? '')
         .trim()
@@ -598,16 +618,8 @@ export function SecretsManagementPage() {
   })
 
   useEffect(() => {
-    if (
-      pagination.pageIndex > 0 &&
-      pagination.pageIndex >= table.getPageCount()
-    ) {
-      setPagination((current) => ({
-        ...current,
-        pageIndex: Math.max(table.getPageCount() - 1, 0),
-      }))
-    }
-  }, [pagination.pageIndex, table])
+    ensurePageInRange(table.getPageCount())
+  }, [table, ensurePageInRange])
 
   if (!stubModeEnabled) {
     return (
