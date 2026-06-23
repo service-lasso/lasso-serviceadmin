@@ -2,6 +2,9 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceConfigDocument,
+  ServiceConfigRevision,
+  ServiceConfigSaveResult,
   ServiceStatus,
 } from './types'
 
@@ -646,6 +649,53 @@ let services: DashboardService[] = syncRelationshipStatuses(
 
 let runtime = restorePersistedRuntime(persistedState.runtime)
 
+const stubConfigRevisions = new Map<string, ServiceConfigRevision[]>()
+const stubConfigContents = new Map<string, string>()
+
+function stableHash(content: string) {
+  let hash = 0
+  for (let index = 0; index < content.length; index += 1) {
+    hash = (hash * 31 + content.charCodeAt(index)) >>> 0
+  }
+  return hash.toString(16).padStart(8, '0')
+}
+
+function buildStubConfigContent(service: DashboardService) {
+  return `${JSON.stringify(
+    {
+      id: service.id,
+      name: service.name,
+      description: service.note,
+      enabled: service.status !== 'stopped',
+      runtime: service.metadata.runtime,
+      version: service.metadata.version,
+      healthcheck: { type: 'process' },
+      urls: service.endpoints.map((endpoint) => ({
+        label: endpoint.label,
+        url: endpoint.url,
+      })),
+    },
+    null,
+    2
+  )}\n`
+}
+
+function requireJsonObject(content: string) {
+  const parsed = JSON.parse(content) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('server.json content must be a JSON object.')
+  }
+  return `${JSON.stringify(parsed, null, 2)}\n`
+}
+
+function getStubConfigContent(service: DashboardService) {
+  const existing = stubConfigContents.get(service.id)
+  if (existing) return existing
+  const content = buildStubConfigContent(service)
+  stubConfigContents.set(service.id, content)
+  return content
+}
+
 function persistStubState() {
   const storage = getBrowserStorage()
   if (!storage) return
@@ -782,6 +832,86 @@ export async function fetchDashboardService(serviceId: string) {
     structuredClone(services.find((service) => service.id === serviceId)) ??
     null
   )
+}
+
+export async function fetchServiceConfigDocument(
+  serviceId: string
+): Promise<ServiceConfigDocument> {
+  await wait(120)
+  const service = services.find((item) => item.id === serviceId)
+  if (!service) {
+    throw new Error(`Service ${serviceId} was not found by the stub runtime.`)
+  }
+  const content = getStubConfigContent(service)
+  const revisions = stubConfigRevisions.get(serviceId) ?? []
+
+  return structuredClone({
+    serviceId,
+    fileName: 'server.json',
+    path:
+      service.metadata.configPath ??
+      `C:\\service-lasso\\services\\${serviceId}\\service.json`,
+    content,
+    hash: stableHash(content),
+    updatedAt: new Date('2026-06-23T02:00:00+10:00').toISOString(),
+    backupCount: revisions.length,
+    revisions,
+    safety: {
+      rawSecretValuesLoaded: false,
+      omittedSensitiveFields: [
+        'resolved environment values',
+        'provider credentials',
+        'authorization headers',
+        'runtime-only process state',
+      ],
+    },
+  } satisfies ServiceConfigDocument)
+}
+
+export async function saveServiceConfigDocument({
+  serviceId,
+  content,
+  reason,
+}: {
+  serviceId: string
+  content: string
+  reason?: string | null
+}): Promise<ServiceConfigSaveResult> {
+  await wait(180)
+  const service = services.find((item) => item.id === serviceId)
+  if (!service) {
+    throw new Error(`Service ${serviceId} was not found by the stub runtime.`)
+  }
+
+  const previousContent = getStubConfigContent(service)
+  const normalizedContent = requireJsonObject(content)
+  const savedAt = new Date().toISOString()
+  const revision: ServiceConfigRevision = {
+    id: `stub-revision-${Date.now()}`,
+    createdAt: savedAt,
+    actor: 'service-admin-web',
+    reason: reason?.trim() || null,
+    path: `${service.metadata.workPath ?? serviceId}\\.state\\config-backups\\server.json`,
+    previousHash: stableHash(previousContent),
+    currentHash: stableHash(normalizedContent),
+    validationStatus: 'valid',
+    content: previousContent,
+  }
+  const revisions = [revision, ...(stubConfigRevisions.get(serviceId) ?? [])]
+  stubConfigRevisions.set(serviceId, revisions)
+  stubConfigContents.set(serviceId, normalizedContent)
+
+  return structuredClone({
+    serviceId,
+    fileName: 'server.json',
+    path:
+      service.metadata.configPath ??
+      `C:\\service-lasso\\services\\${serviceId}\\service.json`,
+    hash: stableHash(normalizedContent),
+    savedAt,
+    backup: revision,
+    validationStatus: 'valid',
+  } satisfies ServiceConfigSaveResult)
 }
 
 export function resolveStubServiceLogInfo(
