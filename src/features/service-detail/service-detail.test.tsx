@@ -2,6 +2,87 @@ import { renderRoute } from '@/test/render-route'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { buildMetadataTableRows } from './metadata-table'
+
+vi.mock('@/lib/service-lasso-dashboard/client', async () => {
+  const stub = await vi.importActual<
+    typeof import('@/lib/service-lasso-dashboard/stub')
+  >('@/lib/service-lasso-dashboard/stub')
+
+  return {
+    buildServiceLogUrl: stub.buildStubServiceLogUrl,
+    fetchDashboardService: stub.fetchDashboardService,
+    fetchDashboardSummary: stub.fetchDashboardSummary,
+    fetchServices: stub.fetchServices,
+    runDashboardAction: stub.runDashboardAction,
+    serviceLassoApiBaseUrl: stub.serviceLassoApiBaseUrl,
+  }
+})
+
+describe('service detail overview metadata table', () => {
+  it('renders runtime metadata under the overview summary without a duplicate metadata tab', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(screen.queryByRole('tab', { name: /metadata/i })).toBeNull()
+
+    const metadataRegion = screen.getByTestId(
+      'service-detail-overview-metadata'
+    )
+    const metadataTable = within(metadataRegion).getByTestId(
+      'service-detail-metadata-table'
+    )
+
+    expect(within(metadataRegion).getByText('Metadata')).toBeVisible()
+    expect(
+      within(metadataTable).getByRole('columnheader', { name: 'Key' })
+    ).toBeVisible()
+    expect(within(metadataTable).getByText('Package')).toBeVisible()
+    expect(within(metadataTable).getByText('lasso-@serviceadmin')).toBeVisible()
+    expect(within(metadataTable).getByText('Install path')).toBeVisible()
+    expect(
+      within(metadataTable).getAllByText(
+        'C:\\projects\\service-lasso\\lasso-@serviceadmin'
+      )[0]
+    ).toBeVisible()
+  })
+
+  it('keeps full metadata values available for wrapped or truncated table cells', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const metadataTable = screen.getByTestId('service-detail-metadata-table')
+    const configPathCell = within(metadataTable).getByText(
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts'
+    )
+
+    expect(configPathCell).toHaveAttribute(
+      'title',
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts'
+    )
+  })
+
+  it('omits empty metadata fields for a compact empty state', () => {
+    expect(
+      buildMetadataTableRows({
+        serviceType: 'app',
+        runtime: 'node',
+        version: '1.0.0',
+        build: 'build-id',
+      })
+    ).toEqual([])
+  })
+})
 
 describe('service detail quick actions', () => {
   it('keeps jump actions in the header and removes duplicate log-panel actions', async () => {
