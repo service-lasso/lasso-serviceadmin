@@ -11,6 +11,7 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceLogType,
 } from './types'
 
 type DashboardSummaryResponse = {
@@ -185,7 +186,7 @@ export async function fetchDashboardService(serviceId: string) {
 export function buildServiceLogUrl(
   serviceId: string,
   options?: {
-    type?: 'default' | 'access' | 'error'
+    type?: ServiceLogType
   }
 ) {
   if (stubDashboardDataEnabled) {

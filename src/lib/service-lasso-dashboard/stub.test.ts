@@ -161,7 +161,12 @@ describe('service lasso dashboard stub', () => {
     expect(resolveStubServiceLogInfo('@serviceadmin')).toMatchObject({
       serviceId: '@serviceadmin',
       type: 'default',
-      availableTypes: ['default'],
+      availableTypes: ['default', 'stdout', 'stderr'],
+    })
+    expect(resolveStubServiceLogInfo('@serviceadmin', 'stdout')).toMatchObject({
+      serviceId: '@serviceadmin',
+      type: 'stdout',
+      availableTypes: ['default', 'stdout', 'stderr'],
     })
     expect(resolveStubServiceLogInfo('missing-service')).toBeNull()
     expect(buildStubServiceLogUrl('@serviceadmin')).toBe(

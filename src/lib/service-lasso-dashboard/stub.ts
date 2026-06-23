@@ -2,6 +2,7 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceLogType,
   ServiceStatus,
 } from './types'
 
@@ -786,19 +787,24 @@ export async function fetchDashboardService(serviceId: string) {
 
 export function resolveStubServiceLogInfo(
   serviceId: string,
-  type: 'default' | 'access' | 'error' = 'default'
+  type: ServiceLogType = 'default'
 ) {
   const service = services.find((item) => item.id === serviceId)
   if (!service) return null
 
   const defaultPath =
     service.metadata.logPath ?? '/mock-logs/service-sample.log'
-  const availableTypes: Array<'default' | 'access' | 'error'> = ['default']
+  const availableTypes: ServiceLogType[] = ['default', 'stdout', 'stderr']
 
   return {
     serviceId,
     type,
-    path: defaultPath,
+    path:
+      type === 'stdout'
+        ? defaultPath.replace(/\.log$/i, '.stdout.log')
+        : type === 'stderr'
+          ? defaultPath.replace(/\.log$/i, '.stderr.log')
+          : defaultPath,
     availableTypes,
   }
 }
@@ -806,7 +812,7 @@ export function resolveStubServiceLogInfo(
 export function buildStubServiceLogUrl(
   serviceId: string,
   options?: {
-    type?: 'default' | 'access' | 'error'
+    type?: ServiceLogType
   }
 ) {
   const params = new URLSearchParams({

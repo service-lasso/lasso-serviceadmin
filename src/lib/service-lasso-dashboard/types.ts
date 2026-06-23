@@ -1,5 +1,12 @@
 export type ServiceStatus = 'running' | 'available' | 'stopped' | 'degraded'
 
+export type ServiceLogType =
+  | 'default'
+  | 'stdout'
+  | 'stderr'
+  | 'access'
+  | 'error'
+
 export type ServiceLink = {
   label: string
   url: string

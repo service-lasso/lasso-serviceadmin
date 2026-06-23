@@ -49,6 +49,7 @@ import type {
   ServiceEndpoint,
   ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
+  ServiceLogType,
   ServiceStatus,
 } from '@/lib/service-lasso-dashboard/types'
 import { useTheme } from '@/context/theme-provider'
@@ -90,6 +91,12 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  fetchServiceLogChunk,
+  fetchServiceLogInfo,
+  type ServiceLogChunk,
+  type ServiceLogInfo,
+} from '@/features/logs/provider'
 import { buildMetadataTableRows } from './metadata-table'
 
 const REDACTED_CONFIG_VALUE = '[redacted by Service Admin]'
@@ -676,6 +683,254 @@ function ServiceLogViewer({ entries }: { entries: ServiceLogPreviewEntry[] }) {
           />
         )}
       />
+    </div>
+  )
+}
+
+type ServiceDetailRunStreamType = Extract<ServiceLogType, 'stdout' | 'stderr'>
+
+type ServiceDetailRunStreamState = {
+  loading: boolean
+  error: string | null
+  info: ServiceLogInfo | null
+  chunk: ServiceLogChunk | null
+}
+
+const SERVICE_DETAIL_RUN_STREAMS: Array<{
+  type: ServiceDetailRunStreamType
+  label: string
+  description: string
+}> = [
+  {
+    type: 'stdout',
+    label: 'Stdout',
+    description: 'Process output captured for the selected service run.',
+  },
+  {
+    type: 'stderr',
+    label: 'Stderr',
+    description: 'Error output captured for the selected service run.',
+  },
+]
+
+const SERVICE_DETAIL_LOG_STREAM_LIMIT = 80
+const SERVICE_DETAIL_LOG_STREAM_POLL_MS = 4000
+
+function createRunStreamState(
+  loading = false
+): Record<ServiceDetailRunStreamType, ServiceDetailRunStreamState> {
+  return {
+    stdout: { loading, error: null, info: null, chunk: null },
+    stderr: { loading, error: null, info: null, chunk: null },
+  }
+}
+
+function ServiceRunStreamPanel({
+  stream,
+  state,
+}: {
+  stream: (typeof SERVICE_DETAIL_RUN_STREAMS)[number]
+  state: ServiceDetailRunStreamState
+}) {
+  const lines = state.chunk?.lines ?? []
+  const logText = lines.join('\n')
+  const latestLine = lines[lines.length - 1]
+  const path = state.chunk?.path ?? state.info?.path
+
+  return (
+    <div className='min-w-0 rounded-md border'>
+      <div className='space-y-2 border-b p-3'>
+        <div className='flex flex-wrap items-start justify-between gap-2'>
+          <div>
+            <div className='flex items-center gap-2'>
+              <div className='font-medium'>{stream.label}</div>
+              <Badge variant='outline'>{stream.type}</Badge>
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              {stream.description}
+            </p>
+          </div>
+          <div className='text-xs text-muted-foreground'>
+            {(state.chunk?.totalLines ?? 0).toLocaleString()} lines
+          </div>
+        </div>
+        <div className='truncate font-mono text-xs text-muted-foreground'>
+          {path ?? 'No run-scoped stream source reported'}
+        </div>
+      </div>
+      <div className='p-3'>
+        {state.loading ? (
+          <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+            Loading {stream.label.toLowerCase()} history...
+          </div>
+        ) : state.error ? (
+          <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+            {stream.label} stream unavailable. {state.error}
+          </div>
+        ) : lines.length ? (
+          <div className='space-y-2'>
+            <pre
+              className='sr-only'
+              data-testid={`service-detail-${stream.type}-lines`}
+            >
+              {logText}
+            </pre>
+            <div
+              className='truncate font-mono text-xs text-muted-foreground'
+              title={latestLine}
+            >
+              Latest: {latestLine}
+            </div>
+            <div className='h-[220px] overflow-hidden rounded-md border'>
+              <ScrollFollow
+                startFollowing={true}
+                render={({ follow }) => (
+                  <LazyLog
+                    text={logText}
+                    follow={follow}
+                    enableSearch
+                    selectableLines
+                    style={{
+                      height: '220px',
+                      width: '100%',
+                      background: 'transparent',
+                    }}
+                  />
+                )}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+            No {stream.label.toLowerCase()} entries are recorded for the current
+            tail window.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ServiceRunStreams({ service }: { service: DashboardService }) {
+  const [streams, setStreams] = useState(() => createRunStreamState())
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadStream(streamType: ServiceDetailRunStreamType) {
+      setStreams((current) => ({
+        ...current,
+        [streamType]: {
+          ...current[streamType],
+          loading: true,
+          error: null,
+        },
+      }))
+
+      try {
+        const [info, chunk] = await Promise.all([
+          fetchServiceLogInfo(service, streamType),
+          fetchServiceLogChunk(
+            service,
+            streamType,
+            undefined,
+            SERVICE_DETAIL_LOG_STREAM_LIMIT
+          ),
+        ])
+
+        if (cancelled) return
+
+        setStreams((current) => ({
+          ...current,
+          [streamType]: {
+            loading: false,
+            error: null,
+            info,
+            chunk,
+          },
+        }))
+      } catch (error) {
+        if (cancelled) return
+
+        setStreams((current) => ({
+          ...current,
+          [streamType]: {
+            ...current[streamType],
+            loading: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'The runtime did not return this stream.',
+          },
+        }))
+      }
+    }
+
+    setStreams(createRunStreamState(true))
+    for (const stream of SERVICE_DETAIL_RUN_STREAMS) {
+      void loadStream(stream.type)
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [service])
+
+  useEffect(() => {
+    if (service.status !== 'running') return
+
+    const intervalId = window.setInterval(() => {
+      for (const stream of SERVICE_DETAIL_RUN_STREAMS) {
+        void fetchServiceLogChunk(
+          service,
+          stream.type,
+          undefined,
+          SERVICE_DETAIL_LOG_STREAM_LIMIT
+        )
+          .then((chunk) => {
+            setStreams((current) => ({
+              ...current,
+              [stream.type]: {
+                ...current[stream.type],
+                error: null,
+                chunk,
+              },
+            }))
+          })
+          .catch(() => {
+            // Keep the last readable history visible during transient tail errors.
+          })
+      }
+    }, SERVICE_DETAIL_LOG_STREAM_POLL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [service])
+
+  return (
+    <div className='space-y-3'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div>
+          <div className='font-medium'>Current run streams</div>
+          <p className='text-sm text-muted-foreground'>
+            Separate stdout and stderr history from the runtime when available.
+          </p>
+        </div>
+        <Badge variant='secondary'>run-scoped</Badge>
+      </div>
+      <div
+        className='grid gap-3 lg:grid-cols-2'
+        data-testid='service-detail-run-streams'
+      >
+        {SERVICE_DETAIL_RUN_STREAMS.map((stream) => (
+          <ServiceRunStreamPanel
+            key={stream.type}
+            stream={stream}
+            state={streams[stream.type]}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -1338,6 +1593,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           label='Current log file'
                           value={service.metadata.logPath}
                         />
+                        <ServiceRunStreams service={service} />
                         <ServiceLogViewer entries={service.recentLogs} />
                       </CardContent>
                     </Card>

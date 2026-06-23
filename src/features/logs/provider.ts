@@ -1,5 +1,8 @@
 import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
-import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import type {
+  DashboardService,
+  ServiceLogType,
+} from '@/lib/service-lasso-dashboard/types'
 
 const logsDebugEnabled =
   import.meta.env.DEV ||
@@ -8,15 +11,15 @@ const relativeLogsApiBaseUrl = ''
 
 export type ServiceLogInfo = {
   serviceId: string
-  type: 'default' | 'access' | 'error'
-  path: string
-  availableTypes: string[]
+  type: ServiceLogType
+  path?: string | null
+  availableTypes: ServiceLogType[]
 }
 
 export type ServiceLogChunk = {
   serviceId: string
-  type: 'default' | 'access' | 'error'
-  path: string
+  type: ServiceLogType
+  path?: string | null
   totalLines: number
   start: number
   end: number
@@ -34,6 +37,7 @@ export type ServiceLogOverviewEntry = {
 
 export type ServiceLogOverview = {
   serviceId: string
+  runId?: string
   logPath?: string
   stdoutPath?: string
   stderrPath?: string
@@ -101,7 +105,7 @@ function buildServiceLogsOverviewUrl(serviceId: string) {
 
 export async function fetchServiceLogInfo(
   service: DashboardService,
-  type: 'default' | 'access' | 'error'
+  type: ServiceLogType
 ) {
   const params = new URLSearchParams({
     service: service.id,
@@ -151,7 +155,7 @@ export async function fetchServiceLogsOverview(service: DashboardService) {
 
 export async function fetchServiceLogChunk(
   service: DashboardService,
-  type: 'default' | 'access' | 'error',
+  type: ServiceLogType,
   before?: number,
   limit = 100
 ) {
