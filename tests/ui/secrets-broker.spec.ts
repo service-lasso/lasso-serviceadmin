@@ -567,6 +567,26 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/no retry needed after broker success/i).first()
     ).toBeVisible()
     await expect(page.getByText(/2 submitted/i)).toBeVisible()
+    await expect(page.getByText(/2 shown/i)).toBeVisible()
+    await expect(page.getByText(/Allowed history fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted history fields/i)).toBeVisible()
+    await expect(page.getByText(/Safe history evidence/i)).toBeVisible()
+    await expect(
+      page.getByText(/history filters operate on refs, operation ids/i)
+    ).toBeVisible()
+    await page.getByLabel(/History outcome/i).selectOption('applied')
+    await expect(page.getByText(/1 shown/i)).toBeVisible()
+    await expect(page.getByText(/broker applied/i).first()).toBeVisible()
+    await page
+      .getByLabel(/History search/i)
+      .fill('audit-reset-serviceadmin-session-signing-2')
+    await expect(
+      page.getByText(/history search matched metadata-only operation/i)
+    ).toBeVisible()
+    await page.getByLabel(/History action/i).selectOption('delete')
+    await expect(
+      page.getByText(/No metadata-only history entries match/i)
+    ).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('policy-denied')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()

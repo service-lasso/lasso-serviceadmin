@@ -10,6 +10,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
@@ -28,6 +29,7 @@ import {
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretEditPreviewHasSecretMaterial,
   managedSecretEvidenceBundleHasSecretMaterial,
+  managedSecretHistoryReviewHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
@@ -716,8 +718,12 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/Allowed evidence fields/i)).toBeVisible()
     expect(screen.getByText(/Omitted evidence artifacts/i)).toBeVisible()
-    expect(screen.getByText(/screenshotsWithVisibleValues/i)).toBeVisible()
-    expect(screen.getByText(/diagnosticPayloadsWithBodies/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/screenshotsWithVisibleValues/i)[0]
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/diagnosticPayloadsWithBodies/i)[0]
+    ).toBeVisible()
     expect(
       screen.getByText(/localStorage\/sessionStorage evidence contains no/i)
     ).toBeVisible()
@@ -765,6 +771,31 @@ describe('Secrets Broker secrets management page', () => {
       screen.getAllByText(/no retry needed after broker success/i)[0]
     ).toBeVisible()
     expect(screen.getByText(/2 submitted/i)).toBeVisible()
+    expect(screen.getByText(/2 shown/i)).toBeVisible()
+    expect(screen.getByText(/Allowed history fields/i)).toBeVisible()
+    expect(screen.getByText(/Omitted history fields/i)).toBeVisible()
+    expect(screen.getAllByText(/rawValue/i)[0]).toBeVisible()
+    expect(screen.getByText(/Safe history evidence/i)).toBeVisible()
+    expect(
+      screen.getByText(/history filters operate on refs, operation ids/i)
+    ).toBeVisible()
+    await user.selectOptions(
+      screen.getByLabelText(/History outcome/i),
+      'applied'
+    )
+    expect(screen.getByText(/1 shown/i)).toBeVisible()
+    expect(screen.getAllByText(/broker applied/i)[0]).toBeVisible()
+    await user.type(
+      screen.getByLabelText(/History search/i),
+      'audit-reset-serviceadmin-session-signing-2'
+    )
+    expect(
+      screen.getByText(/history search matched metadata-only operation/i)
+    ).toBeVisible()
+    await user.selectOptions(screen.getByLabelText(/History action/i), 'delete')
+    expect(
+      screen.getByText(/No metadata-only history entries match/i)
+    ).toBeVisible()
 
     await user.click(
       screen.getAllByRole('button', { name: /Delete dry-run/i })[0]
@@ -1517,6 +1548,64 @@ describe('Secrets Broker secrets management page', () => {
       eventState: 'recorded as safe broker failure metadata',
     })
     expect(managedSecretSingleHistoryHasSecretMaterial([historyEntry])).toBe(
+      false
+    )
+    const appliedHistoryEntry = buildSingleSecretOperationHistoryEntry(
+      managedSecretRows[0],
+      rotatePlan,
+      2,
+      'applied'
+    )
+    const historyReview = buildSingleSecretOperationHistoryReview(
+      [historyEntry, appliedHistoryEntry],
+      {
+        action: 'reset',
+        outcome: 'failed',
+        query: 'broker failure',
+      }
+    )
+    expect(historyReview).toMatchObject({
+      totalCount: 2,
+      filteredCount: 1,
+      appliedCount: 0,
+      blockedCount: 1,
+      pendingCount: 0,
+      safeSearchStatus:
+        'history search matched metadata-only operation evidence',
+    })
+    expect(historyReview.entries[0]).toMatchObject({
+      outcome: 'failed',
+      auditEventId: 'audit-reset-serviceadmin-session-signing-1',
+    })
+    expect(historyReview.allowedFields).toEqual(
+      expect.arrayContaining([
+        'operationId',
+        'ref',
+        'outcome',
+        'auditEventId',
+        'correlationId',
+      ])
+    )
+    expect(historyReview.omittedFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(historyReview.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'history filters operate on refs, operation ids, action/outcome, audit ids, correlation ids, and provider metadata only',
+        'filtered history rows remain safe for support triage and screenshots because value display regions stay hidden',
+      ])
+    )
+    expect(managedSecretHistoryReviewHasSecretMaterial(historyReview)).toBe(
       false
     )
 

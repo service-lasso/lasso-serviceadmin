@@ -291,6 +291,25 @@ export type SingleSecretOperationHistoryEntry = SingleSecretOperationResult & {
   submittedAt: string
 }
 
+export type SingleSecretOperationHistoryFilter = {
+  action: ManagedSecretAction | 'all'
+  outcome: SingleSecretOperationOutcome | 'all'
+  query: string
+}
+
+export type SingleSecretOperationHistoryReview = {
+  totalCount: number
+  filteredCount: number
+  appliedCount: number
+  blockedCount: number
+  pendingCount: number
+  safeSearchStatus: string
+  allowedFields: string[]
+  omittedFields: string[]
+  safeEvidenceRows: string[]
+  entries: SingleSecretOperationHistoryEntry[]
+}
+
 export type SingleSecretOperationAuditTrailStep = {
   id: string
   label: string
@@ -2709,6 +2728,109 @@ export function buildSingleSecretOperationHistoryEntry(
   }
 }
 
+export function buildSingleSecretOperationHistoryReview(
+  entries: SingleSecretOperationHistoryEntry[],
+  filter: SingleSecretOperationHistoryFilter = {
+    action: 'all',
+    outcome: 'all',
+    query: '',
+  }
+): SingleSecretOperationHistoryReview {
+  const query = filter.query.trim().toLowerCase()
+  const filteredEntries = entries.filter((entry) => {
+    const actionMatches =
+      filter.action === 'all' || entry.action === filter.action
+    const outcomeMatches =
+      filter.outcome === 'all' || entry.outcome === filter.outcome
+    const textMatches =
+      query.length === 0 ||
+      [
+        entry.operationId,
+        entry.ref,
+        entry.rowName,
+        entry.provider,
+        entry.policy,
+        entry.auditEventId,
+        entry.auditFeedback.correlationId,
+        entry.outcome,
+        entry.action,
+        entry.statusBadge,
+        entry.resultStatus,
+        entry.recoveryStatus,
+        entry.retryPolicy,
+        entry.nextAction,
+        entry.submittedAt,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+
+    return actionMatches && outcomeMatches && textMatches
+  })
+
+  const blockedOutcomes: SingleSecretOperationOutcome[] = [
+    'policy-denied',
+    'auth-required',
+    'audit-unavailable',
+    'provider-unavailable',
+    'failed',
+    'stale-plan',
+    'cancelled',
+  ]
+
+  return {
+    totalCount: entries.length,
+    filteredCount: filteredEntries.length,
+    appliedCount: filteredEntries.filter((entry) => entry.outcome === 'applied')
+      .length,
+    blockedCount: filteredEntries.filter((entry) =>
+      blockedOutcomes.includes(entry.outcome)
+    ).length,
+    pendingCount: filteredEntries.filter(
+      (entry) => entry.outcome === 'submitted'
+    ).length,
+    safeSearchStatus:
+      query.length > 0
+        ? 'history search matched metadata-only operation evidence'
+        : 'history review is showing metadata-only operation evidence',
+    allowedFields: [
+      'operationId',
+      'ref',
+      'rowName',
+      'provider',
+      'policy',
+      'action',
+      'outcome',
+      'auditEventId',
+      'correlationId',
+      'resultStatus',
+      'recoveryStatus',
+      'retryPolicy',
+      'nextAction',
+      'submittedAt',
+    ],
+    omittedFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+    ],
+    safeEvidenceRows: [
+      'history filters operate on refs, operation ids, action/outcome, audit ids, correlation ids, and provider metadata only',
+      'history review excludes request bodies, response bodies, raw values, credentials, tokens, cookies, keys, recovery material, and environment values',
+      'filtered history rows remain safe for support triage and screenshots because value display regions stay hidden',
+    ],
+    entries: filteredEntries,
+  }
+}
+
 export function buildSingleSecretOperationAuditTrail(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -2985,6 +3107,12 @@ export function managedSecretSingleHistoryHasSecretMaterial(
   entries: SingleSecretOperationHistoryEntry[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretHistoryReviewHasSecretMaterial(
+  review: SingleSecretOperationHistoryReview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(review))
 }
 
 export function managedSecretSingleAuditTrailHasSecretMaterial(

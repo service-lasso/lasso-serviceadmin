@@ -65,6 +65,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
@@ -91,6 +92,7 @@ import {
   type ManagedSecretAction,
   type ManagedSecretRow,
   type ManagedSecretState,
+  type SingleSecretOperationHistoryFilter,
   type SingleSecretRevealLifecycleState,
   type SingleSecretOperationHistoryEntry,
   type SingleSecretOperationOutcome,
@@ -151,6 +153,12 @@ export function SecretsManagementPage() {
   const [singleOperationHistory, setSingleOperationHistory] = useState<
     SingleSecretOperationHistoryEntry[]
   >([])
+  const [singleHistoryFilter, setSingleHistoryFilter] =
+    useState<SingleSecretOperationHistoryFilter>({
+      action: 'all',
+      outcome: 'all',
+      query: '',
+    })
   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([
     managedSecretRows[0].id,
     managedSecretRows[1].id,
@@ -288,6 +296,14 @@ export function SecretsManagementPage() {
           singleStatusMonitor
         )
       : null
+  const singleHistoryReview = useMemo(
+    () =>
+      buildSingleSecretOperationHistoryReview(
+        singleOperationHistory,
+        singleHistoryFilter
+      ),
+    [singleOperationHistory, singleHistoryFilter]
+  )
 
   const resetBulkApplyGate = useCallback(() => {
     setBulkRevalidated(false)
@@ -3031,69 +3047,226 @@ export function SecretsManagementPage() {
                 </div>
                 <Badge variant='secondary'>Metadata only</Badge>
                 <Badge variant='outline'>
-                  {singleOperationHistory.length} submitted
+                  {singleHistoryReview.totalCount} submitted
+                </Badge>
+                <Badge variant='outline'>
+                  {singleHistoryReview.filteredCount} shown
                 </Badge>
               </div>
-              {singleOperationHistory.length > 0 ? (
-                <div className='overflow-x-auto rounded-md border'>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Ref</TableHead>
-                        <TableHead>Action / status</TableHead>
-                        <TableHead>Audit event</TableHead>
-                        <TableHead>Recovery</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {singleOperationHistory.map((entry) => (
-                        <TableRow key={entry.auditEventId}>
-                          <TableCell className='min-w-72 align-top'>
-                            <div className='font-medium'>{entry.rowName}</div>
-                            <div className='text-sm break-all text-muted-foreground'>
-                              {entry.ref}
-                            </div>
-                            <div className='mt-2 text-xs text-muted-foreground'>
-                              {entry.provider}
-                            </div>
-                          </TableCell>
-                          <TableCell className='min-w-44 align-top'>
-                            <Badge variant='outline'>{entry.action}</Badge>
-                            <div className='mt-2'>{entry.statusBadge}</div>
-                            <div className='text-xs text-muted-foreground'>
-                              {entry.submittedAt}
-                            </div>
-                          </TableCell>
-                          <TableCell className='min-w-72 align-top'>
-                            <div className='break-all'>
-                              {entry.auditEventId}
-                            </div>
-                            <div className='mt-2 text-xs break-all text-muted-foreground'>
-                              {entry.auditFeedback.correlationId}
-                            </div>
-                            <div className='mt-2 text-xs text-muted-foreground'>
-                              {entry.auditFeedback.eventState}
-                            </div>
-                            <div className='mt-2 text-xs break-all text-muted-foreground'>
-                              {entry.policy}
-                            </div>
-                          </TableCell>
-                          <TableCell className='min-w-64 align-top'>
-                            <div>{entry.nextAction}</div>
-                            <div className='mt-2 text-muted-foreground'>
-                              {entry.recoveryStatus}
-                            </div>
-                            <div className='mt-2 text-muted-foreground'>
-                              {entry.auditFeedback.dependentServiceStatus}
-                            </div>
-                            <div className='mt-2 text-xs text-muted-foreground'>
-                              {entry.retryPolicy}
-                            </div>
-                          </TableCell>
-                        </TableRow>
+              {singleHistoryReview.totalCount > 0 ? (
+                <div className='space-y-3'>
+                  <div className='grid gap-3 lg:grid-cols-[1fr_12rem_12rem]'>
+                    <div>
+                      <label className='text-xs font-medium text-muted-foreground uppercase'>
+                        History search
+                      </label>
+                      <Input
+                        aria-label='History search'
+                        className='mt-1'
+                        placeholder='Filter operation ids, refs, audit refs'
+                        value={singleHistoryFilter.query}
+                        onChange={(event) =>
+                          setSingleHistoryFilter((current) => ({
+                            ...current,
+                            query: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className='text-xs font-medium text-muted-foreground uppercase'>
+                        Action
+                      </label>
+                      <select
+                        aria-label='History action'
+                        className='mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm'
+                        value={singleHistoryFilter.action}
+                        onChange={(event) =>
+                          setSingleHistoryFilter((current) => ({
+                            ...current,
+                            action: event.target
+                              .value as SingleSecretOperationHistoryFilter['action'],
+                          }))
+                        }
+                      >
+                        <option value='all'>All actions</option>
+                        {Object.entries(actionButtonLabels).map(
+                          ([action, label]) => (
+                            <option key={action} value={action}>
+                              {label}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <label className='text-xs font-medium text-muted-foreground uppercase'>
+                        Outcome
+                      </label>
+                      <select
+                        aria-label='History outcome'
+                        className='mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm'
+                        value={singleHistoryFilter.outcome}
+                        onChange={(event) =>
+                          setSingleHistoryFilter((current) => ({
+                            ...current,
+                            outcome: event.target
+                              .value as SingleSecretOperationHistoryFilter['outcome'],
+                          }))
+                        }
+                      >
+                        <option value='all'>All outcomes</option>
+                        {singleSecretOperationOutcomes.map((outcome) => (
+                          <option key={outcome.id} value={outcome.id}>
+                            {outcome.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-3 md:grid-cols-4'>
+                    <div className='rounded-md border bg-muted/30 p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Applied
+                      </div>
+                      <div className='mt-1 text-lg font-semibold'>
+                        {singleHistoryReview.appliedCount}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-muted/30 p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Pending
+                      </div>
+                      <div className='mt-1 text-lg font-semibold'>
+                        {singleHistoryReview.pendingCount}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-muted/30 p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Blocked
+                      </div>
+                      <div className='mt-1 text-lg font-semibold'>
+                        {singleHistoryReview.blockedCount}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-muted/30 p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Search status
+                      </div>
+                      <div className='mt-1 text-sm'>
+                        {singleHistoryReview.safeSearchStatus}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-3 md:grid-cols-2'>
+                    <div className='rounded-md border bg-muted/30 p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Allowed history fields
+                      </div>
+                      <div className='mt-2 flex flex-wrap gap-1'>
+                        {singleHistoryReview.allowedFields.map((field) => (
+                          <Badge key={field} variant='outline'>
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className='rounded-md border bg-muted/30 p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Omitted history fields
+                      </div>
+                      <div className='mt-2 flex flex-wrap gap-1'>
+                        {singleHistoryReview.omittedFields.map((field) => (
+                          <Badge key={field} variant='secondary'>
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {singleHistoryReview.filteredCount > 0 ? (
+                    <div className='overflow-x-auto rounded-md border'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Ref</TableHead>
+                            <TableHead>Action / status</TableHead>
+                            <TableHead>Audit event</TableHead>
+                            <TableHead>Recovery</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {singleHistoryReview.entries.map((entry) => (
+                            <TableRow key={entry.auditEventId}>
+                              <TableCell className='min-w-72 align-top'>
+                                <div className='font-medium'>
+                                  {entry.rowName}
+                                </div>
+                                <div className='text-sm break-all text-muted-foreground'>
+                                  {entry.ref}
+                                </div>
+                                <div className='mt-2 text-xs text-muted-foreground'>
+                                  {entry.provider}
+                                </div>
+                              </TableCell>
+                              <TableCell className='min-w-44 align-top'>
+                                <Badge variant='outline'>{entry.action}</Badge>
+                                <div className='mt-2'>{entry.statusBadge}</div>
+                                <div className='text-xs text-muted-foreground'>
+                                  {entry.submittedAt}
+                                </div>
+                              </TableCell>
+                              <TableCell className='min-w-72 align-top'>
+                                <div className='break-all'>
+                                  {entry.auditEventId}
+                                </div>
+                                <div className='mt-2 text-xs break-all text-muted-foreground'>
+                                  {entry.auditFeedback.correlationId}
+                                </div>
+                                <div className='mt-2 text-xs text-muted-foreground'>
+                                  {entry.auditFeedback.eventState}
+                                </div>
+                                <div className='mt-2 text-xs break-all text-muted-foreground'>
+                                  {entry.policy}
+                                </div>
+                              </TableCell>
+                              <TableCell className='min-w-64 align-top'>
+                                <div>{entry.nextAction}</div>
+                                <div className='mt-2 text-muted-foreground'>
+                                  {entry.recoveryStatus}
+                                </div>
+                                <div className='mt-2 text-muted-foreground'>
+                                  {entry.auditFeedback.dependentServiceStatus}
+                                </div>
+                                <div className='mt-2 text-xs text-muted-foreground'>
+                                  {entry.retryPolicy}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className='rounded-md border bg-muted/40 p-3 text-muted-foreground'>
+                      No metadata-only history entries match the current
+                      filters.
+                    </div>
+                  )}
+
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Safe history evidence
+                    </div>
+                    <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                      {singleHistoryReview.safeEvidenceRows.map((row) => (
+                        <li key={row}>{row}</li>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </ul>
+                  </div>
                 </div>
               ) : (
                 <div className='rounded-md border bg-muted/40 p-3 text-muted-foreground'>
