@@ -98,6 +98,7 @@ import {
   type ServiceLogInfo,
 } from '@/features/logs/provider'
 import { buildMetadataTableRows } from './metadata-table'
+import { ServiceConfigEditor } from './service-config-editor'
 
 const REDACTED_CONFIG_VALUE = '[redacted by Service Admin]'
 const SENSITIVE_CONFIG_KEY_PATTERN =
@@ -1268,7 +1269,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const serviceQuery = useDashboardService(serviceId)
   const serviceName = serviceQuery.data?.name ?? serviceId
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'dependencies' | 'endpoints' | 'variables' | 'logs'
+    'overview' | 'dependencies' | 'endpoints' | 'variables' | 'config' | 'logs'
   >('overview')
 
   useEffect(() => {
@@ -1285,12 +1286,14 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
         '2': 'dependencies',
         '3': 'endpoints',
         '4': 'variables',
-        '5': 'logs',
+        '5': 'config',
+        '6': 'logs',
       }[event.key] as
         | 'overview'
         | 'dependencies'
         | 'endpoints'
         | 'variables'
+        | 'config'
         | 'logs'
         | undefined
 
@@ -1442,10 +1445,16 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       <span className='ml-1 italic opacity-80'>(4)</span>
                     </TabsTrigger>
                     <TabsTrigger
+                      value='config'
+                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
+                    >
+                      Config <span className='ml-1 italic opacity-80'>(5)</span>
+                    </TabsTrigger>
+                    <TabsTrigger
                       value='logs'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Logs <span className='ml-1 italic opacity-80'>(5)</span>
+                      Logs <span className='ml-1 italic opacity-80'>(6)</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -1578,6 +1587,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         </div>
                       </CardContent>
                     </Card>
+                  </TabsContent>
+
+                  <TabsContent value='config' className='mt-0'>
+                    <ServiceConfigEditor service={service} />
                   </TabsContent>
 
                   <TabsContent value='logs' className='mt-0'>

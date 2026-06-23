@@ -1,9 +1,11 @@
 import {
   buildStubServiceLogUrl,
+  fetchServiceConfigDocument as fetchStubServiceConfigDocument,
   fetchDashboardService as fetchStubDashboardService,
   fetchDashboardSummary as fetchStubDashboardSummary,
   fetchServices as fetchStubServices,
   runDashboardAction as runStubDashboardAction,
+  saveServiceConfigDocument as saveStubServiceConfigDocument,
   serviceLassoApiBaseUrl,
   stubDashboardDataEnabled,
 } from './stub'
@@ -11,6 +13,8 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  ServiceConfigDocument,
+  ServiceConfigSaveResult,
   ServiceLogType,
 } from './types'
 
@@ -181,6 +185,45 @@ export async function fetchDashboardService(serviceId: string) {
   }
 
   return fetchRuntimeDashboardService(serviceId)
+}
+
+export async function fetchServiceConfigDocument(serviceId: string) {
+  if (stubDashboardDataEnabled) {
+    return fetchStubServiceConfigDocument(serviceId)
+  }
+
+  return fetchRuntimeJson<ServiceConfigDocument>(
+    `/api/services/${encodeServiceId(serviceId)}/config`
+  )
+}
+
+export async function saveServiceConfigDocument({
+  serviceId,
+  content,
+  reason,
+}: {
+  serviceId: string
+  content: string
+  reason?: string | null
+}) {
+  if (stubDashboardDataEnabled) {
+    return saveStubServiceConfigDocument({ serviceId, content, reason })
+  }
+
+  return fetchRuntimeJson<ServiceConfigSaveResult>(
+    `/api/services/${encodeServiceId(serviceId)}/config`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content,
+        actor: 'service-admin-web',
+        reason: reason ?? null,
+      }),
+    }
+  )
 }
 
 export function buildServiceLogUrl(

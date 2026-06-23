@@ -1,0 +1,468 @@
+import { useEffect, useMemo, useState } from 'react'
+import Editor from '@monaco-editor/react'
+import {
+  CheckCircle2,
+  FileClock,
+  GitCompare,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  fetchServiceConfigDocument,
+  saveServiceConfigDocument,
+} from '@/lib/service-lasso-dashboard/client'
+import type {
+  DashboardService,
+  ServiceConfigDocument,
+  ServiceConfigRevision,
+} from '@/lib/service-lasso-dashboard/types'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Separator } from '@/components/ui/separator'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+
+type JsonValidationState =
+  | { status: 'valid'; formatted: string }
+  | { status: 'invalid'; message: string }
+
+function validateJsonObject(value: string): JsonValidationState {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        status: 'invalid',
+        message: 'server.json must be a JSON object.',
+      }
+    }
+    return {
+      status: 'valid',
+      formatted: `${JSON.stringify(parsed, null, 2)}\n`,
+    }
+  } catch (error) {
+    return {
+      status: 'invalid',
+      message: error instanceof Error ? error.message : 'Invalid JSON.',
+    }
+  }
+}
+
+function shortHash(value: string) {
+  return value.slice(0, 12)
+}
+
+function revisionLabel(revision: ServiceConfigRevision) {
+  return `${new Date(revision.createdAt).toLocaleString()} · ${shortHash(
+    revision.previousHash
+  )}`
+}
+
+function RevisionTable({
+  revisions,
+  selectedRevisionId,
+  onSelect,
+}: {
+  revisions: ServiceConfigRevision[]
+  selectedRevisionId: string | null
+  onSelect: (revision: ServiceConfigRevision) => void
+}) {
+  return (
+    <div className='overflow-x-auto rounded-md border'>
+      <Table className='min-w-[760px] table-fixed'>
+        <colgroup>
+          <col className='w-[24%]' />
+          <col className='w-[16%]' />
+          <col className='w-[18%]' />
+          <col className='w-[22%]' />
+          <col className='w-[20%]' />
+        </colgroup>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Created</TableHead>
+            <TableHead>Actor</TableHead>
+            <TableHead>Previous hash</TableHead>
+            <TableHead>Reason</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {revisions.length ? (
+            revisions.map((revision) => (
+              <TableRow key={revision.id}>
+                <TableCell className='align-top text-sm whitespace-normal'>
+                  {new Date(revision.createdAt).toLocaleString()}
+                </TableCell>
+                <TableCell className='align-top text-sm whitespace-normal'>
+                  {revision.actor}
+                </TableCell>
+                <TableCell className='align-top font-mono text-xs break-all text-muted-foreground'>
+                  {shortHash(revision.previousHash)}
+                </TableCell>
+                <TableCell className='align-top text-sm whitespace-normal text-muted-foreground'>
+                  {revision.reason ?? 'Not recorded'}
+                </TableCell>
+                <TableCell className='align-top'>
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant={
+                      selectedRevisionId === revision.id ? 'default' : 'outline'
+                    }
+                    onClick={() => onSelect(revision)}
+                  >
+                    <GitCompare className='mr-2 size-4' />
+                    Compare
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={5} className='h-20 text-center'>
+                No backup revisions have been recorded for this service yet.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function ComparePanel({
+  revision,
+  editorContent,
+}: {
+  revision: ServiceConfigRevision | null
+  editorContent: string
+}) {
+  if (!revision) {
+    return (
+      <div className='rounded-md border border-dashed p-4 text-sm text-muted-foreground'>
+        Select a backup revision to compare it with the current editor buffer.
+      </div>
+    )
+  }
+
+  return (
+    <div className='grid gap-4 xl:grid-cols-2'>
+      <div className='min-w-0 space-y-2'>
+        <div className='text-sm font-medium'>
+          Backup {revisionLabel(revision)}
+        </div>
+        <pre className='max-h-[360px] overflow-auto rounded-md border bg-muted/35 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap'>
+          {revision.content}
+        </pre>
+      </div>
+      <div className='min-w-0 space-y-2'>
+        <div className='text-sm font-medium'>Current editor buffer</div>
+        <pre className='max-h-[360px] overflow-auto rounded-md border bg-muted/35 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap'>
+          {editorContent}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
+export function ServiceConfigEditor({
+  service,
+}: {
+  service: DashboardService
+}) {
+  const [document, setDocument] = useState<ServiceConfigDocument | null>(null)
+  const [editorContent, setEditorContent] = useState('')
+  const [savedContent, setSavedContent] = useState('')
+  const [auditReason, setAuditReason] = useState('')
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(
+    null
+  )
+  const [status, setStatus] = useState<string>('Loading server.json')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [reloadDialogOpen, setReloadDialogOpen] = useState(false)
+
+  const validation = useMemo(
+    () => validateJsonObject(editorContent),
+    [editorContent]
+  )
+  const isDirty = editorContent !== savedContent
+  const selectedRevision =
+    document?.revisions.find(
+      (revision) => revision.id === selectedRevisionId
+    ) ?? null
+
+  const loadConfig = async ({ force = false } = {}) => {
+    if (isDirty && !force) {
+      setReloadDialogOpen(true)
+      return
+    }
+
+    setIsLoading(true)
+    setStatus('Loading server.json')
+    try {
+      const nextDocument = await fetchServiceConfigDocument(service.id)
+      setDocument(nextDocument)
+      setEditorContent(nextDocument.content)
+      setSavedContent(nextDocument.content)
+      setSelectedRevisionId(nextDocument.revisions[0]?.id ?? null)
+      setStatus('Loaded current runtime server.json')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Load failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadConfig({ force: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [service.id])
+
+  const formatEditorJson = () => {
+    if (validation.status !== 'valid') {
+      setStatus(validation.message)
+      return
+    }
+    setEditorContent(validation.formatted)
+    setStatus('Formatted server.json')
+  }
+
+  const saveConfig = async () => {
+    if (validation.status !== 'valid') {
+      setStatus(validation.message)
+      return
+    }
+
+    setIsSaving(true)
+    setStatus('Saving server.json')
+    try {
+      await saveServiceConfigDocument({
+        serviceId: service.id,
+        content: validation.formatted,
+        reason: auditReason,
+      })
+      const nextDocument = await fetchServiceConfigDocument(service.id)
+      setDocument(nextDocument)
+      setEditorContent(nextDocument.content)
+      setSavedContent(nextDocument.content)
+      setSelectedRevisionId(nextDocument.revisions[0]?.id ?? null)
+      setAuditReason('')
+      setStatus('Saved server.json and created a backup revision')
+      toast.success('server.json saved with backup history.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Save failed'
+      setStatus(message)
+      toast.error(message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <Card data-testid='service-config-editor'>
+        <CardHeader>
+          <div className='flex flex-wrap items-start justify-between gap-3'>
+            <div className='space-y-1'>
+              <CardTitle className='flex items-center gap-2'>
+                <FileClock className='size-4' /> server.json editor
+              </CardTitle>
+              <CardDescription>
+                {document?.path ??
+                  service.metadata.configPath ??
+                  'Service manifest path unavailable'}
+              </CardDescription>
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              <Badge
+                variant={
+                  validation.status === 'valid' ? 'outline' : 'destructive'
+                }
+              >
+                {validation.status === 'valid' ? 'Valid JSON' : 'Invalid JSON'}
+              </Badge>
+              <Badge variant={isDirty ? 'secondary' : 'outline'}>
+                {isDirty ? 'Unsaved changes' : 'Saved'}
+              </Badge>
+              <Badge variant='outline'>
+                {document?.backupCount ?? 0} backups
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className='space-y-5'>
+          <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]'>
+            <div className='min-w-0 overflow-hidden rounded-md border'>
+              <Editor
+                height='520px'
+                defaultLanguage='json'
+                language='json'
+                value={editorContent}
+                theme='vs-dark'
+                options={{
+                  automaticLayout: true,
+                  formatOnPaste: true,
+                  formatOnType: true,
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  tabSize: 2,
+                  wordWrap: 'on',
+                }}
+                loading='Loading server.json editor'
+                onChange={(value) => setEditorContent(value ?? '')}
+              />
+            </div>
+            <div className='space-y-4'>
+              <div className='rounded-md border p-3'>
+                <div className='flex items-center gap-2 text-sm font-medium'>
+                  <ShieldCheck className='size-4' /> Runtime safety
+                </div>
+                <div className='mt-2 space-y-2 text-sm text-muted-foreground'>
+                  <div>File: {document?.fileName ?? 'server.json'}</div>
+                  <div>
+                    Hash: {document ? shortHash(document.hash) : 'loading'}
+                  </div>
+                  <div>
+                    Updated:{' '}
+                    {document
+                      ? new Date(document.updatedAt).toLocaleString()
+                      : 'loading'}
+                  </div>
+                  <Separator />
+                  <ul className='list-inside list-disc space-y-1'>
+                    {(
+                      document?.safety.omittedSensitiveFields ?? [
+                        'resolved environment values',
+                        'provider credentials',
+                        'authorization headers',
+                      ]
+                    ).map((field) => (
+                      <li key={field}>{field}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <label className='block space-y-2 text-sm font-medium'>
+                Audit reason
+                <textarea
+                  className='min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm'
+                  value={auditReason}
+                  onChange={(event) => setAuditReason(event.target.value)}
+                  placeholder='Describe the operator change'
+                />
+              </label>
+              <div className='flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={formatEditorJson}
+                  disabled={validation.status !== 'valid'}
+                >
+                  <CheckCircle2 className='mr-2 size-4' />
+                  Format
+                </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={() => void loadConfig()}
+                  disabled={isLoading}
+                >
+                  <RefreshCw className='mr-2 size-4' />
+                  Reload
+                </Button>
+                <Button
+                  type='button'
+                  onClick={() => void saveConfig()}
+                  disabled={
+                    !isDirty ||
+                    isSaving ||
+                    validation.status !== 'valid' ||
+                    !auditReason.trim()
+                  }
+                >
+                  <Save className='mr-2 size-4' />
+                  Save
+                </Button>
+              </div>
+              <div className='rounded-md border bg-muted/35 p-3 text-sm'>
+                {validation.status === 'invalid' ? validation.message : status}
+              </div>
+            </div>
+          </div>
+
+          <div className='space-y-3'>
+            <div>
+              <h3 className='text-sm font-medium'>Backup history</h3>
+              <p className='text-sm text-muted-foreground'>
+                Each successful save records the previous runtime-backed
+                server.json for review.
+              </p>
+            </div>
+            <RevisionTable
+              revisions={document?.revisions ?? []}
+              selectedRevisionId={selectedRevisionId}
+              onSelect={(revision) => setSelectedRevisionId(revision.id)}
+            />
+            <ComparePanel
+              revision={selectedRevision}
+              editorContent={editorContent}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={reloadDialogOpen} onOpenChange={setReloadDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard unsaved server.json changes?</DialogTitle>
+            <DialogDescription>
+              Reloading will replace the editor buffer with the current runtime
+              file.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type='button' variant='outline'>
+                Keep editing
+              </Button>
+            </DialogClose>
+            <Button
+              type='button'
+              variant='destructive'
+              onClick={() => {
+                setReloadDialogOpen(false)
+                void loadConfig({ force: true })
+              }}
+            >
+              Discard and reload
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

@@ -1,5 +1,5 @@
 import { renderRoute } from '@/test/render-route'
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildMetadataTableRows } from './metadata-table'
@@ -13,11 +13,29 @@ vi.mock('@/lib/service-lasso-dashboard/client', async () => {
     buildServiceLogUrl: stub.buildStubServiceLogUrl,
     fetchDashboardService: stub.fetchDashboardService,
     fetchDashboardSummary: stub.fetchDashboardSummary,
+    fetchServiceConfigDocument: stub.fetchServiceConfigDocument,
     fetchServices: stub.fetchServices,
     runDashboardAction: stub.runDashboardAction,
+    saveServiceConfigDocument: stub.saveServiceConfigDocument,
     serviceLassoApiBaseUrl: stub.serviceLassoApiBaseUrl,
   }
 })
+
+vi.mock('@monaco-editor/react', () => ({
+  default: ({
+    value,
+    onChange,
+  }: {
+    value?: string
+    onChange?: (value?: string) => void
+  }) => (
+    <textarea
+      aria-label='server.json editor'
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.currentTarget.value)}
+    />
+  ),
+}))
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -269,6 +287,127 @@ describe('service detail quick actions', () => {
     ).toHaveTextContent(/password=\[redacted\]/)
     expect(within(streams).queryByText(/hidden-value/)).not.toBeInTheDocument()
     expect(within(streams).queryByText(/hunter2/)).not.toBeInTheDocument()
+  })
+})
+
+describe('service detail server.json config editor', () => {
+  it('loads server.json into the Config tab with backup metadata', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect((editor as HTMLTextAreaElement).value).toContain(
+        '"id": "@serviceadmin"'
+      )
+    })
+
+    expect(screen.getByTestId('service-config-editor')).toBeVisible()
+    expect(screen.getByText(/Valid JSON/i)).toBeVisible()
+    expect(screen.getByText(/0 backups/i)).toBeVisible()
+    expect(screen.getAllByText(/server\.json/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/resolved environment values/i)).toBeVisible()
+  })
+
+  it('blocks invalid JSON saves and dirty reloads until confirmed', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect((editor as HTMLTextAreaElement).value).toContain(
+        '"id": "@serviceadmin"'
+      )
+    })
+
+    fireEvent.change(editor, { target: { value: '{bad-json' } })
+
+    expect(screen.getByText(/Invalid JSON/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /^Save$/i })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: /^Reload$/i }))
+    expect(
+      screen.getByRole('dialog', {
+        name: /Discard unsaved server\.json changes/i,
+      })
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Keep editing/i }))
+    expect(screen.getByText(/Invalid JSON/i)).toBeVisible()
+  })
+
+  it('saves valid JSON, records a backup, and compares the revision', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect((editor as HTMLTextAreaElement).value).toContain(
+        '"id": "@serviceadmin"'
+      )
+    })
+    const nextConfig = JSON.stringify(
+      {
+        id: '@serviceadmin',
+        name: 'Service Admin UI',
+        description: 'Saved from config editor test',
+        enabled: true,
+      },
+      null,
+      2
+    )
+
+    fireEvent.change(editor, { target: { value: nextConfig } })
+    await user.type(screen.getByLabelText(/Audit reason/i), 'test config save')
+    await user.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Saved server\.json and created a backup revision/i)
+      ).toBeVisible()
+    })
+
+    expect(screen.getByText(/1 backups/i)).toBeVisible()
+    expect(screen.getByText(/test config save/i)).toBeVisible()
+    expect(screen.getAllByText(/Backup history/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Current editor buffer/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/Saved from config editor test/i).length
+    ).toBeGreaterThan(0)
   })
 })
 
