@@ -15,6 +15,7 @@ import type {
   DashboardSummary,
   ServiceConfigDocument,
   ServiceConfigSaveResult,
+  ServiceLogType,
 } from './types'
 
 type DashboardSummaryResponse = {
@@ -228,7 +229,7 @@ export async function saveServiceConfigDocument({
 export function buildServiceLogUrl(
   serviceId: string,
   options?: {
-    type?: 'default' | 'access' | 'error'
+    type?: ServiceLogType
   }
 ) {
   if (stubDashboardDataEnabled) {

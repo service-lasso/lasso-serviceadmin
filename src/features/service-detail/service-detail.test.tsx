@@ -1,7 +1,7 @@
 import { renderRoute } from '@/test/render-route'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildMetadataTableRows } from './metadata-table'
 
 vi.mock('@/lib/service-lasso-dashboard/client', async () => {
@@ -36,6 +36,11 @@ vi.mock('@monaco-editor/react', () => ({
     />
   ),
 }))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 describe('service detail overview metadata table', () => {
   it('renders runtime metadata under the overview summary without a duplicate metadata tab', async () => {
@@ -189,6 +194,99 @@ describe('service detail quick actions', () => {
         screen.queryByRole('dialog', { name: /full config json/i })
       ).toBeNull()
     })
+  })
+
+  it('shows separate stdout and stderr run streams without leaking sensitive values', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+        const type = parsed.searchParams.get('type') ?? 'default'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              availableTypes: ['default', 'stdout', 'stderr'],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          const lines =
+            type === 'stderr'
+              ? [
+                  '2026-06-23T05:20:01Z ERROR startup password=hunter2',
+                  '2026-06-23T05:20:02Z WARN retrying',
+                ]
+              : [
+                  '2026-06-23T05:20:00Z INFO stdout server listening token=hidden-value',
+                ]
+
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              totalLines: lines.length,
+              start: 0,
+              end: lines.length,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 80,
+              lines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    const streams = screen.getByTestId('service-detail-run-streams')
+
+    await waitFor(() => {
+      expect(within(streams).getByText('Stdout')).toBeVisible()
+      expect(within(streams).getByText('Stderr')).toBeVisible()
+    })
+
+    expect(
+      within(streams).getByTestId('service-detail-stdout-lines')
+    ).toHaveTextContent(/stdout server listening/)
+    expect(
+      within(streams).getByTestId('service-detail-stderr-lines')
+    ).toHaveTextContent(/ERROR startup/)
+    expect(
+      within(streams).getByTestId('service-detail-stdout-lines')
+    ).toHaveTextContent(/token=\[redacted\]/)
+    expect(
+      within(streams).getByTestId('service-detail-stderr-lines')
+    ).toHaveTextContent(/password=\[redacted\]/)
+    expect(within(streams).queryByText(/hidden-value/)).not.toBeInTheDocument()
+    expect(within(streams).queryByText(/hunter2/)).not.toBeInTheDocument()
   })
 })
 
