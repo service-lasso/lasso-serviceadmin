@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
@@ -83,6 +83,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
@@ -1058,6 +1063,25 @@ function FullConfigJsonDialog({ service }: { service: DashboardService }) {
   )
 }
 
+function ServiceDetailQuickAction({
+  children,
+  label,
+}: {
+  children: ReactNode
+  label: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant='outline' size='icon' asChild>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function EnvironmentTable({
   serviceId,
   variables,
@@ -1374,37 +1398,47 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     className='flex flex-wrap justify-start gap-2 sm:justify-end'
                     data-testid='service-detail-quick-actions'
                   >
-                    <Button variant='outline' size='sm' asChild>
-                      <Link to='/logs' search={{ service: service.id }}>
-                        <ScrollText className='mr-2 size-4' />
-                        Logs
+                    <ServiceDetailQuickAction label='Logs'>
+                      <Link
+                        to='/logs'
+                        search={{ service: service.id }}
+                        aria-label='Open logs'
+                      >
+                        <ScrollText className='size-4' />
                       </Link>
-                    </Button>
-                    <Button variant='outline' size='sm' asChild>
-                      <Link to='/dependencies' search={{ service: service.id }}>
-                        <Split className='mr-2 size-4' />
-                        Dependencies
+                    </ServiceDetailQuickAction>
+                    <ServiceDetailQuickAction label='Dependencies'>
+                      <Link
+                        to='/dependencies'
+                        search={{ service: service.id }}
+                        aria-label='Open dependencies'
+                      >
+                        <Split className='size-4' />
                       </Link>
-                    </Button>
-                    <Button variant='outline' size='sm' asChild>
-                      <Link to='/variables' search={{ service: service.id }}>
-                        <ArrowRight className='mr-2 size-4' />
-                        Variables
+                    </ServiceDetailQuickAction>
+                    <ServiceDetailQuickAction label='Variables'>
+                      <Link
+                        to='/variables'
+                        search={{ service: service.id }}
+                        aria-label='Open variables'
+                      >
+                        <ArrowRight className='size-4' />
                       </Link>
-                    </Button>
-                    <Button variant='outline' size='sm' asChild>
-                      <Link to='/network'>
-                        <Network className='mr-2 size-4' />
-                        Network
+                    </ServiceDetailQuickAction>
+                    <ServiceDetailQuickAction label='Network'>
+                      <Link to='/network' aria-label='Open network'>
+                        <Network className='size-4' />
                       </Link>
-                    </Button>
-                    <Button variant='outline' size='sm' asChild>
-                      <Link to='/runtime' search={{ service: service.id }}>
-                        <HeartPulse className='mr-2 size-4' />
-                        Runtime
+                    </ServiceDetailQuickAction>
+                    <ServiceDetailQuickAction label='Runtime'>
+                      <Link
+                        to='/runtime'
+                        search={{ service: service.id }}
+                        aria-label='Open runtime'
+                      >
+                        <HeartPulse className='size-4' />
                       </Link>
-                    </Button>
-                    <FullConfigJsonDialog service={service} />
+                    </ServiceDetailQuickAction>
                   </div>
                 </div>
 
@@ -1589,7 +1623,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value='config' className='mt-0'>
+                  <TabsContent value='config' className='mt-0 space-y-4'>
+                    <div className='flex justify-end'>
+                      <FullConfigJsonDialog service={service} />
+                    </div>
                     <ServiceConfigEditor service={service} />
                   </TabsContent>
 

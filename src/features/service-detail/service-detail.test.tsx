@@ -123,34 +123,45 @@ describe('service detail quick actions', () => {
       screen.getByTestId('service-detail-quick-actions')
     )
 
-    expect(quickActions.getByRole('link', { name: /logs/i })).toHaveAttribute(
-      'href',
-      '/logs?service=%40serviceadmin'
-    )
     expect(
-      quickActions.getByRole('link', { name: /dependencies/i })
+      quickActions.getByRole('link', { name: /open logs/i })
+    ).toHaveAttribute('href', '/logs?service=%40serviceadmin')
+    expect(
+      quickActions.getByRole('link', { name: /open dependencies/i })
     ).toHaveAttribute('href', '/dependencies?service=%40serviceadmin')
     expect(
-      quickActions.getByRole('link', { name: /variables/i })
+      quickActions.getByRole('link', { name: /open variables/i })
     ).toHaveAttribute('href', '/variables?service=%40serviceadmin')
     expect(
-      quickActions.getByRole('link', { name: /network/i })
+      quickActions.getByRole('link', { name: /open network/i })
     ).toHaveAttribute('href', '/network')
     expect(
-      quickActions.getByRole('link', { name: /runtime/i })
+      quickActions.getByRole('link', { name: /open runtime/i })
     ).toHaveAttribute('href', '/runtime?service=%40serviceadmin')
+    expect(quickActions.queryByText(/^Logs$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Dependencies$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Variables$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Network$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Runtime$/i)).toBeNull()
+    expect(
+      quickActions.queryByRole('button', { name: /view full config json/i })
+    ).toBeNull()
 
     await user.click(screen.getByRole('tab', { name: /logs/i }))
 
-    expect(screen.queryByRole('link', { name: /open live logs/i })).toBeNull()
+    const logsPanel = within(screen.getByRole('tabpanel'))
+
     expect(
-      screen.queryByRole('link', { name: /open dependencies/i })
+      logsPanel.queryByRole('link', { name: /open live logs/i })
     ).toBeNull()
     expect(
-      screen.queryByRole('link', { name: /open network view/i })
+      logsPanel.queryByRole('link', { name: /open dependencies/i })
     ).toBeNull()
     expect(
-      screen.queryByRole('link', { name: /open runtime view/i })
+      logsPanel.queryByRole('link', { name: /open network view/i })
+    ).toBeNull()
+    expect(
+      logsPanel.queryByRole('link', { name: /open runtime view/i })
     ).toBeNull()
     expect(screen.getByText('Diagnostics + recent logs')).toBeVisible()
   })
@@ -166,6 +177,7 @@ describe('service detail quick actions', () => {
       ).toBeVisible()
     })
 
+    await user.click(screen.getByRole('tab', { name: /config/i }))
     await user.click(
       screen.getByRole('button', { name: /view full config json/i })
     )
