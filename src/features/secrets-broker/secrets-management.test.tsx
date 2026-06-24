@@ -151,6 +151,34 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
+  it('restores metadata search and table filters from the route URL', async () => {
+    await renderRoute(
+      '/secrets-broker/secrets?secret=payments&provider=provider%20connection&state=missing'
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(screen.getByPlaceholderText(/Search secret metadata/i)).toHaveValue(
+      'payments'
+    )
+    expect(screen.getByText(/Metadata matches: 1/i)).toBeVisible()
+    expect(screen.getByText(/PAYMENTS_SIGNING_REF/i)).toBeVisible()
+    expect(screen.getByText(/Readiness: 0 ready \/ 5 blocked/i)).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('restores pagination from the route URL without exposing secret values', async () => {
+    await renderRoute('/secrets-broker/secrets?page=2&pageSize=1')
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(screen.getAllByText(/Page 2 of 4/i)[0]).toBeVisible()
+    expect(screen.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
   it('shows broker-backed value search supported and unsupported states without raw values', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')
