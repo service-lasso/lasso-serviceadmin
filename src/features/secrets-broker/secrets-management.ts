@@ -254,6 +254,32 @@ export type SingleSecretRecoveryDecision = {
   safeRecoveryRows: string[]
 }
 
+export type SingleSecretOperatorHandoff = {
+  handoffId: string
+  operationId: string
+  ref: string
+  outcome: SingleSecretOperationOutcome
+  lane:
+    | 'monitor'
+    | 'settled'
+    | 'policy-review'
+    | 'provider-auth'
+    | 'audit-recovery'
+    | 'provider-recovery'
+    | 'broker-review'
+    | 'fresh-preview'
+  badge: string
+  owner: string
+  severity: 'info' | 'warning' | 'critical'
+  requiredAction: string
+  shareableEvidenceRefs: string[]
+  blockedReason: string | null
+  validatorNote: string
+  allowedHandoffFields: string[]
+  omittedHandoffFields: string[]
+  safeHandoffRows: string[]
+}
+
 export type SingleSecretDecommissionPreview = {
   ref: string
   operationId: string
@@ -3359,6 +3385,134 @@ export function buildSingleSecretRecoveryDecision(
   }
 }
 
+export function buildSingleSecretOperatorHandoff(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  result: SingleSecretOperationResult,
+  monitor: SingleSecretStatusMonitor,
+  decision: SingleSecretRecoveryDecision
+): SingleSecretOperatorHandoff {
+  const slug = safeOperationSlug(plan.action, row)
+  const lane: SingleSecretOperatorHandoff['lane'] =
+    result.outcome === 'submitted'
+      ? 'monitor'
+      : result.outcome === 'applied'
+        ? 'settled'
+        : result.outcome === 'policy-denied'
+          ? 'policy-review'
+          : result.outcome === 'auth-required'
+            ? 'provider-auth'
+            : result.outcome === 'audit-unavailable'
+              ? 'audit-recovery'
+              : result.outcome === 'provider-unavailable'
+                ? 'provider-recovery'
+                : result.outcome === 'stale-plan' ||
+                    result.outcome === 'cancelled'
+                  ? 'fresh-preview'
+                  : 'broker-review'
+
+  const owner =
+    lane === 'monitor' || lane === 'settled'
+      ? 'operator'
+      : lane === 'policy-review'
+        ? 'policy approver'
+        : lane === 'provider-auth'
+          ? 'provider owner'
+          : lane === 'audit-recovery'
+            ? 'audit operator'
+            : lane === 'provider-recovery'
+              ? 'provider operator'
+              : lane === 'fresh-preview'
+                ? 'operator'
+                : 'broker operator'
+
+  const severity: SingleSecretOperatorHandoff['severity'] =
+    lane === 'settled' || lane === 'monitor'
+      ? 'info'
+      : lane === 'audit-recovery' || lane === 'provider-recovery'
+        ? 'critical'
+        : 'warning'
+
+  const requiredAction =
+    lane === 'settled'
+      ? 'review terminal status and no further mutation action'
+      : lane === 'monitor'
+        ? 'keep polling the broker status endpoint until terminal metadata arrives'
+        : decision.operatorAction
+
+  return {
+    handoffId: `handoff-${slug}-${result.outcome}`,
+    operationId: result.operationId,
+    ref: row.ref,
+    outcome: result.outcome,
+    lane,
+    badge:
+      lane === 'settled'
+        ? 'closed'
+        : lane === 'monitor'
+          ? 'monitoring'
+          : lane === 'fresh-preview'
+            ? 'new preview'
+            : 'owner action required',
+    owner,
+    severity,
+    requiredAction,
+    shareableEvidenceRefs: [
+      result.auditFeedback.auditEventId,
+      result.auditFeedback.correlationId,
+      result.impactEvidence.impactRef,
+      result.impactEvidence.rollbackRef,
+      decision.recoveryRef,
+      monitor.statusEndpoint,
+    ],
+    blockedReason:
+      result.outcome === 'submitted' || result.outcome === 'applied'
+        ? null
+        : decision.blocker,
+    validatorNote:
+      result.outcome === 'applied'
+        ? 'terminal success can be validated from audit id, correlation id, impact ref, and status endpoint only'
+        : result.outcome === 'submitted'
+          ? 'pending state remains evidence-only until broker terminal status is observed'
+          : 'blocked state must be revalidated with a fresh preview before another mutation attempt',
+    allowedHandoffFields: [
+      'handoffId',
+      'operationId',
+      'ref',
+      'action',
+      'outcome',
+      'lane',
+      'owner',
+      'auditEventId',
+      'correlationId',
+      'statusEndpoint',
+      'impactRef',
+      'rollbackRef',
+      'recoveryRef',
+    ],
+    omittedHandoffFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+    ],
+    safeHandoffRows: [
+      'operator handoffs use ids, refs, typed outcomes, owner lanes, and audit metadata only',
+      'handoff evidence can be copied into issue or audit notes without raw secret material',
+      result.outcome === 'submitted' || result.outcome === 'applied'
+        ? 'successful or pending handoffs do not include mutation payload echoes'
+        : 'blocked handoffs require owner action and a fresh broker preview before another submit',
+      `required action: ${requiredAction}`,
+    ],
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -3416,6 +3570,12 @@ export function managedSecretRecoveryDecisionHasSecretMaterial(
   decision: SingleSecretRecoveryDecision
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(decision))
+}
+
+export function managedSecretOperatorHandoffHasSecretMaterial(
+  handoff: SingleSecretOperatorHandoff
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(handoff))
 }
 
 export function managedSecretSubmitEnvelopeHasSecretMaterial(

@@ -14,6 +14,7 @@ import {
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
+  buildSingleSecretOperatorHandoff,
   buildSingleSecretPolicyPreview,
   buildSingleSecretRecoveryDecision,
   buildSingleSecretRevealLifecycle,
@@ -34,6 +35,7 @@ import {
   managedSecretEvidenceBundleHasSecretMaterial,
   managedSecretHistoryReviewHasSecretMaterial,
   managedSecretLeakEvidenceHasSecretMaterial,
+  managedSecretOperatorHandoffHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRecoveryDecisionHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
@@ -2111,6 +2113,59 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       managedSecretRecoveryDecisionHasSecretMaterial(recoveryDecision)
     ).toBe(false)
+    const operatorHandoff = buildSingleSecretOperatorHandoff(
+      managedSecretRows[0],
+      rotatePlan,
+      appliedResult,
+      statusMonitor,
+      recoveryDecision
+    )
+    expect(operatorHandoff).toMatchObject({
+      handoffId: 'handoff-reset-serviceadmin-session-signing-applied',
+      operationId: rotatePlan.operationId,
+      outcome: 'applied',
+      lane: 'settled',
+      owner: 'operator',
+      severity: 'info',
+      badge: 'closed',
+      blockedReason: null,
+      requiredAction: 'review terminal status and no further mutation action',
+    })
+    expect(operatorHandoff.shareableEvidenceRefs).toEqual(
+      expect.arrayContaining([
+        'audit-reset-serviceadmin-session-signing-preview',
+        'corr-reset-serviceadmin-session-signing-applied',
+        'impact-reset-serviceadmin-session-signing-applied-metadata',
+        statusMonitor.statusEndpoint,
+      ])
+    )
+    expect(operatorHandoff.allowedHandoffFields).toEqual(
+      expect.arrayContaining([
+        'handoffId',
+        'operationId',
+        'auditEventId',
+        'correlationId',
+        'statusEndpoint',
+      ])
+    )
+    expect(operatorHandoff.omittedHandoffFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'screenshotsWithVisibleValues',
+      ])
+    )
+    expect(operatorHandoff.safeHandoffRows).toEqual(
+      expect.arrayContaining([
+        'operator handoffs use ids, refs, typed outcomes, owner lanes, and audit metadata only',
+        'handoff evidence can be copied into issue or audit notes without raw secret material',
+      ])
+    )
+    expect(managedSecretOperatorHandoffHasSecretMaterial(operatorHandoff)).toBe(
+      false
+    )
     const authRequiredMonitor = buildSingleSecretStatusMonitor(
       managedSecretRows[0],
       rotatePlan,
@@ -2162,6 +2217,33 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretRecoveryDecisionHasSecretMaterial(
         authRequiredRecoveryDecision
       )
+    ).toBe(false)
+    const authRequiredHandoff = buildSingleSecretOperatorHandoff(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredResult,
+      authRequiredMonitor,
+      authRequiredRecoveryDecision
+    )
+    expect(authRequiredHandoff).toMatchObject({
+      outcome: 'auth-required',
+      lane: 'provider-auth',
+      owner: 'provider owner',
+      severity: 'warning',
+      badge: 'owner action required',
+      blockedReason: 'auth required',
+      requiredAction:
+        'complete provider reauthentication, then create a fresh audited preview',
+      validatorNote:
+        'blocked state must be revalidated with a fresh preview before another mutation attempt',
+    })
+    expect(authRequiredHandoff.safeHandoffRows).toEqual(
+      expect.arrayContaining([
+        'blocked handoffs require owner action and a fresh broker preview before another submit',
+      ])
+    )
+    expect(
+      managedSecretOperatorHandoffHasSecretMaterial(authRequiredHandoff)
     ).toBe(false)
     const auditUnavailableTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],
