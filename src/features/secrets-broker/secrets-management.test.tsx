@@ -454,6 +454,15 @@ describe('Secrets Broker secrets management page', () => {
         /partial campaigns remain open while retry-safe item recovery/i
       )
     ).toBeVisible()
+    expect(screen.getAllByText(/Bulk recovery checklist/i)[0]).toBeVisible()
+    expect(screen.getByText(/operation-id-only/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        /retry only items marked retry-safe, using the existing item operation id/i
+      )
+    ).toBeVisible()
+    expect(screen.getByText(/Omitted checklist fields/i)).toBeVisible()
+    expect(screen.getByText(/storedMutationPayload/i)).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
@@ -634,6 +643,15 @@ describe('Secrets Broker secrets management page', () => {
         /blocked campaigns stay open until policy, auth, audit, provider, or stale-plan recovery creates a fresh plan/i
       )
     ).toBeVisible()
+    expect(screen.getAllByText(/Bulk recovery checklist/i)[0]).toBeVisible()
+    expect(screen.getByText(/fresh-preview-required/i)).toBeVisible()
+    expect(
+      screen.getAllByText(
+        /fresh campaign preview and revalidation are mandatory before another mutation submit/i
+      )[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Omitted checklist fields/i)).toBeVisible()
+    expect(screen.getByText(/storedMutationPayload/i)).toBeVisible()
   })
 
   it('shows stale plan and revalidation failure states before bulk apply', async () => {

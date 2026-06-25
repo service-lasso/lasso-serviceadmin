@@ -698,6 +698,28 @@ export type BulkSecretCampaignOwnerActionTicket = {
   safeTicketRows: string[]
 }
 
+export type BulkSecretCampaignRecoveryChecklist = {
+  checklistId: string
+  campaignId: string
+  operationId: string
+  lane: BulkSecretCampaignOperatorHandoff['lane']
+  retryEligibility:
+    | 'none'
+    | 'operation-id-only'
+    | 'fresh-preview-required'
+    | 'monitor-terminal-metadata'
+  retryTokenRef: string
+  retryScope: string
+  ownerAction: string
+  freshPreviewRequired: boolean
+  terminalEvidenceRequired: string
+  supportRefs: string[]
+  itemRecoveryRows: string[]
+  allowedChecklistFields: string[]
+  omittedChecklistFields: string[]
+  safeChecklistRows: string[]
+}
+
 export const managedSecretRows: ManagedSecretRow[] = [
   {
     id: 'serviceadmin-session-signing',
@@ -1937,6 +1959,110 @@ export function buildBulkSecretCampaignOwnerActionTicket(
           : handoff.lane === 'provider-recovery'
             ? 'provider recovery ticket carries connector metadata only'
             : 'owner queue omits request bodies, response bodies, and secret material',
+    ],
+  }
+}
+
+export function buildBulkSecretCampaignRecoveryChecklist(
+  result: BulkSecretCampaignApplyResult,
+  handoff: BulkSecretCampaignOperatorHandoff,
+  ticket: BulkSecretCampaignOwnerActionTicket
+): BulkSecretCampaignRecoveryChecklist {
+  const slug = safeCampaignSlug(result.campaignId)
+  const retrySafeItems = result.items.filter(
+    (item) => !item.applied && item.retrySafe
+  )
+  const blockedItems = result.items.filter((item) => !item.applied)
+  const retryEligibility: BulkSecretCampaignRecoveryChecklist['retryEligibility'] =
+    handoff.lane === 'settled'
+      ? 'none'
+      : handoff.lane === 'monitor'
+        ? 'monitor-terminal-metadata'
+        : retrySafeItems.length > 0
+          ? 'operation-id-only'
+          : 'fresh-preview-required'
+  const freshPreviewRequired =
+    ticket.freshPlanRequired || retryEligibility === 'fresh-preview-required'
+  const retryScope =
+    retryEligibility === 'operation-id-only'
+      ? 'retry only items marked retry-safe, using the existing item operation id and idempotency key'
+      : retryEligibility === 'monitor-terminal-metadata'
+        ? 'monitor pending item terminal metadata before retry or closure'
+        : retryEligibility === 'fresh-preview-required'
+          ? 'discard stale or blocked campaign submit state and create a fresh dry-run preview'
+          : 'no retry required after settled campaign acknowledgement'
+
+  return {
+    checklistId: `bulk-recovery-checklist-${slug}-${result.outcome}`,
+    campaignId: result.campaignId,
+    operationId: result.operationId,
+    lane: handoff.lane,
+    retryEligibility,
+    retryTokenRef:
+      retryEligibility === 'operation-id-only'
+        ? `retry-token-${slug}-operation-id-only`
+        : `retry-token-${slug}-not-issued`,
+    retryScope,
+    ownerAction: ticket.requiredAction,
+    freshPreviewRequired,
+    terminalEvidenceRequired:
+      handoff.lane === 'settled'
+        ? 'audit acknowledgement and dependent service status review'
+        : retryEligibility === 'operation-id-only'
+          ? 'terminal metadata for every retry-safe item operation id'
+          : 'fresh preview, owner acknowledgement, and new campaign revalidation before any submit',
+    supportRefs: [
+      ...ticket.evidenceRefs,
+      `support://secrets-broker/campaigns/${slug}/recovery-checklist`,
+      `diagnostics://secrets-broker/campaigns/${safeCampaignSlug(result.operationId)}/retry-metadata-only`,
+    ],
+    itemRecoveryRows:
+      blockedItems.length > 0
+        ? blockedItems.map(
+            (item) =>
+              `${item.name}: ${item.outcome}; ${item.retrySafe ? 'retry by operation id only' : 'fresh preview required'}; ${item.nextAction}`
+          )
+        : result.items.map(
+            (item) =>
+              `${item.name}: ${item.outcome}; close after audit acknowledgement`
+          ),
+    allowedChecklistFields: [
+      'checklistId',
+      'campaignId',
+      'operationId',
+      'planToken',
+      'lane',
+      'retryEligibility',
+      'retryTokenRef',
+      'itemOperationIds',
+      'idempotencyKeys',
+      'typedItemOutcomes',
+      'auditRefs',
+      'correlationRefs',
+      'supportEvidenceRefs',
+    ],
+    omittedChecklistFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+      'bulkSpreadsheetPayload',
+      'storedMutationPayload',
+    ],
+    safeChecklistRows: [
+      'bulk recovery checklist is generated from campaign result, handoff, and owner ticket metadata only',
+      retryScope,
+      freshPreviewRequired
+        ? 'fresh campaign preview and revalidation are mandatory before another mutation submit'
+        : 'no fresh mutation payload is retained for settled or monitored campaign evidence',
+      'support and diagnostics refs are metadata-only and omit request bodies, response bodies, provider credentials, tokens, raw values, screenshots with visible values, and spreadsheet payloads',
     ],
   }
 }

@@ -62,6 +62,7 @@ import {
   buildBulkSecretCampaignClosureReview,
   buildBulkSecretCampaignOperatorHandoff,
   buildBulkSecretCampaignOwnerActionTicket,
+  buildBulkSecretCampaignRecoveryChecklist,
   buildManagedSecretActionPreview,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
@@ -368,6 +369,14 @@ export function SecretsManagementPage({
   const bulkOwnerActionTicket = bulkOperatorHandoff
     ? buildBulkSecretCampaignOwnerActionTicket(bulkOperatorHandoff)
     : null
+  const bulkRecoveryChecklist =
+    bulkApplyResult && bulkOperatorHandoff && bulkOwnerActionTicket
+      ? buildBulkSecretCampaignRecoveryChecklist(
+          bulkApplyResult,
+          bulkOperatorHandoff,
+          bulkOwnerActionTicket
+        )
+      : null
   const singleOperationAuditTrail = singleApplyResult
     ? buildSingleSecretOperationAuditTrail(
         selectedRow,
@@ -1870,6 +1879,56 @@ export function SecretsManagementPage({
                           ))}
                         </ul>
                       </div>
+
+                      {bulkRecoveryChecklist ? (
+                        <div className='grid gap-3 rounded-md border bg-background p-3 md:grid-cols-2'>
+                          <div>
+                            <div className='text-xs font-medium text-muted-foreground uppercase'>
+                              Bulk recovery checklist
+                            </div>
+                            <dl className='mt-2 space-y-2 text-muted-foreground'>
+                              <div>
+                                <dt className='text-foreground'>
+                                  Checklist ID
+                                </dt>
+                                <dd className='break-all'>
+                                  {bulkRecoveryChecklist.checklistId}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className='text-foreground'>
+                                  Retry eligibility
+                                </dt>
+                                <dd>
+                                  {bulkRecoveryChecklist.retryEligibility}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className='text-foreground'>
+                                  Terminal evidence
+                                </dt>
+                                <dd>
+                                  {
+                                    bulkRecoveryChecklist.terminalEvidenceRequired
+                                  }
+                                </dd>
+                              </div>
+                            </dl>
+                          </div>
+                          <div>
+                            <div className='text-xs font-medium text-muted-foreground uppercase'>
+                              Checklist rows
+                            </div>
+                            <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                              {bulkRecoveryChecklist.safeChecklistRows.map(
+                                (row) => (
+                                  <li key={row}>{row}</li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className='space-y-3 rounded-md bg-muted/40 p-3 text-sm'>
@@ -1933,6 +1992,36 @@ export function SecretsManagementPage({
                           )}
                         </div>
                       </div>
+                      {bulkRecoveryChecklist ? (
+                        <>
+                          <div>
+                            <div className='text-xs font-medium text-muted-foreground uppercase'>
+                              Recovery item rows
+                            </div>
+                            <div className='mt-1 space-y-1'>
+                              {bulkRecoveryChecklist.itemRecoveryRows.map(
+                                (row) => (
+                                  <div key={row}>{row}</div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className='text-xs font-medium text-muted-foreground uppercase'>
+                              Omitted checklist fields
+                            </div>
+                            <div className='mt-1 flex flex-wrap gap-1'>
+                              {bulkRecoveryChecklist.omittedChecklistFields.map(
+                                (field) => (
+                                  <Badge key={field} variant='secondary'>
+                                    {field}
+                                  </Badge>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
