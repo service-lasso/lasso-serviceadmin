@@ -643,6 +643,27 @@ test.describe('Secrets Broker browser coverage', () => {
         /owner action tickets are generated from the safe handoff/i
       )
     ).toBeVisible()
+    await expect(
+      page.getByText('Operator closure review', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(
+          /closure-review-reset-serviceadmin-session-signing-submitted/i
+        )
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/wait for broker terminal metadata/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/Retained evidence refs/i)).toBeVisible()
+    await expect(page.getByText(/Allowed closure fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted closure fields/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /pending operations remain open until broker terminal metadata arrives/i
+      )
+    ).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('applied')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -659,6 +680,17 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(
       page.getByText(/no retry needed after broker success/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/operator review can close/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Allowed after audit acknowledgement/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /operator review may close after terminal metadata and audit receipt acknowledgement/i
+      )
     ).toBeVisible()
     await expect(page.getByText(/2 submitted/i)).toBeVisible()
     await expect(page.getByText(/2 shown/i)).toBeVisible()
@@ -741,7 +773,7 @@ test.describe('Secrets Broker browser coverage', () => {
         )
         .first()
     ).toBeVisible()
-    await expect(page.getByText(/safe-audit-\d{5}/i)).toBeVisible()
+    await expect(page.getByText(/safe-audit-\d{5}/i).first()).toBeVisible()
     await expect(page.getByText(/Safe receipt fields/i)).toBeVisible()
     await expect(page.getByText(/Omitted receipt artifacts/i)).toBeVisible()
     await expect(
@@ -768,6 +800,17 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(
         /fresh broker preview is required after owner action before any mutation retry/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/owner action required before close/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Blocked until required checks complete/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /blocked operations stay open until owner action and a fresh preview are completed/i
       )
     ).toBeVisible()
     await expect(page.getByText(/4 submitted/i)).toBeVisible()

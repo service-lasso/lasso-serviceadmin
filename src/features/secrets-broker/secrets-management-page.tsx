@@ -67,6 +67,7 @@ import {
   buildSingleSecretEvidenceBundle,
   buildSingleSecretExportGuardrail,
   buildSingleSecretConfirmationReceipt,
+  buildSingleSecretClosureReview,
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
@@ -409,6 +410,24 @@ export function SecretsManagementPage({
         singleOperatorHandoff
       )
     : null
+  const singleClosureReview =
+    singleApplyResult &&
+    singleStatusMonitor &&
+    singleEvidenceBundle &&
+    singleAuditReceipt &&
+    singleOperatorHandoff &&
+    singleOwnerActionTicket
+      ? buildSingleSecretClosureReview(
+          selectedRow,
+          singleOperationPlan,
+          singleApplyResult,
+          singleStatusMonitor,
+          singleEvidenceBundle,
+          singleAuditReceipt,
+          singleOperatorHandoff,
+          singleOwnerActionTicket
+        )
+      : null
   const singleHistoryReview = useMemo(
     () =>
       buildSingleSecretOperationHistoryReview(
@@ -3922,6 +3941,148 @@ export function SecretsManagementPage({
                         </div>
                         <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
                           {singleOwnerActionTicket.safeTicketRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {singleClosureReview ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <CheckCircle2 className='size-4 text-primary' />
+                      <div className='font-medium'>Operator closure review</div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge
+                        variant={
+                          singleClosureReview.canCloseOperatorReview
+                            ? 'default'
+                            : singleClosureReview.reviewState === 'monitoring'
+                              ? 'outline'
+                              : 'secondary'
+                        }
+                      >
+                        {singleClosureReview.badge}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 md:grid-cols-3'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Closure review
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleClosureReview.closureId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Review state
+                        </div>
+                        <div className='mt-1'>
+                          {singleClosureReview.reviewState}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Operator close
+                        </div>
+                        <div className='mt-1'>
+                          {singleClosureReview.canCloseOperatorReview
+                            ? 'Allowed after audit acknowledgement'
+                            : 'Blocked until required checks complete'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Required before close
+                        </div>
+                        <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {singleClosureReview.requiredBeforeClose.map(
+                            (row) => (
+                              <li key={row}>{row}</li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Retained evidence refs
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleClosureReview.retainedEvidenceRefs.map(
+                            (ref) => (
+                              <Badge key={ref} variant='outline'>
+                                {ref}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Audit refs
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleClosureReview.auditRefs.map((ref) => (
+                            <Badge key={ref} variant='outline'>
+                              {ref}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Support refs
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleClosureReview.supportRefs.map((ref) => (
+                            <Badge key={ref} variant='secondary'>
+                              {ref}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed closure fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleClosureReview.allowedClosureFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted closure fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleClosureReview.omittedClosureFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe closure evidence
+                        </div>
+                        <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {singleClosureReview.safeClosureRows.map((row) => (
                             <li key={row}>{row}</li>
                           ))}
                         </ul>

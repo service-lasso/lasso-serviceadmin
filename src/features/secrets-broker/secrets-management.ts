@@ -329,6 +329,23 @@ export type SingleSecretOwnerActionTicket = {
   safeTicketRows: string[]
 }
 
+export type SingleSecretClosureReview = {
+  closureId: string
+  operationId: string
+  ref: string
+  outcome: SingleSecretOperationOutcome
+  reviewState: 'ready-to-close' | 'monitoring' | 'owner-action-required'
+  badge: string
+  canCloseOperatorReview: boolean
+  requiredBeforeClose: string[]
+  retainedEvidenceRefs: string[]
+  auditRefs: string[]
+  supportRefs: string[]
+  allowedClosureFields: string[]
+  omittedClosureFields: string[]
+  safeClosureRows: string[]
+}
+
 export type SingleSecretDecommissionPreview = {
   ref: string
   operationId: string
@@ -3863,6 +3880,112 @@ export function buildSingleSecretOwnerActionTicket(
   }
 }
 
+export function buildSingleSecretClosureReview(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  result: SingleSecretOperationResult,
+  monitor: SingleSecretStatusMonitor,
+  evidenceBundle: SingleSecretEvidenceBundle,
+  auditReceipt: SingleSecretAuditReceipt,
+  handoff: SingleSecretOperatorHandoff,
+  ticket: SingleSecretOwnerActionTicket
+): SingleSecretClosureReview {
+  const slug = safeOperationSlug(plan.action, row)
+  const reviewState: SingleSecretClosureReview['reviewState'] =
+    result.outcome === 'applied'
+      ? 'ready-to-close'
+      : result.outcome === 'submitted'
+        ? 'monitoring'
+        : 'owner-action-required'
+  const canCloseOperatorReview = reviewState === 'ready-to-close'
+
+  return {
+    closureId: `closure-review-${slug}-${result.outcome}`,
+    operationId: result.operationId,
+    ref: row.ref,
+    outcome: result.outcome,
+    reviewState,
+    badge: canCloseOperatorReview
+      ? 'operator review can close'
+      : reviewState === 'monitoring'
+        ? 'wait for broker terminal metadata'
+        : 'owner action required before close',
+    canCloseOperatorReview,
+    requiredBeforeClose: canCloseOperatorReview
+      ? [
+          'acknowledge terminal audit receipt',
+          'retain support evidence bundle reference',
+          'confirm dependent service status is reviewed',
+        ]
+      : reviewState === 'monitoring'
+        ? [
+            'wait for terminal broker status metadata',
+            'refresh status endpoint before deciding retry or close',
+            'keep operation in history without retaining payload bodies',
+          ]
+        : [
+            ticket.requiredAction,
+            'complete owner acknowledgement',
+            'create a fresh preview before any new mutation attempt',
+          ],
+    retainedEvidenceRefs: [
+      auditReceipt.receiptId,
+      auditReceipt.receiptChecksum,
+      evidenceBundle.bundleId,
+      evidenceBundle.reportRef,
+      monitor.statusEndpoint,
+      handoff.handoffId,
+      ticket.ticketId,
+    ],
+    auditRefs: [
+      result.auditFeedback.auditEventId,
+      result.auditFeedback.correlationId,
+      auditReceipt.terminalStepStatus,
+    ],
+    supportRefs: [
+      evidenceBundle.diagnosticsRef,
+      evidenceBundle.supportBundleStatus,
+      evidenceBundle.storageEvidence,
+    ],
+    allowedClosureFields: [
+      'closureId',
+      'operationId',
+      'ref',
+      'action',
+      'outcome',
+      'auditEventId',
+      'correlationId',
+      'receiptChecksum',
+      'statusEndpoint',
+      'supportEvidenceRef',
+      'ownerActionTicketId',
+    ],
+    omittedClosureFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+    ],
+    safeClosureRows: [
+      'closure review stores only ids, refs, typed outcomes, audit refs, and support evidence refs',
+      canCloseOperatorReview
+        ? 'operator review may close after terminal metadata and audit receipt acknowledgement'
+        : reviewState === 'monitoring'
+          ? 'pending operations remain open until broker terminal metadata arrives'
+          : 'blocked operations stay open until owner action and a fresh preview are completed',
+      'closing or keeping the review open never requires raw value reveal, request body replay, provider credentials, or diagnostic payload bodies',
+      `operator lane: ${handoff.lane}`,
+    ],
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -3938,6 +4061,12 @@ export function managedSecretOwnerActionTicketHasSecretMaterial(
   ticket: SingleSecretOwnerActionTicket
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(ticket))
+}
+
+export function managedSecretClosureReviewHasSecretMaterial(
+  review: SingleSecretClosureReview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(review))
 }
 
 export function managedSecretSubmitEnvelopeHasSecretMaterial(

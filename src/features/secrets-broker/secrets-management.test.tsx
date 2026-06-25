@@ -12,6 +12,7 @@ import {
   buildSingleSecretEvidenceBundle,
   buildSingleSecretExportGuardrail,
   buildSingleSecretConfirmationReceipt,
+  buildSingleSecretClosureReview,
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
@@ -34,6 +35,7 @@ import {
   managedSecretBulkApplyResultHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
+  managedSecretClosureReviewHasSecretMaterial,
   managedSecretConfirmationReceiptHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretEditPreviewHasSecretMaterial,
@@ -829,7 +831,9 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/Support evidence bundle/i)).toBeVisible()
     expect(
-      screen.getByText(/support-evidence-reset-serviceadmin-session-signing/i)
+      screen.getAllByText(
+        /support-evidence-reset-serviceadmin-session-signing/i
+      )[0]
     ).toBeVisible()
     expect(screen.getByText(/Screenshot redaction/i)).toBeVisible()
     expect(
@@ -844,7 +848,9 @@ describe('Secrets Broker secrets management page', () => {
       screen.getAllByText(/diagnosticPayloadsWithBodies/i)[0]
     ).toBeVisible()
     expect(
-      screen.getByText(/localStorage\/sessionStorage evidence contains no/i)
+      screen.getAllByText(
+        /localStorage\/sessionStorage evidence contains no/i
+      )[0]
     ).toBeVisible()
     expect(screen.getByText(/Recovery and retry decision/i)).toBeVisible()
     expect(
@@ -2416,6 +2422,78 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       managedSecretOwnerActionTicketHasSecretMaterial(ownerActionTicket)
     ).toBe(false)
+    const closureReview = buildSingleSecretClosureReview(
+      managedSecretRows[0],
+      rotatePlan,
+      appliedResult,
+      statusMonitor,
+      evidenceBundle,
+      auditReceipt,
+      operatorHandoff,
+      ownerActionTicket
+    )
+    expect(closureReview).toMatchObject({
+      closureId: 'closure-review-reset-serviceadmin-session-signing-applied',
+      operationId: rotatePlan.operationId,
+      outcome: 'applied',
+      reviewState: 'ready-to-close',
+      badge: 'operator review can close',
+      canCloseOperatorReview: true,
+    })
+    expect(closureReview.requiredBeforeClose).toEqual(
+      expect.arrayContaining([
+        'acknowledge terminal audit receipt',
+        'retain support evidence bundle reference',
+        'confirm dependent service status is reviewed',
+      ])
+    )
+    expect(closureReview.retainedEvidenceRefs).toEqual(
+      expect.arrayContaining([
+        auditReceipt.receiptId,
+        auditReceipt.receiptChecksum,
+        evidenceBundle.bundleId,
+        evidenceBundle.reportRef,
+        statusMonitor.statusEndpoint,
+        operatorHandoff.handoffId,
+        ownerActionTicket.ticketId,
+      ])
+    )
+    expect(closureReview.allowedClosureFields).toEqual(
+      expect.arrayContaining([
+        'closureId',
+        'operationId',
+        'auditEventId',
+        'correlationId',
+        'receiptChecksum',
+        'statusEndpoint',
+        'ownerActionTicketId',
+      ])
+    )
+    expect(closureReview.omittedClosureFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+        'screenshotsWithVisibleValues',
+        'diagnosticPayloadsWithBodies',
+      ])
+    )
+    expect(closureReview.safeClosureRows).toEqual(
+      expect.arrayContaining([
+        'closure review stores only ids, refs, typed outcomes, audit refs, and support evidence refs',
+        'operator review may close after terminal metadata and audit receipt acknowledgement',
+        'closing or keeping the review open never requires raw value reveal, request body replay, provider credentials, or diagnostic payload bodies',
+      ])
+    )
+    expect(managedSecretClosureReviewHasSecretMaterial(closureReview)).toBe(
+      false
+    )
     const authRequiredMonitor = buildSingleSecretStatusMonitor(
       managedSecretRows[0],
       rotatePlan,
@@ -2519,6 +2597,45 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(
       managedSecretOwnerActionTicketHasSecretMaterial(authRequiredTicket)
+    ).toBe(false)
+    const authRequiredEvidenceBundle = buildSingleSecretEvidenceBundle(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredResult,
+      authRequiredMonitor
+    )
+    const authRequiredClosureReview = buildSingleSecretClosureReview(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredResult,
+      authRequiredMonitor,
+      authRequiredEvidenceBundle,
+      authRequiredReceipt,
+      authRequiredHandoff,
+      authRequiredTicket
+    )
+    expect(authRequiredClosureReview).toMatchObject({
+      closureId:
+        'closure-review-reset-serviceadmin-session-signing-auth-required',
+      outcome: 'auth-required',
+      reviewState: 'owner-action-required',
+      badge: 'owner action required before close',
+      canCloseOperatorReview: false,
+    })
+    expect(authRequiredClosureReview.requiredBeforeClose).toEqual(
+      expect.arrayContaining([
+        'complete provider reauthentication, then create a fresh audited preview',
+        'complete owner acknowledgement',
+        'create a fresh preview before any new mutation attempt',
+      ])
+    )
+    expect(authRequiredClosureReview.safeClosureRows).toEqual(
+      expect.arrayContaining([
+        'blocked operations stay open until owner action and a fresh preview are completed',
+      ])
+    )
+    expect(
+      managedSecretClosureReviewHasSecretMaterial(authRequiredClosureReview)
     ).toBe(false)
     const auditUnavailableTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],
