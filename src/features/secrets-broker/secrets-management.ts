@@ -1051,6 +1051,8 @@ export function buildStubSecretMutationPreview(
   auditReason: string,
   confirmed: boolean
 ): StubSecretMutationPreview {
+  const auditReasonRejected =
+    managedSecretAuditReasonHasSecretMaterial(auditReason)
   const actionLabel =
     action === 'reset'
       ? 'reset/rotate'
@@ -1059,7 +1061,7 @@ export function buildStubSecretMutationPreview(
         : action === 'reveal'
           ? 'reveal'
           : 'update'
-  const hasAuditReason = auditReason.trim().length >= 8
+  const hasAuditReason = auditReason.trim().length >= 8 && !auditReasonRejected
   const base = {
     state,
     title: `Stub ${actionLabel} preview for ${row.name}`,
@@ -1176,17 +1178,21 @@ export function buildStubSecretMutationPreview(
   return {
     ...base,
     badge: 'Ready dry-run preview',
-    dryRunStatus: hasAuditReason
-      ? 'metadata-only dry-run ready'
-      : 'audit reason required',
+    dryRunStatus: auditReasonRejected
+      ? 'audit reason rejected'
+      : hasAuditReason
+        ? 'metadata-only dry-run ready'
+        : 'audit reason required',
     applyStatus: 'not applied',
     policyDecision:
       row.state === 'missing'
         ? 'deny until ref/source exists'
         : 'allow preview; apply remains confirmation gated',
-    auditRequirement: hasAuditReason
-      ? 'audit reason present; confirmation still required'
-      : 'enter at least 8 characters of audit reason',
+    auditRequirement: auditReasonRejected
+      ? 'remove secret-like material from the audit reason before preview'
+      : hasAuditReason
+        ? 'audit reason present; confirmation still required'
+        : 'enter at least 8 characters of audit reason',
     safeDiff: [
       `${actionLabel} target ref selected`,
       'affected service metadata reviewed',
@@ -1195,9 +1201,11 @@ export function buildStubSecretMutationPreview(
     nextStep:
       row.state === 'missing'
         ? 'Connect the provider/source before mutation preview can apply.'
-        : confirmed && hasAuditReason
-          ? 'Use the stub state selector to simulate apply success or failure.'
-          : 'Enter audit reason and explicit confirmation before apply can be simulated.',
+        : auditReasonRejected
+          ? 'Audit reasons must describe operator intent and must not contain tokens, credentials, cookies, private keys, or raw values.'
+          : confirmed && hasAuditReason
+            ? 'Use the stub state selector to simulate apply success or failure.'
+            : 'Enter audit reason and explicit confirmation before apply can be simulated.',
     canApply: row.state !== 'missing' && confirmed && hasAuditReason,
   }
 }
@@ -1369,7 +1377,10 @@ export function buildBulkSecretCampaignApplyGate(
   revalidated: boolean,
   brokerCampaignApiAvailable = plan.applyAvailable
 ): BulkSecretCampaignApplyGate {
-  const auditReasonAccepted = auditReason.trim().length >= 12
+  const auditReasonRejected =
+    managedSecretAuditReasonHasSecretMaterial(auditReason)
+  const auditReasonAccepted =
+    auditReason.trim().length >= 12 && !auditReasonRejected
   const confirmationPhrase = getBulkSecretCampaignConfirmationPhrase(plan)
   const confirmationRequired = plan.highRiskCount > 0
   const confirmationAccepted =
@@ -1382,7 +1393,9 @@ export function buildBulkSecretCampaignApplyGate(
   if (plan.applicableCount === 0) {
     blockers.push('no selected refs are applicable for this campaign')
   }
-  if (!auditReasonAccepted) {
+  if (auditReasonRejected) {
+    blockers.push('audit reason contains secret-like material')
+  } else if (!auditReasonAccepted) {
     blockers.push('audit reason must be at least 12 characters')
   }
   if (!confirmationAccepted) {
@@ -1416,7 +1429,11 @@ export function buildBulkSecretCampaignApplyGate(
       ? bulkCampaignRevalidationMessages[revalidationState]
       : 'not revalidated since this dry-run was generated',
     statusRows: [
-      auditReasonAccepted ? 'audit reason recorded' : 'audit reason missing',
+      auditReasonRejected
+        ? 'audit reason rejected: remove secret-like material'
+        : auditReasonAccepted
+          ? 'audit reason recorded'
+          : 'audit reason missing',
       confirmationAccepted
         ? 'confirmation accepted'
         : 'high-risk confirmation missing',
@@ -2358,7 +2375,9 @@ export function buildSingleSecretOperationPlan(
 ): SingleSecretOperationPlan {
   const requirement = capabilityRequirementForAction(action)
   const blockers: string[] = []
-  const hasAuditReason = auditReason.trim().length >= 8
+  const auditReasonRejected =
+    managedSecretAuditReasonHasSecretMaterial(auditReason)
+  const hasAuditReason = auditReason.trim().length >= 8 && !auditReasonRejected
   const metadataOnly = action === 'metadata'
   const capabilitySupported =
     metadataOnly || row.backendCapability.includes(requirement)
@@ -2369,7 +2388,9 @@ export function buildSingleSecretOperationPlan(
   if (!capabilitySupported) {
     blockers.push(`${requirement} unsupported`)
   }
-  if (!metadataOnly && !hasAuditReason) {
+  if (!metadataOnly && auditReasonRejected) {
+    blockers.push('audit reason contains secret-like material')
+  } else if (!metadataOnly && !hasAuditReason) {
     blockers.push('audit reason required')
   }
   if (!metadataOnly && !confirmed) {
@@ -2409,11 +2430,13 @@ export function buildSingleSecretOperationPlan(
       row.policy.includes('readonly') && action !== 'metadata'
         ? 'review required: readonly policy blocks mutation unless broker policy changes'
         : 'allow preview: final allow/deny belongs to Secrets Broker',
-    auditRequirement: hasAuditReason
-      ? 'audit reason captured as metadata only'
-      : metadataOnly
-        ? 'audit reason not required for metadata view'
-        : 'audit reason required before submit',
+    auditRequirement: auditReasonRejected
+      ? 'audit reason rejected because it contains secret-like material'
+      : hasAuditReason
+        ? 'audit reason captured as metadata only'
+        : metadataOnly
+          ? 'audit reason not required for metadata view'
+          : 'audit reason required before submit',
     applyGate: canSubmit
       ? 'operation submit ready after dry-run revalidation'
       : metadataOnly
@@ -2481,7 +2504,9 @@ export function buildSingleSecretConfirmationReceipt(
   confirmed: boolean
 ): SingleSecretConfirmationReceipt {
   const slug = safeOperationSlug(plan.action, row)
-  const hasAuditReason = auditReason.trim().length >= 8
+  const auditReasonRejected =
+    managedSecretAuditReasonHasSecretMaterial(auditReason)
+  const hasAuditReason = auditReason.trim().length >= 8 && !auditReasonRejected
   const accepted = plan.canSubmit && envelope.readyForSubmit
   const metadataOnly = plan.action === 'metadata'
 
@@ -2493,9 +2518,11 @@ export function buildSingleSecretConfirmationReceipt(
     accepted,
     auditReasonStatus: metadataOnly
       ? 'not required for metadata view'
-      : hasAuditReason
-        ? 'accepted as broker audit metadata'
-        : 'missing or too short',
+      : auditReasonRejected
+        ? 'rejected: remove secret-like material'
+        : hasAuditReason
+          ? 'accepted as broker audit metadata'
+          : 'missing or too short',
     confirmationStatus: metadataOnly
       ? 'not required for metadata view'
       : confirmed
@@ -4486,6 +4513,10 @@ export function buildSingleSecretClosureReview(
 
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
+
+export function managedSecretAuditReasonHasSecretMaterial(auditReason: string) {
+  return forbiddenSecretPattern.test(auditReason)
+}
 
 export function managedSecretsHaveSecretMaterial(rows = managedSecretRows) {
   return forbiddenSecretPattern.test(JSON.stringify(rows))

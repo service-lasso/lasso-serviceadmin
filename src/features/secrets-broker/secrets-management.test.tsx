@@ -1,5 +1,5 @@
 import { renderRoute } from '@/test/render-route'
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import {
@@ -41,6 +41,7 @@ import {
   managedSecretBulkOwnerActionTicketHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
+  managedSecretAuditReasonHasSecretMaterial,
   managedSecretClosureReviewHasSecretMaterial,
   managedSecretConfirmationReceiptHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
@@ -177,6 +178,41 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.queryByText(/Controlled management surface/i)).toBeNull()
     expect(screen.queryByText(/^Safety boundaries$/i)).toBeNull()
+  })
+
+  it('rejects pasted secret-like audit reasons before they can gate apply', async () => {
+    await renderRoute('/secrets-broker/secrets')
+
+    const singleAuditReason = screen.getByLabelText(
+      /Audit reason for stub preview/i
+    )
+    fireEvent.change(singleAuditReason, {
+      target: { value: 'password=SuperSecret1234' },
+    })
+
+    expect(singleAuditReason).toHaveValue('')
+    expect(screen.getByText(/Secret-like material was rejected/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Simulate stub apply/i })
+    ).toBeDisabled()
+
+    await userEvent
+      .setup()
+      .click(
+        screen.getByRole('button', { name: /Generate bulk dry-run plan/i })
+      )
+    const bulkAuditReason = screen.getByLabelText(/Campaign audit reason/i)
+    fireEvent.change(bulkAuditReason, {
+      target: { value: 'bearer abcdefghijklmnop' },
+    })
+
+    expect(bulkAuditReason).toHaveValue('')
+    expect(
+      screen.getAllByText(/Secret-like material was rejected/i)[1]
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Revalidate dry-run/i })
+    ).toBeDisabled()
   })
 
   it('filters metadata locally without value search or plaintext indexing', async () => {
@@ -1241,6 +1277,23 @@ describe('Secrets Broker secrets management page', () => {
         true
       ).canApply
     ).toBe(false)
+    expect(
+      managedSecretAuditReasonHasSecretMaterial('password=SuperSecret1234')
+    ).toBe(true)
+    expect(
+      buildStubSecretMutationPreview(
+        managedSecretRows[0],
+        'delete',
+        'ready',
+        'password=SuperSecret1234',
+        true
+      )
+    ).toMatchObject({
+      dryRunStatus: 'audit reason rejected',
+      auditRequirement:
+        'remove secret-like material from the audit reason before preview',
+      canApply: false,
+    })
 
     const rotatePlan = buildSingleSecretOperationPlan(
       managedSecretRows[0],
@@ -1255,6 +1308,22 @@ describe('Secrets Broker secrets management page', () => {
       applyGate: 'operation submit ready after dry-run revalidation',
       canSubmit: true,
     })
+    const rejectedReasonPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[0],
+      'reset',
+      'bearer abcdefghijklmnop',
+      true,
+      'ready'
+    )
+    expect(rejectedReasonPlan).toMatchObject({
+      auditRequirement:
+        'audit reason rejected because it contains secret-like material',
+      applyGate: 'audit reason contains secret-like material',
+      canSubmit: false,
+    })
+    expect(rejectedReasonPlan.blockers).toContain(
+      'audit reason contains secret-like material'
+    )
     expect(rotatePlan.safePayloadFields).toEqual(
       expect.arrayContaining([
         'ref',
@@ -3265,6 +3334,24 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretRows,
       [managedSecretRows[0].id],
       'rotate-reset'
+    )
+    const rejectedReasonGate = buildBulkSecretCampaignApplyGate(
+      cleanPlan,
+      'api_key=SuperSecret1234',
+      'CONFIRM HIGH RISK CAMPAIGN',
+      'ready',
+      true,
+      true
+    )
+    expect(rejectedReasonGate).toMatchObject({
+      auditReasonAccepted: false,
+      canApply: false,
+    })
+    expect(rejectedReasonGate.blockers).toContain(
+      'audit reason contains secret-like material'
+    )
+    expect(rejectedReasonGate.statusRows).toContain(
+      'audit reason rejected: remove secret-like material'
     )
     const staleGate = buildBulkSecretCampaignApplyGate(
       cleanPlan,
