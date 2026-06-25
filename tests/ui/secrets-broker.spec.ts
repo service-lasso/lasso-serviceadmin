@@ -988,6 +988,16 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/campaign audit unavailable; item mutation not applied/i)
     ).toBeVisible()
     await expect(page.getByText(/restore audit persistence/i)).toBeVisible()
+    await expect(page.getByText(/Bulk campaign closure review/i)).toBeVisible()
+    await expect(page.getByText(/operator review remains open/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /blocked campaigns stay open until policy, auth, audit, provider, or stale-plan recovery creates a fresh plan/i
+      )
+    ).toBeVisible()
+    await expect(page.getByText(/Allowed closure fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted closure fields/i)).toBeVisible()
+    await expect(page.getByText(/bulkSpreadsheetPayload/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 

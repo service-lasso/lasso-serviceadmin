@@ -638,6 +638,23 @@ export type BulkSecretCampaignApplyResult = {
   items: BulkSecretCampaignApplyItem[]
 }
 
+export type BulkSecretCampaignClosureReview = {
+  closureId: string
+  campaignId: string
+  operationId: string
+  outcome: BulkSecretCampaignApplyResult['outcome']
+  reviewState: 'closable' | 'monitoring' | 'blocked'
+  canCloseCampaignReview: boolean
+  requiredBeforeClose: string[]
+  retainedEvidenceRefs: string[]
+  auditRefs: string[]
+  supportRefs: string[]
+  itemOutcomeSummary: string[]
+  allowedClosureFields: string[]
+  omittedClosureFields: string[]
+  safeClosureRows: string[]
+}
+
 export const managedSecretRows: ManagedSecretRow[] = [
   {
     id: 'serviceadmin-session-signing',
@@ -831,6 +848,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:bulk-campaign-dry-run',
     'secrets-management:bulk-campaign-apply',
     'secrets-management:bulk-campaign-status',
+    'secrets-management:bulk-campaign-closure-review',
   ],
   persistedStorage: 'none',
 }
@@ -1566,6 +1584,113 @@ export function buildBulkSecretCampaignApplyResult(
                   ? 'request least-privilege policy approval and create a fresh campaign preview'
                   : 'review per-item outcomes and retry only by operation id',
     items,
+  }
+}
+
+export function buildBulkSecretCampaignClosureReview(
+  result: BulkSecretCampaignApplyResult
+): BulkSecretCampaignClosureReview {
+  const nonAppliedCount =
+    result.failedCount +
+    result.deniedCount +
+    result.skippedCount +
+    result.unsupportedCount +
+    result.authRequiredCount +
+    result.auditUnavailableCount +
+    result.providerUnavailableCount +
+    result.staleCount
+  const retrySafeCount = result.items.filter(
+    (item) => !item.applied && item.retrySafe
+  ).length
+  const canCloseCampaignReview =
+    result.outcome === 'applied' && nonAppliedCount === 0
+  const reviewState: BulkSecretCampaignClosureReview['reviewState'] =
+    canCloseCampaignReview
+      ? 'closable'
+      : retrySafeCount > 0
+        ? 'monitoring'
+        : 'blocked'
+
+  return {
+    closureId: `bulk-closure-${safeCampaignSlug(result.campaignId)}`,
+    campaignId: result.campaignId,
+    operationId: result.operationId,
+    outcome: result.outcome,
+    reviewState,
+    canCloseCampaignReview,
+    requiredBeforeClose: canCloseCampaignReview
+      ? [
+          'acknowledge campaign-level audit summary',
+          'retain item operation ids and plan token',
+          'confirm dependent service status is reviewed',
+        ]
+      : reviewState === 'monitoring'
+        ? [
+            'review retry-safe failed item operation ids',
+            'retry only items marked retry safe and only by operation id',
+            'keep campaign open until every item has terminal recovery metadata',
+          ]
+        : [
+            'resolve the typed blocker named by the campaign next action',
+            'create a fresh campaign dry-run before any new mutation attempt',
+            'retain blocked item outcome evidence without request or response bodies',
+          ],
+    retainedEvidenceRefs: [
+      result.campaignId,
+      result.operationId,
+      result.planToken,
+      ...result.items.map((item) => item.operationItemId),
+    ],
+    auditRefs: [
+      `audit-campaign-${safeCampaignSlug(result.campaignId)}`,
+      `corr-campaign-${safeCampaignSlug(result.operationId)}`,
+      `audit-summary-${safeCampaignSlug(result.outcome)}`,
+    ],
+    supportRefs: [
+      `support://secrets-broker/campaigns/${safeCampaignSlug(result.campaignId)}/safe-summary`,
+      `diagnostics://secrets-broker/campaigns/${safeCampaignSlug(result.operationId)}/metadata-only`,
+      'screenshots-redacted-by-policy',
+    ],
+    itemOutcomeSummary: result.items.map(
+      (item) =>
+        `${item.name}: ${item.outcome}; ${item.retrySafe ? 'retry-safe' : 'fresh-plan-required'}`
+    ),
+    allowedClosureFields: [
+      'closureId',
+      'campaignId',
+      'operationId',
+      'planToken',
+      'outcome',
+      'itemOperationIds',
+      'idempotencyKeys',
+      'auditStatus',
+      'correlationId',
+      'supportEvidenceRef',
+      'typedItemOutcomes',
+    ],
+    omittedClosureFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+      'bulkSpreadsheetPayload',
+    ],
+    safeClosureRows: [
+      'bulk closure review stores only campaign ids, operation ids, typed item outcomes, audit refs, and support evidence refs',
+      canCloseCampaignReview
+        ? 'campaign review may close after audit acknowledgement and dependent service status review'
+        : reviewState === 'monitoring'
+          ? 'partial campaigns remain open while retry-safe item recovery is monitored by operation id'
+          : 'blocked campaigns stay open until policy, auth, audit, provider, or stale-plan recovery creates a fresh plan',
+      'closing or keeping the campaign open never requires raw values, request body replay, provider credentials, or diagnostic payload bodies',
+    ],
   }
 }
 
@@ -4007,6 +4132,12 @@ export function managedSecretBulkApplyResultHasSecretMaterial(
   result: BulkSecretCampaignApplyResult
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(result))
+}
+
+export function managedSecretBulkClosureReviewHasSecretMaterial(
+  review: BulkSecretCampaignClosureReview
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(review))
 }
 
 export function managedSecretSingleHistoryHasSecretMaterial(
