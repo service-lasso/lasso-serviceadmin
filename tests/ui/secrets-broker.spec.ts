@@ -501,9 +501,9 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
     await expect(page.getByText(/Broker status monitor/i)).toBeVisible()
     await expect(
-      page.getByText(
-        /GET \/v1\/management\/secret-operations\/\{operationId\}/i
-      )
+      page
+        .getByText(/GET \/v1\/management\/secret-operations\/\{operationId\}/i)
+        .first()
     ).toBeVisible()
     await expect(
       page.getByText(/poll every 5 seconds until broker terminal metadata/i)
@@ -564,6 +564,21 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(
       page.getByText(/track rotation operation id until provider status/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Recovery and retry decision/i)).toBeVisible()
+    await expect(
+      page
+        .getByText(/recovery-reset-serviceadmin-session-signing-submitted/i)
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/Retry blocked/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/wait for broker terminal status before any retry/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Allowed recovery fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted recovery fields/i)).toBeVisible()
+    await expect(
+      page.getByText(/recovery decisions are derived from typed broker/i)
     ).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('applied')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
@@ -696,9 +711,11 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText('Provider recovery evidence', { exact: true })
     ).toBeVisible()
     await expect(
-      page.getByText(
-        /provider-recovery-reset-serviceadmin-session-signing-metadata/i
-      )
+      page
+        .getByText(
+          /provider-recovery-reset-serviceadmin-session-signing-metadata/i
+        )
+        .first()
     ).toBeVisible()
     await expect(
       page.getByText(/Broker-owned recovery metadata only/i)
@@ -747,9 +764,11 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText('Broker failure evidence', { exact: true })
     ).toBeVisible()
     await expect(
-      page.getByText(
-        /broker-failure-reset-serviceadmin-session-signing-metadata/i
-      )
+      page
+        .getByText(
+          /broker-failure-reset-serviceadmin-session-signing-metadata/i
+        )
+        .first()
     ).toBeVisible()
     await expect(page.getByText(/provider_retryable_safe_error/i)).toBeVisible()
     await expect(
@@ -757,7 +776,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/terminal safe failure/i).first()).toBeVisible()
     await expect(
-      page.getByText(/retry-reset-serviceadmin-session-signing/i)
+      page.getByText(/retry-reset-serviceadmin-session-signing/i).first()
     ).toBeVisible()
     await expect(
       page.getByText(/retry only with the same operation id/i).first()
