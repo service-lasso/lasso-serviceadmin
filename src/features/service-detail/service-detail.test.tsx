@@ -315,6 +315,50 @@ describe('service detail quick actions', () => {
 })
 
 describe('service detail tab keyboard shortcuts', () => {
+  it('opens a Service Details tab from the route search state', async () => {
+    await renderRoute('/services/@serviceadmin?tab=variables')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(screen.getByRole('tab', { name: /variables/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toBeVisible()
+  })
+
+  it('updates URL search state on tab changes and falls back from unknown tabs', async () => {
+    const user = userEvent.setup()
+    const { router } = await renderRoute('/services/@serviceadmin?tab=unknown')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(screen.getByRole('tab', { name: /overview/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ tab: 'logs' })
+    })
+
+    await user.click(screen.getByRole('tab', { name: /overview/i }))
+
+    await waitFor(() => {
+      expect(router.state.location.search).not.toHaveProperty('tab')
+    })
+  })
+
   it('uses Ctrl+1 through Ctrl+6 for the visible tab order', async () => {
     await renderRoute('/services/@serviceadmin')
 
