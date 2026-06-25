@@ -64,6 +64,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
@@ -276,6 +277,11 @@ export function SecretsManagementPage({
   const singleSubmitEnvelope = buildSingleSecretSubmitEnvelope(
     selectedRow,
     singleOperationPlan
+  )
+  const singleLeakEvidence = buildSingleSecretLeakEvidence(
+    selectedRow,
+    singleOperationPlan,
+    singleSubmitEnvelope
   )
   const editPreview =
     selectedAction === 'edit'
@@ -1779,6 +1785,121 @@ export function SecretsManagementPage({
                       <li key={row}>{row}</li>
                     ))}
                   </ul>
+                </div>
+              </div>
+            </div>
+            <div className='rounded-md border p-3'>
+              <div className='mb-3 flex flex-wrap items-center gap-2'>
+                <DatabaseZap className='size-4 text-primary' />
+                <div className='font-medium'>
+                  Route and storage leak evidence
+                </div>
+                <Badge variant='secondary'>Metadata only</Badge>
+                <Badge
+                  variant={
+                    singleLeakEvidence.safeForScreenshots
+                      ? 'outline'
+                      : 'destructive'
+                  }
+                >
+                  Screenshot safe
+                </Badge>
+              </div>
+              <div className='grid gap-3 lg:grid-cols-4'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Route
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleLeakEvidence.route}
+                  </div>
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    {singleLeakEvidence.routeState}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Selected ref
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleLeakEvidence.selectedRef}
+                  </div>
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    Action: {singleLeakEvidence.action}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Browser storage
+                  </div>
+                  <div className='mt-1'>
+                    {singleLeakEvidence.browserStorageWrites}
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleLeakEvidence.browserStorageKeys.map((key) => (
+                      <Badge key={key} variant='outline'>
+                        {key}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Diagnostics
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleLeakEvidence.diagnosticsRef}
+                  </div>
+                  <div className='mt-2 text-xs break-all text-muted-foreground'>
+                    {singleLeakEvidence.supportBundleRef}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Allowed route params
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleLeakEvidence.allowedRouteParams.map((param) => (
+                      <Badge key={param} variant='outline'>
+                        {param}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Omitted from browser surfaces
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleLeakEvidence.omittedFields.map((field) => (
+                      <Badge key={field} variant='secondary'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Screenshot policy
+                </div>
+                <div className='mt-2'>
+                  {singleLeakEvidence.screenshotPolicy}
+                </div>
+              </div>
+              <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Safe evidence rows
+                </div>
+                <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                  {singleLeakEvidence.safeEvidenceRows.map((row) => (
+                    <li key={row}>{row}</li>
+                  ))}
+                </ul>
+                <div className='mt-3 text-xs break-all text-muted-foreground'>
+                  Console event: {singleLeakEvidence.consoleEvent}
                 </div>
               </div>
             </div>

@@ -10,6 +10,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
@@ -30,6 +31,7 @@ import {
   managedSecretEditPreviewHasSecretMaterial,
   managedSecretEvidenceBundleHasSecretMaterial,
   managedSecretHistoryReviewHasSecretMaterial,
+  managedSecretLeakEvidenceHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
@@ -96,15 +98,21 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/Delete dry-run/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Apply policy preview/i)[0]).toBeVisible()
     expect(screen.getByText(/Broker operation contract/i)).toBeVisible()
-    expect(screen.getByText(/single-metadata/i)).toBeVisible()
+    expect(screen.getAllByText(/single-metadata/i)[0]).toBeVisible()
     expect(
       screen.getAllByText(
         /GET \/v1\/management\/secrets\/\{ref\}\/metadata/i
       )[0]
     ).toBeVisible()
     expect(screen.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    expect(screen.getByText(/Route and storage leak evidence/i)).toBeVisible()
     expect(screen.getByText(/Submit blocked/i)).toBeVisible()
     expect(screen.getByText(/No raw payload/i)).toBeVisible()
+    expect(screen.getByText(/Allowed route params/i)).toBeVisible()
+    expect(screen.getByText(/localStorage writes: none/i)).toBeVisible()
+    expect(
+      screen.getByText(/secrets-management:route-storage-leak-evidence/i)
+    ).toBeVisible()
     expect(screen.getByText(/Omitted unsafe fields/i)).toBeVisible()
     expect(
       screen.getByText(/no local storage or session storage/i)
@@ -1322,6 +1330,49 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       managedSecretSubmitEnvelopeHasSecretMaterial(rotateSubmitEnvelope)
     ).toBe(false)
+    const rotateLeakEvidence = buildSingleSecretLeakEvidence(
+      managedSecretRows[0],
+      rotatePlan,
+      rotateSubmitEnvelope
+    )
+    expect(rotateLeakEvidence).toMatchObject({
+      route: '/secrets-broker/secrets',
+      selectedRef: 'secret://local/default/@serviceadmin/SESSION_SIGNING_KEY',
+      action: 'reset',
+      browserStorageWrites:
+        'localStorage writes: none; sessionStorage writes: none',
+      diagnosticsRef:
+        'diagnostics-reset-serviceadmin-session-signing-metadata-only',
+      supportBundleRef:
+        'support-reset-serviceadmin-session-signing-metadata-only',
+      safeForScreenshots: true,
+    })
+    expect(rotateLeakEvidence.allowedRouteParams).toEqual(
+      expect.arrayContaining([
+        'ref=<managed secret ref>',
+        'action=reset',
+        'secret=<metadata table search>',
+        'page/pageSize=<table pagination>',
+      ])
+    )
+    expect(rotateLeakEvidence.omittedFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerAuthMaterial',
+        'supportBundlePayloadBodies',
+      ])
+    )
+    expect(rotateLeakEvidence.safeEvidenceRows).toEqual(
+      expect.arrayContaining([
+        'route state uses only ref/action metadata and table filters',
+        'browser storage remains unused for selected action state and submit envelopes',
+      ])
+    )
+    expect(managedSecretLeakEvidenceHasSecretMaterial(rotateLeakEvidence)).toBe(
+      false
+    )
 
     const appliedResult = buildSingleSecretOperationResult(
       managedSecretRows[0],

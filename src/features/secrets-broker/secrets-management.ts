@@ -80,6 +80,23 @@ export type SingleSecretSubmitEnvelope = {
   blockedReason: string
 }
 
+export type SingleSecretLeakEvidence = {
+  route: string
+  selectedRef: string
+  action: ManagedSecretAction
+  routeState: string
+  allowedRouteParams: string[]
+  browserStorageWrites: string
+  browserStorageKeys: string[]
+  diagnosticsRef: string
+  supportBundleRef: string
+  screenshotPolicy: string
+  consoleEvent: string
+  omittedFields: string[]
+  safeEvidenceRows: string[]
+  safeForScreenshots: boolean
+}
+
 export type SingleSecretEditPreview = {
   ref: string
   operationId: string
@@ -663,6 +680,7 @@ export const managedSecretSafeSurfaces = {
     'secrets-management:stub-mutation-apply-status',
     'secrets-management:single-secret-operation-history',
     'secrets-management:single-secret-operation-audit-trail',
+    'secrets-management:route-storage-leak-evidence',
     'secrets-management:single-secret-decommission-preview',
     'secrets-management:single-secret-policy-preview',
     'secrets-management:stub-delete-preview',
@@ -1810,6 +1828,58 @@ export function buildSingleSecretSubmitEnvelope(
     blockedReason: plan.canSubmit
       ? 'ready after final broker revalidation'
       : (plan.blockers[0] ?? plan.applyGate),
+  }
+}
+
+export function buildSingleSecretLeakEvidence(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  envelope: SingleSecretSubmitEnvelope
+): SingleSecretLeakEvidence {
+  const slug = safeOperationSlug(plan.action, row)
+  const actionParam =
+    plan.action === 'metadata'
+      ? 'action omitted for default metadata view'
+      : `action=${plan.action}`
+
+  return {
+    route: managedSecretSafeSurfaces.route,
+    selectedRef: row.ref,
+    action: plan.action,
+    routeState:
+      'selected ref and action are represented as allowlisted metadata only',
+    allowedRouteParams: [
+      'ref=<managed secret ref>',
+      actionParam,
+      'secret=<metadata table search>',
+      'provider=<provider filter>',
+      'state=<state filter>',
+      'page/pageSize=<table pagination>',
+    ],
+    browserStorageWrites:
+      'localStorage writes: none; sessionStorage writes: none',
+    browserStorageKeys: ['none'],
+    diagnosticsRef: `diagnostics-${slug}-metadata-only`,
+    supportBundleRef: `support-${slug}-metadata-only`,
+    screenshotPolicy:
+      'screenshots may include refs, operation ids, badges, and typed outcomes; value display stays hidden',
+    consoleEvent: 'secrets-management:route-storage-leak-evidence',
+    omittedFields: [
+      ...envelope.omittedFields,
+      'requestBody',
+      'responseBody',
+      'providerAuthMaterial',
+      'recoveryMaterial',
+      'supportBundlePayloadBodies',
+    ],
+    safeEvidenceRows: [
+      'route state uses only ref/action metadata and table filters',
+      'browser storage remains unused for selected action state and submit envelopes',
+      `submit envelope ${envelope.operationId} omits value and provider auth fields`,
+      'diagnostics and support bundles carry refs, operation ids, correlation ids, action names, and typed status only',
+      'safe screenshots keep value display regions hidden or redacted',
+    ],
+    safeForScreenshots: true,
   }
 }
 
@@ -3137,6 +3207,12 @@ export function managedSecretSubmitEnvelopeHasSecretMaterial(
   envelope: SingleSecretSubmitEnvelope
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(envelope))
+}
+
+export function managedSecretLeakEvidenceHasSecretMaterial(
+  evidence: SingleSecretLeakEvidence
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(evidence))
 }
 
 export function managedSecretEditPreviewHasSecretMaterial(
