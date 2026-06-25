@@ -655,6 +655,49 @@ export type BulkSecretCampaignClosureReview = {
   safeClosureRows: string[]
 }
 
+export type BulkSecretCampaignOperatorHandoff = {
+  handoffId: string
+  campaignId: string
+  operationId: string
+  outcome: BulkSecretCampaignApplyResult['outcome']
+  lane:
+    | 'monitor'
+    | 'settled'
+    | 'policy-review'
+    | 'provider-auth'
+    | 'audit-recovery'
+    | 'provider-recovery'
+    | 'fresh-preview'
+    | 'item-recovery'
+  badge: string
+  owner: string
+  severity: 'info' | 'warning' | 'critical'
+  requiredAction: string
+  shareableEvidenceRefs: string[]
+  blockedReason: string | null
+  validatorNote: string
+  allowedHandoffFields: string[]
+  omittedHandoffFields: string[]
+  safeHandoffRows: string[]
+}
+
+export type BulkSecretCampaignOwnerActionTicket = {
+  ticketId: string
+  campaignId: string
+  operationId: string
+  lane: BulkSecretCampaignOperatorHandoff['lane']
+  owner: string
+  severity: BulkSecretCampaignOperatorHandoff['severity']
+  acknowledgementStatus: string
+  requiredAction: string
+  freshPlanRequired: boolean
+  evidenceRefs: string[]
+  safeEscalationRoute: string
+  allowedTicketFields: string[]
+  omittedTicketFields: string[]
+  safeTicketRows: string[]
+}
+
 export const managedSecretRows: ManagedSecretRow[] = [
   {
     id: 'serviceadmin-session-signing',
@@ -1690,6 +1733,210 @@ export function buildBulkSecretCampaignClosureReview(
           ? 'partial campaigns remain open while retry-safe item recovery is monitored by operation id'
           : 'blocked campaigns stay open until policy, auth, audit, provider, or stale-plan recovery creates a fresh plan',
       'closing or keeping the campaign open never requires raw values, request body replay, provider credentials, or diagnostic payload bodies',
+    ],
+  }
+}
+
+export function buildBulkSecretCampaignOperatorHandoff(
+  result: BulkSecretCampaignApplyResult,
+  closureReview: BulkSecretCampaignClosureReview
+): BulkSecretCampaignOperatorHandoff {
+  const slug = safeCampaignSlug(result.campaignId)
+  const lane: BulkSecretCampaignOperatorHandoff['lane'] =
+    result.outcome === 'applied'
+      ? 'settled'
+      : result.outcome === 'partial_failure' || result.outcome === 'failed'
+        ? 'item-recovery'
+        : result.outcome === 'policy_denied'
+          ? 'policy-review'
+          : result.outcome === 'auth_required'
+            ? 'provider-auth'
+            : result.outcome === 'audit_unavailable'
+              ? 'audit-recovery'
+              : result.outcome === 'provider_unavailable'
+                ? 'provider-recovery'
+                : result.outcome === 'stale_plan'
+                  ? 'fresh-preview'
+                  : 'monitor'
+
+  const owner =
+    lane === 'settled' || lane === 'monitor'
+      ? 'operator'
+      : lane === 'policy-review'
+        ? 'policy approver'
+        : lane === 'provider-auth'
+          ? 'provider owner'
+          : lane === 'audit-recovery'
+            ? 'audit operator'
+            : lane === 'provider-recovery'
+              ? 'provider operator'
+              : lane === 'fresh-preview'
+                ? 'operator'
+                : 'broker operator'
+
+  const severity: BulkSecretCampaignOperatorHandoff['severity'] =
+    lane === 'settled' || lane === 'monitor'
+      ? 'info'
+      : lane === 'audit-recovery' || lane === 'provider-recovery'
+        ? 'critical'
+        : 'warning'
+
+  const requiredAction =
+    lane === 'settled'
+      ? 'acknowledge campaign audit summary and close operator review'
+      : lane === 'monitor'
+        ? 'monitor campaign status until every item has terminal metadata'
+        : lane === 'policy-review'
+          ? 'request least-privilege policy approval and create a fresh campaign preview'
+          : lane === 'provider-auth'
+            ? 'complete provider reauthentication and create a fresh campaign preview'
+            : lane === 'audit-recovery'
+              ? 'restore audit persistence before creating a fresh campaign preview'
+              : lane === 'provider-recovery'
+                ? 'restore provider connectivity before creating a fresh campaign preview'
+                : lane === 'fresh-preview'
+                  ? 'discard the stale plan token and create a fresh campaign preview'
+                  : 'review retry-safe item operation ids and retry only by operation id'
+
+  return {
+    handoffId: `bulk-handoff-${slug}-${result.outcome}`,
+    campaignId: result.campaignId,
+    operationId: result.operationId,
+    outcome: result.outcome,
+    lane,
+    badge:
+      lane === 'settled'
+        ? 'closed'
+        : lane === 'monitor'
+          ? 'monitoring'
+          : lane === 'fresh-preview'
+            ? 'fresh plan'
+            : 'owner action required',
+    owner,
+    severity,
+    requiredAction,
+    shareableEvidenceRefs: [
+      result.campaignId,
+      result.operationId,
+      result.planToken,
+      ...closureReview.auditRefs,
+      ...closureReview.supportRefs,
+      ...result.items.map((item) => item.operationItemId),
+    ],
+    blockedReason:
+      lane === 'settled' || lane === 'monitor' ? null : result.nextAction,
+    validatorNote:
+      lane === 'settled'
+        ? 'campaign can be validated from campaign id, operation id, audit refs, item outcomes, and support refs only'
+        : lane === 'monitor'
+          ? 'campaign remains evidence-only until every item has terminal metadata'
+          : 'blocked campaign requires owner action and a fresh broker preview before another mutation attempt',
+    allowedHandoffFields: [
+      'handoffId',
+      'campaignId',
+      'operationId',
+      'planToken',
+      'outcome',
+      'lane',
+      'owner',
+      'auditRefs',
+      'correlationRefs',
+      'itemOperationIds',
+      'typedItemOutcomes',
+      'supportEvidenceRefs',
+    ],
+    omittedHandoffFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+      'bulkSpreadsheetPayload',
+    ],
+    safeHandoffRows: [
+      'bulk campaign handoffs use ids, owner lanes, typed item outcomes, audit refs, and support refs only',
+      'handoff evidence can be copied into issue or audit notes without raw secret material',
+      lane === 'settled' || lane === 'monitor'
+        ? 'settled or monitored campaigns do not include mutation payload echoes'
+        : 'blocked campaign handoffs require owner action and a fresh broker preview before another submit',
+      `required action: ${requiredAction}`,
+    ],
+  }
+}
+
+export function buildBulkSecretCampaignOwnerActionTicket(
+  handoff: BulkSecretCampaignOperatorHandoff
+): BulkSecretCampaignOwnerActionTicket {
+  const freshPlanRequired =
+    handoff.lane !== 'settled' && handoff.lane !== 'monitor'
+
+  return {
+    ticketId: `bulk-owner-action-${safeCampaignSlug(handoff.campaignId)}-${handoff.outcome}`,
+    campaignId: handoff.campaignId,
+    operationId: handoff.operationId,
+    lane: handoff.lane,
+    owner: handoff.owner,
+    severity: handoff.severity,
+    acknowledgementStatus:
+      handoff.lane === 'settled'
+        ? 'acknowledge terminal campaign metadata before closing operator review'
+        : handoff.lane === 'monitor'
+          ? 'watch campaign item statuses until terminal metadata arrives'
+          : 'owner acknowledgement required before another broker campaign preview',
+    requiredAction: handoff.requiredAction,
+    freshPlanRequired,
+    evidenceRefs: handoff.shareableEvidenceRefs,
+    safeEscalationRoute:
+      handoff.severity === 'critical'
+        ? 'route to broker/audit owner with metadata-only evidence refs'
+        : 'keep in operator queue with metadata-only evidence refs',
+    allowedTicketFields: [
+      'ticketId',
+      'campaignId',
+      'operationId',
+      'planToken',
+      'lane',
+      'owner',
+      'severity',
+      'auditRefs',
+      'correlationRefs',
+      'itemOperationIds',
+      'typedItemOutcomes',
+      'supportEvidenceRefs',
+    ],
+    omittedTicketFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+      'bulkSpreadsheetPayload',
+    ],
+    safeTicketRows: [
+      'bulk owner action tickets are generated from the safe campaign handoff packet only',
+      'ticket evidence is shareable because it contains ids, owners, lanes, typed outcomes, and audit refs only',
+      freshPlanRequired
+        ? 'fresh campaign preview is required after owner action before any mutation retry'
+        : 'no mutation payload is retained while the campaign is monitored or settled',
+      handoff.lane === 'provider-auth'
+        ? 'provider authentication happens outside Service Admin and omits provider credentials'
+        : handoff.lane === 'audit-recovery'
+          ? 'audit recovery ticket carries sink status metadata only'
+          : handoff.lane === 'provider-recovery'
+            ? 'provider recovery ticket carries connector metadata only'
+            : 'owner queue omits request bodies, response bodies, and secret material',
     ],
   }
 }
@@ -4138,6 +4385,18 @@ export function managedSecretBulkClosureReviewHasSecretMaterial(
   review: BulkSecretCampaignClosureReview
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(review))
+}
+
+export function managedSecretBulkOperatorHandoffHasSecretMaterial(
+  handoff: BulkSecretCampaignOperatorHandoff
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(handoff))
+}
+
+export function managedSecretBulkOwnerActionTicketHasSecretMaterial(
+  ticket: BulkSecretCampaignOwnerActionTicket
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(ticket))
 }
 
 export function managedSecretSingleHistoryHasSecretMaterial(

@@ -7,6 +7,8 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildBulkSecretCampaignClosureReview,
+  buildBulkSecretCampaignOperatorHandoff,
+  buildBulkSecretCampaignOwnerActionTicket,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
@@ -35,6 +37,8 @@ import {
   filterManagedSecrets,
   managedSecretBulkApplyResultHasSecretMaterial,
   managedSecretBulkClosureReviewHasSecretMaterial,
+  managedSecretBulkOperatorHandoffHasSecretMaterial,
+  managedSecretBulkOwnerActionTicketHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretClosureReviewHasSecretMaterial,
@@ -3308,6 +3312,88 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretBulkClosureReviewHasSecretMaterial(partialClosure)
     ).toBe(false)
 
+    const partialHandoff = buildBulkSecretCampaignOperatorHandoff(
+      applyResult,
+      partialClosure
+    )
+    expect(partialHandoff).toMatchObject({
+      campaignId: applyResult.campaignId,
+      operationId: applyResult.operationId,
+      outcome: 'partial_failure',
+      lane: 'item-recovery',
+      owner: 'broker operator',
+      severity: 'warning',
+      blockedReason: applyResult.nextAction,
+    })
+    expect(partialHandoff.shareableEvidenceRefs).toEqual(
+      expect.arrayContaining([
+        applyResult.campaignId,
+        applyResult.operationId,
+        applyResult.planToken,
+        partialClosure.auditRefs[0],
+        partialClosure.supportRefs[0],
+        applyResult.items[0].operationItemId,
+      ])
+    )
+    expect(partialHandoff.allowedHandoffFields).toEqual(
+      expect.arrayContaining([
+        'campaignId',
+        'operationId',
+        'itemOperationIds',
+        'typedItemOutcomes',
+        'supportEvidenceRefs',
+      ])
+    )
+    expect(partialHandoff.omittedHandoffFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'diagnosticPayloadsWithBodies',
+        'bulkSpreadsheetPayload',
+      ])
+    )
+    expect(
+      managedSecretBulkOperatorHandoffHasSecretMaterial(partialHandoff)
+    ).toBe(false)
+
+    const partialOwnerTicket =
+      buildBulkSecretCampaignOwnerActionTicket(partialHandoff)
+    expect(partialOwnerTicket).toMatchObject({
+      campaignId: applyResult.campaignId,
+      operationId: applyResult.operationId,
+      lane: 'item-recovery',
+      owner: 'broker operator',
+      severity: 'warning',
+      freshPlanRequired: true,
+      requiredAction:
+        'review retry-safe item operation ids and retry only by operation id',
+    })
+    expect(partialOwnerTicket.allowedTicketFields).toEqual(
+      expect.arrayContaining([
+        'ticketId',
+        'campaignId',
+        'operationId',
+        'itemOperationIds',
+        'typedItemOutcomes',
+      ])
+    )
+    expect(partialOwnerTicket.omittedTicketFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'environmentValues',
+        'screenshotsWithVisibleValues',
+        'bulkSpreadsheetPayload',
+      ])
+    )
+    expect(
+      managedSecretBulkOwnerActionTicketHasSecretMaterial(partialOwnerTicket)
+    ).toBe(false)
+
     const retryablePartialPlan = buildBulkSecretCampaignPlan(
       managedSecretRows,
       [managedSecretRows[0].id, managedSecretRows[2].id],
@@ -3353,6 +3439,31 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(
       managedSecretBulkClosureReviewHasSecretMaterial(successfulClosure)
+    ).toBe(false)
+    const successfulHandoff = buildBulkSecretCampaignOperatorHandoff(
+      successfulResult,
+      successfulClosure
+    )
+    const successfulOwnerTicket =
+      buildBulkSecretCampaignOwnerActionTicket(successfulHandoff)
+    expect(successfulHandoff).toMatchObject({
+      outcome: 'applied',
+      lane: 'settled',
+      owner: 'operator',
+      severity: 'info',
+      blockedReason: null,
+    })
+    expect(successfulOwnerTicket).toMatchObject({
+      lane: 'settled',
+      freshPlanRequired: false,
+      acknowledgementStatus:
+        'acknowledge terminal campaign metadata before closing operator review',
+    })
+    expect(
+      managedSecretBulkOperatorHandoffHasSecretMaterial(successfulHandoff)
+    ).toBe(false)
+    expect(
+      managedSecretBulkOwnerActionTicketHasSecretMaterial(successfulOwnerTicket)
     ).toBe(false)
 
     const bulkPolicyDeniedResult = buildBulkSecretCampaignApplyResult(
@@ -3428,6 +3539,23 @@ describe('Secrets Broker secrets management page', () => {
     })
     expect(
       managedSecretBulkApplyResultHasSecretMaterial(bulkAuditUnavailableResult)
+    ).toBe(false)
+    const auditUnavailableClosure = buildBulkSecretCampaignClosureReview(
+      bulkAuditUnavailableResult
+    )
+    const auditUnavailableHandoff = buildBulkSecretCampaignOperatorHandoff(
+      bulkAuditUnavailableResult,
+      auditUnavailableClosure
+    )
+    expect(auditUnavailableHandoff).toMatchObject({
+      lane: 'audit-recovery',
+      owner: 'audit operator',
+      severity: 'critical',
+      requiredAction:
+        'restore audit persistence before creating a fresh campaign preview',
+    })
+    expect(
+      managedSecretBulkOperatorHandoffHasSecretMaterial(auditUnavailableHandoff)
     ).toBe(false)
 
     const bulkProviderUnavailableResult = buildBulkSecretCampaignApplyResult(
