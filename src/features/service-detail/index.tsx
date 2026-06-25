@@ -108,6 +108,33 @@ import { ServiceConfigEditor } from './service-config-editor'
 const REDACTED_CONFIG_VALUE = '[redacted by Service Admin]'
 const SENSITIVE_CONFIG_KEY_PATTERN =
   /(?:password|passphrase|token|api[_-]?key|secret|private[_-]?key|credential|cookie)/i
+const serviceDetailTabs = [
+  { id: 'overview', label: 'Overview', shortcut: 'Ctrl+1' },
+  { id: 'dependencies', label: 'Dependencies', shortcut: 'Ctrl+2' },
+  { id: 'endpoints', label: 'Endpoints', shortcut: 'Ctrl+3' },
+  { id: 'variables', label: 'Variables', shortcut: 'Ctrl+4' },
+  { id: 'config', label: 'Config', shortcut: 'Ctrl+5' },
+  { id: 'logs', label: 'Logs', shortcut: 'Ctrl+6' },
+] as const
+
+type ServiceDetailTabId = (typeof serviceDetailTabs)[number]['id']
+
+const serviceDetailTabsByShortcut = Object.fromEntries(
+  serviceDetailTabs.map((tab, index) => [String(index + 1), tab.id])
+) as Record<string, ServiceDetailTabId>
+
+const editableShortcutTargetSelector = [
+  'input',
+  'textarea',
+  'select',
+  '[contenteditable="true"]',
+  '[role="textbox"]',
+  '.monaco-editor',
+  '[data-monaco-editor]',
+  '[data-service-detail-terminal]',
+  '[data-terminal-input]',
+  '.xterm',
+].join(', ')
 
 function redactSensitiveConfigValue(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -1292,34 +1319,21 @@ function ServiceDetailLoading() {
 export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const serviceQuery = useDashboardService(serviceId)
   const serviceName = serviceQuery.data?.name ?? serviceId
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'dependencies' | 'endpoints' | 'variables' | 'config' | 'logs'
-  >('overview')
+  const [activeTab, setActiveTab] = useState<ServiceDetailTabId>('overview')
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
+      if (!event.ctrlKey || event.altKey || event.metaKey) return
+
+      const target = event.target
       if (
-        target?.closest('input, textarea, select, [contenteditable="true"]')
+        target instanceof Element &&
+        target.closest(editableShortcutTargetSelector)
       ) {
         return
       }
 
-      const nextTab = {
-        '1': 'overview',
-        '2': 'dependencies',
-        '3': 'endpoints',
-        '4': 'variables',
-        '5': 'config',
-        '6': 'logs',
-      }[event.key] as
-        | 'overview'
-        | 'dependencies'
-        | 'endpoints'
-        | 'variables'
-        | 'config'
-        | 'logs'
-        | undefined
+      const nextTab = serviceDetailTabsByShortcut[event.key]
 
       if (!nextTab) return
       event.preventDefault()
@@ -1450,46 +1464,18 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                   className='space-y-4'
                 >
                   <TabsList className='flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-border bg-muted/70 p-1 text-muted-foreground shadow-sm dark:border-slate-700/70 dark:bg-slate-900/90 dark:text-slate-400 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
-                    <TabsTrigger
-                      value='overview'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Overview{' '}
-                      <span className='ml-1 italic opacity-80'>(1)</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value='dependencies'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Dependencies{' '}
-                      <span className='ml-1 italic opacity-80'>(2)</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value='endpoints'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Endpoints{' '}
-                      <span className='ml-1 italic opacity-80'>(3)</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value='variables'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Variables{' '}
-                      <span className='ml-1 italic opacity-80'>(4)</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value='config'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Config <span className='ml-1 italic opacity-80'>(5)</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value='logs'
-                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
-                    >
-                      Logs <span className='ml-1 italic opacity-80'>(6)</span>
-                    </TabsTrigger>
+                    {serviceDetailTabs.map((tab) => (
+                      <TabsTrigger
+                        key={tab.id}
+                        value={tab.id}
+                        className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
+                      >
+                        {tab.label}{' '}
+                        <span className='ml-1 italic opacity-80'>
+                          ({tab.shortcut})
+                        </span>
+                      </TabsTrigger>
+                    ))}
                   </TabsList>
 
                   <TabsContent value='overview' className='mt-0 space-y-4'>

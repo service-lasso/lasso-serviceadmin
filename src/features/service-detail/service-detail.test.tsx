@@ -314,6 +314,83 @@ describe('service detail quick actions', () => {
   })
 })
 
+describe('service detail tab keyboard shortcuts', () => {
+  it('uses Ctrl+1 through Ctrl+6 for the visible tab order', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const shortcuts = [
+      ['1', /overview/i],
+      ['2', /dependencies/i],
+      ['3', /endpoints/i],
+      ['4', /variables/i],
+      ['5', /config/i],
+      ['6', /logs/i],
+    ] as const
+
+    for (const [key, tabName] of shortcuts) {
+      fireEvent.keyDown(document.body, { key, ctrlKey: true })
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: tabName })).toHaveAttribute(
+          'aria-selected',
+          'true'
+        )
+      })
+    }
+
+    expect(
+      screen.getByRole('tab', { name: /overview.*ctrl\+1/i })
+    ).toBeVisible()
+    expect(screen.getByRole('tab', { name: /logs.*ctrl\+6/i })).toBeVisible()
+  })
+
+  it('ignores unmodified number keys and Ctrl+number inside the config editor', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    fireEvent.keyDown(document.body, { key: '4' })
+    expect(screen.getByRole('tab', { name: /overview/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+
+    fireEvent.keyDown(document.body, { key: '5', ctrlKey: true })
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /config/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    })
+
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+    await user.click(editor)
+    fireEvent.keyDown(editor, { key: '6', ctrlKey: true })
+
+    expect(screen.getByRole('tab', { name: /config/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.getByRole('tab', { name: /logs/i })).toHaveAttribute(
+      'aria-selected',
+      'false'
+    )
+  })
+})
+
 describe('service detail server.json config editor', () => {
   it('loads server.json into the Config tab with backup metadata', async () => {
     const user = userEvent.setup()
