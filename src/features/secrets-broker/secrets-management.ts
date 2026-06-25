@@ -80,6 +80,22 @@ export type SingleSecretSubmitEnvelope = {
   blockedReason: string
 }
 
+export type SingleSecretReplayGuard = {
+  operationId: string
+  replayScope: string
+  planFingerprint: string
+  selectedRefBinding: string
+  actionBinding: string
+  idempotencyKey: string
+  correlationId: string
+  stalePlanGuard: string
+  replayDecision: string
+  readyForReplaySafeSubmit: boolean
+  omittedReplayFields: string[]
+  refBindingRows: string[]
+  safeReplayRows: string[]
+}
+
 export type SingleSecretLeakEvidence = {
   route: string
   selectedRef: string
@@ -1831,6 +1847,53 @@ export function buildSingleSecretSubmitEnvelope(
   }
 }
 
+export function buildSingleSecretReplayGuard(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  envelope: SingleSecretSubmitEnvelope
+): SingleSecretReplayGuard {
+  const slug = safeOperationSlug(plan.action, row)
+  const readyForReplaySafeSubmit = plan.canSubmit && envelope.readyForSubmit
+
+  return {
+    operationId: plan.operationId,
+    replayScope:
+      'single-secret operation id, selected ref, selected action, and broker-issued idempotency key',
+    planFingerprint: `plan-fp-${slug}-metadata-only`,
+    selectedRefBinding: `bound to selected ref ${row.ref}`,
+    actionBinding: `bound to ${managedSecretActionLabel(plan.action).toLowerCase()} action`,
+    idempotencyKey: envelope.idempotencyKey,
+    correlationId: envelope.correlationId,
+    stalePlanGuard:
+      'reject submit if ref, action, policy, capability, provider, audit, or plan fingerprint changed after dry-run',
+    replayDecision: readyForReplaySafeSubmit
+      ? 'first submit and retry are allowed only with the same operation id and idempotency key'
+      : `replay blocked: ${envelope.blockedReason}`,
+    readyForReplaySafeSubmit,
+    omittedReplayFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'auditReasonText',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'environmentValues',
+    ],
+    refBindingRows: [
+      'cross-ref replay rejected before broker mutation',
+      'cross-action replay rejected before broker mutation',
+      'stale dry-run fingerprint requires a fresh preview',
+    ],
+    safeReplayRows: [
+      'idempotency evidence uses operation id, correlation id, ref metadata, and action metadata only',
+      'retry status is operation-id scoped and never includes request or response bodies',
+      'operator audit reason text is represented by broker audit metadata only',
+    ],
+  }
+}
+
 export function buildSingleSecretLeakEvidence(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -3207,6 +3270,12 @@ export function managedSecretSubmitEnvelopeHasSecretMaterial(
   envelope: SingleSecretSubmitEnvelope
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(envelope))
+}
+
+export function managedSecretReplayGuardHasSecretMaterial(
+  guard: SingleSecretReplayGuard
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(guard))
 }
 
 export function managedSecretLeakEvidenceHasSecretMaterial(
