@@ -10,6 +10,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretConfirmationReceipt,
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
@@ -30,6 +31,7 @@ import {
   managedSecretBulkApplyResultHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
+  managedSecretConfirmationReceiptHasSecretMaterial,
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretEditPreviewHasSecretMaterial,
   managedSecretEvidenceBundleHasSecretMaterial,
@@ -111,6 +113,10 @@ describe('Secrets Broker secrets management page', () => {
       )[0]
     ).toBeVisible()
     expect(screen.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    expect(screen.getAllByText(/Confirmation receipt/i)[0]).toBeVisible()
+    expect(screen.getByText(/receipt-metadata-serviceadmin/i)).toBeVisible()
+    expect(screen.getByText(/confirmation receipt blocked/i)).toBeVisible()
+    expect(screen.getAllByText(/auditReasonText/i)[0]).toBeVisible()
     expect(screen.getByText(/Replay and idempotency guard/i)).toBeVisible()
     expect(screen.getByText(/No cross-ref replay/i)).toBeVisible()
     expect(screen.getByText(/plan-fp-metadata/i)).toBeVisible()
@@ -1002,12 +1008,22 @@ describe('Secrets Broker secrets management page', () => {
       screen.getByRole('button', { name: /Simulate stub apply/i })
     ).toBeDisabled()
 
+    await user.click(
+      screen.getAllByRole('button', { name: /Reset\/rotate dry-run/i })[0]
+    )
+
     await user.type(
       screen.getByLabelText(/Audit reason for stub preview/i),
       'operator requested rotation preview'
     )
     await user.click(screen.getByLabelText(/I confirm this is a stub preview/i))
     expect(screen.getByText(/Stub apply can be simulated/i)).toBeVisible()
+    expect(screen.getByText(/confirmation receipt accepted/i)).toBeVisible()
+    expect(screen.getByText(/accepted as broker audit metadata/i)).toBeVisible()
+    expect(
+      screen.getByText(/explicit stub preview confirmation accepted/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Blocker: none/i)).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Simulate stub apply/i })
     ).toBeEnabled()
@@ -1354,6 +1370,49 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       managedSecretSubmitEnvelopeHasSecretMaterial(rotateSubmitEnvelope)
     ).toBe(false)
+    const rotateReceipt = buildSingleSecretConfirmationReceipt(
+      managedSecretRows[0],
+      rotatePlan,
+      rotateSubmitEnvelope,
+      'operator requested rotation preview',
+      true
+    )
+    expect(rotateReceipt).toMatchObject({
+      receiptId: 'receipt-reset-serviceadmin-session-signing-accepted',
+      operationId: rotatePlan.operationId,
+      accepted: true,
+      auditReasonStatus: 'accepted as broker audit metadata',
+      confirmationStatus: 'explicit stub preview confirmation accepted',
+      blockedReason: 'none',
+    })
+    expect(rotateReceipt.allowedReceiptFields).toEqual(
+      expect.arrayContaining([
+        'receiptId',
+        'operationId',
+        'auditReasonStatus',
+        'confirmationStatus',
+        'idempotencyKey',
+        'correlationId',
+      ])
+    )
+    expect(rotateReceipt.omittedReceiptFields).toEqual(
+      expect.arrayContaining([
+        'auditReasonText',
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+      ])
+    )
+    expect(rotateReceipt.safeReceiptRows).toEqual(
+      expect.arrayContaining([
+        'confirmation receipt accepted; submit remains operation-id scoped',
+        'audit reason text is represented only by broker audit metadata status',
+      ])
+    )
+    expect(
+      managedSecretConfirmationReceiptHasSecretMaterial(rotateReceipt)
+    ).toBe(false)
     const rotateReplayGuard = buildSingleSecretReplayGuard(
       managedSecretRows[0],
       rotatePlan,
@@ -1405,6 +1464,29 @@ describe('Secrets Broker secrets management page', () => {
       managedSecretRows[3],
       missingPlan
     )
+    const blockedReceipt = buildSingleSecretConfirmationReceipt(
+      managedSecretRows[3],
+      missingPlan,
+      blockedSubmitEnvelope,
+      'operator requested rotation preview',
+      true
+    )
+    expect(blockedReceipt).toMatchObject({
+      receiptId: 'receipt-reset-payments-signing-ref-blocked',
+      accepted: false,
+      auditReasonStatus: 'accepted as broker audit metadata',
+      confirmationStatus: 'explicit stub preview confirmation accepted',
+      blockedReason: 'ref unavailable',
+    })
+    expect(blockedReceipt.safeReceiptRows).toEqual(
+      expect.arrayContaining([
+        'confirmation receipt blocked before broker mutation',
+        'submit envelope blocked: ref unavailable',
+      ])
+    )
+    expect(
+      managedSecretConfirmationReceiptHasSecretMaterial(blockedReceipt)
+    ).toBe(false)
     const blockedReplayGuard = buildSingleSecretReplayGuard(
       managedSecretRows[3],
       missingPlan,
