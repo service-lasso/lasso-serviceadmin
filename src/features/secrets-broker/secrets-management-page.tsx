@@ -69,6 +69,7 @@ import {
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretOperatorHandoff,
   buildSingleSecretRecoveryDecision,
   buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
@@ -364,6 +365,16 @@ export function SecretsManagementPage({
           singleOperationPlan,
           singleApplyResult,
           singleStatusMonitor
+        )
+      : null
+  const singleOperatorHandoff =
+    singleApplyResult && singleStatusMonitor && singleRecoveryDecision
+      ? buildSingleSecretOperatorHandoff(
+          selectedRow,
+          singleOperationPlan,
+          singleApplyResult,
+          singleStatusMonitor,
+          singleRecoveryDecision
         )
       : null
   const singleHistoryReview = useMemo(
@@ -3414,6 +3425,135 @@ export function SecretsManagementPage({
                           <li key={row}>{row}</li>
                         ))}
                       </ul>
+                    </div>
+                  </div>
+                ) : null}
+                {singleOperatorHandoff ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <ShieldCheck className='size-4 text-primary' />
+                      <div className='font-medium'>Operator handoff packet</div>
+                      <Badge variant='secondary'>Shareable metadata</Badge>
+                      <Badge variant='outline'>
+                        {singleOperatorHandoff.badge}
+                      </Badge>
+                      <Badge
+                        variant={
+                          singleOperatorHandoff.severity === 'critical'
+                            ? 'destructive'
+                            : singleOperatorHandoff.severity === 'warning'
+                              ? 'secondary'
+                              : 'outline'
+                        }
+                      >
+                        {singleOperatorHandoff.lane}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 md:grid-cols-4'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Handoff
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleOperatorHandoff.handoffId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Owner
+                        </div>
+                        <div className='mt-1'>
+                          {singleOperatorHandoff.owner}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Outcome
+                        </div>
+                        <div className='mt-1'>
+                          {singleOperatorHandoff.outcome}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Blocker
+                        </div>
+                        <div className='mt-1'>
+                          {singleOperatorHandoff.blockedReason ?? 'none'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Required action
+                        </div>
+                        <div className='mt-2'>
+                          {singleOperatorHandoff.requiredAction}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Validator note
+                        </div>
+                        <div className='mt-2'>
+                          {singleOperatorHandoff.validatorNote}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                      <div className='rounded-md border bg-background p-3 md:col-span-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Shareable evidence refs
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleOperatorHandoff.shareableEvidenceRefs.map(
+                            (ref) => (
+                              <Badge key={ref} variant='outline'>
+                                {ref}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed handoff fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleOperatorHandoff.allowedHandoffFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted handoff fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleOperatorHandoff.omittedHandoffFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe handoff evidence
+                        </div>
+                        <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {singleOperatorHandoff.safeHandoffRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 ) : null}

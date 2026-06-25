@@ -293,9 +293,11 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/Delete\/decommission impact evidence/i)
     ).toBeVisible()
     await expect(
-      page.getByText(
-        /impact-delete-serviceadmin-session-signing-applied-metadata/i
-      )
+      page
+        .getByText(
+          /impact-delete-serviceadmin-session-signing-applied-metadata/i
+        )
+        .first()
     ).toBeVisible()
     await expect(
       page
@@ -352,9 +354,11 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/Policy assignment impact evidence/i)
     ).toBeVisible()
     await expect(
-      page.getByText(
-        /impact-policy-serviceadmin-session-signing-applied-metadata/i
-      )
+      page
+        .getByText(
+          /impact-policy-serviceadmin-session-signing-applied-metadata/i
+        )
+        .first()
     ).toBeVisible()
     await expect(
       page
@@ -579,6 +583,21 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Omitted recovery fields/i)).toBeVisible()
     await expect(
       page.getByText(/recovery decisions are derived from typed broker/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Operator handoff packet/i)).toBeVisible()
+    await expect(page.getByText(/Shareable metadata/i)).toBeVisible()
+    await expect(
+      page
+        .getByText(/handoff-reset-serviceadmin-session-signing-submitted/i)
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/Shareable evidence refs/i)).toBeVisible()
+    await expect(page.getByText(/Allowed handoff fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted handoff fields/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /handoff evidence can be copied into issue or audit notes/i
+      )
     ).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('applied')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
