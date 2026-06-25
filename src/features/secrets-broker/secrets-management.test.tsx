@@ -17,6 +17,7 @@ import {
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperatorHandoff,
+  buildSingleSecretOwnerActionTicket,
   buildSingleSecretPolicyPreview,
   buildSingleSecretRecoveryDecision,
   buildSingleSecretRevealLifecycle,
@@ -40,6 +41,7 @@ import {
   managedSecretHistoryReviewHasSecretMaterial,
   managedSecretLeakEvidenceHasSecretMaterial,
   managedSecretOperatorHandoffHasSecretMaterial,
+  managedSecretOwnerActionTicketHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRecoveryDecisionHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
@@ -2302,6 +2304,50 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretOperatorHandoffHasSecretMaterial(operatorHandoff)).toBe(
       false
     )
+    const ownerActionTicket = buildSingleSecretOwnerActionTicket(
+      managedSecretRows[0],
+      rotatePlan,
+      operatorHandoff
+    )
+    expect(ownerActionTicket).toMatchObject({
+      ticketId: 'owner-action-reset-serviceadmin-session-signing-applied',
+      operationId: rotatePlan.operationId,
+      lane: 'settled',
+      owner: 'operator',
+      severity: 'info',
+      freshPreviewRequired: false,
+      acknowledgementStatus:
+        'acknowledge terminal broker metadata before closing operator review',
+      safeEscalationRoute:
+        'keep in operator queue with metadata-only evidence refs',
+    })
+    expect(ownerActionTicket.allowedTicketFields).toEqual(
+      expect.arrayContaining([
+        'ticketId',
+        'operationId',
+        'auditEventId',
+        'correlationId',
+        'statusEndpoint',
+      ])
+    )
+    expect(ownerActionTicket.omittedTicketFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'diagnosticPayloadsWithBodies',
+      ])
+    )
+    expect(ownerActionTicket.safeTicketRows).toEqual(
+      expect.arrayContaining([
+        'owner action tickets are generated from the safe handoff packet only',
+        'no mutation payload is retained while the operation is monitored or settled',
+      ])
+    )
+    expect(
+      managedSecretOwnerActionTicketHasSecretMaterial(ownerActionTicket)
+    ).toBe(false)
     const authRequiredMonitor = buildSingleSecretStatusMonitor(
       managedSecretRows[0],
       rotatePlan,
@@ -2380,6 +2426,31 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(
       managedSecretOperatorHandoffHasSecretMaterial(authRequiredHandoff)
+    ).toBe(false)
+    const authRequiredTicket = buildSingleSecretOwnerActionTicket(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredHandoff
+    )
+    expect(authRequiredTicket).toMatchObject({
+      ticketId: 'owner-action-reset-serviceadmin-session-signing-auth-required',
+      lane: 'provider-auth',
+      owner: 'provider owner',
+      severity: 'warning',
+      acknowledgementStatus:
+        'owner acknowledgement required before another broker preview',
+      freshPreviewRequired: true,
+      safeEscalationRoute:
+        'keep in operator queue with metadata-only evidence refs',
+    })
+    expect(authRequiredTicket.safeTicketRows).toEqual(
+      expect.arrayContaining([
+        'fresh broker preview is required after owner action before any mutation retry',
+        'provider authentication happens outside Service Admin and omits provider credentials',
+      ])
+    )
+    expect(
+      managedSecretOwnerActionTicketHasSecretMaterial(authRequiredTicket)
     ).toBe(false)
     const auditUnavailableTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],

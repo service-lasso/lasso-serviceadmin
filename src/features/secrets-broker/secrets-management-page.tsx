@@ -72,6 +72,7 @@ import {
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
   buildSingleSecretOperatorHandoff,
+  buildSingleSecretOwnerActionTicket,
   buildSingleSecretRecoveryDecision,
   buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
@@ -391,6 +392,13 @@ export function SecretsManagementPage({
           singleRecoveryDecision
         )
       : null
+  const singleOwnerActionTicket = singleOperatorHandoff
+    ? buildSingleSecretOwnerActionTicket(
+        selectedRow,
+        singleOperationPlan,
+        singleOperatorHandoff
+      )
+    : null
   const singleHistoryReview = useMemo(
     () =>
       buildSingleSecretOperationHistoryReview(
@@ -3788,6 +3796,122 @@ export function SecretsManagementPage({
                         </div>
                         <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
                           {singleOperatorHandoff.safeHandoffRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {singleOwnerActionTicket ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <ListChecks className='size-4 text-primary' />
+                      <div className='font-medium'>Owner action ticket</div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge variant='outline'>
+                        {singleOwnerActionTicket.owner}
+                      </Badge>
+                      <Badge
+                        variant={
+                          singleOwnerActionTicket.severity === 'critical'
+                            ? 'destructive'
+                            : singleOwnerActionTicket.severity === 'warning'
+                              ? 'secondary'
+                              : 'outline'
+                        }
+                      >
+                        {singleOwnerActionTicket.lane}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 md:grid-cols-3'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Ticket
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleOwnerActionTicket.ticketId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Acknowledgement
+                        </div>
+                        <div className='mt-1'>
+                          {singleOwnerActionTicket.acknowledgementStatus}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Escalation
+                        </div>
+                        <div className='mt-1'>
+                          {singleOwnerActionTicket.safeEscalationRoute}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Required action
+                        </div>
+                        <div className='mt-2'>
+                          {singleOwnerActionTicket.requiredAction}
+                        </div>
+                        <div className='mt-2 text-muted-foreground'>
+                          {singleOwnerActionTicket.freshPreviewRequired
+                            ? 'Fresh preview required before retry'
+                            : 'No retry preview required for this state'}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Evidence refs
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleOwnerActionTicket.evidenceRefs.map((ref) => (
+                            <Badge key={ref} variant='outline'>
+                              {ref}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed ticket fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleOwnerActionTicket.allowedTicketFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted ticket fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleOwnerActionTicket.omittedTicketFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe ticket evidence
+                        </div>
+                        <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {singleOwnerActionTicket.safeTicketRows.map((row) => (
                             <li key={row}>{row}</li>
                           ))}
                         </ul>

@@ -624,6 +624,25 @@ test.describe('Secrets Broker browser coverage', () => {
         /handoff evidence can be copied into issue or audit notes/i
       )
     ).toBeVisible()
+    await expect(
+      page.getByText('Owner action ticket', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(/owner-action-reset-serviceadmin-session-signing-submitted/i)
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/Metadata only/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/watch broker status endpoint until terminal metadata/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Allowed ticket fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted ticket fields/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /owner action tickets are generated from the safe handoff/i
+      )
+    ).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('applied')
     await page.getByLabel(/Stub API state/i).selectOption('ready')
     await page.getByRole('button', { name: /Simulate stub apply/i }).click()
@@ -713,6 +732,22 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(
       page.getByText(/paused for broker reauthentication/i)
+    ).toBeVisible()
+    await expect(
+      page
+        .getByText(
+          /owner-action-reset-serviceadmin-session-signing-auth-required/i
+        )
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/provider owner/i).first()).toBeVisible()
+    await expect(
+      page.getByText(/owner acknowledgement required before another broker/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /fresh broker preview is required after owner action before any mutation retry/i
+      )
     ).toBeVisible()
     await expect(page.getByText(/4 submitted/i)).toBeVisible()
     await page.getByLabel(/Result status/i).selectOption('audit-unavailable')
