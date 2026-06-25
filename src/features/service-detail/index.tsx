@@ -1329,13 +1329,16 @@ export function ServiceDetail({
     activeTab ?? defaultServiceDetailTab
   )
   const selectedTab = activeTab ?? localActiveTab
-  const setSelectedTab = useCallback((nextTab: ServiceDetailTabId) => {
-    if (activeTab === undefined) {
-      setLocalActiveTab(nextTab)
-    }
+  const setSelectedTab = useCallback(
+    (nextTab: ServiceDetailTabId) => {
+      if (activeTab === undefined) {
+        setLocalActiveTab(nextTab)
+      }
 
-    onActiveTabChange?.(nextTab)
-  }, [activeTab, onActiveTabChange])
+      onActiveTabChange?.(nextTab)
+    },
+    [activeTab, onActiveTabChange]
+  )
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

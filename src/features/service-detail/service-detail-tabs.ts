@@ -19,9 +19,7 @@ const serviceDetailTabIds = new Set<ServiceDetailTabId>(
   serviceDetailTabs.map((tab) => tab.id)
 )
 
-export function normalizeServiceDetailTab(
-  value: unknown
-): ServiceDetailTabId {
+export function normalizeServiceDetailTab(value: unknown): ServiceDetailTabId {
   return typeof value === 'string' &&
     serviceDetailTabIds.has(value as ServiceDetailTabId)
     ? (value as ServiceDetailTabId)

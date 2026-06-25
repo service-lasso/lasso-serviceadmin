@@ -182,9 +182,7 @@ test('service detail tabs are deep-linkable and restore through browser history'
   await expect(page).toHaveURL(/\/variables\?service=%40serviceadmin$/)
 
   await page.goBack()
-  await expect(page).toHaveURL(
-    /\/services\/%40serviceadmin\?tab=variables$/
-  )
+  await expect(page).toHaveURL(/\/services\/%40serviceadmin\?tab=variables$/)
   await expect(page.getByRole('tab', { name: /variables/i })).toHaveAttribute(
     'aria-selected',
     'true'
