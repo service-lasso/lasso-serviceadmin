@@ -312,6 +312,286 @@ describe('service detail quick actions', () => {
     expect(within(streams).queryByText(/hidden-value/)).not.toBeInTheDocument()
     expect(within(streams).queryByText(/hunter2/)).not.toBeInTheDocument()
   })
+
+  it('renders the Terminal tab from safe stdout history without leaking values', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'stdout',
+              path: `C:\\runtime\\${serviceId}\\stdout.log`,
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              sources: [
+                {
+                  kind: 'current',
+                  stream: 'stdout',
+                  runId: 'run-2026-06-25T05-00-00Z',
+                  path: `C:\\runtime\\${serviceId}\\stdout.log`,
+                  available: true,
+                },
+              ],
+              stdin: {
+                available: false,
+                reason: 'Provider does not expose stdin.',
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'stdout',
+              path: `C:\\runtime\\${serviceId}\\stdout.log`,
+              available: true,
+              source: {
+                kind: 'current',
+                stream: 'stdout',
+                runId: 'run-2026-06-25T05-00-00Z',
+                path: `C:\\runtime\\${serviceId}\\stdout.log`,
+                available: true,
+              },
+              totalLines: 2,
+              start: 0,
+              end: 2,
+              hasMore: false,
+              nextBefore: 0,
+              cursor: '2',
+              nextCursor: null,
+              limit: 240,
+              lines: [
+                'service ready token=hidden-value',
+                'listening on http://127.0.0.1:17700',
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const terminal = screen.getByTestId('service-detail-terminal-lines')
+
+    await waitFor(() => {
+      expect(terminal).toHaveTextContent(/service ready/)
+    })
+
+    expect(terminal).toHaveTextContent(/token=\[redacted\]/)
+    expect(terminal).not.toHaveTextContent(/hidden-value/)
+    expect(screen.getByText('run-2026-06-25T05-00-00Z')).toBeVisible()
+    expect(
+      screen.getByRole('textbox', { name: /terminal input/i })
+    ).toBeDisabled()
+    expect(screen.getByText(/Provider does not expose stdin/i)).toBeVisible()
+  })
+
+  it('keeps Terminal input disabled when the managed service is stopped', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId: 'dagu',
+              type: 'stdout',
+              path: 'C:\\runtime\\dagu\\stdout.log',
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              stdin: { available: true },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId: 'dagu',
+              type: 'stdout',
+              path: 'C:\\runtime\\dagu\\stdout.log',
+              available: true,
+              totalLines: 0,
+              start: 0,
+              end: 0,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 240,
+              lines: [],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/dagu')
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^Dagu$/i })).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('textbox', { name: /terminal input/i })
+      ).toBeDisabled()
+    })
+
+    expect(screen.getByText(/managed process is not running/i)).toBeVisible()
+  })
+
+  it('sends Terminal input only through the managed stdin endpoint', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const parsed = new URL(url, 'http://localhost')
+      const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+
+      if (parsed.pathname === '/api/services/log-info') {
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type: 'stdout',
+            path: `C:\\runtime\\${serviceId}\\stdout.log`,
+            available: true,
+            availableTypes: ['default', 'stdout', 'stderr'],
+            stdin: {
+              available: true,
+              auditRequired: true,
+              provider: 'direct',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/logs/read') {
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type: 'stdout',
+            path: `C:\\runtime\\${serviceId}\\stdout.log`,
+            available: true,
+            totalLines: 1,
+            start: 0,
+            end: 1,
+            hasMore: false,
+            nextBefore: 0,
+            limit: 240,
+            lines: ['interactive app ready'],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (
+        parsed.pathname === '/api/services/%40serviceadmin/stdin' ||
+        parsed.pathname === '/api/services/@serviceadmin/stdin'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          input: 'status',
+          stream: 'stdin',
+          actor: 'service-admin-web',
+        })
+
+        return new Response(
+          JSON.stringify({
+            serviceId: '@serviceadmin',
+            accepted: true,
+            auditId: 'audit-1',
+            message: 'Input accepted.',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      return new Response('not found', { status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const terminalInput = await screen.findByRole('textbox', {
+      name: /terminal input/i,
+    })
+    await user.type(terminalInput, 'status')
+    await user.click(screen.getByRole('button', { name: /send input/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Input accepted/i)).toBeVisible()
+    })
+
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => {
+        const parsed = new URL(String(url), 'http://localhost')
+        return (
+          parsed.pathname.endsWith('/stdin') &&
+          init?.method === 'POST' &&
+          String(init?.body).includes('"input":"status"')
+        )
+      })
+    ).toBe(true)
+  })
 })
 
 describe('service detail tab keyboard shortcuts', () => {
@@ -359,7 +639,7 @@ describe('service detail tab keyboard shortcuts', () => {
     })
   })
 
-  it('uses Ctrl+1 through Ctrl+6 for the visible tab order', async () => {
+  it('uses Ctrl+1 through Ctrl+7 for the visible tab order', async () => {
     await renderRoute('/services/@serviceadmin')
 
     await waitFor(() => {
@@ -375,6 +655,7 @@ describe('service detail tab keyboard shortcuts', () => {
       ['4', /variables/i],
       ['5', /config/i],
       ['6', /logs/i],
+      ['7', /terminal/i],
     ] as const
 
     for (const [key, tabName] of shortcuts) {
@@ -391,6 +672,9 @@ describe('service detail tab keyboard shortcuts', () => {
       screen.getByRole('tab', { name: /overview.*ctrl\+1/i })
     ).toBeVisible()
     expect(screen.getByRole('tab', { name: /logs.*ctrl\+6/i })).toBeVisible()
+    expect(
+      screen.getByRole('tab', { name: /terminal.*ctrl\+7/i })
+    ).toBeVisible()
   })
 
   it('ignores unmodified number keys and Ctrl+number inside the config editor', async () => {

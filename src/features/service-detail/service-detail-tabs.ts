@@ -5,6 +5,7 @@ export const serviceDetailTabs = [
   { id: 'variables', label: 'Variables', shortcut: 'Ctrl+4' },
   { id: 'config', label: 'Config', shortcut: 'Ctrl+5' },
   { id: 'logs', label: 'Logs', shortcut: 'Ctrl+6' },
+  { id: 'terminal', label: 'Terminal', shortcut: 'Ctrl+7' },
 ] as const
 
 export type ServiceDetailTabId = (typeof serviceDetailTabs)[number]['id']

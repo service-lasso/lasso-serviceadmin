@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
   type ReactNode,
 } from 'react'
 import { Link } from '@tanstack/react-router'
@@ -25,10 +26,15 @@ import {
   Link2,
   Network,
   PackageCheck,
+  Pause,
+  Play,
+  RefreshCw,
   Save,
   ScanSearch,
   ScrollText,
+  Send,
   Split,
+  Terminal,
   Undo2,
   Wrench,
 } from 'lucide-react'
@@ -89,6 +95,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
@@ -105,8 +112,10 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import {
   fetchServiceLogChunk,
   fetchServiceLogInfo,
+  sendServiceTerminalInput,
   type ServiceLogChunk,
   type ServiceLogInfo,
+  type ServiceTerminalStdinCapability,
 } from '@/features/logs/provider'
 import { buildMetadataTableRows } from './metadata-table'
 import { ServiceConfigEditor } from './service-config-editor'
@@ -746,6 +755,7 @@ const SERVICE_DETAIL_RUN_STREAMS: Array<{
 
 const SERVICE_DETAIL_LOG_STREAM_LIMIT = 80
 const SERVICE_DETAIL_LOG_STREAM_POLL_MS = 4000
+const SERVICE_DETAIL_TERMINAL_LIMIT = 240
 
 function createRunStreamState(
   loading = false
@@ -963,6 +973,312 @@ function ServiceRunStreams({ service }: { service: DashboardService }) {
         ))}
       </div>
     </div>
+  )
+}
+
+function extractRuntimePid(service: DashboardService) {
+  const values = [service.note, service.runtimeHealth.summary]
+
+  for (const value of values) {
+    const match = value.match(/\bpid\s+(\d+)\b/i)
+    if (match?.[1]) return match[1]
+  }
+
+  return null
+}
+
+function resolveRunId(
+  info: ServiceLogInfo | null,
+  chunk: ServiceLogChunk | null
+) {
+  return (
+    chunk?.source?.runId ??
+    info?.source?.runId ??
+    info?.sources?.find((source) => source.stream === 'stdout')?.runId ??
+    info?.sources?.find((source) => source.kind === 'current')?.runId ??
+    null
+  )
+}
+
+function resolveStdinCapability(
+  service: DashboardService,
+  info: ServiceLogInfo | null
+): ServiceTerminalStdinCapability {
+  const advertised = info?.stdin ?? info?.capabilities?.stdin
+
+  if (service.status !== 'running') {
+    return {
+      available: false,
+      reason: 'The managed process is not running.',
+    }
+  }
+
+  if (advertised?.available) {
+    return advertised
+  }
+
+  return {
+    available: false,
+    reason:
+      advertised?.reason ??
+      'The runtime has not advertised a safe stdin channel for this service.',
+  }
+}
+
+function ServiceTerminalPanel({ service }: { service: DashboardService }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<ServiceLogInfo | null>(null)
+  const [chunk, setChunk] = useState<ServiceLogChunk | null>(null)
+  const [paused, setPaused] = useState(false)
+  const [input, setInput] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null)
+
+  const loadStdout = useCallback(async () => {
+    setError(null)
+
+    try {
+      const [nextInfo, nextChunk] = await Promise.all([
+        fetchServiceLogInfo(service, 'stdout'),
+        fetchServiceLogChunk(
+          service,
+          'stdout',
+          undefined,
+          SERVICE_DETAIL_TERMINAL_LIMIT
+        ),
+      ])
+
+      setInfo(nextInfo)
+      setChunk(nextChunk)
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'The runtime did not return stdout history.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [service])
+
+  useEffect(() => {
+    let cancelled = false
+
+    setLoading(true)
+    setInfo(null)
+    setChunk(null)
+
+    void (async () => {
+      await loadStdout()
+      if (cancelled) return
+      setLoading(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [loadStdout])
+
+  useEffect(() => {
+    if (service.status !== 'running' || paused) return
+
+    const intervalId = window.setInterval(() => {
+      void fetchServiceLogChunk(
+        service,
+        'stdout',
+        undefined,
+        SERVICE_DETAIL_TERMINAL_LIMIT
+      )
+        .then((nextChunk) => {
+          setError(null)
+          setChunk(nextChunk)
+        })
+        .catch(() => {
+          // Preserve the visible scrollback during transient tail failures.
+        })
+    }, SERVICE_DETAIL_LOG_STREAM_POLL_MS)
+
+    return () => window.clearInterval(intervalId)
+  }, [paused, service])
+
+  const stdinCapability = resolveStdinCapability(service, info)
+  const canSendInput = stdinCapability.available && input.trim().length > 0
+  const pid = extractRuntimePid(service)
+  const runId = resolveRunId(info, chunk)
+  const lines = chunk?.lines ?? []
+  const logText = lines.join('\n')
+
+  async function handleSubmitInput(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmedInput = input.trim()
+    if (!stdinCapability.available || !trimmedInput) return
+
+    setSubmitting(true)
+    setSubmitMessage(null)
+
+    try {
+      const result = await sendServiceTerminalInput(service, trimmedInput)
+      setSubmitMessage(
+        result.message ??
+          (result.accepted
+            ? 'Input accepted by runtime stdin.'
+            : 'Runtime rejected the stdin write.')
+      )
+      setInput('')
+    } catch (nextError) {
+      setSubmitMessage(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Runtime stdin write failed.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Card data-service-detail-terminal>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle className='flex items-center gap-2'>
+              <Terminal className='size-4' /> Terminal
+            </CardTitle>
+            <CardDescription>
+              Current-run stdout history and safe process input state.
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              onClick={() => setPaused((value) => !value)}
+            >
+              {paused ? (
+                <Play className='mr-2 size-4' />
+              ) : (
+                <Pause className='mr-2 size-4' />
+              )}
+              {paused ? 'Resume' : 'Pause'}
+            </Button>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              onClick={() => void loadStdout()}
+            >
+              <RefreshCw className='mr-2 size-4' />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-3 md:grid-cols-4'>
+          <MetadataRow label='State' value={service.status} />
+          <MetadataRow
+            label='Started'
+            value={service.runtimeHealth.lastRestartAt}
+          />
+          <MetadataRow label='PID' value={pid ?? undefined} />
+          <MetadataRow label='Run' value={runId ?? undefined} />
+        </div>
+
+        <div className='rounded-md border'>
+          <div className='flex flex-wrap items-center justify-between gap-2 border-b p-3'>
+            <div>
+              <div className='font-medium'>Stdout</div>
+              <div className='font-mono text-xs break-all text-muted-foreground'>
+                {chunk?.path ?? info?.path ?? 'No stdout source reported'}
+              </div>
+            </div>
+            <Badge variant={paused ? 'outline' : 'secondary'}>
+              {paused ? 'paused' : 'following'}
+            </Badge>
+          </div>
+          <div className='p-3'>
+            {loading ? (
+              <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+                Loading stdout history...
+              </div>
+            ) : error ? (
+              <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+                Stdout history unavailable. {error}
+              </div>
+            ) : lines.length ? (
+              <div>
+                <pre
+                  className='sr-only'
+                  data-testid='service-detail-terminal-lines'
+                >
+                  {logText}
+                </pre>
+                <div className='h-[360px] overflow-hidden rounded-md border'>
+                  <ScrollFollow
+                    startFollowing={!paused}
+                    render={({ follow }) => (
+                      <LazyLog
+                        text={logText}
+                        follow={!paused && follow}
+                        enableSearch
+                        selectableLines
+                        style={{
+                          height: '360px',
+                          width: '100%',
+                          background: 'transparent',
+                        }}
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+                No stdout lines are available for this service run.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <form className='space-y-3' onSubmit={handleSubmitInput}>
+          <div className='grid gap-3 lg:grid-cols-[1fr_auto]'>
+            <Textarea
+              aria-label='Terminal input'
+              data-terminal-input
+              value={input}
+              onChange={(event) => setInput(event.currentTarget.value)}
+              disabled={!stdinCapability.available || submitting}
+              placeholder={
+                stdinCapability.available
+                  ? 'Write to managed process stdin'
+                  : (stdinCapability.reason ?? 'Stdin is unavailable')
+              }
+              className='min-h-24 font-mono'
+            />
+            <Button
+              type='submit'
+              disabled={!canSendInput || submitting}
+              className='self-end'
+            >
+              <Send className='mr-2 size-4' />
+              Send input
+            </Button>
+          </div>
+          {!stdinCapability.available ? (
+            <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+              Input disabled. {stdinCapability.reason}
+            </div>
+          ) : null}
+          {submitMessage ? (
+            <div className='rounded-md border p-3 text-sm text-muted-foreground'>
+              {submitMessage}
+            </div>
+          ) : null}
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -1652,6 +1968,10 @@ export function ServiceDetail({
                         <ServiceLogViewer entries={service.recentLogs} />
                       </CardContent>
                     </Card>
+                  </TabsContent>
+
+                  <TabsContent value='terminal' className='mt-0'>
+                    <ServiceTerminalPanel service={service} />
                   </TabsContent>
                 </Tabs>
               </>
