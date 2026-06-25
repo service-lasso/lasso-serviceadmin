@@ -731,7 +731,28 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/provider reauthentication happens outside Service Admin/i)
     ).toBeVisible()
     await expect(
-      page.getByText(/paused for broker reauthentication/i)
+      page.getByText(/paused for broker reauthentication/i).first()
+    ).toBeVisible()
+    await expect(page.getByText('Audit receipt', { exact: true })).toBeVisible()
+    await expect(
+      page
+        .getByText(
+          /audit-receipt-reset-serviceadmin-session-signing-auth-required/i
+        )
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/safe-audit-\d{5}/i)).toBeVisible()
+    await expect(page.getByText(/Safe receipt fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted receipt artifacts/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /audit receipts are derived from operation ids, refs, typed outcomes/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        /receipt checksum proves the metadata set reviewed without hashing/i
+      )
     ).toBeVisible()
     await expect(
       page

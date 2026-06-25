@@ -449,6 +449,22 @@ export type SingleSecretOperationAuditTrailStep = {
   terminal: boolean
 }
 
+export type SingleSecretAuditReceipt = {
+  receiptId: string
+  operationId: string
+  ref: string
+  action: ManagedSecretAction
+  outcome: SingleSecretOperationOutcome
+  auditEventId: string
+  correlationId: string
+  receiptChecksum: string
+  retentionStatus: string
+  terminalStepStatus: string
+  safeReceiptFields: string[]
+  omittedReceiptArtifacts: string[]
+  safeReceiptRows: string[]
+}
+
 export type StubSecretMutationState =
   | 'ready'
   | 'denied'
@@ -3272,6 +3288,83 @@ export function buildSingleSecretOperationAuditTrail(
   ]
 }
 
+export function buildSingleSecretAuditReceipt(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  result: SingleSecretOperationResult,
+  auditTrail: SingleSecretOperationAuditTrailStep[]
+): SingleSecretAuditReceipt {
+  const slug = safeOperationSlug(plan.action, row)
+  const terminalStep =
+    auditTrail.find((step) => step.terminal) ??
+    auditTrail[auditTrail.length - 1]
+  const checksumSeed = [
+    result.operationId,
+    row.ref,
+    plan.action,
+    result.outcome,
+    result.auditFeedback.auditEventId,
+    result.auditFeedback.correlationId,
+    terminalStep.status,
+  ].join('|')
+  const checksum = Array.from(checksumSeed).reduce(
+    (total, char) => (total + char.charCodeAt(0) * 17) % 100000,
+    0
+  )
+
+  return {
+    receiptId: `audit-receipt-${slug}-${result.outcome}`,
+    operationId: result.operationId,
+    ref: row.ref,
+    action: plan.action,
+    outcome: result.outcome,
+    auditEventId: result.auditFeedback.auditEventId,
+    correlationId: result.auditFeedback.correlationId,
+    receiptChecksum: `safe-audit-${checksum.toString().padStart(5, '0')}`,
+    retentionStatus:
+      result.outcome === 'submitted'
+        ? 'receipt pending terminal broker metadata'
+        : result.outcome === 'audit-unavailable'
+          ? 'audit receipt blocked until sink retention is restored'
+          : 'audit receipt retained with metadata-only terminal evidence',
+    terminalStepStatus: terminalStep.status,
+    safeReceiptFields: [
+      'receiptId',
+      'operationId',
+      'ref',
+      'action',
+      'outcome',
+      'auditEventId',
+      'correlationId',
+      'terminalStepStatus',
+      'receiptChecksum',
+      'retentionStatus',
+    ],
+    omittedReceiptArtifacts: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'requestHeaders',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+    ],
+    safeReceiptRows: [
+      'audit receipts are derived from operation ids, refs, typed outcomes, audit ids, and correlation ids only',
+      'receipt checksum proves the metadata set reviewed without hashing or storing secret payloads',
+      result.outcome === 'audit-unavailable'
+        ? 'audit-unavailable receipts remain blocked and require sink recovery before retry'
+        : 'retained audit receipts are shareable for support and issue trails without raw values',
+      'receipt exports omit request bodies, response bodies, headers, credentials, tokens, cookies, keys, recovery material, and environment values',
+    ],
+  }
+}
+
 export function buildSingleSecretStatusMonitor(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -3809,6 +3902,12 @@ export function managedSecretSingleAuditTrailHasSecretMaterial(
   entries: SingleSecretOperationAuditTrailStep[]
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(entries))
+}
+
+export function managedSecretAuditReceiptHasSecretMaterial(
+  receipt: SingleSecretAuditReceipt
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(receipt))
 }
 
 export function managedSecretStatusMonitorHasSecretMaterial(
