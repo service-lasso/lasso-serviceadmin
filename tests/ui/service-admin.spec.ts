@@ -158,6 +158,39 @@ test('service detail variables table keeps long values inside their columns', as
   await expect(row.getByRole('link', { name: 'Open variables' })).toBeVisible()
 })
 
+test('service detail tabs are deep-linkable and restore through browser history', async ({
+  page,
+}) => {
+  await page.goto('/services/@serviceadmin?tab=variables')
+
+  await expect(
+    page.getByRole('heading', { name: 'Service Admin UI' })
+  ).toBeVisible()
+  await expect(page.getByRole('tab', { name: /variables/i })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
+  await expect(page.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toBeVisible()
+
+  await page.getByRole('tab', { name: /logs/i }).click()
+  await expect(page).toHaveURL(/\/services\/%40serviceadmin\?tab=logs$/)
+
+  await page.getByRole('tab', { name: /variables/i }).click()
+  await expect(page).toHaveURL(/\/services\/%40serviceadmin\?tab=variables$/)
+
+  await page.getByRole('link', { name: 'Open all variables' }).click()
+  await expect(page).toHaveURL(/\/variables\?service=%40serviceadmin$/)
+
+  await page.goBack()
+  await expect(page).toHaveURL(
+    /\/services\/%40serviceadmin\?tab=variables$/
+  )
+  await expect(page.getByRole('tab', { name: /variables/i })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
+})
+
 test('runtime, network, installed, and variables tables render', async ({
   page,
 }) => {

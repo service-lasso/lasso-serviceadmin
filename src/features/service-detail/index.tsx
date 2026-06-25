@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Link } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
@@ -104,25 +110,17 @@ import {
 } from '@/features/logs/provider'
 import { buildMetadataTableRows } from './metadata-table'
 import { ServiceConfigEditor } from './service-config-editor'
+import {
+  defaultServiceDetailTab,
+  normalizeServiceDetailTab,
+  serviceDetailTabs,
+  serviceDetailTabsByShortcut,
+  type ServiceDetailTabId,
+} from './service-detail-tabs'
 
 const REDACTED_CONFIG_VALUE = '[redacted by Service Admin]'
 const SENSITIVE_CONFIG_KEY_PATTERN =
   /(?:password|passphrase|token|api[_-]?key|secret|private[_-]?key|credential|cookie)/i
-const serviceDetailTabs = [
-  { id: 'overview', label: 'Overview', shortcut: 'Ctrl+1' },
-  { id: 'dependencies', label: 'Dependencies', shortcut: 'Ctrl+2' },
-  { id: 'endpoints', label: 'Endpoints', shortcut: 'Ctrl+3' },
-  { id: 'variables', label: 'Variables', shortcut: 'Ctrl+4' },
-  { id: 'config', label: 'Config', shortcut: 'Ctrl+5' },
-  { id: 'logs', label: 'Logs', shortcut: 'Ctrl+6' },
-] as const
-
-type ServiceDetailTabId = (typeof serviceDetailTabs)[number]['id']
-
-const serviceDetailTabsByShortcut = Object.fromEntries(
-  serviceDetailTabs.map((tab, index) => [String(index + 1), tab.id])
-) as Record<string, ServiceDetailTabId>
-
 const editableShortcutTargetSelector = [
   'input',
   'textarea',
@@ -1316,10 +1314,28 @@ function ServiceDetailLoading() {
   )
 }
 
-export function ServiceDetail({ serviceId }: { serviceId: string }) {
+export function ServiceDetail({
+  serviceId,
+  activeTab,
+  onActiveTabChange,
+}: {
+  serviceId: string
+  activeTab?: ServiceDetailTabId
+  onActiveTabChange?: (tab: ServiceDetailTabId) => void
+}) {
   const serviceQuery = useDashboardService(serviceId)
   const serviceName = serviceQuery.data?.name ?? serviceId
-  const [activeTab, setActiveTab] = useState<ServiceDetailTabId>('overview')
+  const [localActiveTab, setLocalActiveTab] = useState<ServiceDetailTabId>(
+    activeTab ?? defaultServiceDetailTab
+  )
+  const selectedTab = activeTab ?? localActiveTab
+  const setSelectedTab = useCallback((nextTab: ServiceDetailTabId) => {
+    if (activeTab === undefined) {
+      setLocalActiveTab(nextTab)
+    }
+
+    onActiveTabChange?.(nextTab)
+  }, [activeTab, onActiveTabChange])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1337,12 +1353,12 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
       if (!nextTab) return
       event.preventDefault()
-      setActiveTab(nextTab)
+      setSelectedTab(nextTab)
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [setSelectedTab])
 
   usePageMetadata({
     title: `Service Admin - Service - ${serviceName}`,
@@ -1457,9 +1473,9 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                 </div>
 
                 <Tabs
-                  value={activeTab}
+                  value={selectedTab}
                   onValueChange={(value) =>
-                    setActiveTab(value as typeof activeTab)
+                    setSelectedTab(normalizeServiceDetailTab(value))
                   }
                   className='space-y-4'
                 >
