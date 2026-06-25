@@ -74,6 +74,7 @@ import {
   buildSingleSecretRotationPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
+  buildSingleSecretReplayGuard,
   buildSingleSecretStatusMonitor,
   buildSingleSecretSubmitEnvelope,
   buildStubSecretMutationPreview,
@@ -277,6 +278,11 @@ export function SecretsManagementPage({
   const singleSubmitEnvelope = buildSingleSecretSubmitEnvelope(
     selectedRow,
     singleOperationPlan
+  )
+  const singleReplayGuard = buildSingleSecretReplayGuard(
+    selectedRow,
+    singleOperationPlan,
+    singleSubmitEnvelope
   )
   const singleLeakEvidence = buildSingleSecretLeakEvidence(
     selectedRow,
@@ -1782,6 +1788,110 @@ export function SecretsManagementPage({
                   </div>
                   <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
                     {singleSubmitEnvelope.diagnosticsGuardrails.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className='rounded-md border p-3'>
+              <div className='mb-3 flex flex-wrap items-center gap-2'>
+                <ShieldCheck className='size-4 text-primary' />
+                <div className='font-medium'>Replay and idempotency guard</div>
+                <Badge
+                  variant={
+                    singleReplayGuard.readyForReplaySafeSubmit
+                      ? 'default'
+                      : 'secondary'
+                  }
+                >
+                  {singleReplayGuard.readyForReplaySafeSubmit
+                    ? 'Replay safe'
+                    : 'Replay blocked'}
+                </Badge>
+                <Badge variant='outline'>No cross-ref replay</Badge>
+              </div>
+              <div className='grid gap-3 lg:grid-cols-4'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Scope
+                  </div>
+                  <div className='mt-1'>{singleReplayGuard.replayScope}</div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Plan fingerprint
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleReplayGuard.planFingerprint}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Binding
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleReplayGuard.selectedRefBinding}
+                  </div>
+                  <div className='mt-1 text-muted-foreground'>
+                    {singleReplayGuard.actionBinding}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Decision
+                  </div>
+                  <div className='mt-1'>{singleReplayGuard.replayDecision}</div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 lg:grid-cols-3'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Retry keys
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleReplayGuard.idempotencyKey}
+                  </div>
+                  <div className='mt-1 break-all text-muted-foreground'>
+                    {singleReplayGuard.correlationId}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Stale plan guard
+                  </div>
+                  <div className='mt-1'>{singleReplayGuard.stalePlanGuard}</div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Omitted replay fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleReplayGuard.omittedReplayFields.map((field) => (
+                      <Badge key={field} variant='secondary'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Ref binding checks
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleReplayGuard.refBindingRows.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Safe replay evidence
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleReplayGuard.safeReplayRows.map((row) => (
                       <li key={row}>{row}</li>
                     ))}
                   </ul>

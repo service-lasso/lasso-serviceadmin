@@ -20,6 +20,7 @@ import {
   buildSingleSecretRotationPreview,
   buildSingleSecretOperationResult,
   buildSingleSecretOperationPlan,
+  buildSingleSecretReplayGuard,
   buildSingleSecretStatusMonitor,
   buildSingleSecretSubmitEnvelope,
   buildStubSecretMutationPreview,
@@ -35,6 +36,7 @@ import {
   managedSecretPolicyPreviewHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
+  managedSecretReplayGuardHasSecretMaterial,
   managedSecretRotationPreviewHasSecretMaterial,
   managedSecretSingleAuditTrailHasSecretMaterial,
   managedSecretStatusMonitorHasSecretMaterial,
@@ -105,6 +107,9 @@ describe('Secrets Broker secrets management page', () => {
       )[0]
     ).toBeVisible()
     expect(screen.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    expect(screen.getByText(/Replay and idempotency guard/i)).toBeVisible()
+    expect(screen.getByText(/No cross-ref replay/i)).toBeVisible()
+    expect(screen.getByText(/plan-fp-metadata/i)).toBeVisible()
     expect(screen.getByText(/Route and storage leak evidence/i)).toBeVisible()
     expect(screen.getByText(/Submit blocked/i)).toBeVisible()
     expect(screen.getByText(/No raw payload/i)).toBeVisible()
@@ -1330,6 +1335,73 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       managedSecretSubmitEnvelopeHasSecretMaterial(rotateSubmitEnvelope)
     ).toBe(false)
+    const rotateReplayGuard = buildSingleSecretReplayGuard(
+      managedSecretRows[0],
+      rotatePlan,
+      rotateSubmitEnvelope
+    )
+    expect(rotateReplayGuard).toMatchObject({
+      operationId: rotatePlan.operationId,
+      planFingerprint:
+        'plan-fp-reset-serviceadmin-session-signing-metadata-only',
+      idempotencyKey: 'idem-reset-serviceadmin-session-signing-metadata-submit',
+      correlationId: 'corr-reset-serviceadmin-session-signing-metadata-submit',
+      readyForReplaySafeSubmit: true,
+      replayDecision:
+        'first submit and retry are allowed only with the same operation id and idempotency key',
+    })
+    expect(rotateReplayGuard.refBindingRows).toEqual(
+      expect.arrayContaining([
+        'cross-ref replay rejected before broker mutation',
+        'cross-action replay rejected before broker mutation',
+        'stale dry-run fingerprint requires a fresh preview',
+      ])
+    )
+    expect(rotateReplayGuard.omittedReplayFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'auditReasonText',
+      ])
+    )
+    expect(rotateReplayGuard.safeReplayRows).toEqual(
+      expect.arrayContaining([
+        'idempotency evidence uses operation id, correlation id, ref metadata, and action metadata only',
+        'retry status is operation-id scoped and never includes request or response bodies',
+      ])
+    )
+    expect(managedSecretReplayGuardHasSecretMaterial(rotateReplayGuard)).toBe(
+      false
+    )
+
+    const missingPlan = buildSingleSecretOperationPlan(
+      managedSecretRows[3],
+      'reset',
+      'operator requested rotation preview',
+      true,
+      'ready'
+    )
+    const blockedSubmitEnvelope = buildSingleSecretSubmitEnvelope(
+      managedSecretRows[3],
+      missingPlan
+    )
+    const blockedReplayGuard = buildSingleSecretReplayGuard(
+      managedSecretRows[3],
+      missingPlan,
+      blockedSubmitEnvelope
+    )
+    expect(blockedReplayGuard).toMatchObject({
+      readyForReplaySafeSubmit: false,
+      replayDecision: 'replay blocked: ref unavailable',
+    })
+    expect(blockedReplayGuard.stalePlanGuard).toMatch(
+      /reject submit if ref, action, policy/i
+    )
+    expect(managedSecretReplayGuardHasSecretMaterial(blockedReplayGuard)).toBe(
+      false
+    )
+
     const rotateLeakEvidence = buildSingleSecretLeakEvidence(
       managedSecretRows[0],
       rotatePlan,

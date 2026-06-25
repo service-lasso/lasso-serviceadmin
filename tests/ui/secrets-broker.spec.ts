@@ -518,7 +518,19 @@ test.describe('Secrets Broker browser coverage', () => {
         .first()
     ).toBeVisible()
     await expect(
-      page.getByText(/corr-reset-serviceadmin-session-signing-metadata-submit/i)
+      page
+        .getByText(/corr-reset-serviceadmin-session-signing-metadata-submit/i)
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/Replay and idempotency guard/i)).toBeVisible()
+    await expect(page.getByText(/No cross-ref replay/i)).toBeVisible()
+    await expect(
+      page.getByText(
+        /plan-fp-reset-serviceadmin-session-signing-metadata-only/i
+      )
+    ).toBeVisible()
+    await expect(
+      page.getByText(/cross-ref replay rejected before broker mutation/i)
     ).toBeVisible()
     await expect(page.getByText(/rotationReason/i).first()).toBeVisible()
     await expect(page.getByText(/providerCredentials/i).first()).toBeVisible()
