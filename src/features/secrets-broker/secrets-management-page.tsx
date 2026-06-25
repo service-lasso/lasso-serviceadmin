@@ -59,6 +59,7 @@ import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
+  buildBulkSecretCampaignClosureReview,
   buildManagedSecretActionPreview,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
@@ -352,6 +353,9 @@ export function SecretsManagementPage({
     bulkRevalidated,
     bulkPlan.applyAvailable
   )
+  const bulkClosureReview = bulkApplyResult
+    ? buildBulkSecretCampaignClosureReview(bulkApplyResult)
+    : null
   const singleOperationAuditTrail = singleApplyResult
     ? buildSingleSecretOperationAuditTrail(
         selectedRow,
@@ -1594,6 +1598,166 @@ export function SecretsManagementPage({
                     </TableBody>
                   </Table>
                 </div>
+
+                {bulkClosureReview ? (
+                  <div className='grid gap-4 rounded-md border p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]'>
+                    <div className='space-y-4'>
+                      <div className='flex flex-wrap items-start justify-between gap-3'>
+                        <div>
+                          <h3 className='font-medium'>
+                            Bulk campaign closure review
+                          </h3>
+                          <p className='mt-1 text-muted-foreground'>
+                            {bulkClosureReview.canCloseCampaignReview
+                              ? 'Campaign review can close after audit acknowledgement.'
+                              : bulkClosureReview.reviewState === 'monitoring'
+                                ? 'Campaign review stays open while retry-safe item recovery is monitored.'
+                                : 'Campaign review is blocked until recovery creates a fresh plan.'}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            bulkClosureReview.canCloseCampaignReview
+                              ? 'default'
+                              : bulkClosureReview.reviewState === 'monitoring'
+                                ? 'secondary'
+                                : 'outline'
+                          }
+                        >
+                          {bulkClosureReview.reviewState}
+                        </Badge>
+                      </div>
+
+                      <dl className='grid gap-3 md:grid-cols-3'>
+                        <div>
+                          <dt className='text-muted-foreground'>Closure ID</dt>
+                          <dd className='break-all'>
+                            {bulkClosureReview.closureId}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className='text-muted-foreground'>Outcome</dt>
+                          <dd>{bulkClosureReview.outcome}</dd>
+                        </div>
+                        <div>
+                          <dt className='text-muted-foreground'>
+                            Close decision
+                          </dt>
+                          <dd>
+                            {bulkClosureReview.canCloseCampaignReview
+                              ? 'operator review can close'
+                              : 'operator review remains open'}
+                          </dd>
+                        </div>
+                      </dl>
+
+                      <div className='grid gap-3 md:grid-cols-2'>
+                        <div>
+                          <div className='text-xs font-medium text-muted-foreground uppercase'>
+                            Required before close
+                          </div>
+                          <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                            {bulkClosureReview.requiredBeforeClose.map(
+                              (item) => (
+                                <li key={item}>{item}</li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                        <div>
+                          <div className='text-xs font-medium text-muted-foreground uppercase'>
+                            Item outcome summary
+                          </div>
+                          <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                            {bulkClosureReview.itemOutcomeSummary.map(
+                              (item) => (
+                                <li key={item}>{item}</li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className='space-y-2'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe closure evidence
+                        </div>
+                        <ul className='list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {bulkClosureReview.safeClosureRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className='space-y-3 rounded-md bg-muted/40 p-3 text-sm'>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Retained evidence refs
+                        </div>
+                        <div className='mt-1 space-y-1'>
+                          {bulkClosureReview.retainedEvidenceRefs.map((ref) => (
+                            <div key={ref} className='break-all'>
+                              {ref}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Audit refs
+                        </div>
+                        <div className='mt-1 space-y-1'>
+                          {bulkClosureReview.auditRefs.map((ref) => (
+                            <div key={ref} className='break-all'>
+                              {ref}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Support refs
+                        </div>
+                        <div className='mt-1 space-y-1'>
+                          {bulkClosureReview.supportRefs.map((ref) => (
+                            <div key={ref} className='break-all'>
+                              {ref}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed closure fields
+                        </div>
+                        <div className='mt-1 flex flex-wrap gap-1'>
+                          {bulkClosureReview.allowedClosureFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted closure fields
+                        </div>
+                        <div className='mt-1 flex flex-wrap gap-1'>
+                          {bulkClosureReview.omittedClosureFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </CardContent>

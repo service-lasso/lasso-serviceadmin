@@ -6,6 +6,7 @@ import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
+  buildBulkSecretCampaignClosureReview,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
@@ -33,6 +34,7 @@ import {
   buildStubSecretMutationPreview,
   filterManagedSecrets,
   managedSecretBulkApplyResultHasSecretMaterial,
+  managedSecretBulkClosureReviewHasSecretMaterial,
   managedSecretBulkPlanHasSecretMaterial,
   managedSecretActionReadinessHasSecretMaterial,
   managedSecretClosureReviewHasSecretMaterial,
@@ -385,6 +387,13 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/Applied 1/i)[0]).toBeVisible()
     expect(screen.getByText(/campaign and item audit recorded/i)).toBeVisible()
     expect(screen.getAllByText(/retry by operation id/i)[0]).toBeVisible()
+    expect(screen.getByText(/Bulk campaign closure review/i)).toBeVisible()
+    expect(screen.getByText(/operator review can close/i)).toBeVisible()
+    expect(
+      screen.getByText(/campaign review may close after audit acknowledgement/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Allowed closure fields/i)).toBeVisible()
+    expect(screen.getByText(/Omitted closure fields/i)).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
@@ -434,6 +443,13 @@ describe('Secrets Broker secrets management page', () => {
       screen.getAllByText(/retry with the same idempotency key/i)[0]
     ).toBeVisible()
     expect(screen.getAllByText(/campaign-update-edit/i)[0]).toBeVisible()
+    expect(screen.getByText(/Bulk campaign closure review/i)).toBeVisible()
+    expect(screen.getByText(/operator review remains open/i)).toBeVisible()
+    expect(
+      screen.getByText(
+        /partial campaigns remain open while retry-safe item recovery/i
+      )
+    ).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
@@ -609,6 +625,11 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(screen.getByText(/Campaign apply result: stale_plan/i)).toBeVisible()
     expect(screen.getAllByText(/create a fresh dry-run plan/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(
+        /blocked campaigns stay open until policy, auth, audit, provider, or stale-plan recovery creates a fresh plan/i
+      )
+    ).toBeVisible()
   })
 
   it('shows stale plan and revalidation failure states before bulk apply', async () => {
@@ -3258,6 +3279,81 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretBulkApplyResultHasSecretMaterial(applyResult)).toBe(
       false
     )
+    const partialClosure = buildBulkSecretCampaignClosureReview(applyResult)
+    expect(partialClosure).toMatchObject({
+      campaignId: applyResult.campaignId,
+      operationId: applyResult.operationId,
+      outcome: 'partial_failure',
+      reviewState: 'blocked',
+      canCloseCampaignReview: false,
+    })
+    expect(partialClosure.requiredBeforeClose).toEqual(
+      expect.arrayContaining([
+        'resolve the typed blocker named by the campaign next action',
+        'create a fresh campaign dry-run before any new mutation attempt',
+      ])
+    )
+    expect(partialClosure.allowedClosureFields).toEqual(
+      expect.arrayContaining(['campaignId', 'operationId', 'typedItemOutcomes'])
+    )
+    expect(partialClosure.omittedClosureFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'providerCredentials',
+        'bulkSpreadsheetPayload',
+      ])
+    )
+    expect(
+      managedSecretBulkClosureReviewHasSecretMaterial(partialClosure)
+    ).toBe(false)
+
+    const retryablePartialPlan = buildBulkSecretCampaignPlan(
+      managedSecretRows,
+      [managedSecretRows[0].id, managedSecretRows[2].id],
+      'update-edit'
+    )
+    const retryablePartialResult = buildBulkSecretCampaignApplyResult(
+      retryablePartialPlan,
+      'partial-failure'
+    )
+    const retryablePartialClosure = buildBulkSecretCampaignClosureReview(
+      retryablePartialResult
+    )
+    expect(retryablePartialClosure).toMatchObject({
+      outcome: 'partial_failure',
+      reviewState: 'monitoring',
+      canCloseCampaignReview: false,
+    })
+    expect(retryablePartialClosure.requiredBeforeClose).toEqual(
+      expect.arrayContaining([
+        'review retry-safe failed item operation ids',
+        'retry only items marked retry safe and only by operation id',
+      ])
+    )
+    expect(
+      managedSecretBulkClosureReviewHasSecretMaterial(retryablePartialClosure)
+    ).toBe(false)
+
+    const successfulResult = buildBulkSecretCampaignApplyResult(
+      cleanPlan,
+      'success'
+    )
+    const successfulClosure =
+      buildBulkSecretCampaignClosureReview(successfulResult)
+    expect(successfulClosure).toMatchObject({
+      outcome: 'applied',
+      reviewState: 'closable',
+      canCloseCampaignReview: true,
+    })
+    expect(successfulClosure.safeClosureRows).toEqual(
+      expect.arrayContaining([
+        'campaign review may close after audit acknowledgement and dependent service status review',
+      ])
+    )
+    expect(
+      managedSecretBulkClosureReviewHasSecretMaterial(successfulClosure)
+    ).toBe(false)
 
     const bulkPolicyDeniedResult = buildBulkSecretCampaignApplyResult(
       cleanPlan,
