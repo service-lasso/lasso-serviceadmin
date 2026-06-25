@@ -312,6 +312,23 @@ export type SingleSecretOperatorHandoff = {
   safeHandoffRows: string[]
 }
 
+export type SingleSecretOwnerActionTicket = {
+  ticketId: string
+  operationId: string
+  ref: string
+  lane: SingleSecretOperatorHandoff['lane']
+  owner: string
+  severity: SingleSecretOperatorHandoff['severity']
+  acknowledgementStatus: string
+  requiredAction: string
+  freshPreviewRequired: boolean
+  evidenceRefs: string[]
+  safeEscalationRoute: string
+  allowedTicketFields: string[]
+  omittedTicketFields: string[]
+  safeTicketRows: string[]
+}
+
 export type SingleSecretDecommissionPreview = {
   ref: string
   operationId: string
@@ -3679,6 +3696,80 @@ export function buildSingleSecretOperatorHandoff(
   }
 }
 
+export function buildSingleSecretOwnerActionTicket(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  handoff: SingleSecretOperatorHandoff
+): SingleSecretOwnerActionTicket {
+  const slug = safeOperationSlug(plan.action, row)
+  const freshPreviewRequired =
+    handoff.lane !== 'monitor' && handoff.lane !== 'settled'
+
+  return {
+    ticketId: `owner-action-${slug}-${handoff.outcome}`,
+    operationId: handoff.operationId,
+    ref: row.ref,
+    lane: handoff.lane,
+    owner: handoff.owner,
+    severity: handoff.severity,
+    acknowledgementStatus:
+      handoff.lane === 'settled'
+        ? 'acknowledge terminal broker metadata before closing operator review'
+        : handoff.lane === 'monitor'
+          ? 'watch broker status endpoint until terminal metadata arrives'
+          : 'owner acknowledgement required before another broker preview',
+    requiredAction: handoff.requiredAction,
+    freshPreviewRequired,
+    evidenceRefs: handoff.shareableEvidenceRefs,
+    safeEscalationRoute:
+      handoff.severity === 'critical'
+        ? 'route to broker/audit operator with metadata-only evidence refs'
+        : 'keep in operator queue with metadata-only evidence refs',
+    allowedTicketFields: [
+      'ticketId',
+      'operationId',
+      'ref',
+      'action',
+      'lane',
+      'owner',
+      'severity',
+      'auditEventId',
+      'correlationId',
+      'statusEndpoint',
+      'impactRef',
+      'rollbackRef',
+      'recoveryRef',
+    ],
+    omittedTicketFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+      'screenshotsWithVisibleValues',
+      'diagnosticPayloadsWithBodies',
+    ],
+    safeTicketRows: [
+      'owner action tickets are generated from the safe handoff packet only',
+      'ticket evidence is shareable because it contains ids, refs, owners, lanes, and typed outcomes only',
+      freshPreviewRequired
+        ? 'fresh broker preview is required after owner action before any mutation retry'
+        : 'no mutation payload is retained while the operation is monitored or settled',
+      handoff.lane === 'provider-auth'
+        ? 'provider authentication happens outside Service Admin and omits provider credentials'
+        : handoff.lane === 'audit-recovery'
+          ? 'audit recovery ticket carries sink status metadata only'
+          : handoff.lane === 'provider-recovery'
+            ? 'provider recovery ticket carries connector metadata only'
+            : 'owner queue omits request bodies, response bodies, and secret material',
+    ],
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -3742,6 +3833,12 @@ export function managedSecretOperatorHandoffHasSecretMaterial(
   handoff: SingleSecretOperatorHandoff
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(handoff))
+}
+
+export function managedSecretOwnerActionTicketHasSecretMaterial(
+  ticket: SingleSecretOwnerActionTicket
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(ticket))
 }
 
 export function managedSecretSubmitEnvelopeHasSecretMaterial(
