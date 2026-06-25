@@ -15,6 +15,7 @@ import {
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
+  buildSingleSecretAuditReceipt,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretOperatorHandoff,
   buildSingleSecretOwnerActionTicket,
@@ -49,6 +50,7 @@ import {
   managedSecretReplayGuardHasSecretMaterial,
   managedSecretRotationPreviewHasSecretMaterial,
   managedSecretSingleAuditTrailHasSecretMaterial,
+  managedSecretAuditReceiptHasSecretMaterial,
   managedSecretStatusMonitorHasSecretMaterial,
   managedSecretSubmitEnvelopeHasSecretMaterial,
   managedSecretRows,
@@ -2106,6 +2108,57 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretSingleAuditTrailHasSecretMaterial(auditTrail)).toBe(
       false
     )
+    const auditReceipt = buildSingleSecretAuditReceipt(
+      managedSecretRows[0],
+      rotatePlan,
+      appliedResult,
+      auditTrail
+    )
+    expect(auditReceipt).toMatchObject({
+      receiptId: 'audit-receipt-reset-serviceadmin-session-signing-applied',
+      operationId: rotatePlan.operationId,
+      outcome: 'applied',
+      auditEventId: 'audit-reset-serviceadmin-session-signing-preview',
+      correlationId: 'corr-reset-serviceadmin-session-signing-applied',
+      terminalStepStatus: 'terminal success',
+      retentionStatus:
+        'audit receipt retained with metadata-only terminal evidence',
+    })
+    expect(auditReceipt.receiptChecksum).toMatch(/^safe-audit-\d{5}$/)
+    expect(auditReceipt.safeReceiptFields).toEqual(
+      expect.arrayContaining([
+        'receiptId',
+        'operationId',
+        'ref',
+        'action',
+        'outcome',
+        'auditEventId',
+        'correlationId',
+        'receiptChecksum',
+      ])
+    )
+    expect(auditReceipt.omittedReceiptArtifacts).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'requestHeaders',
+        'providerCredentials',
+        'providerTokens',
+        'cookies',
+        'privateKeys',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(auditReceipt.safeReceiptRows).toEqual(
+      expect.arrayContaining([
+        'audit receipts are derived from operation ids, refs, typed outcomes, audit ids, and correlation ids only',
+        'receipt checksum proves the metadata set reviewed without hashing or storing secret payloads',
+        'retained audit receipts are shareable for support and issue trails without raw values',
+      ])
+    )
+    expect(managedSecretAuditReceiptHasSecretMaterial(auditReceipt)).toBe(false)
     const authRequiredTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],
       rotatePlan,
@@ -2117,6 +2170,21 @@ describe('Secrets Broker secrets management page', () => {
     })
     expect(
       managedSecretSingleAuditTrailHasSecretMaterial(authRequiredTrail)
+    ).toBe(false)
+    const authRequiredReceipt = buildSingleSecretAuditReceipt(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredResult,
+      authRequiredTrail
+    )
+    expect(authRequiredReceipt).toMatchObject({
+      outcome: 'auth-required',
+      terminalStepStatus: 'paused for broker reauthentication',
+      retentionStatus:
+        'audit receipt retained with metadata-only terminal evidence',
+    })
+    expect(
+      managedSecretAuditReceiptHasSecretMaterial(authRequiredReceipt)
     ).toBe(false)
     const statusMonitor = buildSingleSecretStatusMonitor(
       managedSecretRows[0],

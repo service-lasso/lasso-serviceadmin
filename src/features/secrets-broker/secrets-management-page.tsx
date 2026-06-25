@@ -63,6 +63,7 @@ import {
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
+  buildSingleSecretAuditReceipt,
   buildSingleSecretEvidenceBundle,
   buildSingleSecretExportGuardrail,
   buildSingleSecretConfirmationReceipt,
@@ -357,6 +358,15 @@ export function SecretsManagementPage({
         singleApplyResult.outcome
       )
     : []
+  const singleAuditReceipt =
+    singleApplyResult && singleOperationAuditTrail.length > 0
+      ? buildSingleSecretAuditReceipt(
+          selectedRow,
+          singleOperationPlan,
+          singleApplyResult,
+          singleOperationAuditTrail
+        )
+      : null
   const singleStatusMonitor = singleApplyResult
     ? buildSingleSecretStatusMonitor(
         selectedRow,
@@ -3965,6 +3975,90 @@ export function SecretsManagementPage({
                     </Table>
                   </div>
                 </div>
+                {singleAuditReceipt ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <ShieldCheck className='size-4 text-primary' />
+                      <div className='font-medium'>Audit receipt</div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge variant='outline'>
+                        {singleAuditReceipt.retentionStatus}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 lg:grid-cols-4'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Receipt
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleAuditReceipt.receiptId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Checksum
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleAuditReceipt.receiptChecksum}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Audit event
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleAuditReceipt.auditEventId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Terminal evidence
+                        </div>
+                        <div className='mt-1'>
+                          {singleAuditReceipt.terminalStepStatus}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe receipt fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleAuditReceipt.safeReceiptFields.map((field) => (
+                            <Badge key={field} variant='outline'>
+                              {field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted receipt artifacts
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleAuditReceipt.omittedReceiptArtifacts.map(
+                            (artifact) => (
+                              <Badge key={artifact} variant='secondary'>
+                                {artifact}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Safe receipt evidence
+                      </div>
+                      <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                        {singleAuditReceipt.safeReceiptRows.map((row) => (
+                          <li key={row}>{row}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
