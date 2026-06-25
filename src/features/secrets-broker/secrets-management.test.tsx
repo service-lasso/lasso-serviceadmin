@@ -10,6 +10,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretExportGuardrail,
   buildSingleSecretConfirmationReceipt,
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
@@ -35,6 +36,7 @@ import {
   managedSecretDecommissionPreviewHasSecretMaterial,
   managedSecretEditPreviewHasSecretMaterial,
   managedSecretEvidenceBundleHasSecretMaterial,
+  managedSecretExportGuardrailHasSecretMaterial,
   managedSecretHistoryReviewHasSecretMaterial,
   managedSecretLeakEvidenceHasSecretMaterial,
   managedSecretOperatorHandoffHasSecretMaterial,
@@ -121,6 +123,11 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getByText(/No cross-ref replay/i)).toBeVisible()
     expect(screen.getByText(/plan-fp-metadata/i)).toBeVisible()
     expect(screen.getByText(/Route and storage leak evidence/i)).toBeVisible()
+    expect(screen.getByText(/Export and copy guardrail/i)).toBeVisible()
+    expect(screen.getByText(/Raw export blocked/i)).toBeVisible()
+    expect(
+      screen.getByText(/spreadsheet-style payload export are unavailable/i)
+    ).toBeVisible()
     expect(screen.getByText(/Submit blocked/i)).toBeVisible()
     expect(screen.getByText(/No raw payload/i)).toBeVisible()
     expect(screen.getByText(/Allowed route params/i)).toBeVisible()
@@ -1546,6 +1553,53 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretLeakEvidenceHasSecretMaterial(rotateLeakEvidence)).toBe(
       false
     )
+
+    const rotateExportGuard = buildSingleSecretExportGuardrail(
+      managedSecretRows[0],
+      rotatePlan,
+      rotateSubmitEnvelope
+    )
+    expect(rotateExportGuard).toMatchObject({
+      exportGuardId: 'export-guard-reset-serviceadmin-session-signing-metadata',
+      operationId: rotatePlan.operationId,
+      ref: 'secret://local/default/@serviceadmin/SESSION_SIGNING_KEY',
+      action: 'reset',
+      metadataExportStatus:
+        'metadata report available for operation ids, refs, audit refs, typed outcomes, and next actions only',
+      rawExportStatus:
+        'raw value copy, raw export, and spreadsheet-style payload export are unavailable',
+    })
+    expect(rotateExportGuard.allowedExportFields).toEqual(
+      expect.arrayContaining([
+        'operationId',
+        'ref',
+        'action',
+        'auditEventId',
+        'correlationId',
+        'nextAction',
+      ])
+    )
+    expect(rotateExportGuard.blockedExportFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBody',
+        'responseBody',
+        'providerCredentials',
+        'providerTokens',
+        'recoveryMaterial',
+        'environmentValues',
+      ])
+    )
+    expect(rotateExportGuard.safeExportRows).toEqual(
+      expect.arrayContaining([
+        'metadata export is scoped to the selected ref and operation id',
+        'raw value export and bulk raw reveal are out of scope',
+        'spreadsheet-style secret editing remains unavailable',
+      ])
+    )
+    expect(
+      managedSecretExportGuardrailHasSecretMaterial(rotateExportGuard)
+    ).toBe(false)
 
     const appliedResult = buildSingleSecretOperationResult(
       managedSecretRows[0],

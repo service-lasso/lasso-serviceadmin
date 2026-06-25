@@ -519,6 +519,15 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/rotation can be requested without controlled reveal/i)
     ).toBeVisible()
     await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    await expect(page.getByText(/Export and copy guardrail/i)).toBeVisible()
+    await expect(page.getByText(/Raw export blocked/i)).toBeVisible()
+    await expect(
+      page.getByText(/spreadsheet-style payload export are unavailable/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Blocked export fields/i)).toBeVisible()
+    await expect(
+      page.getByText(/metadata export is scoped to the selected ref/i)
+    ).toBeVisible()
     await expect(page.getByText(/Broker status monitor/i)).toBeVisible()
     await expect(
       page

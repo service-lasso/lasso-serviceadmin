@@ -130,6 +130,21 @@ export type SingleSecretLeakEvidence = {
   safeForScreenshots: boolean
 }
 
+export type SingleSecretExportGuardrail = {
+  exportGuardId: string
+  operationId: string
+  ref: string
+  action: ManagedSecretAction
+  metadataExportStatus: string
+  rawExportStatus: string
+  copyStatus: string
+  allowedExportFields: string[]
+  blockedExportFields: string[]
+  exportRoutes: string[]
+  storageGuardrails: string[]
+  safeExportRows: string[]
+}
+
 export type SingleSecretEditPreview = {
   ref: string
   operationId: string
@@ -2080,6 +2095,69 @@ export function buildSingleSecretLeakEvidence(
   }
 }
 
+export function buildSingleSecretExportGuardrail(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  envelope: SingleSecretSubmitEnvelope
+): SingleSecretExportGuardrail {
+  const slug = safeOperationSlug(plan.action, row)
+
+  return {
+    exportGuardId: `export-guard-${slug}-metadata`,
+    operationId: plan.operationId,
+    ref: row.ref,
+    action: plan.action,
+    metadataExportStatus:
+      'metadata report available for operation ids, refs, audit refs, typed outcomes, and next actions only',
+    rawExportStatus:
+      'raw value copy, raw export, and spreadsheet-style payload export are unavailable',
+    copyStatus:
+      envelope.readyForSubmit || plan.blockers.length === 0
+        ? 'copy support evidence only after audit reason and confirmation metadata are bound'
+        : 'copy disabled until the selected action passes the dry-run gate',
+    allowedExportFields: [
+      'exportGuardId',
+      'operationId',
+      'ref',
+      'action',
+      'owner',
+      'provider',
+      'policy',
+      'auditEventId',
+      'correlationId',
+      'outcome',
+      'nextAction',
+    ],
+    blockedExportFields: [
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    exportRoutes: [
+      '/secrets-broker/secrets',
+      '/secrets-broker/secrets?ref=<encoded-ref>&action=<metadata-action>',
+    ],
+    storageGuardrails: [
+      'browser storage keeps table and action selection only',
+      'metadata reports are generated from typed refs and operation ids',
+      'diagnostics and support bundles omit request and response bodies',
+    ],
+    safeExportRows: [
+      'metadata export is scoped to the selected ref and operation id',
+      'raw value export and bulk raw reveal are out of scope',
+      'copyable evidence excludes source payloads, generated values, provider auth material, and recovery material',
+      'spreadsheet-style secret editing remains unavailable',
+      `support evidence reuses ${envelope.correlationId} without including secret material`,
+    ],
+  }
+}
+
 function editConsumerRefsForRow(row: ManagedSecretRow) {
   if (row.owningService === '@serviceadmin') {
     return ['@serviceadmin operator API', '@serviceadmin runtime config loader']
@@ -3688,6 +3766,12 @@ export function managedSecretLeakEvidenceHasSecretMaterial(
   evidence: SingleSecretLeakEvidence
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(evidence))
+}
+
+export function managedSecretExportGuardrailHasSecretMaterial(
+  guardrail: SingleSecretExportGuardrail
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(guardrail))
 }
 
 export function managedSecretEditPreviewHasSecretMaterial(

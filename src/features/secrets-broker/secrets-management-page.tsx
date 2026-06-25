@@ -64,6 +64,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretExportGuardrail,
   buildSingleSecretConfirmationReceipt,
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
@@ -295,6 +296,11 @@ export function SecretsManagementPage({
     singleSubmitEnvelope
   )
   const singleLeakEvidence = buildSingleSecretLeakEvidence(
+    selectedRow,
+    singleOperationPlan,
+    singleSubmitEnvelope
+  )
+  const singleExportGuardrail = buildSingleSecretExportGuardrail(
     selectedRow,
     singleOperationPlan,
     singleSubmitEnvelope
@@ -2040,6 +2046,125 @@ export function SecretsManagementPage({
                 <div className='mt-3 text-xs break-all text-muted-foreground'>
                   Console event: {singleLeakEvidence.consoleEvent}
                 </div>
+              </div>
+            </div>
+            <div className='rounded-md border p-3'>
+              <div className='mb-3 flex flex-wrap items-center gap-2'>
+                <ListChecks className='size-4 text-primary' />
+                <div className='font-medium'>Export and copy guardrail</div>
+                <Badge variant='secondary'>Metadata only</Badge>
+                <Badge variant='outline'>Raw export blocked</Badge>
+              </div>
+              <div className='grid gap-3 lg:grid-cols-4'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Guard
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleExportGuardrail.exportGuardId}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Operation
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleExportGuardrail.operationId}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Ref / action
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleExportGuardrail.ref}
+                  </div>
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    {singleExportGuardrail.action}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Copy status
+                  </div>
+                  <div className='mt-1'>{singleExportGuardrail.copyStatus}</div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Metadata export
+                  </div>
+                  <div className='mt-2'>
+                    {singleExportGuardrail.metadataExportStatus}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Raw export
+                  </div>
+                  <div className='mt-2'>
+                    {singleExportGuardrail.rawExportStatus}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Allowed export fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleExportGuardrail.allowedExportFields.map((field) => (
+                      <Badge key={field} variant='outline'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Blocked export fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleExportGuardrail.blockedExportFields.map((field) => (
+                      <Badge key={field} variant='secondary'>
+                        {field}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Export routes
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleExportGuardrail.exportRoutes.map((route) => (
+                      <li key={route}>{route}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Storage guardrails
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleExportGuardrail.storageGuardrails.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Safe export evidence
+                </div>
+                <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                  {singleExportGuardrail.safeExportRows.map((row) => (
+                    <li key={row}>{row}</li>
+                  ))}
+                </ul>
               </div>
             </div>
             {revealPreview ? (
