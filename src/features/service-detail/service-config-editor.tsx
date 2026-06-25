@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor, { DiffEditor } from '@monaco-editor/react'
 import {
   CheckCircle2,
   FileClock,
@@ -168,21 +168,56 @@ function ComparePanel({
     )
   }
 
-  return (
-    <div className='grid gap-4 xl:grid-cols-2'>
-      <div className='min-w-0 space-y-2'>
-        <div className='text-sm font-medium'>
-          Backup {revisionLabel(revision)}
+  if (!revision.content.trim()) {
+    return (
+      <div className='rounded-md border border-destructive/45 p-4 text-sm'>
+        <div className='font-medium text-destructive'>
+          Backup content unavailable
         </div>
-        <pre className='max-h-[360px] overflow-auto rounded-md border bg-muted/35 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap'>
-          {revision.content}
-        </pre>
+        <div className='mt-1 text-muted-foreground'>
+          Select another backup revision or reload server.json before comparing.
+        </div>
       </div>
-      <div className='min-w-0 space-y-2'>
-        <div className='text-sm font-medium'>Current editor buffer</div>
-        <pre className='max-h-[360px] overflow-auto rounded-md border bg-muted/35 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap'>
-          {editorContent}
-        </pre>
+    )
+  }
+
+  return (
+    <div className='space-y-3'>
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='text-sm font-medium'>Monaco diff editor</div>
+          <div className='text-sm text-muted-foreground'>
+            Original backup revision compared with the current editor buffer.
+          </div>
+        </div>
+        <div className='flex flex-wrap gap-2'>
+          <Badge variant='outline'>
+            Original: backup {revisionLabel(revision)}
+          </Badge>
+          <Badge variant='secondary'>Modified: current editor buffer</Badge>
+        </div>
+      </div>
+      <div
+        className='min-w-0 overflow-hidden rounded-md border'
+        data-testid='service-config-diff-editor'
+      >
+        <DiffEditor
+          height='440px'
+          language='json'
+          original={revision.content}
+          modified={editorContent}
+          theme='vs-dark'
+          options={{
+            automaticLayout: true,
+            minimap: { enabled: false },
+            originalEditable: false,
+            readOnly: true,
+            renderSideBySide: true,
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+          }}
+          loading='Loading server.json diff editor'
+        />
       </div>
     </div>
   )
