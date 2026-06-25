@@ -413,6 +413,15 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
     await expect(
+      page.getByText('Confirmation receipt', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByText(/receipt-reset-serviceadmin-session-signing-blocked/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/confirmation receipt blocked before broker mutation/i)
+    ).toBeVisible()
+    await expect(
       page.getByText(/Route and storage leak evidence/i)
     ).toBeVisible()
     await expect(page.getByText(/No raw payload/i)).toBeVisible()
@@ -434,6 +443,13 @@ test.describe('Secrets Broker browser coverage', () => {
       .fill('operator requested preview')
     await page.getByLabel(/I confirm this is a stub preview/i).check()
     await expect(page.getByText(/Stub apply can be simulated/i)).toBeVisible()
+    await expect(
+      page.getByText(/receipt-reset-serviceadmin-session-signing-accepted/i)
+    ).toBeVisible()
+    await expect(
+      page.getByText(/accepted as broker audit metadata/i)
+    ).toBeVisible()
+    await expect(page.getByText(/confirmation receipt accepted/i)).toBeVisible()
     await expect(
       page.getByRole('button', { name: /Simulate stub apply/i })
     ).toBeEnabled()

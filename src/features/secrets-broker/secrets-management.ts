@@ -80,6 +80,23 @@ export type SingleSecretSubmitEnvelope = {
   blockedReason: string
 }
 
+export type SingleSecretConfirmationReceipt = {
+  receiptId: string
+  operationId: string
+  ref: string
+  action: ManagedSecretAction
+  accepted: boolean
+  auditReasonStatus: string
+  confirmationStatus: string
+  dryRunBinding: string
+  policyBinding: string
+  capabilityBinding: string
+  blockedReason: string
+  allowedReceiptFields: string[]
+  omittedReceiptFields: string[]
+  safeReceiptRows: string[]
+}
+
 export type SingleSecretReplayGuard = {
   operationId: string
   replayScope: string
@@ -1893,6 +1910,77 @@ export function buildSingleSecretSubmitEnvelope(
   }
 }
 
+export function buildSingleSecretConfirmationReceipt(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  envelope: SingleSecretSubmitEnvelope,
+  auditReason: string,
+  confirmed: boolean
+): SingleSecretConfirmationReceipt {
+  const slug = safeOperationSlug(plan.action, row)
+  const hasAuditReason = auditReason.trim().length >= 8
+  const accepted = plan.canSubmit && envelope.readyForSubmit
+  const metadataOnly = plan.action === 'metadata'
+
+  return {
+    receiptId: `receipt-${slug}-${accepted ? 'accepted' : 'blocked'}`,
+    operationId: plan.operationId,
+    ref: row.ref,
+    action: plan.action,
+    accepted,
+    auditReasonStatus: metadataOnly
+      ? 'not required for metadata view'
+      : hasAuditReason
+        ? 'accepted as broker audit metadata'
+        : 'missing or too short',
+    confirmationStatus: metadataOnly
+      ? 'not required for metadata view'
+      : confirmed
+        ? 'explicit stub preview confirmation accepted'
+        : 'explicit confirmation missing',
+    dryRunBinding:
+      'receipt binds the latest dry-run operation id, selected ref, action, and idempotency key',
+    policyBinding: plan.policyDecision,
+    capabilityBinding: plan.capabilityDecision,
+    blockedReason: accepted ? 'none' : envelope.blockedReason,
+    allowedReceiptFields: [
+      'receiptId',
+      'operationId',
+      'ref',
+      'action',
+      'auditReasonStatus',
+      'confirmationStatus',
+      'capabilityDecision',
+      'policyDecision',
+      'idempotencyKey',
+      'correlationId',
+    ],
+    omittedReceiptFields: [
+      'auditReasonText',
+      'rawValue',
+      'requestBody',
+      'responseBody',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    safeReceiptRows: [
+      accepted
+        ? 'confirmation receipt accepted; submit remains operation-id scoped'
+        : 'confirmation receipt blocked before broker mutation',
+      'audit reason text is represented only by broker audit metadata status',
+      'operator confirmation is recorded as a boolean gate, not as free-form payload',
+      'receipt evidence can be copied to audit notes without raw secret material',
+      envelope.readyForSubmit
+        ? 'submit envelope is ready after final broker revalidation'
+        : `submit envelope blocked: ${envelope.blockedReason}`,
+    ],
+  }
+}
+
 export function buildSingleSecretReplayGuard(
   row: ManagedSecretRow,
   plan: SingleSecretOperationPlan,
@@ -3582,6 +3670,12 @@ export function managedSecretSubmitEnvelopeHasSecretMaterial(
   envelope: SingleSecretSubmitEnvelope
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(envelope))
+}
+
+export function managedSecretConfirmationReceiptHasSecretMaterial(
+  receipt: SingleSecretConfirmationReceipt
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(receipt))
 }
 
 export function managedSecretReplayGuardHasSecretMaterial(

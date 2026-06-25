@@ -64,6 +64,7 @@ import {
   buildSingleSecretDecommissionPreview,
   buildSingleSecretEditPreview,
   buildSingleSecretEvidenceBundle,
+  buildSingleSecretConfirmationReceipt,
   buildSingleSecretLeakEvidence,
   buildSingleSecretOperationHistoryReview,
   buildSingleSecretOperationAuditTrail,
@@ -280,6 +281,13 @@ export function SecretsManagementPage({
   const singleSubmitEnvelope = buildSingleSecretSubmitEnvelope(
     selectedRow,
     singleOperationPlan
+  )
+  const singleConfirmationReceipt = buildSingleSecretConfirmationReceipt(
+    selectedRow,
+    singleOperationPlan,
+    singleSubmitEnvelope,
+    auditReason,
+    confirmed
   )
   const singleReplayGuard = buildSingleSecretReplayGuard(
     selectedRow,
@@ -2817,6 +2825,111 @@ export function SecretsManagementPage({
               </ul>
               <div className='mt-3 rounded-md border bg-muted/40 p-3'>
                 {stubMutationPreview.nextStep}
+              </div>
+            </div>
+
+            <div className='rounded-lg border p-3'>
+              <div className='mb-3 flex flex-wrap items-center gap-2'>
+                <ShieldCheck className='size-4 text-primary' />
+                <div className='font-medium'>Confirmation receipt</div>
+                <Badge
+                  variant={
+                    singleConfirmationReceipt.accepted ? 'default' : 'secondary'
+                  }
+                >
+                  {singleConfirmationReceipt.accepted ? 'Accepted' : 'Blocked'}
+                </Badge>
+                <Badge variant='outline'>Metadata only</Badge>
+              </div>
+              <div className='grid gap-3 md:grid-cols-3'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Receipt
+                  </div>
+                  <div className='mt-1 break-all'>
+                    {singleConfirmationReceipt.receiptId}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Audit reason
+                  </div>
+                  <div className='mt-1'>
+                    {singleConfirmationReceipt.auditReasonStatus}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Confirmation
+                  </div>
+                  <div className='mt-1'>
+                    {singleConfirmationReceipt.confirmationStatus}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Dry-run binding
+                  </div>
+                  <div className='mt-1'>
+                    {singleConfirmationReceipt.dryRunBinding}
+                  </div>
+                  <div className='mt-2 text-muted-foreground'>
+                    Blocker: {singleConfirmationReceipt.blockedReason}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Policy and capability
+                  </div>
+                  <div className='mt-1'>
+                    {singleConfirmationReceipt.policyBinding}
+                  </div>
+                  <div className='mt-2 text-muted-foreground'>
+                    {singleConfirmationReceipt.capabilityBinding}
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Allowed receipt fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleConfirmationReceipt.allowedReceiptFields.map(
+                      (field) => (
+                        <Badge key={field} variant='outline'>
+                          {field}
+                        </Badge>
+                      )
+                    )}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Omitted receipt fields
+                  </div>
+                  <div className='mt-2 flex flex-wrap gap-1'>
+                    {singleConfirmationReceipt.omittedReceiptFields.map(
+                      (field) => (
+                        <Badge key={field} variant='secondary'>
+                          {field}
+                        </Badge>
+                      )
+                    )}
+                  </div>
+                </div>
+                <div className='rounded-md border bg-muted/30 p-3'>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Safe receipt evidence
+                  </div>
+                  <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                    {singleConfirmationReceipt.safeReceiptRows.map((row) => (
+                      <li key={row}>{row}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
 
