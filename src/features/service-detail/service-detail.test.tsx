@@ -22,6 +22,18 @@ vi.mock('@/lib/service-lasso-dashboard/client', async () => {
 })
 
 vi.mock('@monaco-editor/react', () => ({
+  DiffEditor: ({
+    original,
+    modified,
+  }: {
+    original?: string
+    modified?: string
+  }) => (
+    <div aria-label='server.json backup diff editor' role='region'>
+      <pre data-testid='server-json-diff-original'>{original ?? ''}</pre>
+      <pre data-testid='server-json-diff-modified'>{modified ?? ''}</pre>
+    </div>
+  ),
   default: ({
     value,
     onChange,
@@ -416,10 +428,17 @@ describe('service detail server.json config editor', () => {
     expect(screen.getByText(/1 backups/i)).toBeVisible()
     expect(screen.getByText(/test config save/i)).toBeVisible()
     expect(screen.getAllByText(/Backup history/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Current editor buffer/i)).toBeVisible()
+    expect(screen.getByText(/Monaco diff editor/i)).toBeVisible()
     expect(
-      screen.getAllByText(/Saved from config editor test/i).length
-    ).toBeGreaterThan(0)
+      screen.getByRole('region', { name: /server\.json backup diff editor/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Modified: current editor buffer/i)).toBeVisible()
+    expect(screen.getByTestId('server-json-diff-modified')).toHaveTextContent(
+      /Saved from config editor test/i
+    )
+    expect(
+      screen.queryByText(/config-backups\\server\.json/i)
+    ).not.toBeInTheDocument()
   })
 })
 
