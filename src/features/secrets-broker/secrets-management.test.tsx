@@ -179,6 +179,63 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
   })
 
+  it('restores a selected secret action preview from allowlisted route params', async () => {
+    await renderRoute(
+      '/secrets-broker/secrets?ref=secret%3A%2F%2Fprovider%2Fzitadel%2Fclient-credential&action=reset'
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Reset\/rotate dry-run for ZITADEL_CLIENT_CREDENTIAL/i)
+    ).toBeVisible()
+    expect(
+      screen.getAllByText(/secret:\/\/provider\/zitadel\/client-credential/i)[0]
+    ).toBeVisible()
+    expect(screen.getByText(/Rotation safety preview/i)).toBeVisible()
+    expect(
+      screen.getAllByText(/single-reset-zitadel-client-credential/i)[0]
+    ).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('falls back to metadata view when a selected ref param is unknown', async () => {
+    await renderRoute(
+      '/secrets-broker/secrets?ref=secret%3A%2F%2Funknown%2Fmissing&action=delete'
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Metadata view for SESSION_SIGNING_KEY/i)
+    ).toBeVisible()
+    expect(screen.queryByText(/Delete dry-run for/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
+  it('writes selected secret action previews back to safe route params', async () => {
+    const user = userEvent.setup()
+    const { router } = await renderRoute('/secrets-broker/secrets')
+
+    await user.type(
+      screen.getByPlaceholderText(/Search secret metadata/i),
+      'payments'
+    )
+    await user.click(screen.getByRole('button', { name: /Delete dry-run/i }))
+
+    expect(router.state.location.search).toMatchObject({
+      secret: 'payments',
+      ref: 'secret://provider/payments/signing-ref',
+      action: 'delete',
+    })
+    expect(
+      screen.getByText(/Delete dry-run for PAYMENTS_SIGNING_REF/i)
+    ).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+  })
+
   it('shows broker-backed value search supported and unsupported states without raw values', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/secrets')

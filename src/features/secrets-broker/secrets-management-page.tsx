@@ -133,6 +133,22 @@ const actionButtonLabels: Record<
   policy: 'Apply policy preview',
 }
 
+const managedSecretActionValues: ManagedSecretAction[] = [
+  'metadata',
+  'reveal',
+  'edit',
+  'reset',
+  'delete',
+  'policy',
+]
+
+function isManagedSecretAction(value: unknown): value is ManagedSecretAction {
+  return (
+    typeof value === 'string' &&
+    managedSecretActionValues.includes(value as ManagedSecretAction)
+  )
+}
+
 type SecretsManagementPageProps = {
   search: Record<string, unknown>
   navigate: NavigateFn
@@ -143,11 +159,23 @@ export function SecretsManagementPage({
   navigate,
 }: SecretsManagementPageProps) {
   const stubModeEnabled = isServiceAdminStubModeEnabled()
+  const selectedSearchRef =
+    typeof search.ref === 'string' ? search.ref.trim() : ''
+  const selectedSearchRow =
+    managedSecretRows.find(
+      (row) => row.ref === selectedSearchRef || row.id === selectedSearchRef
+    ) ?? null
+  const selectedSearchAction = selectedSearchRow
+    ? isManagedSecretAction(search.action)
+      ? search.action
+      : 'metadata'
+    : 'metadata'
+  const selectedSearchRowId = selectedSearchRow?.id ?? managedSecretRows[0].id
   const [valueQuery, setValueQuery] = useState('')
   const [valueSearchSupported, setValueSearchSupported] = useState(false)
-  const [selectedRowId, setSelectedRowId] = useState(managedSecretRows[0].id)
+  const [selectedRowId, setSelectedRowId] = useState(selectedSearchRowId)
   const [selectedAction, setSelectedAction] =
-    useState<ManagedSecretAction>('metadata')
+    useState<ManagedSecretAction>(selectedSearchAction)
   const [stubState, setStubState] = useState<StubSecretMutationState>('ready')
   const [auditReason, setAuditReason] = useState('')
   const [confirmed, setConfirmed] = useState(false)
@@ -330,17 +358,33 @@ export function SecretsManagementPage({
     setBulkApplyResult(null)
   }, [])
 
+  useEffect(() => {
+    setSelectedRowId(selectedSearchRowId)
+    setSelectedAction(selectedSearchAction)
+    setSingleApplyResult(null)
+  }, [selectedSearchAction, selectedSearchRowId])
+
   function resetBulkApplyResult() {
     setBulkApplyResult(null)
   }
 
   const chooseAction = useCallback(
     (rowId: string, action: ManagedSecretAction) => {
+      const row = managedSecretRows.find((item) => item.id === rowId)
+      const isDefaultSelection =
+        row?.id === managedSecretRows[0].id && action === 'metadata'
       setSelectedRowId(rowId)
       setSelectedAction(action)
       setSingleApplyResult(null)
+      navigate({
+        search: (prev) => ({
+          ...(prev as Record<string, unknown>),
+          ref: isDefaultSelection ? undefined : row?.ref,
+          action: action === 'metadata' ? undefined : action,
+        }),
+      })
     },
-    []
+    [navigate]
   )
 
   const toggleBulkSelection = useCallback(

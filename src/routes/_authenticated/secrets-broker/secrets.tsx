@@ -15,6 +15,11 @@ const secretsManagementSearchSchema = z.object({
   page: z.number().optional().catch(undefined),
   pageSize: z.number().optional().catch(undefined),
   secret: z.string().optional().catch(''),
+  ref: z.string().optional().catch(undefined),
+  action: z
+    .enum(['metadata', 'reveal', 'edit', 'reset', 'delete', 'policy'])
+    .optional()
+    .catch('metadata'),
   provider: optionalStringArraySearchParam,
   state: optionalStringArraySearchParam,
 })
