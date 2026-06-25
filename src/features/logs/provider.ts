@@ -13,20 +13,54 @@ export type ServiceLogInfo = {
   serviceId: string
   type: ServiceLogType
   path?: string | null
+  available?: boolean
   availableTypes: ServiceLogType[]
+  source?: ServiceLogSource
+  sources?: ServiceLogSource[]
+  stdin?: ServiceTerminalStdinCapability
+  capabilities?: {
+    stdin?: ServiceTerminalStdinCapability
+  }
 }
 
 export type ServiceLogChunk = {
   serviceId: string
   type: ServiceLogType
   path?: string | null
+  available?: boolean
+  source?: ServiceLogSource
   totalLines: number
   start: number
   end: number
   hasMore: boolean
   nextBefore: number
+  cursor?: string | null
+  nextCursor?: string | null
   limit: number
   lines: string[]
+}
+
+export type ServiceLogSource = {
+  kind?: 'current' | 'archive' | string
+  stream?: 'combined' | 'stdout' | 'stderr' | string
+  runId?: string
+  path?: string | null
+  available?: boolean
+}
+
+export type ServiceTerminalStdinCapability = {
+  available: boolean
+  reason?: string
+  auditRequired?: boolean
+  policy?: 'allowed' | 'denied' | 'unavailable' | string
+  provider?: string
+}
+
+export type ServiceTerminalInputResult = {
+  serviceId: string
+  accepted: boolean
+  auditId?: string
+  message?: string
 }
 
 export type ServiceLogOverviewEntry = {
@@ -101,6 +135,12 @@ function buildServiceLogsOverviewUrl(serviceId: string) {
   return `${resolveLogsApiBaseUrl()}/api/services/${encodeServiceId(
     serviceId
   )}/logs`
+}
+
+function buildServiceTerminalInputUrl(serviceId: string) {
+  return `${resolveLogsApiBaseUrl()}/api/services/${encodeServiceId(
+    serviceId
+  )}/stdin`
 }
 
 export async function fetchServiceLogInfo(
@@ -198,4 +238,23 @@ export async function fetchServiceLogChunk(
   })
 
   return safeChunk
+}
+
+export async function sendServiceTerminalInput(
+  service: DashboardService,
+  input: string
+) {
+  const response = await fetch(buildServiceTerminalInputUrl(service.id), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      input,
+      stream: 'stdin',
+      actor: 'service-admin-web',
+    }),
+  })
+
+  return parseJsonResponse<ServiceTerminalInputResult>(response)
 }
