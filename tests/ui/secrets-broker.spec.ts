@@ -987,7 +987,9 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/campaign audit unavailable; item mutation not applied/i)
     ).toBeVisible()
-    await expect(page.getByText(/restore audit persistence/i)).toBeVisible()
+    await expect(
+      page.getByText(/restore audit persistence/i).first()
+    ).toBeVisible()
     await expect(page.getByText(/Bulk campaign closure review/i)).toBeVisible()
     await expect(page.getByText(/operator review remains open/i)).toBeVisible()
     await expect(
@@ -997,7 +999,27 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByText(/Allowed closure fields/i)).toBeVisible()
     await expect(page.getByText(/Omitted closure fields/i)).toBeVisible()
-    await expect(page.getByText(/bulkSpreadsheetPayload/i)).toBeVisible()
+    await expect(page.getByText(/Bulk campaign owner handoff/i)).toBeVisible()
+    await expect(page.getByText(/audit-recovery/i)).toBeVisible()
+    await expect(page.getByText(/audit operator/i)).toBeVisible()
+    await expect(
+      page
+        .getByText(
+          /restore audit persistence before creating a fresh campaign preview/i
+        )
+        .first()
+    ).toBeVisible()
+    await expect(
+      page.getByText('Owner action ticket', { exact: true })
+    ).toBeVisible()
+    await expect(page.getByText(/Allowed handoff fields/i)).toBeVisible()
+    await expect(page.getByText(/Omitted ticket fields/i)).toBeVisible()
+    await expect(
+      page.getByText(/diagnosticPayloadsWithBodies/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/bulkSpreadsheetPayload/i).first()
+    ).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 
@@ -1017,8 +1039,10 @@ test.describe('Secrets Broker browser coverage', () => {
       )
     ).toBeVisible()
     await expect(
-      page.getByText(/request least-privilege policy approval/i)
+      page.getByText(/request least-privilege policy approval/i).first()
     ).toBeVisible()
+    await expect(page.getByText(/policy-review/i)).toBeVisible()
+    await expect(page.getByText(/policy approver/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 
@@ -1040,8 +1064,10 @@ test.describe('Secrets Broker browser coverage', () => {
         .first()
     ).toBeVisible()
     await expect(
-      page.getByText(/complete provider reauthentication/i)
+      page.getByText(/complete provider reauthentication/i).first()
     ).toBeVisible()
+    await expect(page.getByText(/provider-auth/i)).toBeVisible()
+    await expect(page.getByText(/provider owner/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 
@@ -1065,6 +1091,8 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText(/restore provider connectivity/i).first()
     ).toBeVisible()
+    await expect(page.getByText(/provider-recovery/i)).toBeVisible()
+    await expect(page.getByText(/provider operator/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])

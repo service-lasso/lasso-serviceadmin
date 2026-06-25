@@ -60,6 +60,8 @@ import {
   buildBulkSecretCampaignApplyGate,
   buildBulkSecretCampaignApplyResult,
   buildBulkSecretCampaignClosureReview,
+  buildBulkSecretCampaignOperatorHandoff,
+  buildBulkSecretCampaignOwnerActionTicket,
   buildManagedSecretActionPreview,
   buildManagedSecretActionReadiness,
   buildSingleSecretDecommissionPreview,
@@ -355,6 +357,16 @@ export function SecretsManagementPage({
   )
   const bulkClosureReview = bulkApplyResult
     ? buildBulkSecretCampaignClosureReview(bulkApplyResult)
+    : null
+  const bulkOperatorHandoff =
+    bulkApplyResult && bulkClosureReview
+      ? buildBulkSecretCampaignOperatorHandoff(
+          bulkApplyResult,
+          bulkClosureReview
+        )
+      : null
+  const bulkOwnerActionTicket = bulkOperatorHandoff
+    ? buildBulkSecretCampaignOwnerActionTicket(bulkOperatorHandoff)
     : null
   const singleOperationAuditTrail = singleApplyResult
     ? buildSingleSecretOperationAuditTrail(
@@ -1747,6 +1759,172 @@ export function SecretsManagementPage({
                         </div>
                         <div className='mt-1 flex flex-wrap gap-1'>
                           {bulkClosureReview.omittedClosureFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {bulkOperatorHandoff && bulkOwnerActionTicket ? (
+                  <div className='grid gap-4 rounded-md border p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]'>
+                    <div className='space-y-4'>
+                      <div className='flex flex-wrap items-start justify-between gap-3'>
+                        <div>
+                          <h3 className='font-medium'>
+                            Bulk campaign owner handoff
+                          </h3>
+                          <p className='mt-1 text-muted-foreground'>
+                            {bulkOperatorHandoff.requiredAction}
+                          </p>
+                        </div>
+                        <div className='flex flex-wrap gap-2'>
+                          <Badge
+                            variant={
+                              bulkOperatorHandoff.severity === 'critical'
+                                ? 'destructive'
+                                : bulkOperatorHandoff.severity === 'warning'
+                                  ? 'secondary'
+                                  : 'outline'
+                            }
+                          >
+                            {bulkOperatorHandoff.severity}
+                          </Badge>
+                          <Badge variant='outline'>
+                            {bulkOperatorHandoff.badge}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <dl className='grid gap-3 md:grid-cols-3'>
+                        <div>
+                          <dt className='text-muted-foreground'>Handoff ID</dt>
+                          <dd className='break-all'>
+                            {bulkOperatorHandoff.handoffId}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className='text-muted-foreground'>Owner lane</dt>
+                          <dd>{bulkOperatorHandoff.lane}</dd>
+                        </div>
+                        <div>
+                          <dt className='text-muted-foreground'>Owner</dt>
+                          <dd>{bulkOperatorHandoff.owner}</dd>
+                        </div>
+                      </dl>
+
+                      <div className='grid gap-3 md:grid-cols-2'>
+                        <div>
+                          <div className='text-xs font-medium text-muted-foreground uppercase'>
+                            Safe handoff rows
+                          </div>
+                          <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                            {bulkOperatorHandoff.safeHandoffRows.map((row) => (
+                              <li key={row}>{row}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <div className='text-xs font-medium text-muted-foreground uppercase'>
+                            Owner action ticket
+                          </div>
+                          <dl className='mt-2 space-y-2 text-muted-foreground'>
+                            <div>
+                              <dt className='text-foreground'>Ticket ID</dt>
+                              <dd className='break-all'>
+                                {bulkOwnerActionTicket.ticketId}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className='text-foreground'>
+                                Acknowledgement
+                              </dt>
+                              <dd>
+                                {bulkOwnerActionTicket.acknowledgementStatus}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className='text-foreground'>
+                                Escalation route
+                              </dt>
+                              <dd>
+                                {bulkOwnerActionTicket.safeEscalationRoute}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </div>
+
+                      <div className='space-y-2'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Safe ticket rows
+                        </div>
+                        <ul className='list-disc space-y-1 ps-5 text-muted-foreground'>
+                          {bulkOwnerActionTicket.safeTicketRows.map((row) => (
+                            <li key={row}>{row}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className='space-y-3 rounded-md bg-muted/40 p-3 text-sm'>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Shareable evidence refs
+                        </div>
+                        <div className='mt-1 space-y-1'>
+                          {bulkOperatorHandoff.shareableEvidenceRefs.map(
+                            (ref) => (
+                              <div key={ref} className='break-all'>
+                                {ref}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      {bulkOperatorHandoff.blockedReason ? (
+                        <div>
+                          <div className='text-xs font-medium text-muted-foreground uppercase'>
+                            Blocked reason
+                          </div>
+                          <div className='mt-1'>
+                            {bulkOperatorHandoff.blockedReason}
+                          </div>
+                        </div>
+                      ) : null}
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Validator note
+                        </div>
+                        <div className='mt-1'>
+                          {bulkOperatorHandoff.validatorNote}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed handoff fields
+                        </div>
+                        <div className='mt-1 flex flex-wrap gap-1'>
+                          {bulkOperatorHandoff.allowedHandoffFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted ticket fields
+                        </div>
+                        <div className='mt-1 flex flex-wrap gap-1'>
+                          {bulkOwnerActionTicket.omittedTicketFields.map(
                             (field) => (
                               <Badge key={field} variant='secondary'>
                                 {field}
