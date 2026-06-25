@@ -408,9 +408,13 @@ test.describe('Secrets Broker browser coverage', () => {
       page.getByText(/Single-secret operation history/i)
     ).toBeVisible()
     await expect(page.getByText(/Metadata-only submit envelope/i)).toBeVisible()
+    await expect(
+      page.getByText(/Route and storage leak evidence/i)
+    ).toBeVisible()
     await expect(page.getByText(/No raw payload/i)).toBeVisible()
     await expect(page.getByText(/Omitted unsafe fields/i).first()).toBeVisible()
-    await expect(page.getByText(/requestBodyEcho/i)).toBeVisible()
+    await expect(page.getByText(/requestBodyEcho/i).first()).toBeVisible()
+    await expect(page.getByText(/localStorage writes: none/i)).toBeVisible()
     await expect(page.getByText(/not copied into query strings/i)).toBeVisible()
     await expect(
       page.getByText(/no local storage or session storage/i)
