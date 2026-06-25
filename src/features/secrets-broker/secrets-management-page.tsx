@@ -92,6 +92,7 @@ import {
   bulkSecretCampaignApplyModes,
   bulkSecretCampaignOperations,
   bulkSecretCampaignRevalidationStates,
+  managedSecretAuditReasonHasSecretMaterial,
   managedSecretRows,
   singleSecretRevealLifecycleStates,
   singleSecretOperationOutcomes,
@@ -191,6 +192,7 @@ export function SecretsManagementPage({
     useState<ManagedSecretAction>(selectedSearchAction)
   const [stubState, setStubState] = useState<StubSecretMutationState>('ready')
   const [auditReason, setAuditReason] = useState('')
+  const [auditReasonRejected, setAuditReasonRejected] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [singleApplyResult, setSingleApplyResult] =
     useState<SingleSecretOperationResult | null>(null)
@@ -215,6 +217,7 @@ export function SecretsManagementPage({
     useState<BulkSecretCampaignOperation>('rotate-reset')
   const [bulkPlanGenerated, setBulkPlanGenerated] = useState(false)
   const [bulkAuditReason, setBulkAuditReason] = useState('')
+  const [bulkAuditReasonRejected, setBulkAuditReasonRejected] = useState(false)
   const [bulkConfirmation, setBulkConfirmation] = useState('')
   const [bulkRevalidationState, setBulkRevalidationState] =
     useState<BulkSecretCampaignRevalidationState>('ready')
@@ -466,6 +469,28 @@ export function SecretsManagementPage({
     setBulkRevalidated(false)
     setBulkApplyResult(null)
   }, [])
+
+  function setSafeSingleAuditReason(nextReason: string) {
+    if (managedSecretAuditReasonHasSecretMaterial(nextReason)) {
+      setAuditReason('')
+      setAuditReasonRejected(true)
+    } else {
+      setAuditReason(nextReason)
+      setAuditReasonRejected(false)
+    }
+    setSingleApplyResult(null)
+  }
+
+  function setSafeBulkAuditReason(nextReason: string) {
+    if (managedSecretAuditReasonHasSecretMaterial(nextReason)) {
+      setBulkAuditReason('')
+      setBulkAuditReasonRejected(true)
+    } else {
+      setBulkAuditReason(nextReason)
+      setBulkAuditReasonRejected(false)
+    }
+    resetBulkApplyGate()
+  }
 
   useEffect(() => {
     setSelectedRowId(selectedSearchRowId)
@@ -1321,11 +1346,16 @@ export function SecretsManagementPage({
                         id='bulk-audit-reason'
                         value={bulkAuditReason}
                         onChange={(event) => {
-                          setBulkAuditReason(event.target.value)
-                          resetBulkApplyGate()
+                          setSafeBulkAuditReason(event.target.value)
                         }}
                         placeholder='Required before revalidation'
                       />
+                      {bulkAuditReasonRejected ? (
+                        <div className='text-xs text-destructive'>
+                          Secret-like material was rejected; enter operator
+                          intent only.
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className='space-y-2'>
@@ -3362,11 +3392,16 @@ export function SecretsManagementPage({
                   id='audit-reason'
                   value={auditReason}
                   onChange={(event) => {
-                    setAuditReason(event.target.value)
-                    setSingleApplyResult(null)
+                    setSafeSingleAuditReason(event.target.value)
                   }}
                   placeholder='Required before simulated apply; no secret values'
                 />
+                {auditReasonRejected ? (
+                  <div className='text-xs text-destructive'>
+                    Secret-like material was rejected; enter operator intent
+                    only.
+                  </div>
+                ) : null}
                 <label className='flex items-center gap-2 text-sm'>
                   <input
                     type='checkbox'
