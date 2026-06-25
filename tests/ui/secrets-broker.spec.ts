@@ -1015,11 +1015,24 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText(/Allowed handoff fields/i)).toBeVisible()
     await expect(page.getByText(/Omitted ticket fields/i)).toBeVisible()
     await expect(
+      page.getByText(/Bulk recovery checklist/i).first()
+    ).toBeVisible()
+    await expect(page.getByText(/fresh-preview-required/i)).toBeVisible()
+    await expect(
+      page
+        .getByText(
+          /fresh campaign preview and revalidation are mandatory before another mutation submit/i
+        )
+        .first()
+    ).toBeVisible()
+    await expect(page.getByText(/Omitted checklist fields/i)).toBeVisible()
+    await expect(
       page.getByText(/diagnosticPayloadsWithBodies/i).first()
     ).toBeVisible()
     await expect(
       page.getByText(/bulkSpreadsheetPayload/i).first()
     ).toBeVisible()
+    await expect(page.getByText(/storedMutationPayload/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 
