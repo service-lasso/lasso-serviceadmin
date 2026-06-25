@@ -69,6 +69,7 @@ import {
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretRecoveryDecision,
   buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
   buildSingleSecretRotationPreview,
@@ -350,6 +351,15 @@ export function SecretsManagementPage({
   const singleEvidenceBundle =
     singleApplyResult && singleStatusMonitor
       ? buildSingleSecretEvidenceBundle(
+          selectedRow,
+          singleOperationPlan,
+          singleApplyResult,
+          singleStatusMonitor
+        )
+      : null
+  const singleRecoveryDecision =
+    singleApplyResult && singleStatusMonitor
+      ? buildSingleSecretRecoveryDecision(
           selectedRow,
           singleOperationPlan,
           singleApplyResult,
@@ -3271,6 +3281,136 @@ export function SecretsManagementPage({
                       </div>
                       <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
                         {singleEvidenceBundle.safeEvidenceRows.map((row) => (
+                          <li key={row}>{row}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
+                {singleRecoveryDecision ? (
+                  <div className='mt-3 rounded-md border bg-muted/30 p-3'>
+                    <div className='mb-3 flex flex-wrap items-center gap-2'>
+                      <RotateCcw className='size-4 text-primary' />
+                      <div className='font-medium'>
+                        Recovery and retry decision
+                      </div>
+                      <Badge variant='secondary'>Metadata only</Badge>
+                      <Badge variant='outline'>
+                        {singleRecoveryDecision.badge}
+                      </Badge>
+                      <Badge
+                        variant={
+                          singleRecoveryDecision.retryAllowed
+                            ? 'default'
+                            : 'outline'
+                        }
+                      >
+                        {singleRecoveryDecision.retryAllowed
+                          ? 'Retry eligible'
+                          : 'Retry blocked'}
+                      </Badge>
+                    </div>
+                    <div className='grid gap-3 lg:grid-cols-4'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Decision
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleRecoveryDecision.decisionId}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Recovery ref
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleRecoveryDecision.recoveryRef}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Rollback ref
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleRecoveryDecision.rollbackRef}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Status
+                        </div>
+                        <div className='mt-1 break-all'>
+                          {singleRecoveryDecision.statusEndpoint}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Operator action
+                        </div>
+                        <div className='mt-2'>
+                          {singleRecoveryDecision.operatorAction}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Broker action
+                        </div>
+                        <div className='mt-2'>
+                          {singleRecoveryDecision.brokerAction}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Retry ref
+                        </div>
+                        <div className='mt-2 break-all'>
+                          {singleRecoveryDecision.retryRef}
+                        </div>
+                        <div className='mt-2 text-muted-foreground'>
+                          {singleRecoveryDecision.freshPreviewRequired
+                            ? 'Fresh preview required'
+                            : 'No fresh preview required for this state'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-2'>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Allowed recovery fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleRecoveryDecision.allowedRecoveryFields.map(
+                            (field) => (
+                              <Badge key={field} variant='outline'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className='rounded-md border bg-background p-3'>
+                        <div className='text-xs font-medium text-muted-foreground uppercase'>
+                          Omitted recovery fields
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                          {singleRecoveryDecision.omittedRecoveryFields.map(
+                            (field) => (
+                              <Badge key={field} variant='secondary'>
+                                {field}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='mt-3 rounded-md border bg-background p-3'>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Safe recovery evidence
+                      </div>
+                      <ul className='mt-2 list-disc space-y-1 ps-5 text-muted-foreground'>
+                        {singleRecoveryDecision.safeRecoveryRows.map((row) => (
                           <li key={row}>{row}</li>
                         ))}
                       </ul>

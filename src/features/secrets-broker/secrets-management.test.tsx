@@ -15,6 +15,7 @@ import {
   buildSingleSecretOperationAuditTrail,
   buildSingleSecretOperationHistoryEntry,
   buildSingleSecretPolicyPreview,
+  buildSingleSecretRecoveryDecision,
   buildSingleSecretRevealLifecycle,
   buildSingleSecretRevealPreview,
   buildSingleSecretRotationPreview,
@@ -34,6 +35,7 @@ import {
   managedSecretHistoryReviewHasSecretMaterial,
   managedSecretLeakEvidenceHasSecretMaterial,
   managedSecretPolicyPreviewHasSecretMaterial,
+  managedSecretRecoveryDecisionHasSecretMaterial,
   managedSecretRevealLifecycleHasSecretMaterial,
   managedSecretRevealPreviewHasSecretMaterial,
   managedSecretReplayGuardHasSecretMaterial,
@@ -825,6 +827,21 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/localStorage\/sessionStorage evidence contains no/i)
     ).toBeVisible()
+    expect(screen.getByText(/Recovery and retry decision/i)).toBeVisible()
+    expect(
+      screen.getAllByText(
+        /recovery-reset-serviceadmin-session-signing-submitted/i
+      )[0]
+    ).toBeVisible()
+    expect(screen.getAllByText(/Retry blocked/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/wait for broker terminal status before any retry/i)
+    ).toBeVisible()
+    expect(screen.getByText(/Allowed recovery fields/i)).toBeVisible()
+    expect(screen.getByText(/Omitted recovery fields/i)).toBeVisible()
+    expect(
+      screen.getByText(/recovery decisions are derived from typed broker/i)
+    ).toBeVisible()
     expect(screen.getAllByText(/Audit event/i)[0]).toBeVisible()
     expect(
       screen.getAllByText(
@@ -1067,9 +1084,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.getAllByText(/provider outage/i)[0]).toBeVisible()
     expect(screen.getByText(/Provider recovery evidence/i)).toBeVisible()
     expect(
-      screen.getByText(
+      screen.getAllByText(
         /provider-recovery-[a-z-]+-serviceadmin-session-signing-metadata/i
-      )
+      )[0]
     ).toBeVisible()
     expect(
       screen.getByText(/Broker-owned recovery metadata only/i)
@@ -1735,6 +1752,32 @@ describe('Secrets Broker secrets management page', () => {
     expect(failedResult.brokerFailureRef).not.toMatch(
       /credential|token|cookie|private key|request body|response body|DEMO_REVEAL_VALUE_42/i
     )
+    const failedMonitor = buildSingleSecretStatusMonitor(
+      managedSecretRows[0],
+      rotatePlan,
+      failedResult
+    )
+    const failedRecoveryDecision = buildSingleSecretRecoveryDecision(
+      managedSecretRows[0],
+      rotatePlan,
+      failedResult,
+      failedMonitor
+    )
+    expect(failedRecoveryDecision).toMatchObject({
+      outcome: 'failed',
+      badge: 'retry gated',
+      retryAllowed: true,
+      freshPreviewRequired: true,
+      operatorAction:
+        'retry only with the same operation id after reviewing broker failure metadata',
+      brokerAction:
+        'allow one operation-id retry when broker marks it retry-safe',
+      blocker: 'broker safe failure metadata review required',
+      retryRef: 'retry-reset-serviceadmin-session-signing-operation-id-only',
+    })
+    expect(
+      managedSecretRecoveryDecisionHasSecretMaterial(failedRecoveryDecision)
+    ).toBe(false)
 
     const historyEntry = buildSingleSecretOperationHistoryEntry(
       managedSecretRows[0],
@@ -2020,6 +2063,54 @@ describe('Secrets Broker secrets management page', () => {
     expect(managedSecretEvidenceBundleHasSecretMaterial(evidenceBundle)).toBe(
       false
     )
+    const recoveryDecision = buildSingleSecretRecoveryDecision(
+      managedSecretRows[0],
+      rotatePlan,
+      appliedResult,
+      statusMonitor
+    )
+    expect(recoveryDecision).toMatchObject({
+      decisionId: 'recovery-reset-serviceadmin-session-signing-applied',
+      operationId: rotatePlan.operationId,
+      outcome: 'applied',
+      badge: 'settled',
+      retryAllowed: false,
+      freshPreviewRequired: false,
+      operatorAction:
+        'review terminal metadata and dependent service freshness',
+      brokerAction: 'retain terminal status and audit metadata for review',
+      blocker: 'none',
+      rollbackRef:
+        'rotation-monitor-reset-serviceadmin-session-signing-metadata',
+      retryRef: 'retry blocked until a fresh broker preview is created',
+    })
+    expect(recoveryDecision.allowedRecoveryFields).toEqual(
+      expect.arrayContaining([
+        'decisionId',
+        'operationId',
+        'correlationId',
+        'auditEventId',
+        'retryAllowed',
+      ])
+    )
+    expect(recoveryDecision.omittedRecoveryFields).toEqual(
+      expect.arrayContaining([
+        'rawValue',
+        'requestBodyEcho',
+        'responseBodyEcho',
+        'providerCredentials',
+        'environmentValues',
+      ])
+    )
+    expect(recoveryDecision.safeRecoveryRows).toEqual(
+      expect.arrayContaining([
+        'recovery decisions are derived from typed broker metadata only',
+        'retry eligibility is scoped to operation id, ref, action, and correlation id',
+      ])
+    )
+    expect(
+      managedSecretRecoveryDecisionHasSecretMaterial(recoveryDecision)
+    ).toBe(false)
     const authRequiredMonitor = buildSingleSecretStatusMonitor(
       managedSecretRows[0],
       rotatePlan,
@@ -2045,6 +2136,32 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(
       managedSecretStatusMonitorHasSecretMaterial(authRequiredMonitor)
+    ).toBe(false)
+    const authRequiredRecoveryDecision = buildSingleSecretRecoveryDecision(
+      managedSecretRows[0],
+      rotatePlan,
+      authRequiredResult,
+      authRequiredMonitor
+    )
+    expect(authRequiredRecoveryDecision).toMatchObject({
+      outcome: 'auth-required',
+      badge: 'fresh preview required',
+      retryAllowed: false,
+      freshPreviewRequired: true,
+      operatorAction:
+        'complete provider reauthentication, then create a fresh audited preview',
+      brokerAction: 'issue broker-owned provider challenge metadata only',
+      blocker: 'auth required',
+    })
+    expect(authRequiredRecoveryDecision.safeRecoveryRows).toEqual(
+      expect.arrayContaining([
+        'provider challenge stays broker-owned and omits auth material',
+      ])
+    )
+    expect(
+      managedSecretRecoveryDecisionHasSecretMaterial(
+        authRequiredRecoveryDecision
+      )
     ).toBe(false)
     const auditUnavailableTrail = buildSingleSecretOperationAuditTrail(
       managedSecretRows[0],

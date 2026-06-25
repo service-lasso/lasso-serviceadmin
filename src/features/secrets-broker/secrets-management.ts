@@ -234,6 +234,26 @@ export type SingleSecretEvidenceBundle = {
   safeEvidenceRows: string[]
 }
 
+export type SingleSecretRecoveryDecision = {
+  decisionId: string
+  operationId: string
+  ref: string
+  outcome: SingleSecretOperationOutcome
+  badge: string
+  retryAllowed: boolean
+  freshPreviewRequired: boolean
+  operatorAction: string
+  brokerAction: string
+  blocker: string
+  recoveryRef: string
+  rollbackRef: string
+  retryRef: string
+  statusEndpoint: string
+  allowedRecoveryFields: string[]
+  omittedRecoveryFields: string[]
+  safeRecoveryRows: string[]
+}
+
 export type SingleSecretDecommissionPreview = {
   ref: string
   operationId: string
@@ -3213,6 +3233,132 @@ export function buildSingleSecretEvidenceBundle(
   }
 }
 
+export function buildSingleSecretRecoveryDecision(
+  row: ManagedSecretRow,
+  plan: SingleSecretOperationPlan,
+  result: SingleSecretOperationResult,
+  monitor: SingleSecretStatusMonitor
+): SingleSecretRecoveryDecision {
+  const slug = safeOperationSlug(plan.action, row)
+  const retryAllowed = result.outcome === 'failed' && plan.action !== 'reveal'
+  const freshPreviewRequired =
+    result.outcome !== 'submitted' && result.outcome !== 'applied'
+
+  const operatorAction =
+    result.outcome === 'applied'
+      ? 'review terminal metadata and dependent service freshness'
+      : result.outcome === 'submitted'
+        ? 'wait for broker terminal status before any retry or recovery'
+        : result.outcome === 'auth-required'
+          ? 'complete provider reauthentication, then create a fresh audited preview'
+          : result.outcome === 'audit-unavailable'
+            ? 'restore audit persistence, then create a fresh audited preview'
+            : result.outcome === 'provider-unavailable'
+              ? 'restore provider connectivity or capability support, then create a fresh audited preview'
+              : result.outcome === 'policy-denied'
+                ? 'request least-privilege approval or choose a permitted policy, then create a fresh preview'
+                : result.outcome === 'stale-plan'
+                  ? 'discard the rejected dry-run token and create a fresh preview'
+                  : result.outcome === 'cancelled'
+                    ? 'resume only by creating a fresh preview with a new confirmation'
+                    : 'retry only with the same operation id after reviewing broker failure metadata'
+
+  const brokerAction =
+    result.outcome === 'submitted'
+      ? 'continue polling operation status by operation id'
+      : result.outcome === 'applied'
+        ? 'retain terminal status and audit metadata for review'
+        : result.outcome === 'auth-required'
+          ? 'issue broker-owned provider challenge metadata only'
+          : result.outcome === 'audit-unavailable'
+            ? 'block mutation until audit retention can be confirmed'
+            : result.outcome === 'provider-unavailable'
+              ? 'refresh provider health and capability metadata'
+              : result.outcome === 'policy-denied'
+                ? 'retain policy decision reference without mutation'
+                : result.outcome === 'stale-plan'
+                  ? 'reject replayed or expired dry-run token'
+                  : result.outcome === 'cancelled'
+                    ? 'retain cancellation metadata without broker mutation'
+                    : 'allow one operation-id retry when broker marks it retry-safe'
+
+  const blocker =
+    result.outcome === 'submitted' || result.outcome === 'applied'
+      ? 'none'
+      : result.outcome === 'failed'
+        ? 'broker safe failure metadata review required'
+        : result.outcome.replace('-', ' ')
+
+  return {
+    decisionId: `recovery-${slug}-${result.outcome}`,
+    operationId: result.operationId,
+    ref: row.ref,
+    outcome: result.outcome,
+    badge:
+      result.outcome === 'applied'
+        ? 'settled'
+        : result.outcome === 'submitted'
+          ? 'monitor'
+          : retryAllowed
+            ? 'retry gated'
+            : 'fresh preview required',
+    retryAllowed,
+    freshPreviewRequired,
+    operatorAction,
+    brokerAction,
+    blocker,
+    recoveryRef:
+      result.providerRecoveryRef ??
+      result.brokerFailureRef ??
+      `recovery-${slug}-${result.outcome}-metadata`,
+    rollbackRef: result.impactEvidence.rollbackRef,
+    retryRef: retryAllowed
+      ? monitor.retryToken
+      : 'retry blocked until a fresh broker preview is created',
+    statusEndpoint: monitor.statusEndpoint,
+    allowedRecoveryFields: [
+      'decisionId',
+      'operationId',
+      'ref',
+      'action',
+      'outcome',
+      'correlationId',
+      'auditEventId',
+      'statusBadge',
+      'retryAllowed',
+      'recoveryRef',
+      'rollbackRef',
+    ],
+    omittedRecoveryFields: [
+      'rawValue',
+      'requestBodyEcho',
+      'responseBodyEcho',
+      'providerCredentials',
+      'providerTokens',
+      'cookies',
+      'privateKeys',
+      'recoveryMaterial',
+      'environmentValues',
+    ],
+    safeRecoveryRows: [
+      'recovery decisions are derived from typed broker metadata only',
+      'retry eligibility is scoped to operation id, ref, action, and correlation id',
+      freshPreviewRequired
+        ? 'fresh preview is required before any new broker mutation attempt'
+        : 'terminal or pending state does not reuse a mutation payload',
+      result.outcome === 'policy-denied'
+        ? 'policy denial recovery requires a new authorized policy path'
+        : result.outcome === 'audit-unavailable'
+          ? 'audit recovery requires confirmed retention before a new preview'
+          : result.outcome === 'auth-required'
+            ? 'provider challenge stays broker-owned and omits auth material'
+            : result.outcome === 'provider-unavailable'
+              ? 'provider recovery stores connector metadata only'
+              : 'recovery evidence stores ids, refs, typed outcomes, and next actions only',
+    ],
+  }
+}
+
 const forbiddenSecretPattern =
   /(secret-value|plaintext|correct-horse-battery-staple|portable-master-key|raw key|sk-[a-z0-9]|ghp_[a-z0-9]|AKIA[0-9A-Z]{16}|password\s*=|api[_-]?key\s*=|private key|cookie=|bearer\s+[a-z0-9])/i
 
@@ -3264,6 +3410,12 @@ export function managedSecretEvidenceBundleHasSecretMaterial(
   bundle: SingleSecretEvidenceBundle
 ) {
   return forbiddenSecretPattern.test(JSON.stringify(bundle))
+}
+
+export function managedSecretRecoveryDecisionHasSecretMaterial(
+  decision: SingleSecretRecoveryDecision
+) {
+  return forbiddenSecretPattern.test(JSON.stringify(decision))
 }
 
 export function managedSecretSubmitEnvelopeHasSecretMaterial(
