@@ -16,11 +16,13 @@ import {
 import { Activity, ClipboardCheck, FileChartColumn } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  useServiceTelemetryPreview,
   useServices,
   useTelemetryPreview,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type {
   DashboardService,
+  ServiceTelemetryPreview,
   TelemetryPreview,
 } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
@@ -224,7 +226,9 @@ function buildTelemetryPreviewRows(
 function buildTelemetryRows(
   services: DashboardService[],
   telemetryPreview?: TelemetryPreview,
-  telemetryError?: Error | null
+  telemetryError?: Error | null,
+  secretsBrokerTelemetry?: ServiceTelemetryPreview,
+  secretsBrokerTelemetryError?: Error | null
 ): TelemetryRow[] {
   const serviceRows: TelemetryRow[] = services.slice(0, 6).map((service) => ({
     id: `service-${service.id}`,
@@ -266,18 +270,99 @@ function buildTelemetryRows(
       value: `${secretsBrokerAuditEvents.length} metadata-only audit events loaded`,
       nextAction: 'Use Audit Logging for policy, outcome, and chain status.',
     },
-    {
-      id: 'secretsbroker-telemetry-endpoint',
-      signal: 'Secrets Broker telemetry endpoint',
-      source: 'Secrets Broker',
-      owner: '@secretsbroker',
-      state: 'unavailable',
-      lastSample: 'Not configured',
-      value: 'Broker metrics endpoint is not configured in the current demo.',
-      nextAction:
-        'Keep this explicit instead of presenting missing telemetry as success.',
-    },
+    ...buildSecretsBrokerTelemetryRows(
+      secretsBrokerTelemetry,
+      secretsBrokerTelemetryError
+    ),
     ...serviceRows,
+  ]
+}
+
+function buildSecretsBrokerTelemetryRows(
+  telemetryPreview?: ServiceTelemetryPreview,
+  telemetryError?: Error | null
+): TelemetryRow[] {
+  if (telemetryError) {
+    return [
+      {
+        id: 'secretsbroker-telemetry-preview-error',
+        signal: 'Secrets Broker service telemetry',
+        source: 'Secrets Broker',
+        owner: '@secretsbroker',
+        state: 'unavailable',
+        lastSample: 'Unavailable',
+        value: telemetryError.message,
+        nextAction:
+          'Verify the core /api/services/@secretsbroker/telemetry proxy before relying on broker telemetry status.',
+      },
+    ]
+  }
+
+  if (!telemetryPreview) {
+    return [
+      {
+        id: 'secretsbroker-telemetry-preview-pending',
+        signal: 'Secrets Broker service telemetry',
+        source: 'Secrets Broker',
+        owner: '@secretsbroker',
+        state: 'degraded',
+        lastSample: 'Not sampled',
+        value: 'Waiting for core service telemetry preview.',
+        nextAction:
+          'Keep broker telemetry explicit until a runtime-backed preview is available.',
+      },
+    ]
+  }
+
+  const signals = telemetryPreview.signals
+  const firstSignal = signals[0]
+  const attributes = firstSignal?.attributes ?? {}
+  const signalCount = signals.length
+  const signalKinds = Array.from(new Set(signals.map((signal) => signal.kind)))
+  const allSignalsHaveTraceContext =
+    signalCount > 0 &&
+    signals.every(
+      (signal) =>
+        Boolean(signal.traceparent) &&
+        Boolean(signal.traceId) &&
+        Boolean(signal.spanId) &&
+        Boolean(signal.correlationId)
+    )
+  const rawAttributeKeysReturned = Object.keys(attributes).some((key) =>
+    /authorization|cookie|header|body|query|secret|token|credential|private/i.test(
+      key
+    )
+  )
+  const serviceTag =
+    typeof attributes['service.artifact.tag'] === 'string'
+      ? attributes['service.artifact.tag']
+      : typeof attributes['service.version'] === 'string'
+        ? attributes['service.version']
+        : 'tag unavailable'
+
+  return [
+    {
+      id: 'secretsbroker-service-trace-context',
+      signal: 'Secrets Broker service trace context',
+      source: 'Secrets Broker',
+      owner: telemetryPreview.serviceId,
+      state: allSignalsHaveTraceContext ? 'available' : 'degraded',
+      lastSample: `${signalCount} signals`,
+      value: `w3c traceparent=${allSignalsHaveTraceContext}; correlation ids=${allSignalsHaveTraceContext}`,
+      nextAction:
+        'Use the core service telemetry route for broker trace posture; incoming headers and raw request material stay out of the UI.',
+    },
+    {
+      id: 'secretsbroker-service-safe-envelope',
+      signal: 'Secrets Broker telemetry safe envelope',
+      source: 'Secrets Broker',
+      owner: serviceTag,
+      state: rawAttributeKeysReturned ? 'unavailable' : 'available',
+      lastSample: signalKinds.join(', ') || 'No signals',
+      value: `route/service attributes only; unsafe keys returned=${rawAttributeKeysReturned}`,
+      nextAction:
+        'Display service id, version, health, phase, outcome, and artifact metadata only.',
+    },
   ]
 }
 
@@ -640,16 +725,30 @@ export function OperationsTelemetry() {
 
   const servicesQuery = useServices()
   const telemetryQuery = useTelemetryPreview()
+  const secretsBrokerTelemetryQuery =
+    useServiceTelemetryPreview('@secretsbroker')
   const telemetryError =
     telemetryQuery.error instanceof Error ? telemetryQuery.error : null
+  const secretsBrokerTelemetryError =
+    secretsBrokerTelemetryQuery.error instanceof Error
+      ? secretsBrokerTelemetryQuery.error
+      : null
   const rows = useMemo(
     () =>
       buildTelemetryRows(
         servicesQuery.data ?? [],
         telemetryQuery.data,
-        telemetryError
+        telemetryError,
+        secretsBrokerTelemetryQuery.data,
+        secretsBrokerTelemetryError
       ),
-    [servicesQuery.data, telemetryError, telemetryQuery.data]
+    [
+      secretsBrokerTelemetryError,
+      secretsBrokerTelemetryQuery.data,
+      servicesQuery.data,
+      telemetryError,
+      telemetryQuery.data,
+    ]
   )
   const requestSummary = telemetryQuery.data?.apiRequestSummary
   const exporter = telemetryQuery.data?.exporter
@@ -681,7 +780,7 @@ export function OperationsTelemetry() {
               {rows.filter((row) => row.source === 'Secrets Broker').length}
             </div>
             <p className='text-xs text-muted-foreground'>
-              Broker rows are metadata-only and mark unavailable telemetry.
+              Broker rows are sourced from core service telemetry metadata.
             </p>
           </div>
           <div className='rounded-md border p-4'>
@@ -704,7 +803,9 @@ export function OperationsTelemetry() {
           </div>
         </div>
 
-        {servicesQuery.isLoading || telemetryQuery.isLoading ? (
+        {servicesQuery.isLoading ||
+        telemetryQuery.isLoading ||
+        secretsBrokerTelemetryQuery.isLoading ? (
           <OperationsLoading />
         ) : (
           <OperationsTable

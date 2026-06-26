@@ -7,6 +7,8 @@ import type {
   ServiceConfigSaveResult,
   ServiceLogType,
   ServiceStatus,
+  ServiceTelemetryPreview,
+  ServiceTelemetrySignal,
   TelemetryPreview,
 } from './types'
 
@@ -905,6 +907,79 @@ export async function fetchTelemetryPreview(): Promise<TelemetryPreview> {
       rawMaterialReturned: false,
     },
   } satisfies TelemetryPreview)
+}
+
+export async function fetchServiceTelemetryPreview(
+  serviceId: string
+): Promise<ServiceTelemetryPreview> {
+  await wait(120)
+
+  const service = services.find((item) => item.id === serviceId)
+  const serviceVersion = service?.metadata.version ?? 'unknown'
+  const running =
+    service?.status === 'running' || service?.status === 'available'
+  const signals: ServiceTelemetrySignal[] = [
+    {
+      kind: 'span',
+      name: 'service_lasso.service.lifecycle',
+      traceId: 'f2d1412190c7ec276ca474894c82eb27',
+      spanId: '5a2ae73908a7986d',
+      traceparent: '00-f2d1412190c7ec276ca474894c82eb27-5a2ae73908a7986d-01',
+      correlationId: 'sl-85a59ffe07646ec3',
+      attributes: {
+        'service.id': serviceId,
+        'service.role': 'service',
+        'service.version': serviceVersion,
+        'service.artifact.tag': serviceVersion,
+        'service.artifact.asset':
+          serviceId === '@secretsbroker'
+            ? 'secretsbroker-win32.zip'
+            : 'service-package.zip',
+        'service.lifecycle.installed': Boolean(service?.installed),
+        'service.lifecycle.running': running,
+        'service.operation.phase': 'lifecycle',
+        'service.operation.outcome': running ? 'healthy' : 'unavailable',
+      },
+    },
+    {
+      kind: 'span',
+      name: 'service_lasso.service.health_check',
+      traceId: 'f2d1412190c7ec276ca474894c82eb27',
+      spanId: '771b717f65a3d595',
+      traceparent: '00-f2d1412190c7ec276ca474894c82eb27-771b717f65a3d595-01',
+      correlationId: 'sl-85a59ffe07646ec3',
+      attributes: {
+        'service.id': serviceId,
+        'service.role': 'service',
+        'service.version': serviceVersion,
+        'service.health.status': running ? 'healthy' : 'critical',
+        'service.health.readiness': running ? 'ready' : 'blocked',
+        'service.operation.phase': 'health_check',
+        'service.operation.outcome': running ? 'healthy' : 'unavailable',
+      },
+    },
+    {
+      kind: 'metric',
+      name: 'service_lasso.service.runtime.launches',
+      traceId: 'f2d1412190c7ec276ca474894c82eb27',
+      spanId: '3df4003721bde212',
+      traceparent: '00-f2d1412190c7ec276ca474894c82eb27-3df4003721bde212-01',
+      correlationId: 'sl-85a59ffe07646ec3',
+      attributes: {
+        'service.id': serviceId,
+        'service.role': 'service',
+        'service.version': serviceVersion,
+        'service.operation.phase': 'runtime_metrics',
+        'service.operation.outcome': running ? 'healthy' : 'unavailable',
+        'service.operation.duration_ms': 0,
+      },
+    },
+  ]
+
+  return structuredClone({
+    serviceId,
+    signals,
+  } satisfies ServiceTelemetryPreview)
 }
 
 export async function fetchDashboardService(serviceId: string) {

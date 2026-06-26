@@ -178,6 +178,52 @@ describe('service lasso dashboard runtime client', () => {
     )
   })
 
+  it('uses the runtime service telemetry route for service-scoped telemetry previews', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const telemetry = {
+      serviceId: '@secretsbroker',
+      signals: [
+        {
+          kind: 'span',
+          name: 'service_lasso.service.lifecycle',
+          traceId: 'f2d1412190c7ec276ca474894c82eb27',
+          spanId: '5a2ae73908a7986d',
+          traceparent:
+            '00-f2d1412190c7ec276ca474894c82eb27-5a2ae73908a7986d-01',
+          correlationId: 'sl-85a59ffe07646ec3',
+          attributes: {
+            'service.id': '@secretsbroker',
+            'service.version': '2026.6.26-test',
+            'service.operation.outcome': 'healthy',
+          },
+        },
+      ],
+    }
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (
+        url === 'http://runtime.test/api/services/%40secretsbroker/telemetry'
+      ) {
+        return jsonResponse({ telemetry })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchServiceTelemetryPreview } = await import('./client')
+
+    await expect(
+      fetchServiceTelemetryPreview('@secretsbroker')
+    ).resolves.toEqual(telemetry)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://runtime.test/api/services/%40secretsbroker/telemetry',
+      undefined
+    )
+  })
+
   it('uses same-origin runtime API by default instead of dashboard stubs', async () => {
     const services = [service('@archive', 'Archive Runtime', 'available')]
     const fetchMock = vi.fn(async (url: string) => {
