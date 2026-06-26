@@ -7,6 +7,7 @@ import type {
   ServiceConfigSaveResult,
   ServiceLogType,
   ServiceStatus,
+  TelemetryPreview,
 } from './types'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -824,6 +825,86 @@ export async function fetchServices() {
   await wait(120)
   await syncFavoriteStateFromApi()
   return structuredClone(services)
+}
+
+export async function fetchTelemetryPreview(): Promise<TelemetryPreview> {
+  await wait(120)
+  return structuredClone({
+    contractVersion: 'service-lasso.telemetry-preview.v1',
+    exporter: {
+      status: 'disabled',
+      protocol: 'otlp-http',
+      endpointConfigured: false,
+      endpointValueReturned: false,
+      headersValueReturned: false,
+      reason:
+        'OTLP export is disabled until runtime exporter settings are configured.',
+    },
+    resource: {
+      serviceName: 'service-lasso-core',
+      serviceNamespace: 'service-lasso',
+      serviceInstanceId: 'stub-runtime',
+    },
+    redaction: {
+      mode: 'allowlist',
+      allowedAttributes: [
+        'api.route_group',
+        'http.route',
+        'http.response.status_class',
+        'service.id',
+        'service.health.status',
+      ],
+      forbiddenFieldClasses: [
+        'raw secret values',
+        'environment values',
+        'provider tokens or credentials',
+        'cookies and authorization headers',
+        'raw request or response bodies',
+        'raw URL paths and query strings',
+      ],
+    },
+    exportPreview: {
+      mode: 'disabled',
+      status: 'not_sent',
+      signalCount: 42,
+      serviceCount: services.length,
+      endpointConfigured: false,
+      endpointValueReturned: false,
+      headersValueReturned: false,
+      bodyValueReturned: false,
+      allowedAttributeCount: 5,
+      reason:
+        'The Service Admin stub mirrors runtime telemetry status without exporter endpoints, headers, or payload bodies.',
+    },
+    apiRequestBuffer: {
+      capacity: 50,
+      retainedCount: 18,
+      droppedCount: 3,
+      routeTemplateOnly: true,
+      rawMaterialReturned: false,
+    },
+    apiRequestSummary: {
+      retainedCount: 18,
+      droppedCount: 3,
+      totalObservedCount: 21,
+      mutatingCount: 2,
+      routeGroups: [
+        { key: 'health', count: 8 },
+        { key: 'services', count: 6 },
+        { key: 'telemetry', count: 4 },
+      ],
+      statusClasses: [
+        { key: '2xx', count: 17 },
+        { key: '4xx', count: 1 },
+      ],
+      outcomes: [
+        { key: 'success', count: 17 },
+        { key: 'failure', count: 1 },
+      ],
+      routeTemplateOnly: true,
+      rawMaterialReturned: false,
+    },
+  } satisfies TelemetryPreview)
 }
 
 export async function fetchDashboardService(serviceId: string) {

@@ -15,8 +15,14 @@ import {
 } from '@tanstack/react-table'
 import { Activity, ClipboardCheck, FileChartColumn } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
-import { useServices } from '@/lib/service-lasso-dashboard/hooks'
-import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import {
+  useServices,
+  useTelemetryPreview,
+} from '@/lib/service-lasso-dashboard/hooks'
+import type {
+  DashboardService,
+  TelemetryPreview,
+} from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -97,7 +103,129 @@ function operationStateForService(service: DashboardService): OperationsState {
   return 'unavailable'
 }
 
-function buildTelemetryRows(services: DashboardService[]): TelemetryRow[] {
+function telemetryPreviewState(telemetryPreview: TelemetryPreview) {
+  const hasSafeExportPreview =
+    !telemetryPreview.exportPreview.endpointValueReturned &&
+    !telemetryPreview.exportPreview.headersValueReturned &&
+    !telemetryPreview.exportPreview.bodyValueReturned
+
+  if (!hasSafeExportPreview) return 'unavailable'
+  if (telemetryPreview.exporter.status === 'disabled') return 'degraded'
+  return 'available'
+}
+
+function buildTelemetryPreviewRows(
+  telemetryPreview?: TelemetryPreview,
+  telemetryError?: Error | null
+): TelemetryRow[] {
+  if (telemetryError) {
+    return [
+      {
+        id: 'runtime-telemetry-preview-error',
+        signal: 'Core telemetry preview',
+        source: 'Service Lasso',
+        owner: 'service-lasso-core',
+        state: 'unavailable',
+        lastSample: 'Unavailable',
+        value: telemetryError.message,
+        nextAction: 'Verify the Service Lasso runtime /api/telemetry endpoint.',
+      },
+    ]
+  }
+
+  if (!telemetryPreview) return []
+
+  const apiRequestBuffer = telemetryPreview.apiRequestBuffer
+  const apiRequestSummary = telemetryPreview.apiRequestSummary
+
+  return [
+    {
+      id: 'runtime-telemetry-exporter',
+      signal: 'Core telemetry exporter',
+      source: 'Service Lasso',
+      owner: telemetryPreview.resource.serviceName,
+      state: telemetryPreviewState(telemetryPreview),
+      lastSample: telemetryPreview.contractVersion,
+      value: `${telemetryPreview.exporter.protocol} ${telemetryPreview.exporter.status}; endpoint hidden=${!telemetryPreview.exporter.endpointValueReturned}; headers hidden=${!telemetryPreview.exporter.headersValueReturned}`,
+      nextAction: telemetryPreview.exporter.reason,
+    },
+    {
+      id: 'runtime-telemetry-redaction',
+      signal: 'Telemetry allowlist redaction',
+      source: 'Service Lasso',
+      owner: telemetryPreview.resource.serviceNamespace,
+      state:
+        telemetryPreview.redaction.mode === 'allowlist'
+          ? 'available'
+          : 'degraded',
+      lastSample: `${telemetryPreview.redaction.allowedAttributes.length} attributes`,
+      value: `${telemetryPreview.redaction.forbiddenFieldClasses.length} forbidden field classes omitted`,
+      nextAction:
+        'Keep Service Admin telemetry metadata-only and avoid raw request, config, credential, or secret material.',
+    },
+    {
+      id: 'runtime-telemetry-export-preview',
+      signal: 'OTLP export preview',
+      source: 'Service Lasso',
+      owner: telemetryPreview.resource.serviceInstanceId,
+      state:
+        telemetryPreview.exportPreview.endpointValueReturned ||
+        telemetryPreview.exportPreview.headersValueReturned ||
+        telemetryPreview.exportPreview.bodyValueReturned
+          ? 'unavailable'
+          : telemetryPreview.exportPreview.mode === 'disabled'
+            ? 'degraded'
+            : 'available',
+      lastSample: `${telemetryPreview.exportPreview.signalCount} signals`,
+      value: `${telemetryPreview.exportPreview.mode}/${telemetryPreview.exportPreview.status}; ${telemetryPreview.exportPreview.serviceCount} services`,
+      nextAction: telemetryPreview.exportPreview.reason,
+    },
+    ...(apiRequestBuffer
+      ? [
+          {
+            id: 'runtime-telemetry-request-buffer',
+            signal: 'API request buffer safety',
+            source: 'Service Lasso' as const,
+            owner: 'route-template telemetry',
+            state:
+              apiRequestBuffer.routeTemplateOnly &&
+              !apiRequestBuffer.rawMaterialReturned
+                ? ('available' as const)
+                : ('unavailable' as const),
+            lastSample: `${apiRequestBuffer.retainedCount}/${apiRequestBuffer.capacity} retained`,
+            value: `${apiRequestBuffer.droppedCount} dropped; route templates only=${apiRequestBuffer.routeTemplateOnly}`,
+            nextAction:
+              'Use aggregate request metadata only; raw URLs, query strings, headers, and bodies stay hidden.',
+          },
+        ]
+      : []),
+    ...(apiRequestSummary
+      ? [
+          {
+            id: 'runtime-telemetry-request-summary',
+            signal: 'API request summary',
+            source: 'Service Lasso' as const,
+            owner: 'operations telemetry',
+            state:
+              apiRequestSummary.routeTemplateOnly &&
+              !apiRequestSummary.rawMaterialReturned
+                ? ('available' as const)
+                : ('unavailable' as const),
+            lastSample: `${apiRequestSummary.totalObservedCount} observed`,
+            value: `${apiRequestSummary.mutatingCount} mutating; ${apiRequestSummary.routeGroups.length} route groups`,
+            nextAction:
+              'Show status classes, outcomes, and route groups without raw request material.',
+          },
+        ]
+      : []),
+  ]
+}
+
+function buildTelemetryRows(
+  services: DashboardService[],
+  telemetryPreview?: TelemetryPreview,
+  telemetryError?: Error | null
+): TelemetryRow[] {
   const serviceRows: TelemetryRow[] = services.slice(0, 6).map((service) => ({
     id: `service-${service.id}`,
     signal: service.name,
@@ -113,7 +241,7 @@ function buildTelemetryRows(services: DashboardService[]): TelemetryRow[] {
   }))
 
   return [
-    ...serviceRows,
+    ...buildTelemetryPreviewRows(telemetryPreview, telemetryError),
     {
       id: 'runtime-health',
       signal: 'Runtime API health',
@@ -149,6 +277,7 @@ function buildTelemetryRows(services: DashboardService[]): TelemetryRow[] {
       nextAction:
         'Keep this explicit instead of presenting missing telemetry as success.',
     },
+    ...serviceRows,
   ]
 }
 
@@ -510,10 +639,20 @@ export function OperationsTelemetry() {
   })
 
   const servicesQuery = useServices()
+  const telemetryQuery = useTelemetryPreview()
+  const telemetryError =
+    telemetryQuery.error instanceof Error ? telemetryQuery.error : null
   const rows = useMemo(
-    () => buildTelemetryRows(servicesQuery.data ?? []),
-    [servicesQuery.data]
+    () =>
+      buildTelemetryRows(
+        servicesQuery.data ?? [],
+        telemetryQuery.data,
+        telemetryError
+      ),
+    [servicesQuery.data, telemetryError, telemetryQuery.data]
   )
+  const requestSummary = telemetryQuery.data?.apiRequestSummary
+  const exporter = telemetryQuery.data?.exporter
 
   return (
     <>
@@ -549,15 +688,23 @@ export function OperationsTelemetry() {
             <div className='flex items-center gap-2 text-sm font-medium'>
               <ClipboardCheck className='size-4' /> Safety boundary
             </div>
-            <div className='mt-2 text-2xl font-bold'>No values</div>
+            <div className='mt-2 text-2xl font-bold'>
+              {exporter
+                ? exporter.endpointValueReturned ||
+                  exporter.headersValueReturned
+                  ? 'Review'
+                  : 'Hidden'
+                : 'No values'}
+            </div>
             <p className='text-xs text-muted-foreground'>
-              No secret values, tokens, credentials, or raw log payloads are
-              shown.
+              {requestSummary
+                ? `${requestSummary.totalObservedCount} API requests observed with raw material returned=${requestSummary.rawMaterialReturned}.`
+                : 'No secret values, tokens, credentials, or raw log payloads are shown.'}
             </p>
           </div>
         </div>
 
-        {servicesQuery.isLoading ? (
+        {servicesQuery.isLoading || telemetryQuery.isLoading ? (
           <OperationsLoading />
         ) : (
           <OperationsTable

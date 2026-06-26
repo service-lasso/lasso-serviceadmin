@@ -173,3 +173,60 @@ export type ServiceConfigSaveResult = {
   backup: ServiceConfigRevision
   validationStatus: 'valid'
 }
+
+export type TelemetryCountBucket = {
+  key: string
+  count: number
+}
+
+export type TelemetryPreview = {
+  contractVersion: string
+  exporter: {
+    status: 'disabled' | 'configured' | 'error' | string
+    protocol: string
+    endpointConfigured: boolean
+    endpointValueReturned: boolean
+    headersValueReturned: boolean
+    reason: string
+  }
+  resource: {
+    serviceName: string
+    serviceNamespace: string
+    serviceInstanceId: string
+  }
+  redaction: {
+    mode: string
+    allowedAttributes: string[]
+    forbiddenFieldClasses: string[]
+  }
+  exportPreview: {
+    mode: 'disabled' | 'dry_run' | string
+    status: 'not_sent' | 'ready' | string
+    signalCount: number
+    serviceCount: number
+    endpointConfigured: boolean
+    endpointValueReturned: boolean
+    headersValueReturned: boolean
+    bodyValueReturned: boolean
+    allowedAttributeCount: number
+    reason: string
+  }
+  apiRequestBuffer?: {
+    capacity: number
+    retainedCount: number
+    droppedCount: number
+    routeTemplateOnly: boolean
+    rawMaterialReturned: boolean
+  }
+  apiRequestSummary?: {
+    retainedCount: number
+    droppedCount: number
+    totalObservedCount: number
+    mutatingCount: number
+    routeGroups: TelemetryCountBucket[]
+    statusClasses: TelemetryCountBucket[]
+    outcomes: TelemetryCountBucket[]
+    routeTemplateOnly: boolean
+    rawMaterialReturned: boolean
+  }
+}

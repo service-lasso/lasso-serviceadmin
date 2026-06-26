@@ -5,6 +5,7 @@ import {
   fetchDashboardService,
   fetchDashboardSummary,
   fetchServices,
+  fetchTelemetryPreview,
   runDashboardAction,
 } from './client'
 import { favoritesMutationEnabled } from './stub'
@@ -23,6 +24,13 @@ export function useServices() {
   return useQuery({
     queryKey: [...dashboardQueryKey, 'services'],
     queryFn: fetchServices,
+  })
+}
+
+export function useTelemetryPreview() {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, 'telemetry-preview'],
+    queryFn: fetchTelemetryPreview,
   })
 }
 

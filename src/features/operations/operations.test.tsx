@@ -10,16 +10,27 @@ describe('Operations pages', () => {
       await screen.findByRole('heading', { name: /^Telemetry$/i })
     ).toBeVisible()
     expect(screen.getByText(/Service Lasso runtime/i)).toBeVisible()
+    expect(await screen.findByText(/Core telemetry exporter/i)).toBeVisible()
+    expect(screen.getByText(/otlp-http disabled/i)).toBeVisible()
+    expect(screen.getByText(/endpoint hidden=true/i)).toBeVisible()
+    expect(screen.getByText(/API request buffer safety/i)).toBeVisible()
+    expect(screen.getByText(/route templates only=true/i)).toBeVisible()
+    expect(screen.getByText(/API request summary/i)).toBeVisible()
+    expect(screen.getByText(/21 observed/i)).toBeVisible()
     expect(
       await screen.findByText(/Secrets Broker telemetry endpoint/i)
     ).toBeVisible()
     expect(
       await screen.findByText(/not configured in the current demo/i)
     ).toBeVisible()
-    expect(screen.getByText(/No values/i)).toBeVisible()
+    const [hiddenBoundary] = screen.getAllByText(/Hidden/i)
+    expect(hiddenBoundary).toBeVisible()
     expect(container).not.toHaveTextContent(/BEGIN PRIVATE KEY/i)
     expect(container).not.toHaveTextContent(/CLIENT_SECRET=/i)
     expect(container).not.toHaveTextContent(/REFRESH_TOKEN=/i)
+    expect(container).not.toHaveTextContent(/OTEL_EXPORTER_OTLP_HEADERS/i)
+    expect(container).not.toHaveTextContent(/Authorization/i)
+    expect(container).not.toHaveTextContent(/http:\/\/otel-collector/i)
   })
 
   it('renders audit logging rows from both operation sources without secret payloads', async () => {
