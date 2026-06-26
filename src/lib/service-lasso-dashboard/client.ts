@@ -3,6 +3,7 @@ import {
   fetchServiceConfigDocument as fetchStubServiceConfigDocument,
   fetchDashboardService as fetchStubDashboardService,
   fetchDashboardSummary as fetchStubDashboardSummary,
+  fetchServiceTelemetryPreview as fetchStubServiceTelemetryPreview,
   fetchServices as fetchStubServices,
   fetchTelemetryPreview as fetchStubTelemetryPreview,
   runDashboardAction as runStubDashboardAction,
@@ -17,6 +18,7 @@ import type {
   ServiceConfigDocument,
   ServiceConfigSaveResult,
   ServiceLogType,
+  ServiceTelemetryPreview,
   TelemetryPreview,
 } from './types'
 
@@ -34,6 +36,10 @@ type DashboardServiceDetailResponse = {
 
 type TelemetryPreviewResponse = {
   telemetry: TelemetryPreview
+}
+
+type ServiceTelemetryPreviewResponse = {
+  telemetry: ServiceTelemetryPreview
 }
 
 function encodeServiceId(serviceId: string) {
@@ -125,6 +131,13 @@ async function fetchRuntimeTelemetryPreview() {
   return payload.telemetry
 }
 
+async function fetchRuntimeServiceTelemetryPreview(serviceId: string) {
+  const payload = await fetchRuntimeJson<ServiceTelemetryPreviewResponse>(
+    `/api/services/${encodeServiceId(serviceId)}/telemetry`
+  )
+  return payload.telemetry
+}
+
 async function updateRuntimeFavorite(serviceId: string) {
   const service = await fetchRuntimeDashboardService(serviceId)
   if (!service) {
@@ -205,6 +218,14 @@ export async function fetchTelemetryPreview() {
   }
 
   return fetchRuntimeTelemetryPreview()
+}
+
+export async function fetchServiceTelemetryPreview(serviceId: string) {
+  if (stubDashboardDataEnabled) {
+    return fetchStubServiceTelemetryPreview(serviceId)
+  }
+
+  return fetchRuntimeServiceTelemetryPreview(serviceId)
 }
 
 export async function fetchServiceConfigDocument(serviceId: string) {

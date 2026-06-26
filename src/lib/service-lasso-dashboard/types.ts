@@ -179,6 +179,21 @@ export type TelemetryCountBucket = {
   count: number
 }
 
+export type ServiceTelemetrySignal = {
+  kind: 'span' | 'metric' | 'log' | string
+  name: string
+  traceId?: string
+  spanId?: string
+  traceparent?: string
+  correlationId?: string
+  attributes: Record<string, string | number | boolean>
+}
+
+export type ServiceTelemetryPreview = {
+  serviceId: string
+  signals: ServiceTelemetrySignal[]
+}
+
 export type TelemetryPreview = {
   contractVersion: string
   exporter: {

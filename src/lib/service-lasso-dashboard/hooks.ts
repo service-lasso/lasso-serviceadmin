@@ -4,6 +4,7 @@ import {
   buildServiceLogUrl,
   fetchDashboardService,
   fetchDashboardSummary,
+  fetchServiceTelemetryPreview,
   fetchServices,
   fetchTelemetryPreview,
   runDashboardAction,
@@ -31,6 +32,13 @@ export function useTelemetryPreview() {
   return useQuery({
     queryKey: [...dashboardQueryKey, 'telemetry-preview'],
     queryFn: fetchTelemetryPreview,
+  })
+}
+
+export function useServiceTelemetryPreview(serviceId: string) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, serviceId, 'telemetry-preview'],
+    queryFn: () => fetchServiceTelemetryPreview(serviceId),
   })
 }
 

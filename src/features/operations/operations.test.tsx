@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 describe('Operations pages', () => {
-  it('renders telemetry rows for Service Lasso and Secrets Broker with explicit unavailable state', async () => {
+  it('renders telemetry rows for Service Lasso and Secrets Broker without secret material', async () => {
     const { container } = await renderRoute('/operations/telemetry')
 
     expect(
@@ -18,11 +18,13 @@ describe('Operations pages', () => {
     expect(screen.getByText(/API request summary/i)).toBeVisible()
     expect(screen.getByText(/21 observed/i)).toBeVisible()
     expect(
-      await screen.findByText(/Secrets Broker telemetry endpoint/i)
+      await screen.findByText(/Secrets Broker service trace context/i)
     ).toBeVisible()
+    expect(await screen.findByText(/w3c traceparent=true/i)).toBeVisible()
     expect(
-      await screen.findByText(/not configured in the current demo/i)
+      await screen.findByText(/Secrets Broker telemetry safe envelope/i)
     ).toBeVisible()
+    expect(screen.getByText(/unsafe keys returned=false/i)).toBeVisible()
     const [hiddenBoundary] = screen.getAllByText(/Hidden/i)
     expect(hiddenBoundary).toBeVisible()
     expect(container).not.toHaveTextContent(/BEGIN PRIVATE KEY/i)
@@ -31,6 +33,8 @@ describe('Operations pages', () => {
     expect(container).not.toHaveTextContent(/OTEL_EXPORTER_OTLP_HEADERS/i)
     expect(container).not.toHaveTextContent(/Authorization/i)
     expect(container).not.toHaveTextContent(/http:\/\/otel-collector/i)
+    expect(container).not.toHaveTextContent(/ACTUAL_SECRET/i)
+    expect(container).not.toHaveTextContent(/BOT_TOKEN=/i)
   })
 
   it('renders audit logging rows from both operation sources without secret payloads', async () => {
