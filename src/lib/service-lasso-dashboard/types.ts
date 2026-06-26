@@ -209,6 +209,19 @@ export type TelemetryPreview = {
     serviceNamespace: string
     serviceInstanceId: string
   }
+  traceContext?: {
+    propagation: string
+    responseHeaders: {
+      correlationId: string
+      traceId: string
+      traceparent: string
+    }
+    traceparentSampled: boolean
+    incomingHeadersAccepted: boolean
+    incomingHeadersReturned: boolean
+    rawHeadersReturned: boolean
+    routeTemplateOnly: boolean
+  }
   redaction: {
     mode: string
     allowedAttributes: string[]

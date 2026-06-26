@@ -847,6 +847,19 @@ export async function fetchTelemetryPreview(): Promise<TelemetryPreview> {
       serviceNamespace: 'service-lasso',
       serviceInstanceId: 'stub-runtime',
     },
+    traceContext: {
+      propagation: 'w3c-trace-context',
+      responseHeaders: {
+        correlationId: 'x-service-lasso-correlation-id',
+        traceId: 'x-service-lasso-trace-id',
+        traceparent: 'traceparent',
+      },
+      traceparentSampled: true,
+      incomingHeadersAccepted: false,
+      incomingHeadersReturned: false,
+      rawHeadersReturned: false,
+      routeTemplateOnly: true,
+    },
     redaction: {
       mode: 'allowlist',
       allowedAttributes: [

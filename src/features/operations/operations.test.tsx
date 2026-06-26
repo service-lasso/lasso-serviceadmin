@@ -17,6 +17,10 @@ describe('Operations pages', () => {
     expect(screen.getByText(/route templates only=true/i)).toBeVisible()
     expect(screen.getByText(/API request summary/i)).toBeVisible()
     expect(screen.getByText(/21 observed/i)).toBeVisible()
+    expect(screen.getByText(/Core trace propagation/i)).toBeVisible()
+    expect(screen.getByText(/raw headers returned=false/i)).toBeVisible()
+    expect(screen.getByText(/Core-to-broker correlation/i)).toBeVisible()
+    expect(screen.getByText(/broker trace context=true/i)).toBeVisible()
     expect(
       await screen.findByText(/Secrets Broker service trace context/i)
     ).toBeVisible()
