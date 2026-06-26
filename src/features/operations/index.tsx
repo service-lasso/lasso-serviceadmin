@@ -118,7 +118,8 @@ function telemetryPreviewState(telemetryPreview: TelemetryPreview) {
 
 function buildTelemetryPreviewRows(
   telemetryPreview?: TelemetryPreview,
-  telemetryError?: Error | null
+  telemetryError?: Error | null,
+  secretsBrokerTelemetry?: ServiceTelemetryPreview
 ): TelemetryRow[] {
   if (telemetryError) {
     return [
@@ -139,6 +140,21 @@ function buildTelemetryPreviewRows(
 
   const apiRequestBuffer = telemetryPreview.apiRequestBuffer
   const apiRequestSummary = telemetryPreview.apiRequestSummary
+  const traceContext = telemetryPreview.traceContext
+  const coreTraceContextSafe =
+    traceContext &&
+    traceContext.routeTemplateOnly &&
+    !traceContext.incomingHeadersReturned &&
+    !traceContext.rawHeadersReturned
+  const brokerTraceContextReady =
+    Boolean(secretsBrokerTelemetry?.signals.length) &&
+    secretsBrokerTelemetry?.signals.every(
+      (signal) =>
+        Boolean(signal.traceparent) &&
+        Boolean(signal.traceId) &&
+        Boolean(signal.spanId) &&
+        Boolean(signal.correlationId)
+    )
 
   return [
     {
@@ -182,6 +198,43 @@ function buildTelemetryPreviewRows(
       value: `${telemetryPreview.exportPreview.mode}/${telemetryPreview.exportPreview.status}; ${telemetryPreview.exportPreview.serviceCount} services`,
       nextAction: telemetryPreview.exportPreview.reason,
     },
+    ...(traceContext
+      ? [
+          {
+            id: 'runtime-telemetry-trace-context',
+            signal: 'Core trace propagation',
+            source: 'Service Lasso' as const,
+            owner: traceContext.propagation,
+            state: coreTraceContextSafe
+              ? ('available' as const)
+              : ('unavailable' as const),
+            lastSample: traceContext.traceparentSampled
+              ? 'sampled traceparent'
+              : 'unsampled traceparent',
+            value: `response header names=${Object.values(traceContext.responseHeaders).join(', ')}; raw headers returned=${traceContext.rawHeadersReturned}`,
+            nextAction:
+              'Propagate W3C trace context by header name only; incoming/raw header values stay hidden.',
+          },
+        ]
+      : []),
+    ...(traceContext && secretsBrokerTelemetry
+      ? [
+          {
+            id: 'runtime-telemetry-core-broker-correlation',
+            signal: 'Core-to-broker correlation',
+            source: 'Secrets Broker' as const,
+            owner: secretsBrokerTelemetry.serviceId,
+            state:
+              coreTraceContextSafe && brokerTraceContextReady
+                ? ('available' as const)
+                : ('degraded' as const),
+            lastSample: `${secretsBrokerTelemetry.signals.length} broker signals`,
+            value: `core propagation=${traceContext.propagation}; broker trace context=${brokerTraceContextReady}`,
+            nextAction:
+              'Use Service Lasso correlation IDs and W3C trace context posture without rendering header values or payloads.',
+          },
+        ]
+      : []),
     ...(apiRequestBuffer
       ? [
           {
@@ -245,7 +298,11 @@ function buildTelemetryRows(
   }))
 
   return [
-    ...buildTelemetryPreviewRows(telemetryPreview, telemetryError),
+    ...buildTelemetryPreviewRows(
+      telemetryPreview,
+      telemetryError,
+      secretsBrokerTelemetry
+    ),
     {
       id: 'runtime-health',
       signal: 'Runtime API health',
@@ -260,6 +317,10 @@ function buildTelemetryRows(
         ? 'Use Runtime or Logs for service-level details.'
         : 'Verify Service Lasso runtime health endpoint before operating.',
     },
+    ...buildSecretsBrokerTelemetryRows(
+      secretsBrokerTelemetry,
+      secretsBrokerTelemetryError
+    ),
     {
       id: 'secretsbroker-audit-metadata',
       signal: 'Secrets Broker audit metadata',
@@ -270,10 +331,6 @@ function buildTelemetryRows(
       value: `${secretsBrokerAuditEvents.length} metadata-only audit events loaded`,
       nextAction: 'Use Audit Logging for policy, outcome, and chain status.',
     },
-    ...buildSecretsBrokerTelemetryRows(
-      secretsBrokerTelemetry,
-      secretsBrokerTelemetryError
-    ),
     ...serviceRows,
   ]
 }
