@@ -1276,6 +1276,20 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
                 >
                   {logText}
                 </pre>
+                <div
+                  className='mb-3 max-h-72 overflow-auto rounded-md border bg-muted/20 p-3 font-mono text-xs leading-relaxed'
+                  data-testid='service-detail-terminal-visible-lines'
+                >
+                  {lines.map((line, index) => (
+                    <div
+                      // Runtime log chunks are windowed and may contain repeated text.
+                      key={`${index}-${line}`}
+                      className='whitespace-pre-wrap break-words'
+                    >
+                      {line}
+                    </div>
+                  ))}
+                </div>
                 <div className='h-[360px] overflow-hidden rounded-md border'>
                   <ScrollFollow
                     startFollowing={!paused}

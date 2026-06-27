@@ -503,11 +503,19 @@ describe('service detail quick actions', () => {
     await user.click(screen.getByRole('tab', { name: /terminal/i }))
 
     const terminal = screen.getByTestId('service-detail-terminal-lines')
+    const visibleTerminal = screen.getByTestId(
+      'service-detail-terminal-visible-lines'
+    )
 
     await waitFor(() => {
       expect(terminal).toHaveTextContent(/service ready/)
     })
 
+    expect(visibleTerminal).toBeVisible()
+    expect(visibleTerminal).toHaveTextContent(/service ready/)
+    expect(visibleTerminal).toHaveTextContent(/listening on/)
+    expect(visibleTerminal).toHaveTextContent(/token=\[redacted\]/)
+    expect(visibleTerminal).not.toHaveTextContent(/hidden-value/)
     expect(terminal).toHaveTextContent(/token=\[redacted\]/)
     expect(terminal).not.toHaveTextContent(/hidden-value/)
     expect(screen.getByText('run-2026-06-25T05-00-00Z')).toBeVisible()
