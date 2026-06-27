@@ -1284,7 +1284,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
                     <div
                       // Runtime log chunks are windowed and may contain repeated text.
                       key={`${index}-${line}`}
-                      className='whitespace-pre-wrap break-words'
+                      className='break-words whitespace-pre-wrap'
                     >
                       {line}
                     </div>
