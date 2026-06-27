@@ -112,9 +112,11 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import {
   fetchServiceLogChunk,
   fetchServiceLogInfo,
+  fetchServiceLogsOverview,
   sendServiceTerminalInput,
   type ServiceLogChunk,
   type ServiceLogInfo,
+  type ServiceLogOverview,
   type ServiceTerminalStdinCapability,
 } from '@/features/logs/provider'
 import { buildMetadataTableRows } from './metadata-table'
@@ -852,8 +854,108 @@ function ServiceRunStreamPanel({
   )
 }
 
+function ServiceRunStreamsOverview({
+  overview,
+  streams,
+}: {
+  overview: ServiceLogOverview | null
+  streams: Record<ServiceDetailRunStreamType, ServiceDetailRunStreamState>
+}) {
+  const sourceRows = SERVICE_DETAIL_RUN_STREAMS.map((stream) => {
+    const state = streams[stream.type]
+    const source =
+      state.chunk?.source ??
+      state.info?.source ??
+      state.info?.sources?.find((candidate) => candidate.stream === stream.type)
+
+    return {
+      stream,
+      path: state.chunk?.path ?? state.info?.path ?? source?.path,
+      available:
+        state.chunk?.available ?? state.info?.available ?? source?.available,
+    }
+  })
+
+  const overviewRows = overview?.entries.slice(0, 6) ?? []
+  const hasSourcePath = sourceRows.some((row) => row.path)
+
+  if (!overview && !hasSourcePath) return null
+
+  return (
+    <div
+      className='space-y-3 rounded-md border bg-muted/20 p-3'
+      data-testid='service-detail-log-overview'
+    >
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div>
+          <div className='font-medium'>Runtime log overview</div>
+          <p className='text-sm text-muted-foreground'>
+            Safe runtime log events and source metadata for the selected
+            service.
+          </p>
+        </div>
+        {overview?.runId ? (
+          <Badge variant='outline' className='font-mono'>
+            {overview.runId}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='grid gap-2 md:grid-cols-2'>
+        {sourceRows.map(({ stream, path, available }) => (
+          <div
+            key={stream.type}
+            className='min-w-0 rounded-md border bg-card p-2'
+          >
+            <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='font-medium'>{stream.label}</span>
+              <Badge variant={available === false ? 'outline' : 'secondary'}>
+                {available === false ? 'unavailable' : 'source'}
+              </Badge>
+            </div>
+            <div className='mt-1 truncate font-mono text-xs text-muted-foreground'>
+              {path ?? 'No source path reported'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {overviewRows.length ? (
+        <div className='overflow-hidden rounded-md border bg-card'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Level</TableHead>
+                <TableHead>Recent runtime event</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {overviewRows.map((entry, index) => (
+                <TableRow key={`${entry.level}-${index}`}>
+                  <TableCell className='w-28 align-top'>
+                    <Badge variant='outline'>{entry.level}</Badge>
+                  </TableCell>
+                  <TableCell className='align-top text-sm text-muted-foreground'>
+                    {entry.message}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+          The runtime reported log sources, but no overview events are recorded
+          yet.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ServiceRunStreams({ service }: { service: DashboardService }) {
   const [streams, setStreams] = useState(() => createRunStreamState())
+  const [overview, setOverview] = useState<ServiceLogOverview | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -908,9 +1010,17 @@ function ServiceRunStreams({ service }: { service: DashboardService }) {
     }
 
     setStreams(createRunStreamState(true))
+    setOverview(null)
     for (const stream of SERVICE_DETAIL_RUN_STREAMS) {
       void loadStream(stream.type)
     }
+    void fetchServiceLogsOverview(service)
+      .then((nextOverview) => {
+        if (!cancelled) setOverview(nextOverview)
+      })
+      .catch(() => {
+        if (!cancelled) setOverview(null)
+      })
 
     return () => {
       cancelled = true
@@ -960,6 +1070,7 @@ function ServiceRunStreams({ service }: { service: DashboardService }) {
         </div>
         <Badge variant='secondary'>run-scoped</Badge>
       </div>
+      <ServiceRunStreamsOverview overview={overview} streams={streams} />
       <div
         className='grid gap-3 lg:grid-cols-2'
         data-testid='service-detail-run-streams'
