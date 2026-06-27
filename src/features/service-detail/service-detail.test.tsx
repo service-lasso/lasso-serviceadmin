@@ -313,6 +313,128 @@ describe('service detail quick actions', () => {
     expect(within(streams).queryByText(/hunter2/)).not.toBeInTheDocument()
   })
 
+  it('shows runtime overview events when stdout and stderr stream files are empty', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+        const type = parsed.searchParams.get('type') ?? 'default'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              sources: [
+                {
+                  kind: 'current',
+                  stream: 'stdout',
+                  runId: 'run-1',
+                  path: `C:\\runtime\\${serviceId}\\stdout.log`,
+                  available: true,
+                },
+                {
+                  kind: 'current',
+                  stream: 'stderr',
+                  runId: 'run-1',
+                  path: `C:\\runtime\\${serviceId}\\stderr.log`,
+                  available: true,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              available: true,
+              totalLines: 0,
+              start: 0,
+              end: 0,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 80,
+              lines: [],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/services/%40serviceadmin/logs') {
+          return new Response(
+            JSON.stringify({
+              logs: {
+                serviceId: '@serviceadmin',
+                runId: 'run-1',
+                logPath: 'C:\\runtime\\@serviceadmin\\service.log',
+                stdoutPath: 'C:\\runtime\\@serviceadmin\\stdout.log',
+                stderrPath: 'C:\\runtime\\@serviceadmin\\stderr.log',
+                entries: [
+                  {
+                    level: 'info',
+                    message:
+                      'serviceadmin:start token=review-secret should be redacted',
+                  },
+                ],
+                archives: [],
+                retention: { maxArchives: 3 },
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    const overview = await screen.findByTestId('service-detail-log-overview')
+
+    expect(within(overview).getByText('Runtime log overview')).toBeVisible()
+    expect(within(overview).getByText('run-1')).toBeVisible()
+    expect(within(overview).getByText(/serviceadmin:start/)).toBeVisible()
+    expect(within(overview).getByText(/token=\[redacted\]/)).toBeVisible()
+    expect(
+      within(overview).queryByText(/review-secret/)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getAllByText(/No stdout entries are recorded/i).length
+    ).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText(/No stderr entries are recorded/i).length
+    ).toBeGreaterThan(0)
+  })
+
   it('renders the Terminal tab from safe stdout history without leaking values', async () => {
     const user = userEvent.setup()
 
