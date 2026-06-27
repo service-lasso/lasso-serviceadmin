@@ -178,7 +178,7 @@ describe('service detail quick actions', () => {
     expect(screen.getByText('Diagnostics + recent logs')).toBeVisible()
   })
 
-  it('opens a full config JSON modal with secret values redacted', async () => {
+  it('keeps the Config tab focused on the server.json editor', async () => {
     const user = userEvent.setup()
 
     await renderRoute('/services/@serviceadmin')
@@ -190,34 +190,15 @@ describe('service detail quick actions', () => {
     })
 
     await user.click(screen.getByRole('tab', { name: /config/i }))
-    await user.click(
-      screen.getByRole('button', { name: /view full config json/i })
-    )
 
-    const dialog = screen.getByRole('dialog', { name: /full config json/i })
-    const configJson = within(dialog).getByTestId(
-      'service-detail-full-config-json'
-    )
-
-    expect(configJson).toHaveTextContent('"id": "@serviceadmin"')
-    expect(configJson).toHaveTextContent('"favorite": true')
-    expect(configJson).toHaveTextContent('"templateValue"')
-    expect(configJson).toHaveTextContent('SESSION_SECRET')
-    expect(configJson).toHaveTextContent('[redacted by Service Admin]')
-    expect(configJson).not.toHaveTextContent(
-      'secret://@serviceadmin/SESSION_SECRET'
-    )
-    expect(configJson).not.toHaveTextContent(
-      'secret://openclaw/anthropic/api_key'
-    )
-
-    await user.keyboard('{Escape}')
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('dialog', { name: /full config json/i })
-      ).toBeNull()
-    })
+    expect(screen.getByTestId('service-config-editor')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /view full config json/i })
+    ).toBeNull()
+    expect(screen.queryByText(/runtime safety/i)).toBeNull()
+    expect(screen.queryByText(/resolved environment values/i)).toBeNull()
+    expect(screen.queryByText(/provider credentials/i)).toBeNull()
+    expect(screen.queryByText(/authorization headers/i)).toBeNull()
   })
 
   it('shows separate stdout and stderr run streams without leaking sensitive values', async () => {
@@ -869,7 +850,10 @@ describe('service detail server.json config editor', () => {
     expect(screen.getByText(/Valid JSON/i)).toBeVisible()
     expect(screen.getByText(/0 backups/i)).toBeVisible()
     expect(screen.getAllByText(/server\.json/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/resolved environment values/i)).toBeVisible()
+    expect(screen.queryByText(/Runtime safety/i)).toBeNull()
+    expect(screen.queryByText(/resolved environment values/i)).toBeNull()
+    expect(screen.queryByText(/provider credentials/i)).toBeNull()
+    expect(screen.queryByText(/authorization headers/i)).toBeNull()
   })
 
   it('blocks invalid JSON saves and dirty reloads until confirmed', async () => {

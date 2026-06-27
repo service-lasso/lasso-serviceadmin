@@ -6,7 +6,6 @@ import {
   GitCompare,
   RefreshCw,
   Save,
-  ShieldCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -36,7 +35,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
 import {
   Table,
   TableBody,
@@ -372,35 +370,6 @@ export function ServiceConfigEditor({
               />
             </div>
             <div className='space-y-4'>
-              <div className='rounded-md border p-3'>
-                <div className='flex items-center gap-2 text-sm font-medium'>
-                  <ShieldCheck className='size-4' /> Runtime safety
-                </div>
-                <div className='mt-2 space-y-2 text-sm text-muted-foreground'>
-                  <div>File: {document?.fileName ?? 'server.json'}</div>
-                  <div>
-                    Hash: {document ? shortHash(document.hash) : 'loading'}
-                  </div>
-                  <div>
-                    Updated:{' '}
-                    {document
-                      ? new Date(document.updatedAt).toLocaleString()
-                      : 'loading'}
-                  </div>
-                  <Separator />
-                  <ul className='list-inside list-disc space-y-1'>
-                    {(
-                      document?.safety.omittedSensitiveFields ?? [
-                        'resolved environment values',
-                        'provider credentials',
-                        'authorization headers',
-                      ]
-                    ).map((field) => (
-                      <li key={field}>{field}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
               <label className='block space-y-2 text-sm font-medium'>
                 Audit reason
                 <textarea
