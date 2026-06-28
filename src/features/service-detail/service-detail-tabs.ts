@@ -16,6 +16,12 @@ export const serviceDetailTabsByShortcut = Object.fromEntries(
   serviceDetailTabs.map((tab, index) => [String(index + 1), tab.id])
 ) as Record<string, ServiceDetailTabId>
 
+export function getServiceDetailTabShortcutLabel(shortcut: string): string {
+  const lastKey = shortcut.split('+').pop()?.trim()
+
+  return lastKey || shortcut
+}
+
 const serviceDetailTabIds = new Set<ServiceDetailTabId>(
   serviceDetailTabs.map((tab) => tab.id)
 )
