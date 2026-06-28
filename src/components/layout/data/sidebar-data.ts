@@ -92,7 +92,7 @@ export const sidebarData: SidebarData = {
           icon: FileChartColumn,
         },
         {
-          title: 'Audit Logging',
+          title: 'Audit',
           url: '/operations/audit-logging',
           icon: ScrollText,
         },

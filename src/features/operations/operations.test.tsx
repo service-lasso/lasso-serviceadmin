@@ -41,12 +41,13 @@ describe('Operations pages', () => {
     expect(container).not.toHaveTextContent(/BOT_TOKEN=/i)
   })
 
-  it('renders audit logging rows from both operation sources without secret payloads', async () => {
+  it('renders audit rows from both operation sources without secret payloads', async () => {
     const { container } = await renderRoute('/operations/audit-logging')
 
     expect(
-      await screen.findByRole('heading', { name: /Audit Logging/i })
+      await screen.findByRole('heading', { name: /^Audit$/i })
     ).toBeVisible()
+    expect(container).not.toHaveTextContent(/Audit Logging/i)
     expect(screen.getByText(/runtime health checked/i)).toBeVisible()
     expect(screen.getByText(/resolve granted/i)).toBeVisible()
     expect(screen.getAllByText(/Service Lasso/i)[0]).toBeVisible()

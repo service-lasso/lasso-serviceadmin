@@ -76,8 +76,8 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/operations/audit-logging',
-    heading: /^Audit Logging$/i,
-    title: 'Service Admin - Operations Audit Logging',
+    heading: /^Audit$/i,
+    title: 'Service Admin - Operations Audit',
   },
   {
     path: '/auth-session',

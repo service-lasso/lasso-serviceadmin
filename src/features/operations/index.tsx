@@ -329,7 +329,7 @@ function buildTelemetryRows(
       state: 'available',
       lastSample: secretsBrokerAuditEvents[0]?.timestamp ?? 'Not sampled',
       value: `${secretsBrokerAuditEvents.length} metadata-only audit events loaded`,
-      nextAction: 'Use Audit Logging for policy, outcome, and chain status.',
+      nextAction: 'Use Audit for policy, outcome, and chain status.',
     },
     ...serviceRows,
   ]
@@ -892,9 +892,9 @@ export function OperationsTelemetry() {
 
 export function OperationsAuditLogging() {
   usePageMetadata({
-    title: 'Service Admin - Operations Audit Logging',
+    title: 'Service Admin - Operations Audit',
     description:
-      'Operations audit logging across Service Lasso and Secrets Broker sources.',
+      'Operations audit events across Service Lasso and Secrets Broker sources.',
   })
 
   const rows = useMemo(() => buildAuditRows(), [])
@@ -916,7 +916,7 @@ export function OperationsAuditLogging() {
   return (
     <>
       <OperationsHeader
-        title='Audit Logging'
+        title='Audit'
         description='Metadata-only operation events for Service Lasso and Secrets Broker, including explicit unavailable chain proof states.'
       />
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
