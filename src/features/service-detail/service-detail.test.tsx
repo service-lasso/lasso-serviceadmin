@@ -779,13 +779,12 @@ describe('service detail tab keyboard shortcuts', () => {
       })
     }
 
+    expect(screen.getByRole('tab', { name: /overview.*\(1\)/i })).toBeVisible()
+    expect(screen.getByRole('tab', { name: /logs.*\(6\)/i })).toBeVisible()
+    expect(screen.getByRole('tab', { name: /terminal.*\(7\)/i })).toBeVisible()
     expect(
-      screen.getByRole('tab', { name: /overview.*ctrl\+1/i })
-    ).toBeVisible()
-    expect(screen.getByRole('tab', { name: /logs.*ctrl\+6/i })).toBeVisible()
-    expect(
-      screen.getByRole('tab', { name: /terminal.*ctrl\+7/i })
-    ).toBeVisible()
+      screen.queryByRole('tab', { name: /overview.*ctrl\+1/i })
+    ).not.toBeInTheDocument()
   })
 
   it('ignores unmodified number keys and Ctrl+number inside the config editor', async () => {

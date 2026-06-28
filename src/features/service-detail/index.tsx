@@ -115,6 +115,7 @@ import {
   normalizeServiceDetailTab,
   serviceDetailTabs,
   serviceDetailTabsByShortcut,
+  getServiceDetailTabShortcutLabel,
   type ServiceDetailTabId,
 } from './service-detail-tabs'
 
@@ -1846,7 +1847,7 @@ export function ServiceDetail({
                       >
                         {tab.label}{' '}
                         <span className='ml-1 italic opacity-80'>
-                          ({tab.shortcut})
+                          ({getServiceDetailTabShortcutLabel(tab.shortcut)})
                         </span>
                       </TabsTrigger>
                     ))}
