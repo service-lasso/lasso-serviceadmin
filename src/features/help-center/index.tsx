@@ -158,7 +158,8 @@ function MarkdownArticle({ content }: { content: string }) {
 export function HelpCenter() {
   usePageMetadata({
     title: 'Service Admin - Help Center',
-    description: 'Markdown-based Help Center for Service Lasso docs.',
+    description:
+      'Guides and runbooks for operating local Service Lasso services.',
   })
 
   const search = route.useSearch()
@@ -229,7 +230,7 @@ export function HelpCenter() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Help Center</h2>
             <p className='text-muted-foreground'>
-              Help docs loaded from the local docs set.
+              Guides and runbooks for operating local Service Lasso services.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
