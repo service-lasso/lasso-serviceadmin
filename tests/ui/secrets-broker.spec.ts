@@ -82,7 +82,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByRole('link', { name: 'Add provider' })).toBeVisible()
     await expect(
-      page.getByRole('main').getByRole('link', { name: 'Audit Logging' })
+      page.getByRole('main').getByRole('link', { name: 'Audit' })
     ).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'View provider status' })
@@ -1149,7 +1149,7 @@ test.describe('Secrets Broker browser coverage', () => {
       ['/secrets-broker/sources', /Secrets Broker providers/i],
       ['/secrets-broker/backup-keys', /Local encrypted store/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
-      ['/operations/audit-logging', /Audit Logging/i],
+      ['/operations/audit-logging', /^Audit$/i],
     ] as const
 
     for (const [path, label] of sections) {

@@ -200,8 +200,8 @@ const secretsBrokerSectionMetadata: Record<
     description: 'Inspect safe service-to-secret relationship metadata.',
   },
   'audit-events': {
-    title: 'Service Admin - Operations Audit Logging',
-    heading: 'Audit Logging',
+    title: 'Service Admin - Operations Audit',
+    heading: 'Audit',
     description: 'Inspect audit events and tamper-evidence metadata.',
   },
   diagnostics: {
@@ -2297,7 +2297,7 @@ export function SecretsBrokerSetupWizard({
                     <Link to='/secrets-broker/sources'>Add provider</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
-                    <Link to='/operations/audit-logging'>Audit Logging</Link>
+                    <Link to='/operations/audit-logging'>Audit</Link>
                   </Button>
                   <Button variant='outline' size='sm' asChild>
                     <Link to='/secrets-broker/sources'>

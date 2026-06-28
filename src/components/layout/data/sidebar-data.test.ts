@@ -76,7 +76,7 @@ describe('sidebar optional page classification', () => {
     ])
     expect(operationsGroup?.items.map((item) => item.title)).toEqual([
       'Telemetry',
-      'Audit Logging',
+      'Audit',
     ])
   })
 })

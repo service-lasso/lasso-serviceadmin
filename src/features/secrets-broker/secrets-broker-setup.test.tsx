@@ -124,7 +124,7 @@ describe('Secrets Broker overview dashboard', () => {
     expect(screen.getByText(/Needs operator action/i)).toBeVisible()
     expect(
       screen
-        .getAllByRole('link', { name: /Audit Logging/i })
+        .getAllByRole('link', { name: /^Audit$/i })
         .some(
           (link) => link.getAttribute('href') === '/operations/audit-logging'
         )
@@ -167,7 +167,7 @@ describe('Secrets Broker overview dashboard', () => {
     expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()
     expect(screen.getByText(/key version v3/i)).toBeVisible()
     expect(screen.getByText(/View providers/i)).toBeVisible()
-    expect(screen.getAllByText(/Audit Logging/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/^Audit$/i)[0]).toBeVisible()
 
     await user.selectOptions(
       screen.getByLabelText(/Preview state/i),
@@ -200,14 +200,14 @@ describe('Secrets Broker overview dashboard', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('redirects the removed operational controls route to Audit Logging', async () => {
+  it('redirects the removed operational controls route to Audit', async () => {
     const { router } = await renderRoute('/secrets-broker/operational-controls')
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/operations/audit-logging')
     })
     expect(
-      screen.getByRole('heading', { name: /^Audit Logging$/i })
+      screen.getByRole('heading', { name: /^Audit$/i })
     ).toBeVisible()
     expect(
       screen.queryByRole('heading', { name: /^Operational Controls$/i })
@@ -1132,7 +1132,7 @@ describe('Secrets Broker overview dashboard', () => {
     await renderRoute('/operations/audit-logging')
 
     expect(
-      screen.getByRole('heading', { name: /Audit Logging/i })
+      screen.getByRole('heading', { name: /^Audit$/i })
     ).toBeVisible()
     expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()

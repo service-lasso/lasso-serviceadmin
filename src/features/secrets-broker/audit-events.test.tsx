@@ -8,12 +8,12 @@ import {
 } from './audit-events'
 
 describe('Secrets Broker audit event viewer', () => {
-  it('redirects the legacy Secrets Broker audit route to Operations Audit Logging', async () => {
+  it('redirects the legacy Secrets Broker audit route to Operations Audit', async () => {
     const { router } = await renderRoute('/secrets-broker/audit-events')
 
     expect(
       await screen.findByRole('heading', {
-        name: /Audit Logging/i,
+        name: /^Audit$/i,
       })
     ).toBeVisible()
     expect(screen.getAllByText(/runtime health checked/i)[0]).toBeVisible()
