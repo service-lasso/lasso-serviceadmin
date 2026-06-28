@@ -206,9 +206,7 @@ describe('Secrets Broker overview dashboard', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/operations/audit-logging')
     })
-    expect(
-      screen.getByRole('heading', { name: /^Audit$/i })
-    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: /^Audit$/i })).toBeVisible()
     expect(
       screen.queryByRole('heading', { name: /^Operational Controls$/i })
     ).not.toBeInTheDocument()
@@ -1131,9 +1129,7 @@ describe('Secrets Broker overview dashboard', () => {
   it('covers audit event types, filtering, and safe detail rendering', async () => {
     await renderRoute('/operations/audit-logging')
 
-    expect(
-      screen.getByRole('heading', { name: /^Audit$/i })
-    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: /^Audit$/i })).toBeVisible()
     expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
 
