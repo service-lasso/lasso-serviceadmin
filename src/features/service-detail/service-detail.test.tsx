@@ -2,6 +2,11 @@ import { renderRoute } from '@/test/render-route'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  __resetStubServicesForTest,
+  __setStubServicesForTest,
+} from '@/lib/service-lasso-dashboard/stub'
+import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { buildMetadataTableRows } from './metadata-table'
 
 vi.mock('@/lib/service-lasso-dashboard/client', async () => {
@@ -50,9 +55,73 @@ vi.mock('@monaco-editor/react', () => ({
 }))
 
 afterEach(() => {
+  __resetStubServicesForTest()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
+
+function buildNodeSampleService(): DashboardService {
+  return {
+    id: 'node-sample-service',
+    name: 'Node Sample Service',
+    status: 'running',
+    favorite: false,
+    role: 'Canonical terminal and logs validation target',
+    note: 'Managed process is running with pid 4242.',
+    installed: true,
+    links: [{ label: 'Local', url: 'http://127.0.0.1:4020', kind: 'local' }],
+    runtimeHealth: {
+      state: 'running',
+      health: 'healthy',
+      uptime: '3m',
+      lastCheckAt: '2026-07-02T08:25:00Z',
+      lastRestartAt: '2026-07-02T08:22:00Z',
+      summary: 'Runtime process pid 4242 is healthy.',
+    },
+    endpoints: [
+      {
+        label: 'Local HTTP',
+        url: 'http://127.0.0.1:4020',
+        bind: '127.0.0.1',
+        port: 4020,
+        protocol: 'http',
+        exposure: 'local',
+      },
+    ],
+    metadata: {
+      serviceType: 'sample',
+      runtime: 'node',
+      version: 'demo',
+      build: 'local',
+      packageId: '@service-lasso/node-sample-service',
+      installPath:
+        'C:\\projects\\service-lasso\\service-lasso\\services\\node-sample-service',
+      configPath:
+        'C:\\projects\\service-lasso\\service-lasso\\services\\node-sample-service\\service.json',
+      logPath: 'C:\\runtime\\node-sample-service\\service.log',
+      workPath:
+        'C:\\projects\\service-lasso\\service-lasso\\services\\node-sample-service',
+      profile: 'canonical-demo',
+    },
+    dependencies: [],
+    dependents: [],
+    environmentVariables: [],
+    recentLogs: [
+      {
+        timestamp: '2026-07-02T08:22:00Z',
+        level: 'info',
+        source: 'stdout',
+        message: 'node-sample-service starting',
+      },
+    ],
+    actions: [
+      { id: 'start', label: 'Start service', kind: 'start' },
+      { id: 'stop', label: 'Stop service', kind: 'stop' },
+      { id: 'restart', label: 'Restart service', kind: 'restart' },
+      { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
+    ],
+  }
+}
 
 describe('service detail overview metadata table', () => {
   it('renders runtime metadata under the overview summary without a duplicate metadata tab', async () => {
@@ -523,6 +592,195 @@ describe('service detail quick actions', () => {
       screen.getByRole('textbox', { name: /terminal input/i })
     ).toBeDisabled()
     expect(screen.getByText(/Provider does not expose stdin/i)).toBeVisible()
+  })
+
+  it('validates Node Sample Service Terminal and Logs with safe stdout and stderr fixtures', async () => {
+    const user = userEvent.setup()
+    __setStubServicesForTest([buildNodeSampleService()])
+
+    const stdoutLines = [
+      'node-sample-service starting',
+      'node-sample-service listening on 127.0.0.1:4020',
+      'node-sample-service heartbeat count=1 uptimeMs=5000',
+    ]
+    const stderrLines = [
+      'node-sample-service demo error message="canonical error"',
+    ]
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const parsed = new URL(url, 'http://localhost')
+      const serviceId =
+        parsed.searchParams.get('service') ?? 'node-sample-service'
+      const type = parsed.searchParams.get('type') ?? 'stdout'
+
+      if (parsed.pathname === '/api/services/log-info') {
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type,
+            path: `C:\\runtime\\node-sample-service\\${type}.log`,
+            available: true,
+            availableTypes: ['default', 'stdout', 'stderr'],
+            sources: [
+              {
+                kind: 'current',
+                stream: type,
+                runId: 'node-sample-run-1',
+                path: `C:\\runtime\\node-sample-service\\${type}.log`,
+                available: true,
+              },
+            ],
+            stdin: {
+              available: true,
+              provider: 'direct',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/logs/read') {
+        const lines = type === 'stderr' ? stderrLines : stdoutLines
+
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type,
+            path: `C:\\runtime\\node-sample-service\\${type}.log`,
+            available: true,
+            source: {
+              kind: 'current',
+              stream: type,
+              runId: 'node-sample-run-1',
+              path: `C:\\runtime\\node-sample-service\\${type}.log`,
+              available: true,
+            },
+            totalLines: lines.length,
+            start: 0,
+            end: lines.length,
+            hasMore: false,
+            nextBefore: 0,
+            cursor: String(lines.length),
+            nextCursor: null,
+            limit: Number(parsed.searchParams.get('limit') ?? '240'),
+            lines,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/services/node-sample-service/logs') {
+        return new Response(
+          JSON.stringify({
+            logs: {
+              serviceId: 'node-sample-service',
+              runId: 'node-sample-run-1',
+              logPath: 'C:\\runtime\\node-sample-service\\service.log',
+              stdoutPath: 'C:\\runtime\\node-sample-service\\stdout.log',
+              stderrPath: 'C:\\runtime\\node-sample-service\\stderr.log',
+              entries: [
+                {
+                  level: 'info',
+                  message:
+                    'node-sample-service demo log message="canonical normal"',
+                },
+                {
+                  level: 'error',
+                  message:
+                    'node-sample-service demo error message="canonical error"',
+                },
+              ],
+              archives: [],
+              retention: { maxArchives: 3 },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/services/node-sample-service/stdin') {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          input: 'ping',
+          stream: 'stdin',
+          actor: 'service-admin-web',
+        })
+        stdoutLines.push('node-sample-service command pong')
+
+        return new Response(
+          JSON.stringify({
+            serviceId: 'node-sample-service',
+            accepted: true,
+            auditId: 'node-sample-audit-1',
+            message: 'Input accepted.',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      return new Response('not found', { status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/services/node-sample-service?tab=terminal')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Node Sample Service$/i })
+      ).toBeVisible()
+    })
+
+    const visibleTerminal = await screen.findByTestId(
+      'service-detail-terminal-visible-lines'
+    )
+
+    expect(visibleTerminal).toHaveTextContent(/node-sample-service starting/)
+    expect(visibleTerminal).toHaveTextContent(/listening on 127\.0\.0\.1:4020/)
+    expect(visibleTerminal).toHaveTextContent(/heartbeat count=1/)
+    expect(screen.getByText('node-sample-run-1')).toBeVisible()
+
+    const terminalInput = screen.getByRole('textbox', {
+      name: /terminal input/i,
+    })
+    expect(terminalInput).toBeEnabled()
+
+    await user.type(terminalInput, 'ping')
+    await user.click(screen.getByRole('button', { name: /send input/i }))
+    await screen.findByText('Input accepted.')
+    await user.click(screen.getByRole('button', { name: /refresh/i }))
+
+    await waitFor(() => {
+      expect(visibleTerminal).toHaveTextContent(/command pong/)
+    })
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    const streams = await screen.findByTestId('service-detail-run-streams')
+    const overview = await screen.findByTestId('service-detail-log-overview')
+
+    expect(within(overview).getByText('node-sample-run-1')).toBeVisible()
+    expect(
+      within(streams).getByTestId('service-detail-stdout-lines')
+    ).toHaveTextContent(/demo log message="canonical normal"|command pong/)
+    expect(
+      within(streams).getByTestId('service-detail-stderr-lines')
+    ).toHaveTextContent(/demo error message="canonical error"/)
+    expect(
+      screen.queryByText(/ACTUAL_SECRET|CLIENT_SECRET|PASSWORD=/)
+    ).toBeNull()
   })
 
   it('keeps Terminal input disabled when the managed service is stopped', async () => {
