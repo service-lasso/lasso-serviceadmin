@@ -718,6 +718,14 @@ function setServices(nextServices: DashboardService[]) {
   persistStubState()
 }
 
+export function __setStubServicesForTest(nextServices: DashboardService[]) {
+  services = syncRelationshipStatuses(structuredClone(nextServices))
+}
+
+export function __resetStubServicesForTest() {
+  services = syncRelationshipStatuses(cloneDefaultServices())
+}
+
 function serviceHealthForStatus(
   status: ServiceStatus
 ): DashboardService['runtimeHealth']['health'] {
