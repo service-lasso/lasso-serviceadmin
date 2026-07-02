@@ -20,6 +20,9 @@ Copy-Item -Force (Join-Path $root 'runtime\server.js') (Join-Path $staging 'runt
 Copy-Item -Recurse -Force (Join-Path $root 'config') (Join-Path $staging 'config')
 New-Item -ItemType Directory -Force -Path (Join-Path $staging 'dist') | Out-Null
 Copy-Item -Force (Join-Path $dist 'index.html') (Join-Path $staging 'dist\index.html')
+foreach ($rootAsset in @('apple-touch-icon.png', 'favicon.ico', 'site.webmanifest', 'web-app-manifest-192x192.png', 'web-app-manifest-512x512.png')) {
+  Copy-Item -Force (Join-Path $dist $rootAsset) (Join-Path $staging "dist\$rootAsset")
+}
 Copy-Item -Recurse -Force (Join-Path $dist 'assets') (Join-Path $staging 'dist\assets')
 Copy-Item -Recurse -Force (Join-Path $dist 'images') (Join-Path $staging 'dist\images')
 Copy-Item -Recurse -Force (Join-Path $dist 'services') (Join-Path $staging 'dist\services')
