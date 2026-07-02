@@ -8,6 +8,14 @@ import type { IncomingMessage, ServerResponse } from 'http'
 
 const DEFAULT_LOG_READ_LIMIT = 100
 const MAX_LOG_READ_LIMIT = 1000
+const DEFAULT_RUNTIME_PROXY_TARGET = 'http://127.0.0.1:17883'
+
+function resolveRuntimeProxyTarget() {
+  return (
+    process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET?.trim() ||
+    DEFAULT_RUNTIME_PROXY_TARGET
+  )
+}
 
 type StubServiceDefinition = {
   id: string
@@ -333,6 +341,22 @@ function createLogReadEndpointPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: resolveRuntimeProxyTarget(),
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      '/api': {
+        target: resolveRuntimeProxyTarget(),
+        changeOrigin: true,
+      },
+    },
+  },
   plugins: [
     createLogReadEndpointPlugin(),
     tanstackRouter({
