@@ -1,12 +1,19 @@
 import { cn } from '@/lib/utils'
 
 type MainProps = React.HTMLAttributes<HTMLElement> & {
+  constrained?: boolean
   fixed?: boolean
   fluid?: boolean
   ref?: React.Ref<HTMLElement>
 }
 
-export function Main({ fixed, className, fluid, ...props }: MainProps) {
+export function Main({
+  constrained,
+  fixed,
+  className,
+  fluid,
+  ...props
+}: MainProps) {
   return (
     <main
       data-layout={fixed ? 'fixed' : 'auto'}
@@ -16,8 +23,10 @@ export function Main({ fixed, className, fluid, ...props }: MainProps) {
         // If layout is fixed, make the main container flex and grow
         fixed && 'flex grow flex-col overflow-hidden',
 
-        // If layout is not fluid, set the max-width
-        !fluid &&
+        // Most app pages should fill the Service Admin workspace; opt in only
+        // for intentionally narrow reading or settings surfaces.
+        constrained &&
+          !fluid &&
           '@7xl/content:mx-auto @7xl/content:w-full @7xl/content:max-w-7xl',
         className
       )}
