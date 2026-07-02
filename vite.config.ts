@@ -5,17 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { promises as fs } from 'fs'
 import type { IncomingMessage, ServerResponse } from 'http'
+import { resolveRuntimeProxyTarget } from './src/lib/service-lasso-dashboard/runtime-proxy-target'
 
 const DEFAULT_LOG_READ_LIMIT = 100
 const MAX_LOG_READ_LIMIT = 1000
-const DEFAULT_RUNTIME_PROXY_TARGET = 'http://127.0.0.1:17883'
-
-function resolveRuntimeProxyTarget() {
-  return (
-    process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET?.trim() ||
-    DEFAULT_RUNTIME_PROXY_TARGET
-  )
-}
 
 type StubServiceDefinition = {
   id: string
@@ -344,7 +337,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: resolveRuntimeProxyTarget(),
+        target: resolveRuntimeProxyTarget(
+          process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET
+        ),
         changeOrigin: true,
       },
     },
@@ -352,7 +347,9 @@ export default defineConfig({
   preview: {
     proxy: {
       '/api': {
-        target: resolveRuntimeProxyTarget(),
+        target: resolveRuntimeProxyTarget(
+          process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET
+        ),
         changeOrigin: true,
       },
     },
