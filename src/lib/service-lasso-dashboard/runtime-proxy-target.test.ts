@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_RUNTIME_PROXY_TARGET,
   resolveRuntimeProxyTarget,
+  shouldEnableStubLogMiddleware,
 } from './runtime-proxy-target'
 
 describe('Service Admin runtime API proxy target', () => {
@@ -17,5 +18,14 @@ describe('Service Admin runtime API proxy target', () => {
 
   it('ignores blank runtime proxy overrides', () => {
     expect(resolveRuntimeProxyTarget('   ')).toBe(DEFAULT_RUNTIME_PROXY_TARGET)
+  })
+
+  it('keeps the Vite stub log middleware disabled by default', () => {
+    expect(shouldEnableStubLogMiddleware()).toBe(false)
+    expect(shouldEnableStubLogMiddleware('false')).toBe(false)
+  })
+
+  it('allows explicit Vite stub log middleware opt-in', () => {
+    expect(shouldEnableStubLogMiddleware('true')).toBe(true)
   })
 })
