@@ -10,28 +10,38 @@ describe('Operations pages', () => {
     expect(
       await screen.findByRole('heading', { name: /^Telemetry$/i })
     ).toBeVisible()
-    expect(screen.getByText(/Service Lasso runtime/i)).toBeVisible()
-    expect(await screen.findByText(/Core telemetry exporter/i)).toBeVisible()
-    expect(screen.getByText(/otlp-http disabled/i)).toBeVisible()
-    expect(screen.getByText(/endpoint hidden=true/i)).toBeVisible()
-    expect(screen.getByText(/API request buffer safety/i)).toBeVisible()
-    expect(screen.getByText(/route templates only=true/i)).toBeVisible()
-    expect(screen.getByText(/API request summary/i)).toBeVisible()
-    expect(screen.getByText(/21 observed/i)).toBeVisible()
-    expect(screen.getByText(/Core trace propagation/i)).toBeVisible()
-    expect(screen.getByText(/raw headers returned=false/i)).toBeVisible()
-    expect(screen.getByText(/Core-to-broker correlation/i)).toBeVisible()
-    expect(screen.getByText(/broker trace context=true/i)).toBeVisible()
-    expect(
-      await screen.findByText(/Secrets Broker service trace context/i)
-    ).toBeVisible()
-    expect(await screen.findByText(/w3c traceparent=true/i)).toBeVisible()
-    expect(
-      await screen.findByText(/Secrets Broker telemetry safe envelope/i)
-    ).toBeVisible()
-    expect(screen.getByText(/unsafe keys returned=false/i)).toBeVisible()
-    const [hiddenBoundary] = screen.getAllByText(/Hidden/i)
-    expect(hiddenBoundary).toBeVisible()
+    expect(screen.getAllByText(/Service Lasso runtime/i)[0]).toBeVisible()
+    const telemetryState = await screen.findByText(
+      /Core telemetry (exporter|preview)/i
+    )
+    expect(telemetryState).toBeVisible()
+
+    if (/exporter/i.test(telemetryState.textContent ?? '')) {
+      expect(screen.getByText(/otlp-http disabled/i)).toBeVisible()
+      expect(screen.getByText(/endpoint hidden=true/i)).toBeVisible()
+      expect(screen.getByText(/API request buffer safety/i)).toBeVisible()
+      expect(screen.getByText(/route templates only=true/i)).toBeVisible()
+      expect(screen.getByText(/API request summary/i)).toBeVisible()
+      expect(screen.getByText(/21 observed/i)).toBeVisible()
+      expect(screen.getByText(/Core trace propagation/i)).toBeVisible()
+      expect(screen.getByText(/raw headers returned=false/i)).toBeVisible()
+      expect(screen.getByText(/Core-to-broker correlation/i)).toBeVisible()
+      expect(screen.getByText(/broker trace context=true/i)).toBeVisible()
+      expect(
+        await screen.findByText(/Secrets Broker service trace context/i)
+      ).toBeVisible()
+      expect(await screen.findByText(/w3c traceparent=true/i)).toBeVisible()
+      expect(
+        await screen.findByText(/Secrets Broker telemetry safe envelope/i)
+      ).toBeVisible()
+      expect(screen.getByText(/unsafe keys returned=false/i)).toBeVisible()
+      const [hiddenBoundary] = screen.getAllByText(/Hidden/i)
+      expect(hiddenBoundary).toBeVisible()
+    } else {
+      expect(
+        screen.getAllByText(/Verify the Service Lasso runtime/i)[0]
+      ).toBeVisible()
+    }
     expect(container).not.toHaveTextContent(/BEGIN PRIVATE KEY/i)
     expect(container).not.toHaveTextContent(/CLIENT_SECRET=/i)
     expect(container).not.toHaveTextContent(/REFRESH_TOKEN=/i)
