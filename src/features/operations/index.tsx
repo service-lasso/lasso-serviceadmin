@@ -79,6 +79,17 @@ type AuditLogRow = {
   safeSummary: string
 }
 
+type AuditSourceStatus = 'live' | 'unavailable' | 'fixture'
+
+type AuditSummary = {
+  sourceLabel: string
+  eventCount: number
+  mutatingActionCount: number
+  chainStatus: 'verified' | 'broken' | 'mixed' | 'unavailable'
+  rawMaterialLabel: 'Hidden' | 'Review'
+  rawMaterialReturned: boolean
+}
+
 const stateVariant: Record<
   OperationsState,
   'default' | 'secondary' | 'outline' | 'destructive'
@@ -465,6 +476,49 @@ function buildAuditRows(): AuditLogRow[] {
     },
     ...brokerRows,
   ]
+}
+
+function auditSourceLabel(status: AuditSourceStatus) {
+  if (status === 'live') return 'Live runtime audit'
+  if (status === 'unavailable') return 'Unavailable'
+  return 'Fixture preview'
+}
+
+function isMutatingAuditRow(row: AuditLogRow) {
+  return /committed|changed|completed|rotated|revoked|denied|granted/i.test(
+    `${row.event} ${row.policy}`
+  )
+}
+
+function auditChainStatus(rows: AuditLogRow[]): AuditSummary['chainStatus'] {
+  if (!rows.length) return 'unavailable'
+
+  const statuses = new Set(rows.map((row) => row.tamperEvidence))
+  if (statuses.size === 1) {
+    const [status] = Array.from(statuses)
+    return status === 'verified' || status === 'broken' ? status : 'unavailable'
+  }
+
+  return 'mixed'
+}
+
+export function buildAuditSummary(
+  rows: AuditLogRow[],
+  sourceStatus: AuditSourceStatus = 'fixture',
+  rawMaterialReturned = false
+): AuditSummary {
+  return {
+    sourceLabel: auditSourceLabel(sourceStatus),
+    eventCount: sourceStatus === 'unavailable' ? 0 : rows.length,
+    mutatingActionCount:
+      sourceStatus === 'unavailable'
+        ? 0
+        : rows.filter(isMutatingAuditRow).length,
+    chainStatus:
+      sourceStatus === 'unavailable' ? 'unavailable' : auditChainStatus(rows),
+    rawMaterialLabel: rawMaterialReturned ? 'Review' : 'Hidden',
+    rawMaterialReturned,
+  }
 }
 
 function OperationsLoading() {
@@ -898,6 +952,7 @@ export function OperationsAuditLogging() {
   })
 
   const rows = useMemo(() => buildAuditRows(), [])
+  const auditSummary = useMemo(() => buildAuditSummary(rows), [rows])
   const outcomes = useMemo(
     () =>
       Array.from(new Set(rows.map((row) => row.outcome)))
@@ -920,6 +975,64 @@ export function OperationsAuditLogging() {
         description='Metadata-only operation events for Service Lasso and Secrets Broker, including explicit unavailable chain proof states.'
       />
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        <div className='grid gap-4 md:grid-cols-5'>
+          <div className='rounded-md border p-4'>
+            <div className='flex items-center gap-2 text-sm font-medium'>
+              <Activity className='size-4' /> Data source
+            </div>
+            <div className='mt-2 text-2xl font-bold'>
+              {auditSummary.sourceLabel}
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              Audit events are labelled separately from telemetry and request
+              summaries.
+            </p>
+          </div>
+          <div className='rounded-md border p-4'>
+            <div className='flex items-center gap-2 text-sm font-medium'>
+              <FileChartColumn className='size-4' /> Audit events
+            </div>
+            <div className='mt-2 text-2xl font-bold'>
+              {auditSummary.eventCount}
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              Events returned by the current audit source.
+            </p>
+          </div>
+          <div className='rounded-md border p-4'>
+            <div className='flex items-center gap-2 text-sm font-medium'>
+              <ClipboardCheck className='size-4' /> Durable operator actions
+            </div>
+            <div className='mt-2 text-2xl font-bold'>
+              {auditSummary.mutatingActionCount}
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              Mutating actions inferred from safe audit metadata.
+            </p>
+          </div>
+          <div className='rounded-md border p-4'>
+            <div className='flex items-center gap-2 text-sm font-medium'>
+              <ClipboardCheck className='size-4' /> Chain status
+            </div>
+            <div className='mt-2 text-2xl font-bold capitalize'>
+              {auditSummary.chainStatus}
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              Verified, broken, mixed, or unavailable chain proof.
+            </p>
+          </div>
+          <div className='rounded-md border p-4'>
+            <div className='flex items-center gap-2 text-sm font-medium'>
+              <ClipboardCheck className='size-4' /> Raw material
+            </div>
+            <div className='mt-2 text-2xl font-bold'>
+              {auditSummary.rawMaterialLabel}
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              rawMaterialReturned={String(auditSummary.rawMaterialReturned)}
+            </p>
+          </div>
+        </div>
         <div className='rounded-md border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground'>
           Audit rows use safe identifiers, policy metadata, outcomes, and
           tamper-evidence status only. Secret values, provider credentials,
