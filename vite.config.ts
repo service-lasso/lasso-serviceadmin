@@ -5,7 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { promises as fs } from 'fs'
 import type { IncomingMessage, ServerResponse } from 'http'
-import { resolveRuntimeProxyTarget } from './src/lib/service-lasso-dashboard/runtime-proxy-target'
+import {
+  resolveRuntimeProxyTarget,
+  shouldEnableStubLogMiddleware,
+} from './src/lib/service-lasso-dashboard/runtime-proxy-target'
 
 const DEFAULT_LOG_READ_LIMIT = 100
 const MAX_LOG_READ_LIMIT = 1000
@@ -355,7 +358,9 @@ export default defineConfig({
     },
   },
   plugins: [
-    createLogReadEndpointPlugin(),
+    ...(shouldEnableStubLogMiddleware(process.env.SERVICE_ADMIN_STUB_LOGS)
+      ? [createLogReadEndpointPlugin()]
+      : []),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
