@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -93,6 +93,14 @@ function providerTypeLabel(provider: SecretsBrokerSourceBackend) {
   return provider.type === 'local' ? 'local-encrypted-store' : provider.type
 }
 
+function isLocalFallbackProvider(provider: SecretsBrokerSourceBackend) {
+  return (
+    provider.critical === true ||
+    provider.defaultRole === 'default' ||
+    provider.sourceId === 'local'
+  )
+}
+
 function EnabledBadge({ enabled }: { enabled: boolean }) {
   return enabled ? (
     <Badge className='bg-emerald-600 hover:bg-emerald-600'>Enabled</Badge>
@@ -170,6 +178,18 @@ function actionSummary({ provider, action }: SelectedProviderAction): {
   }
 
   if (action === 'disable') {
+    if (isLocalFallbackProvider(provider)) {
+      return {
+        status: 'blocked: local fallback provider',
+        nextAction: 'keep the local encrypted store enabled as the fallback',
+        details: [
+          'Local encrypted store is the fallback provider and cannot be removed.',
+          'disable is blocked before any broker mutation preview',
+          'refs, namespaces, state, and audit metadata remain metadata only',
+        ],
+      }
+    }
+
     return {
       status: 'disable requires broker confirmation',
       nextAction: 'preview dependent refs and service impact before disable',
@@ -182,6 +202,18 @@ function actionSummary({ provider, action }: SelectedProviderAction): {
   }
 
   if (action === 'remove') {
+    if (isLocalFallbackProvider(provider)) {
+      return {
+        status: 'blocked: local fallback provider',
+        nextAction: 'keep the local encrypted store available for recovery',
+        details: [
+          'Local encrypted store is the fallback provider and cannot be removed.',
+          'remove is blocked before any broker mutation preview',
+          'refs, namespaces, state, and audit metadata remain metadata only',
+        ],
+      }
+    }
+
     return {
       status: 'remove requires dependency and recovery review',
       nextAction: 'verify dependent refs and recovery plan before removal',
@@ -217,15 +249,23 @@ function ProviderActions({
     'invalid',
     'setup-needed',
   ].includes(provider.lifecycle)
+  const localFallback = isLocalFallbackProvider(provider)
+  const localFallbackReason =
+    'Local encrypted store is the fallback provider and cannot be removed.'
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type='button' size='sm' variant='outline'>
+        <Button
+          type='button'
+          size='sm'
+          variant='outline'
+          title={`Provider actions for ${provider.title}`}
+        >
           <MoreHorizontal className='size-4' /> Actions
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' className='w-48'>
+      <DropdownMenuContent align='end' className='w-72'>
         <DropdownMenuItem disabled={!canEdit} onSelect={() => onSelect('edit')}>
           <Settings className='size-4' /> View/Edit configuration
         </DropdownMenuItem>
@@ -238,14 +278,36 @@ function ProviderActions({
         >
           <RefreshCw className='size-4' /> Reconnect / reauth
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSelect('disable')}>
-          <Ban className='size-4' /> Disable provider
+        <DropdownMenuItem
+          disabled={localFallback}
+          title={localFallback ? localFallbackReason : undefined}
+          onSelect={() => onSelect('disable')}
+        >
+          <Ban className='size-4' />
+          <span className='flex min-w-0 flex-col'>
+            <span>Disable provider</span>
+            {localFallback ? (
+              <span className='text-xs whitespace-normal text-muted-foreground'>
+                {localFallbackReason}
+              </span>
+            ) : null}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem
+          disabled={localFallback}
           variant='destructive'
+          title={localFallback ? localFallbackReason : undefined}
           onSelect={() => onSelect('remove')}
         >
-          <Trash2 className='size-4' /> Remove provider
+          <Trash2 className='size-4' />
+          <span className='flex min-w-0 flex-col'>
+            <span>Remove provider</span>
+            {localFallback ? (
+              <span className='text-xs whitespace-normal'>
+                {localFallbackReason}
+              </span>
+            ) : null}
+          </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -391,9 +453,14 @@ function providerColumns(
       ),
       cell: ({ row }) => (
         <div className='flex min-w-0 flex-col'>
-          <span className='truncate font-medium' title={row.original.title}>
-            {row.original.title}
-          </span>
+          <div className='flex min-w-0 flex-wrap items-center gap-2'>
+            <span className='truncate font-medium' title={row.original.title}>
+              {row.original.title}
+            </span>
+            {isLocalFallbackProvider(row.original) ? (
+              <Badge variant='secondary'>Fallback/default</Badge>
+            ) : null}
+          </div>
           <span
             className='truncate text-xs text-muted-foreground'
             title={row.original.source}
@@ -532,13 +599,7 @@ export function ProvidersManagementPage() {
       'Focused Secrets Broker provider management table for configured providers and metadata-only status.',
   })
 
-  const data = useMemo(
-    () =>
-      getConfiguredSecretsBrokerProviders().filter(
-        (provider) => provider.enabled
-      ),
-    []
-  )
+  const data = useMemo(() => getConfiguredSecretsBrokerProviders(), [])
   const addableProviders = useMemo(() => getAddableSecretsBrokerProviders(), [])
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'priority', desc: false },
@@ -592,7 +653,7 @@ export function ProvidersManagementPage() {
               <KeyRound className='size-5' /> Secrets Broker providers
             </h1>
             <p className='text-muted-foreground'>
-              Enabled provider configuration, health, and row actions.
+              Configured provider state, health, and row actions.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -608,10 +669,12 @@ export function ProvidersManagementPage() {
         </div>
 
         <div className='flex flex-1 flex-col gap-4'>
-          <ProviderActionPanel
-            selection={selectedAction}
-            onClear={() => setSelectedAction(null)}
-          />
+          {selectedAction?.action === 'add' ? (
+            <ProviderActionPanel
+              selection={selectedAction}
+              onClear={() => setSelectedAction(null)}
+            />
+          ) : null}
 
           <DataTableToolbar
             table={table}
@@ -674,16 +737,28 @@ export function ProvidersManagementPage() {
                 <TableBody>
                   {table.getRowModel().rows.length ? (
                     table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} className='group/row'>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className='min-w-0'>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
+                      <Fragment key={row.id}>
+                        <TableRow className='group/row'>
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id} className='min-w-0'>
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                        {selectedAction?.provider.id === row.original.id ? (
+                          <TableRow>
+                            <TableCell colSpan={columns.length}>
+                              <ProviderActionPanel
+                                selection={selectedAction}
+                                onClear={() => setSelectedAction(null)}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
                     ))
                   ) : (
                     <TableRow>
@@ -694,10 +769,10 @@ export function ProvidersManagementPage() {
                         <div className='mx-auto flex max-w-md flex-col items-center gap-2'>
                           <PlugZap className='size-5 text-muted-foreground' />
                           <div className='font-medium'>
-                            No enabled providers match the current filters.
+                            No configured providers match the current filters.
                           </div>
                           <div className='text-sm text-muted-foreground'>
-                            Add a provider or clear filters to review enabled
+                            Add a provider or clear filters to review configured
                             provider state.
                           </div>
                           <Button type='button' size='sm'>

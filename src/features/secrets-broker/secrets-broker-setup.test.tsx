@@ -438,7 +438,7 @@ describe('Secrets Broker overview dashboard', () => {
     await user.click(screen.getByRole('button', { name: /^Clear$/i }))
 
     await user.type(screen.getByPlaceholderText(/Search providers/i), 'aws')
-    expect(screen.getByText(/No enabled providers match/i)).toBeVisible()
+    expect(screen.getByText(/No configured providers match/i)).toBeVisible()
     expect(
       screen.queryByText(/AWS Secrets Manager CLI/i)
     ).not.toBeInTheDocument()
@@ -684,6 +684,41 @@ describe('Secrets Broker overview dashboard', () => {
       screen.getByRole('button', { name: /^Add provider$/i })
     ).toBeVisible()
     expect(screen.queryByText(/AWS Secrets Manager CLI/i)).toBeNull()
+  })
+
+  it('blocks local fallback provider remove and disable from the row action menu', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/sources')
+
+    expect(screen.getByText(/Fallback\/default/i)).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /^Actions$/i }))
+
+    const disableItem = await screen.findByRole('menuitem', {
+      name: /Disable provider/i,
+    })
+    const removeItem = screen.getByRole('menuitem', {
+      name: /Remove provider/i,
+    })
+
+    expect(disableItem).toHaveAttribute('aria-disabled', 'true')
+    expect(removeItem).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getAllByText(
+        /Local encrypted store is the fallback provider and cannot be removed/i
+      ).length
+    ).toBeGreaterThanOrEqual(2)
+
+    await user.click(screen.getByRole('menuitem', { name: /Test connection/i }))
+
+    expect(
+      await screen.findByRole('region', { name: /Provider action detail/i })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/latest metadata test failed closed/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
   it('keeps source backend fixtures free of secret values', () => {
