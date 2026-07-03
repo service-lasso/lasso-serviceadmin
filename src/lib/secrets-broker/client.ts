@@ -84,6 +84,15 @@ export type SecretsBrokerSecretDryRunRequest = {
   requestId?: string
 }
 
+export type SecretsBrokerSecretApplyRequest = {
+  action: SecretsBrokerSecretDryRunAction
+  ref: string
+  operationId: string
+  serviceId?: string
+  reason: string
+  requestId?: string
+}
+
 export type SecretsBrokerSecretDryRunResult = {
   state: SecretsBrokerLiveState
   summary: string
@@ -421,6 +430,14 @@ function dryRunEndpointForAction(action: SecretsBrokerSecretDryRunAction) {
   }
 
   return `/api/services/%40secretsbroker/proxy/v1/management/secrets/${action}/dry-run`
+}
+
+function applyEndpointForAction(action: SecretsBrokerSecretDryRunAction) {
+  if (action === 'policy') {
+    return '/api/services/%40secretsbroker/proxy/v1/management/secrets/policy/apply'
+  }
+
+  return `/api/services/%40secretsbroker/proxy/v1/management/secrets/${action}/apply`
 }
 
 function dryRunModeForAction(action: SecretsBrokerSecretDryRunAction) {
@@ -935,6 +952,101 @@ export async function fetchSecretsBrokerSecretOperationStatus(
       operationId: normalizedOperationId,
       ref: 'unknown-ref',
       operation: 'unknown-operation',
+      status: status === 404 ? 'unsupported' : 'unavailable',
+      outcome: status === 404 ? 'unsupported' : 'unavailable',
+      terminal: true,
+      retrySafe: false,
+      auditStatus: 'audit-unavailable',
+      correlationId: 'unavailable',
+      nextAction:
+        status === 404 ? 'inspect_capability' : 'retry_or_inspect_status',
+      checkedAt,
+      stubMode: false,
+    }
+  }
+}
+
+export async function submitSecretsBrokerSecretApply(
+  request: SecretsBrokerSecretApplyRequest
+): Promise<SecretsBrokerSecretOperationStatusResult> {
+  const ref = request.ref.trim()
+  const operationId = request.operationId.trim()
+  const serviceId = request.serviceId?.trim() || '@serviceadmin'
+  const reason = request.reason.trim()
+  const requestId =
+    request.requestId?.trim() ||
+    `service-admin-${request.action}-apply-${Date.now().toString(36)}`
+  const checkedAt = new Date().toISOString()
+
+  if (isServiceAdminStubModeEnabled()) {
+    return {
+      state: 'unsupported',
+      summary:
+        'Explicit Service Admin stub mode is enabled; live broker apply was not requested.',
+      operationId,
+      ref: ref || 'stub-mode',
+      operation: request.action,
+      status: 'stub_mode',
+      outcome: 'stub_mode',
+      terminal: true,
+      retrySafe: false,
+      auditStatus: 'stub-mode',
+      correlationId: 'stub-mode',
+      nextAction: 'disable_stub_mode_for_live_apply',
+      checkedAt,
+      stubMode: true,
+    }
+  }
+
+  if (!ref || !operationId || !reason) {
+    return {
+      state: 'unsupported',
+      summary:
+        'A managed secret ref, broker operation id, and audit reason are required before live apply can be submitted.',
+      operationId,
+      ref: ref || 'unknown-ref',
+      operation: request.action,
+      status: 'apply_not_ready',
+      outcome: 'apply_not_ready',
+      terminal: true,
+      retrySafe: false,
+      auditStatus: 'audit-unavailable',
+      correlationId: 'unavailable',
+      nextAction: 'complete_apply_gate',
+      checkedAt,
+      stubMode: false,
+    }
+  }
+
+  try {
+    const payload = await postJson<RawManagedSecretOperationStatusResponse>(
+      applyEndpointForAction(request.action),
+      {
+        requestId,
+        serviceId,
+        ref,
+        operationId,
+        reason,
+        confirm: true,
+      }
+    )
+
+    return normalizeOperationStatusResponse(payload, operationId)
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return {
+      state: status === 404 ? 'unsupported' : 'unavailable',
+      summary:
+        status === 404
+          ? 'Secrets Broker live apply route is not exposed by the runtime yet.'
+          : 'Secrets Broker live apply route is unavailable.',
+      operationId,
+      ref,
+      operation: request.action,
       status: status === 404 ? 'unsupported' : 'unavailable',
       outcome: status === 404 ? 'unsupported' : 'unavailable',
       terminal: true,

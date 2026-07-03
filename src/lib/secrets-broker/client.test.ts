@@ -329,6 +329,81 @@ describe('Secrets Broker live client', () => {
     )
   })
 
+  it('submits metadata-only live apply requests and sanitizes the response', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        url ===
+        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secrets/reset/apply'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(init?.body).toBeTypeOf('string')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: 'req-reset-apply',
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          operationId: 'op-live-reset',
+          reason: 'operator approved reset after dry-run',
+          confirm: true,
+        })
+
+        return jsonResponse({
+          operationId: 'op-live-reset',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          operation: 'reset',
+          status: 'submitted',
+          outcome: 'pending',
+          terminal: false,
+          retrySafe: false,
+          auditStatus: 'audit_recorded',
+          correlationId: 'corr-live-apply',
+          nextAction: 'poll_operation_status',
+          rawValue: 'DEMO_REVEAL_VALUE_42',
+          providerToken: 'provider-token-must-not-render',
+          requestBody: { value: 'replacement-value-must-not-render' },
+          responseBody: { value: 'replacement-value-must-not-render' },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { submitSecretsBrokerSecretApply } = await import('./client')
+
+    const result = await submitSecretsBrokerSecretApply({
+      action: 'reset',
+      ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+      operationId: 'op-live-reset',
+      serviceId: '@serviceadmin',
+      reason: 'operator approved reset after dry-run',
+      requestId: 'req-reset-apply',
+    })
+
+    expect(result).toMatchObject({
+      state: 'degraded',
+      operationId: 'op-live-reset',
+      operation: 'reset',
+      status: 'submitted',
+      outcome: 'pending',
+      terminal: false,
+      retrySafe: false,
+      auditStatus: 'audit_recorded',
+      correlationId: 'corr-live-apply',
+      nextAction: 'poll_operation_status',
+      stubMode: false,
+    })
+    expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+    expect(JSON.stringify(result)).not.toContain(
+      'provider-token-must-not-render'
+    )
+    expect(JSON.stringify(result)).not.toContain(
+      'replacement-value-must-not-render'
+    )
+  })
+
   it('reports unavailable when Service Lasso cannot return @secretsbroker metadata', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
     vi.stubGlobal(
