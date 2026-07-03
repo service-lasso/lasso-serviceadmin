@@ -74,6 +74,35 @@ export type SecretsBrokerManagedSecretsResult = {
   stubMode: boolean
 }
 
+export type SecretsBrokerSecretDryRunAction = 'edit' | 'reset' | 'policy'
+
+export type SecretsBrokerSecretDryRunRequest = {
+  action: SecretsBrokerSecretDryRunAction
+  ref: string
+  serviceId?: string
+  reason?: string
+  requestId?: string
+}
+
+export type SecretsBrokerSecretDryRunResult = {
+  state: SecretsBrokerLiveState
+  summary: string
+  requestId: string
+  ref: string
+  operation: string
+  mode: string
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction: string
+  affectedRefs: string[]
+  affectedServices: string[]
+  lockoutActive: boolean
+  retryAfterSeconds: number
+  stubMode: boolean
+}
+
 type RuntimeServiceResponse = {
   service?: DashboardService | null
 }
@@ -128,6 +157,22 @@ type RawManagedSecretsResponse = {
   results?: unknown
 }
 
+type RawManagedSecretDryRunResponse = {
+  requestId?: unknown
+  ref?: unknown
+  operation?: unknown
+  mode?: unknown
+  outcome?: unknown
+  applied?: unknown
+  requiresConfirmation?: unknown
+  auditStatus?: unknown
+  nextAction?: unknown
+  affectedRefs?: unknown
+  affectedServices?: unknown
+  lockoutActive?: unknown
+  retryAfterSeconds?: unknown
+}
+
 type HttpJsonError = Error & {
   status?: number
 }
@@ -177,6 +222,10 @@ function normalizeStringList(value: unknown) {
   return value
     .map((item) => optionalString(item))
     .filter((item): item is string => Boolean(item))
+}
+
+function optionalNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 function normalizeSourceState(value: unknown): SecretsBrokerSourceState {
@@ -316,8 +365,67 @@ function normalizeManagedSecrets(value: unknown): SecretsBrokerManagedSecret[] {
   })
 }
 
-async function fetchJson<T>(pathname: string) {
-  const response = await fetch(buildApiUrl(pathname))
+function normalizeDryRunState(outcome: string): SecretsBrokerLiveState {
+  const normalized = outcome.toLowerCase().replace(/_/g, '-')
+
+  if (normalized === 'dry-run-ready' || normalized === 'ready') return 'ready'
+  if (normalized === 'locked' || normalized === 'lockout-active')
+    return 'locked'
+  if (normalized === 'source-auth-required') return 'auth-required'
+  if (normalized === 'policy-denied') return 'policy-denied'
+  if (normalized === 'unsupported') return 'unsupported'
+  if (normalized === 'audit-unavailable') return 'audit-unavailable'
+  if (normalized === 'invalid-ref' || normalized === 'missing-ref') {
+    return 'unsupported'
+  }
+
+  return 'degraded'
+}
+
+function dryRunEndpointForAction(action: SecretsBrokerSecretDryRunAction) {
+  if (action === 'policy') {
+    return '/api/services/%40secretsbroker/proxy/v1/management/secrets/policy/preview'
+  }
+
+  return `/api/services/%40secretsbroker/proxy/v1/management/secrets/${action}/dry-run`
+}
+
+function dryRunModeForAction(action: SecretsBrokerSecretDryRunAction) {
+  return action === 'policy' ? 'preview' : 'dry-run'
+}
+
+function normalizeDryRunResponse(
+  payload: RawManagedSecretDryRunResponse,
+  request: Required<SecretsBrokerSecretDryRunRequest>
+): SecretsBrokerSecretDryRunResult {
+  const outcome = requiredString(payload.outcome, 'degraded')
+  const mode = requiredString(payload.mode, dryRunModeForAction(request.action))
+
+  return {
+    state: normalizeDryRunState(outcome),
+    summary:
+      outcome === 'dry_run_ready'
+        ? 'Live broker dry-run returned safe metadata and did not apply a mutation.'
+        : 'Live broker dry-run failed closed with safe metadata only.',
+    requestId: requiredString(payload.requestId, request.requestId),
+    ref: requiredString(payload.ref, request.ref),
+    operation: requiredString(payload.operation, request.action),
+    mode,
+    outcome,
+    applied: optionalBoolean(payload.applied),
+    requiresConfirmation: optionalBoolean(payload.requiresConfirmation),
+    auditStatus: requiredString(payload.auditStatus, 'audit-unavailable'),
+    nextAction: requiredString(payload.nextAction, 'inspect_status'),
+    affectedRefs: normalizeStringList(payload.affectedRefs),
+    affectedServices: normalizeStringList(payload.affectedServices),
+    lockoutActive: optionalBoolean(payload.lockoutActive),
+    retryAfterSeconds: optionalNumber(payload.retryAfterSeconds),
+    stubMode: false,
+  }
+}
+
+async function fetchJson<T>(pathname: string, init?: RequestInit) {
+  const response = await fetch(buildApiUrl(pathname), init)
   const contentType = response.headers.get('content-type') ?? ''
 
   if (!response.ok) {
@@ -333,6 +441,14 @@ async function fetchJson<T>(pathname: string) {
   }
 
   return (await response.json()) as T
+}
+
+async function postJson<T>(pathname: string, body: unknown) {
+  return fetchJson<T>(pathname, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 }
 
 function buildUnsupportedOverview(
@@ -544,6 +660,112 @@ export async function fetchSecretsBrokerManagedSecrets(
       valueSearch: false,
       results: [],
       checkedAt,
+      stubMode: false,
+    }
+  }
+}
+
+export async function fetchSecretsBrokerSecretDryRun(
+  request: SecretsBrokerSecretDryRunRequest
+): Promise<SecretsBrokerSecretDryRunResult> {
+  const ref = request.ref.trim()
+  const serviceId = request.serviceId?.trim() || '@serviceadmin'
+  const requestId =
+    request.requestId?.trim() ||
+    `service-admin-${request.action}-${Date.now().toString(36)}`
+  const reason =
+    request.reason?.trim() ||
+    'Service Admin operator requested metadata-only dry-run preview.'
+  const normalizedRequest: Required<SecretsBrokerSecretDryRunRequest> = {
+    action: request.action,
+    ref,
+    serviceId,
+    reason,
+    requestId,
+  }
+
+  if (isServiceAdminStubModeEnabled()) {
+    return {
+      state: 'unsupported',
+      summary:
+        'Explicit Service Admin stub mode is enabled; live broker dry-run was not requested.',
+      requestId,
+      ref,
+      operation: request.action,
+      mode: dryRunModeForAction(request.action),
+      outcome: 'stub_mode',
+      applied: false,
+      requiresConfirmation: false,
+      auditStatus: 'stub-mode',
+      nextAction: 'disable_stub_mode_for_live_dry_run',
+      affectedRefs: ref ? [ref] : [],
+      affectedServices: [serviceId],
+      lockoutActive: false,
+      retryAfterSeconds: 0,
+      stubMode: true,
+    }
+  }
+
+  if (!ref) {
+    return {
+      state: 'unsupported',
+      summary: 'A managed secret ref is required before live dry-run preview.',
+      requestId,
+      ref: '',
+      operation: request.action,
+      mode: dryRunModeForAction(request.action),
+      outcome: 'invalid_ref',
+      applied: false,
+      requiresConfirmation: false,
+      auditStatus: 'audit-unavailable',
+      nextAction: 'select_managed_secret_ref',
+      affectedRefs: [],
+      affectedServices: [serviceId],
+      lockoutActive: false,
+      retryAfterSeconds: 0,
+      stubMode: false,
+    }
+  }
+
+  try {
+    const payload = await postJson<RawManagedSecretDryRunResponse>(
+      dryRunEndpointForAction(request.action),
+      {
+        requestId,
+        serviceId,
+        ref,
+        reason,
+        confirm: false,
+      }
+    )
+
+    return normalizeDryRunResponse(payload, normalizedRequest)
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return {
+      state: status === 404 ? 'unsupported' : 'unavailable',
+      summary:
+        status === 404
+          ? 'Secrets Broker live dry-run route is not exposed by the runtime yet.'
+          : 'Secrets Broker live dry-run route is unavailable.',
+      requestId,
+      ref,
+      operation: request.action,
+      mode: dryRunModeForAction(request.action),
+      outcome: status === 404 ? 'unsupported' : 'unavailable',
+      applied: false,
+      requiresConfirmation: false,
+      auditStatus: 'audit-unavailable',
+      nextAction:
+        status === 404 ? 'inspect_capability' : 'retry_or_inspect_status',
+      affectedRefs: ref ? [ref] : [],
+      affectedServices: [serviceId],
+      lockoutActive: false,
+      retryAfterSeconds: 0,
       stubMode: false,
     }
   }

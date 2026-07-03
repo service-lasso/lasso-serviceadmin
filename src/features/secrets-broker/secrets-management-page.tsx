@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   type ColumnDef,
   type SortingState,
@@ -27,6 +27,8 @@ import { usePageMetadata } from '@/lib/page-metadata'
 import {
   fetchSecretsBrokerManagedSecrets,
   fetchSecretsBrokerOverview,
+  fetchSecretsBrokerSecretDryRun,
+  type SecretsBrokerSecretDryRunAction,
   type SecretsBrokerManagedSecretsResult,
   type SecretsBrokerLiveState,
   type SecretsBrokerOverview,
@@ -188,6 +190,40 @@ function isManagedSecretAction(value: unknown): value is ManagedSecretAction {
   )
 }
 
+const liveDryRunActions: Array<{
+  label: string
+  value: SecretsBrokerSecretDryRunAction
+}> = [
+  { label: 'Edit dry-run', value: 'edit' },
+  { label: 'Reset dry-run', value: 'reset' },
+  { label: 'Policy preview', value: 'policy' },
+]
+
+function liveDryRunSupported(
+  row: { capabilities: string[] },
+  action: SecretsBrokerSecretDryRunAction
+) {
+  const capabilities = row.capabilities.map((capability) =>
+    capability.toLowerCase()
+  )
+
+  if (action === 'edit') {
+    return capabilities.some(
+      (capability) =>
+        capability.includes('edit') || capability.includes('update')
+    )
+  }
+
+  if (action === 'reset') {
+    return capabilities.some(
+      (capability) =>
+        capability.includes('reset') || capability.includes('rotate')
+    )
+  }
+
+  return capabilities.some((capability) => capability.includes('policy'))
+}
+
 function LiveSecretMetadata({
   overview,
   loading,
@@ -292,6 +328,32 @@ function LiveManagedSecretsTable({
   enabled: boolean
 }) {
   const rows = managedSecrets?.results ?? []
+  const [dryRunAction, setDryRunAction] =
+    useState<SecretsBrokerSecretDryRunAction>('reset')
+  const liveDryRun = useMutation({
+    mutationFn: ({
+      ref,
+      ownerServiceId,
+    }: {
+      ref: string
+      ownerServiceId: string
+    }) =>
+      fetchSecretsBrokerSecretDryRun({
+        action: dryRunAction,
+        ref,
+        serviceId:
+          ownerServiceId && ownerServiceId !== 'unknown-service'
+            ? ownerServiceId
+            : '@serviceadmin',
+        reason:
+          'Service Admin operator requested metadata-only dry-run preview.',
+      }),
+  })
+  const liveDryRunResult = liveDryRun.data
+  const dryRunDisabledReason = (row: (typeof rows)[number]) =>
+    liveDryRunSupported(row, dryRunAction)
+      ? null
+      : `${dryRunAction} dry-run not advertised for this row`
 
   return (
     <Card>
@@ -339,56 +401,101 @@ function LiveManagedSecretsTable({
                   <TableHead>Provider/source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Safe capabilities</TableHead>
+                  <TableHead>Live dry-run</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className='min-w-80 align-top'>
-                      <div className='font-medium'>{row.name}</div>
-                      <div className='text-sm break-all text-muted-foreground'>
-                        {row.ref}
-                      </div>
-                      <div className='mt-2 text-xs text-muted-foreground'>
-                        {row.ownerServiceId} · {row.workspaceId}
-                      </div>
-                    </TableCell>
-                    <TableCell className='min-w-64 align-top'>
-                      <div>{row.providerKind}</div>
-                      <div className='text-sm break-all text-muted-foreground'>
-                        {row.sourceId}
-                      </div>
-                    </TableCell>
-                    <TableCell className='min-w-48 align-top'>
-                      <div className='flex flex-wrap gap-1'>
-                        <Badge variant='outline'>{row.state}</Badge>
-                        <Badge variant='outline'>{row.outcome}</Badge>
-                      </div>
-                      <div className='mt-2 text-sm text-muted-foreground'>
-                        {row.policy}
-                      </div>
-                      <div className='mt-1 text-xs text-muted-foreground'>
-                        {row.auditStatus}
-                      </div>
-                    </TableCell>
-                    <TableCell className='min-w-56 align-top'>
-                      <div className='flex flex-wrap gap-1'>
-                        {row.capabilities.length ? (
-                          row.capabilities.map((capability) => (
-                            <Badge key={capability} variant='secondary'>
-                              {capability}
-                            </Badge>
-                          ))
-                        ) : (
-                          <Badge variant='outline'>none advertised</Badge>
-                        )}
-                      </div>
-                      <div className='mt-2 text-xs text-muted-foreground'>
-                        Value search: {row.valueSearch}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {rows.map((row) => {
+                  const disabledReason = dryRunDisabledReason(row)
+
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell className='min-w-80 align-top'>
+                        <div className='font-medium'>{row.name}</div>
+                        <div className='text-sm break-all text-muted-foreground'>
+                          {row.ref}
+                        </div>
+                        <div className='mt-2 text-xs text-muted-foreground'>
+                          {row.ownerServiceId} · {row.workspaceId}
+                        </div>
+                      </TableCell>
+                      <TableCell className='min-w-64 align-top'>
+                        <div>{row.providerKind}</div>
+                        <div className='text-sm break-all text-muted-foreground'>
+                          {row.sourceId}
+                        </div>
+                      </TableCell>
+                      <TableCell className='min-w-48 align-top'>
+                        <div className='flex flex-wrap gap-1'>
+                          <Badge variant='outline'>{row.state}</Badge>
+                          <Badge variant='outline'>{row.outcome}</Badge>
+                        </div>
+                        <div className='mt-2 text-sm text-muted-foreground'>
+                          {row.policy}
+                        </div>
+                        <div className='mt-1 text-xs text-muted-foreground'>
+                          {row.auditStatus}
+                        </div>
+                      </TableCell>
+                      <TableCell className='min-w-56 align-top'>
+                        <div className='flex flex-wrap gap-1'>
+                          {row.capabilities.length ? (
+                            row.capabilities.map((capability) => (
+                              <Badge key={capability} variant='secondary'>
+                                {capability}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge variant='outline'>none advertised</Badge>
+                          )}
+                        </div>
+                        <div className='mt-2 text-xs text-muted-foreground'>
+                          Value search: {row.valueSearch}
+                        </div>
+                      </TableCell>
+                      <TableCell className='min-w-64 align-top'>
+                        <div className='flex flex-col gap-2'>
+                          <select
+                            aria-label={`Live dry-run action for ${row.name}`}
+                            className='h-9 rounded-md border bg-background px-3 text-sm'
+                            value={dryRunAction}
+                            onChange={(event) =>
+                              setDryRunAction(
+                                event.target
+                                  .value as SecretsBrokerSecretDryRunAction
+                              )
+                            }
+                          >
+                            {liveDryRunActions.map((action) => (
+                              <option key={action.value} value={action.value}>
+                                {action.label}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            type='button'
+                            variant='outline'
+                            disabled={
+                              Boolean(disabledReason) || liveDryRun.isPending
+                            }
+                            onClick={() =>
+                              liveDryRun.mutate({
+                                ref: row.ref,
+                                ownerServiceId: row.ownerServiceId,
+                              })
+                            }
+                          >
+                            Preview {dryRunAction} dry-run for {row.name}
+                          </Button>
+                          <div className='text-xs text-muted-foreground'>
+                            {disabledReason ??
+                              'Non-mutating broker preview only; apply remains unavailable.'}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -397,6 +504,59 @@ function LiveManagedSecretsTable({
             No live managed secret metadata rows were returned for this query.
           </div>
         )}
+
+        {liveDryRun.isPending ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Requesting live dry-run metadata from the broker.
+          </div>
+        ) : liveDryRunResult ? (
+          <div
+            aria-live='polite'
+            className='rounded-md border bg-muted/30 p-3 text-sm'
+          >
+            <div className='mb-2 flex flex-wrap items-center gap-2'>
+              <Badge variant={liveStateVariant[liveDryRunResult.state]}>
+                {liveDryRunResult.state}
+              </Badge>
+              <Badge variant='outline'>{liveDryRunResult.mode}</Badge>
+              <Badge variant='outline'>{liveDryRunResult.outcome}</Badge>
+              <Badge variant='outline'>
+                {liveDryRunResult.applied ? 'applied' : 'not applied'}
+              </Badge>
+            </div>
+            <div className='font-medium'>Live dry-run accepted</div>
+            <div className='mt-1 text-muted-foreground'>
+              {liveDryRunResult.summary}
+            </div>
+            <div className='mt-3 grid gap-3 md:grid-cols-3'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Request
+                </div>
+                <div className='break-all'>{liveDryRunResult.requestId}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Audit
+                </div>
+                <div>{liveDryRunResult.auditStatus}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Next action
+                </div>
+                <div>{liveDryRunResult.nextAction}</div>
+              </div>
+            </div>
+            <div className='mt-3 text-xs break-all text-muted-foreground'>
+              Ref: {liveDryRunResult.ref}
+            </div>
+          </div>
+        ) : liveDryRun.isError ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Live dry-run preview failed before safe metadata could be displayed.
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

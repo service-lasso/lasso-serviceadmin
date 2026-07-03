@@ -97,6 +97,7 @@ describe('Secrets Broker secrets management page', () => {
   })
 
   it('renders live managed secret rows in non-stub mode when the broker advertises management metadata', async () => {
+    const user = userEvent.setup()
     const fetchMock = vi.fn(async (url: string) => {
       if (url === '/api/dashboard/services/%40secretsbroker') {
         return new Response(
@@ -159,6 +160,32 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/reset/dry-run'
+      ) {
+        return new Response(
+          JSON.stringify({
+            requestId: 'req-live-reset',
+            ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            operation: 'reset',
+            mode: 'dry-run',
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresConfirmation: true,
+            auditStatus: 'audit_ready',
+            nextAction: 'confirm_and_apply_with_audit_reason',
+            affectedRefs: [
+              'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            ],
+            affectedServices: ['@serviceadmin'],
+            value: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -178,6 +205,16 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/local-encrypted-store/i)).toBeVisible()
     expect(screen.getByText(/audit_available/i)).toBeVisible()
+    await user.click(
+      screen.getByRole('button', {
+        name: /Preview reset dry-run for SESSION_SIGNING_KEY/i,
+      })
+    )
+    expect(await screen.findByText(/Live dry-run accepted/i)).toBeVisible()
+    expect(screen.getByText(/req-live-reset/i)).toBeVisible()
+    expect(
+      screen.getByText(/confirm_and_apply_with_audit_reason/i)
+    ).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
     expect(
       screen.queryByText(/provider-token-must-not-render/i)
