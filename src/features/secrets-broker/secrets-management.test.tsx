@@ -77,6 +77,11 @@ describe('Secrets Broker secrets management page', () => {
       await screen.findByRole('heading', { name: /^Secrets$/i })
     ).toBeVisible()
     expect(screen.getByText(/Secrets Broker API unavailable/i)).toBeVisible()
+    expect(
+      await screen.findByRole('region', {
+        name: /Live secret metadata status/i,
+      })
+    ).toBeVisible()
     expect(screen.getByText(/No fixture rows/i)).toBeVisible()
     expect(
       screen.queryByText(/Single-secret preview gate/i)
@@ -97,6 +102,16 @@ describe('Secrets Broker secrets management page', () => {
       screen.getByText(/Search refs, review provider state/i)
     ).toBeVisible()
     expect(screen.getByText(/Operator queue/i)).toBeVisible()
+    expect(
+      await screen.findByRole('region', {
+        name: /Live secret metadata status/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Explicit Service Admin stub mode is enabled/i)
+    ).toBeVisible()
+    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+    expect(screen.getByText(/Management API/i)).toBeVisible()
     expect(screen.getByText(/Find a ref/i)).toBeVisible()
     expect(screen.getByText(/Pick row action/i)).toBeVisible()
     expect(screen.getByText(/Dry-run before apply/i)).toBeVisible()

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   type ColumnDef,
   type SortingState,
@@ -16,12 +17,18 @@ import {
   DatabaseZap,
   Eye,
   ListChecks,
+  PlugZap,
   RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
 import { isServiceAdminStubModeEnabled } from '@/lib/service-lasso-dashboard/stub'
 import { cn } from '@/lib/utils'
 import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
@@ -130,6 +137,22 @@ const stateOptions: Array<{ label: string; value: ManagedSecretState }> = [
   { label: 'Missing', value: 'missing' },
 ]
 
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
 const providerOptions = Array.from(
   new Set(managedSecretRows.map((row) => row.provider))
 )
@@ -163,6 +186,100 @@ function isManagedSecretAction(value: unknown): value is ManagedSecretAction {
   )
 }
 
+function LiveSecretMetadata({
+  overview,
+  loading,
+  error,
+}: {
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const visibleSources = overview?.sources.slice(0, 3) ?? []
+  const managementAvailable = overview?.capabilities.managementSecrets ?? false
+
+  return (
+    <section
+      aria-label='Live secret metadata status'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live secret metadata status
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker secret metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker secret metadata and management capability.'
+                  : 'Broker secret metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Sources
+          </div>
+          <div>{overview?.sourceCount ?? 0}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Management API
+          </div>
+          <div>{managementAvailable ? 'available' : 'blocked'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Reveal API
+          </div>
+          <div>{overview?.capabilities.reveal ? 'available' : 'blocked'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Audit
+          </div>
+          <div>{overview?.auditAvailable ? 'available' : 'blocked'}</div>
+        </div>
+      </div>
+
+      {visibleSources.length ? (
+        <div className='mt-3 grid gap-2 md:grid-cols-3'>
+          {visibleSources.map((source) => (
+            <div key={source.id} className='rounded-md border bg-muted/30 p-3'>
+              <div className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='font-medium'>{source.label}</span>
+                <Badge variant='outline'>{source.state}</Badge>
+              </div>
+              <div className='mt-1 text-xs text-muted-foreground'>
+                {source.provider} · {source.reason}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 type SecretsManagementPageProps = {
   search: Record<string, unknown>
   navigate: NavigateFn
@@ -173,6 +290,14 @@ export function SecretsManagementPage({
   navigate,
 }: SecretsManagementPageProps) {
   const stubModeEnabled = isServiceAdminStubModeEnabled()
+  const {
+    data: liveOverview,
+    isLoading: liveOverviewLoading,
+    isError: liveOverviewError,
+  } = useQuery({
+    queryKey: ['secrets-broker', 'management-secrets', 'overview'],
+    queryFn: fetchSecretsBrokerOverview,
+  })
   const selectedSearchRef =
     typeof search.ref === 'string' ? search.ref.trim() : ''
   const selectedSearchRow =
@@ -831,10 +956,17 @@ export function SecretsManagementPage({
             <AlertTitle>Secrets Broker API unavailable</AlertTitle>
             <AlertDescription>
               No local stub data is rendered because Service Admin stub mode is
-              disabled. Connect a live Secrets Broker API or enable the explicit
-              local developer stub flag for fixture previews.
+              disabled. Live metadata remains visible when the runtime exposes
+              it, but fixture rows and simulated mutations stay hidden until the
+              broker advertises supported management actions.
             </AlertDescription>
           </Alert>
+
+          <LiveSecretMetadata
+            overview={liveOverview}
+            loading={liveOverviewLoading}
+            error={liveOverviewError}
+          />
 
           <Card>
             <CardHeader>
@@ -880,6 +1012,12 @@ export function SecretsManagementPage({
           </div>
           <Badge variant='secondary'>Stub preview · values hidden</Badge>
         </div>
+
+        <LiveSecretMetadata
+          overview={liveOverview}
+          loading={liveOverviewLoading}
+          error={liveOverviewError}
+        />
 
         <Card>
           <CardHeader>
