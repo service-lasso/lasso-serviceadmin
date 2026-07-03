@@ -137,6 +137,21 @@ type SecretsBrokerOverviewScenario = {
     recentDeniedRequests: number
     lastAuditEvent: string
   }
+  providerAttention: {
+    connected: number
+    authRequired: number
+    degraded: number
+    disabled: number
+    summary: string
+  }
+  startupImpact: {
+    readyServices: number
+    blockedServices: number
+    warningServices: number
+    generatedSecretsExpected: number
+    summary: string
+    nextAction: string
+  }
   emptyState?: string
 }
 
@@ -312,6 +327,24 @@ const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
       recentDeniedRequests: 1,
       lastAuditEvent: 'resolve granted · local · 2026-05-07T19:18:00Z',
     },
+    providerAttention: {
+      connected: 3,
+      authRequired: 0,
+      degraded: 0,
+      disabled: 1,
+      summary:
+        'Local encrypted fallback and required providers are ready for startup-critical refs.',
+    },
+    startupImpact: {
+      readyServices: 5,
+      blockedServices: 0,
+      warningServices: 1,
+      generatedSecretsExpected: 2,
+      summary:
+        'All startup-critical service refs resolve through broker metadata; one non-blocking rotation reminder remains.',
+      nextAction:
+        'Review denied audit event metadata or open Secrets for routine rotation.',
+    },
   },
   {
     id: 'degraded',
@@ -339,6 +372,24 @@ const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
       recentResolveFailures: 2,
       recentDeniedRequests: 1,
       lastAuditEvent: 'refresh failure · vault · 2026-05-07T19:19:00Z',
+    },
+    providerAttention: {
+      connected: 2,
+      authRequired: 1,
+      degraded: 1,
+      disabled: 1,
+      summary:
+        'One external provider needs broker-owned reauthentication before dependent refs can resolve.',
+    },
+    startupImpact: {
+      readyServices: 3,
+      blockedServices: 2,
+      warningServices: 1,
+      generatedSecretsExpected: 2,
+      summary:
+        'Two services cannot start because provider-auth-required refs are not available from the broker.',
+      nextAction:
+        'Reconnect the external provider, then re-run dependency impact.',
     },
   },
   {
@@ -368,6 +419,24 @@ const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
       recentDeniedRequests: 0,
       lastAuditEvent: 'last cached event only',
     },
+    providerAttention: {
+      connected: 0,
+      authRequired: 0,
+      degraded: 0,
+      disabled: 0,
+      summary:
+        'Live provider status is unavailable while the broker API is offline.',
+    },
+    startupImpact: {
+      readyServices: 0,
+      blockedServices: 5,
+      warningServices: 0,
+      generatedSecretsExpected: 0,
+      summary:
+        'Service Admin cannot confirm startup secret resolution until @secretsbroker is reachable.',
+      nextAction:
+        'Start @secretsbroker and refresh live health before launching dependent services.',
+    },
   },
   {
     id: 'unconfigured',
@@ -395,6 +464,24 @@ const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
       recentResolveFailures: 0,
       recentDeniedRequests: 0,
       lastAuditEvent: 'no audit events yet',
+    },
+    providerAttention: {
+      connected: 0,
+      authRequired: 0,
+      degraded: 0,
+      disabled: 0,
+      summary:
+        'No providers are configured; create the local encrypted fallback before adding external providers.',
+    },
+    startupImpact: {
+      readyServices: 0,
+      blockedServices: 4,
+      warningServices: 0,
+      generatedSecretsExpected: 4,
+      summary:
+        'Services with broker refs are blocked until the local store is initialized or a provider is connected.',
+      nextAction:
+        'Initialize local encrypted store, then provision generated first-run secrets.',
     },
     emptyState:
       'Add a local encrypted store or connect an external source to activate @secretsbroker.',
@@ -2285,6 +2372,101 @@ export function SecretsBrokerSetupWizard({
                     </div>
                     <div className='text-sm font-medium'>
                       {brokerOverview.operations.lastAuditEvent}
+                    </div>
+                  </div>
+                </div>
+
+                <div className='grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]'>
+                  <div className='rounded-lg border p-4'>
+                    <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                      <div className='flex items-center gap-2 font-medium'>
+                        <TerminalSquare className='size-4' /> Can my services
+                        start?
+                      </div>
+                      <Badge
+                        variant={
+                          brokerOverview.startupImpact.blockedServices > 0
+                            ? 'destructive'
+                            : brokerOverview.startupImpact.warningServices > 0
+                              ? 'secondary'
+                              : 'default'
+                        }
+                      >
+                        {brokerOverview.startupImpact.blockedServices} blocked
+                      </Badge>
+                    </div>
+                    <p className='text-sm text-muted-foreground'>
+                      {brokerOverview.startupImpact.summary}
+                    </p>
+                    <div className='mt-3 grid gap-3 sm:grid-cols-4'>
+                      <div className='rounded-md bg-muted/40 p-2'>
+                        <div className='text-xs text-muted-foreground'>
+                          Ready services
+                        </div>
+                        <div className='text-xl font-semibold'>
+                          {brokerOverview.startupImpact.readyServices}
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-muted/40 p-2'>
+                        <div className='text-xs text-muted-foreground'>
+                          Blocked services
+                        </div>
+                        <div className='text-xl font-semibold'>
+                          {brokerOverview.startupImpact.blockedServices}
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-muted/40 p-2'>
+                        <div className='text-xs text-muted-foreground'>
+                          Warnings
+                        </div>
+                        <div className='text-xl font-semibold'>
+                          {brokerOverview.startupImpact.warningServices}
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-muted/40 p-2'>
+                        <div className='text-xs text-muted-foreground'>
+                          Generated first-run secrets
+                        </div>
+                        <div className='text-xl font-semibold'>
+                          {
+                            brokerOverview.startupImpact
+                              .generatedSecretsExpected
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='space-y-3'>
+                    <div className='rounded-lg border p-3 text-sm'>
+                      <div className='flex items-center gap-2 font-medium'>
+                        <Network className='size-4' /> Provider attention
+                      </div>
+                      <p className='mt-1 text-muted-foreground'>
+                        {brokerOverview.providerAttention.summary}
+                      </p>
+                      <div className='mt-3 grid grid-cols-2 gap-2 text-xs'>
+                        <div>
+                          connected:{' '}
+                          {brokerOverview.providerAttention.connected}
+                        </div>
+                        <div>
+                          auth required:{' '}
+                          {brokerOverview.providerAttention.authRequired}
+                        </div>
+                        <div>
+                          degraded: {brokerOverview.providerAttention.degraded}
+                        </div>
+                        <div>
+                          disabled: {brokerOverview.providerAttention.disabled}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='rounded-lg border p-3 text-sm'>
+                      <div className='font-medium'>Safest next action</div>
+                      <p className='mt-1 text-muted-foreground'>
+                        {brokerOverview.startupImpact.nextAction}
+                      </p>
                     </div>
                   </div>
                 </div>
