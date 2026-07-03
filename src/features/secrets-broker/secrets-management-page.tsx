@@ -370,6 +370,9 @@ function LiveManagedSecretsTable({
       }),
   })
   const liveApplyResult = liveApply.data
+  const liveStatusOperationId =
+    liveApplyResult?.operationId ?? liveDryRunResult?.operationId ?? ''
+  const liveStatusSource = liveApplyResult ? 'submitted apply' : 'dry-run'
   const dryRunDisabledReason = (row: (typeof rows)[number]) =>
     liveDryRunSupported(row, dryRunAction)
       ? null
@@ -641,13 +644,13 @@ function LiveManagedSecretsTable({
                 type='button'
                 variant='outline'
                 disabled={
-                  liveOperationStatus.isPending || !liveDryRunResult.operationId
+                  liveOperationStatus.isPending || !liveStatusOperationId
                 }
                 onClick={() =>
-                  liveOperationStatus.mutate(liveDryRunResult.operationId)
+                  liveOperationStatus.mutate(liveStatusOperationId)
                 }
               >
-                Check broker operation status
+                Check {liveStatusSource} operation status
               </Button>
             </div>
           </div>

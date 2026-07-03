@@ -189,11 +189,11 @@ describe('Secrets Broker secrets management page', () => {
 
       if (
         url ===
-        '/api/services/%40secretsbroker/proxy/v1/management/secret-operations/op-live-reset'
+        '/api/services/%40secretsbroker/proxy/v1/management/secret-operations/op-live-apply'
       ) {
         return new Response(
           JSON.stringify({
-            operationId: 'op-live-reset',
+            operationId: 'op-live-apply',
             ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
             operation: 'reset',
             status: 'succeeded',
@@ -226,7 +226,7 @@ describe('Secrets Broker secrets management page', () => {
 
         return new Response(
           JSON.stringify({
-            operationId: 'op-live-reset',
+            operationId: 'op-live-apply',
             ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
             operation: 'reset',
             status: 'submitted',
@@ -284,10 +284,11 @@ describe('Secrets Broker secrets management page', () => {
     await user.click(screen.getByRole('button', { name: /Submit live apply/i }))
     expect(await screen.findByText(/Live apply submit metadata/i)).toBeVisible()
     expect(screen.getByText(/corr-live-apply/i)).toBeVisible()
+    expect(screen.getByText(/op-live-apply/i)).toBeVisible()
     expect(screen.getByText(/poll_operation_status/i)).toBeVisible()
     await user.click(
       screen.getByRole('button', {
-        name: /Check broker operation status/i,
+        name: /Check submitted apply operation status/i,
       })
     )
     expect(
