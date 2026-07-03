@@ -25,7 +25,9 @@ import {
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  fetchSecretsBrokerManagedSecrets,
   fetchSecretsBrokerOverview,
+  type SecretsBrokerManagedSecretsResult,
   type SecretsBrokerLiveState,
   type SecretsBrokerOverview,
 } from '@/lib/secrets-broker/client'
@@ -280,6 +282,126 @@ function LiveSecretMetadata({
   )
 }
 
+function LiveManagedSecretsTable({
+  managedSecrets,
+  loading,
+  enabled,
+}: {
+  managedSecrets: SecretsBrokerManagedSecretsResult | undefined
+  loading: boolean
+  enabled: boolean
+}) {
+  const rows = managedSecrets?.results ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Live managed secret rows</CardTitle>
+        <CardDescription>
+          Metadata-only rows from `GET /v1/management/secrets`; raw values and
+          provider credentials are not requested or rendered.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='flex flex-wrap gap-2'>
+          <Badge variant={enabled ? 'default' : 'outline'}>
+            {enabled ? 'Management API advertised' : 'Management API blocked'}
+          </Badge>
+          {managedSecrets ? (
+            <>
+              <Badge variant='outline'>{managedSecrets.state}</Badge>
+              <Badge variant='outline'>{rows.length} metadata rows</Badge>
+              <Badge variant='outline'>
+                {managedSecrets.valueSearch
+                  ? 'value search supported'
+                  : 'value search unavailable'}
+              </Badge>
+            </>
+          ) : null}
+        </div>
+
+        {!enabled ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            The broker has not advertised the managed-secrets list capability,
+            so Service Admin keeps the table closed and does not fall back to
+            fixture rows.
+          </div>
+        ) : loading ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Loading live secret metadata rows.
+          </div>
+        ) : rows.length ? (
+          <div className='overflow-x-auto rounded-md border'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Secret metadata</TableHead>
+                  <TableHead>Provider/source</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Safe capabilities</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className='min-w-80 align-top'>
+                      <div className='font-medium'>{row.name}</div>
+                      <div className='text-sm break-all text-muted-foreground'>
+                        {row.ref}
+                      </div>
+                      <div className='mt-2 text-xs text-muted-foreground'>
+                        {row.ownerServiceId} · {row.workspaceId}
+                      </div>
+                    </TableCell>
+                    <TableCell className='min-w-64 align-top'>
+                      <div>{row.providerKind}</div>
+                      <div className='text-sm break-all text-muted-foreground'>
+                        {row.sourceId}
+                      </div>
+                    </TableCell>
+                    <TableCell className='min-w-48 align-top'>
+                      <div className='flex flex-wrap gap-1'>
+                        <Badge variant='outline'>{row.state}</Badge>
+                        <Badge variant='outline'>{row.outcome}</Badge>
+                      </div>
+                      <div className='mt-2 text-sm text-muted-foreground'>
+                        {row.policy}
+                      </div>
+                      <div className='mt-1 text-xs text-muted-foreground'>
+                        {row.auditStatus}
+                      </div>
+                    </TableCell>
+                    <TableCell className='min-w-56 align-top'>
+                      <div className='flex flex-wrap gap-1'>
+                        {row.capabilities.length ? (
+                          row.capabilities.map((capability) => (
+                            <Badge key={capability} variant='secondary'>
+                              {capability}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant='outline'>none advertised</Badge>
+                        )}
+                      </div>
+                      <div className='mt-2 text-xs text-muted-foreground'>
+                        Value search: {row.valueSearch}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            No live managed secret metadata rows were returned for this query.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 type SecretsManagementPageProps = {
   search: Record<string, unknown>
   navigate: NavigateFn
@@ -371,6 +493,25 @@ export function SecretsManagementPage({
       { columnId: 'state', searchKey: 'state', type: 'array' },
     ],
   })
+  const liveManagementEnabled = Boolean(
+    liveOverview &&
+    !liveOverview.stubMode &&
+    liveOverview.capabilities.managementSecrets
+  )
+  const { data: liveManagedSecrets, isLoading: liveManagedSecretsLoading } =
+    useQuery({
+      queryKey: [
+        'secrets-broker',
+        'management-secrets',
+        'rows',
+        typeof globalFilter === 'string' ? globalFilter : '',
+      ],
+      queryFn: () =>
+        fetchSecretsBrokerManagedSecrets(
+          typeof globalFilter === 'string' ? globalFilter : ''
+        ),
+      enabled: !stubModeEnabled && liveManagementEnabled,
+    })
 
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Secrets',
@@ -966,6 +1107,12 @@ export function SecretsManagementPage({
             overview={liveOverview}
             loading={liveOverviewLoading}
             error={liveOverviewError}
+          />
+
+          <LiveManagedSecretsTable
+            managedSecrets={liveManagedSecrets}
+            loading={liveManagedSecretsLoading}
+            enabled={liveManagementEnabled}
           />
 
           <Card>
