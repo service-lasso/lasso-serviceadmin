@@ -1122,20 +1122,36 @@ test.describe('Secrets Broker browser coverage', () => {
     await previewState.selectOption('healthy')
     await expect(page.getByText('@secretsbroker healthy')).toBeVisible()
     await expect(page.getByText(/Broker API is reachable/i)).toBeVisible()
+    await expect(page.getByText(/Can my services start/i)).toBeVisible()
+    await expect(
+      page.getByText(/All startup-critical service refs resolve/i)
+    ).toBeVisible()
+    await expect(page.getByText(/Generated first-run secrets/i)).toBeVisible()
 
     await previewState.selectOption('degraded')
     await expect(page.getByText('@secretsbroker degraded')).toBeVisible()
     await expect(page.getByText(/source_auth_required/i).first()).toBeVisible()
+    await expect(page.getByText(/Two services cannot start/i)).toBeVisible()
+    await expect(
+      page.getByText(/provider-owned reauthentication/i)
+    ).toHaveCount(0)
+    await expect(page.getByText(/broker-owned reauthentication/i)).toBeVisible()
 
     await previewState.selectOption('offline')
     await expect(page.getByText('@secretsbroker offline')).toBeVisible()
     await expect(page.getByText('API reachable', { exact: true })).toBeVisible()
     await expect(page.getByText('no', { exact: true }).first()).toBeVisible()
+    await expect(
+      page.getByText(/cannot confirm startup secret resolution/i)
+    ).toBeVisible()
 
     await previewState.selectOption('unconfigured')
     await expect(page.getByText('@secretsbroker setup needed')).toBeVisible()
     await expect(
       page.getByText(/Add a local encrypted store/i).first()
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Initialize local encrypted store/i)
     ).toBeVisible()
 
     await expectNoSecretMaterial(page)
