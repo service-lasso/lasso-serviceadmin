@@ -167,6 +167,7 @@ describe('Secrets Broker secrets management page', () => {
         return new Response(
           JSON.stringify({
             requestId: 'req-live-reset',
+            operationId: 'op-live-reset',
             ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
             operation: 'reset',
             mode: 'dry-run',
@@ -179,6 +180,29 @@ describe('Secrets Broker secrets management page', () => {
               'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
             ],
             affectedServices: ['@serviceadmin'],
+            value: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secret-operations/op-live-reset'
+      ) {
+        return new Response(
+          JSON.stringify({
+            operationId: 'op-live-reset',
+            ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            operation: 'reset',
+            status: 'succeeded',
+            outcome: 'applied',
+            terminal: true,
+            retrySafe: false,
+            auditStatus: 'audit_recorded',
+            correlationId: 'corr-live-reset',
+            nextAction: 'review_audit_metadata',
             value: 'DEMO_REVEAL_VALUE_42',
             providerToken: 'provider-token-must-not-render',
           }),
@@ -212,9 +236,20 @@ describe('Secrets Broker secrets management page', () => {
     )
     expect(await screen.findByText(/Live dry-run accepted/i)).toBeVisible()
     expect(screen.getByText(/req-live-reset/i)).toBeVisible()
+    expect(screen.getByText(/op-live-reset/i)).toBeVisible()
     expect(
       screen.getByText(/confirm_and_apply_with_audit_reason/i)
     ).toBeVisible()
+    await user.click(
+      screen.getByRole('button', {
+        name: /Check broker operation status/i,
+      })
+    )
+    expect(
+      await screen.findByText(/Live operation status metadata/i)
+    ).toBeVisible()
+    expect(screen.getByText(/corr-live-reset/i)).toBeVisible()
+    expect(screen.getByText(/review_audit_metadata/i)).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
     expect(
       screen.queryByText(/provider-token-must-not-render/i)
