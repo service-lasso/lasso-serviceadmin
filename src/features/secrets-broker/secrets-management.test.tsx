@@ -1,7 +1,7 @@
 import { renderRoute } from '@/test/render-route'
 import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
@@ -69,6 +69,10 @@ import {
   valueSearchManagedSecrets,
 } from './secrets-management'
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('Secrets Broker secrets management page', () => {
   it('hides stub previews and fixture rows when stub mode is disabled', async () => {
     await renderRoute('/secrets-broker/secrets', { stubData: false })
@@ -87,6 +91,97 @@ describe('Secrets Broker secrets management page', () => {
       screen.queryByText(/Single-secret preview gate/i)
     ).not.toBeInTheDocument()
     expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Simulate stub apply/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders live managed secret rows in non-stub mode when the broker advertises management metadata', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/dashboard/services/%40secretsbroker') {
+        return new Response(
+          JSON.stringify({ service: { status: 'running' } }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
+        return new Response(
+          JSON.stringify({
+            state: 'ready',
+            summary: 'Broker metadata available.',
+            capabilities: {
+              sourcesStatus: true,
+              managementSecrets: true,
+              reveal: false,
+            },
+            audit: { available: true },
+            sources: [
+              {
+                id: '@secretsbroker/local/default',
+                label: 'Local encrypted store',
+                provider: 'local',
+                state: 'ready',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
+      ) {
+        return new Response(
+          JSON.stringify({
+            outcome: 'ready',
+            valueSearch: false,
+            results: [
+              {
+                ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+                name: 'SESSION_SIGNING_KEY',
+                sourceId: 'local',
+                providerKind: 'local-encrypted-store',
+                ownerServiceId: '@serviceadmin',
+                workspaceId: 'local',
+                state: 'present',
+                outcome: 'ready',
+                capabilities: ['metadata', 'reveal', 'reset'],
+                policy: 'local-writeback-policy',
+                auditStatus: 'audit_available',
+                valueSearch: 'supported',
+                rawValue: 'DEMO_REVEAL_VALUE_42',
+                providerToken: 'provider-token-must-not-render',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/secrets-broker/secrets', { stubData: false })
+
+    expect(
+      await screen.findByRole('heading', { name: /^Secrets$/i })
+    ).toBeVisible()
+    expect(await screen.findByText(/Live managed secret rows/i)).toBeVisible()
+    expect(screen.getByText(/Management API advertised/i)).toBeVisible()
+    expect(screen.getByText(/1 metadata rows/i)).toBeVisible()
+    expect(screen.getAllByText(/SESSION_SIGNING_KEY/i)[0]).toBeVisible()
+    expect(
+      screen.getByText(/services\/@serviceadmin\/runtime\/SESSION_SIGNING_KEY/i)
+    ).toBeVisible()
+    expect(screen.getByText(/local-encrypted-store/i)).toBeVisible()
+    expect(screen.getByText(/audit_available/i)).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Simulate stub apply/i })
     ).not.toBeInTheDocument()

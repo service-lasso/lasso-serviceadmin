@@ -122,6 +122,84 @@ describe('Secrets Broker live client', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('reads metadata-only managed secret rows from the live broker route', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (
+        url ===
+        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secrets?search=session'
+      ) {
+        return jsonResponse({
+          query: 'session',
+          valueSearch: false,
+          outcome: 'ready',
+          results: [
+            {
+              ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+              name: 'SESSION_SIGNING_KEY',
+              sourceId: 'local',
+              providerKind: 'local-encrypted-store',
+              ownerServiceId: '@serviceadmin',
+              workspaceId: 'local',
+              state: 'present',
+              outcome: 'ready',
+              capabilities: ['metadata', 'reveal', 'reset'],
+              policy: 'local-writeback-policy',
+              auditStatus: 'audit_available',
+              valueSearch: 'supported',
+              rawValue: 'DEMO_REVEAL_VALUE_42',
+              providerToken: 'provider-token-must-not-render',
+            },
+          ],
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchSecretsBrokerManagedSecrets } = await import('./client')
+
+    const result = await fetchSecretsBrokerManagedSecrets('session')
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      query: 'session',
+      valueSearch: false,
+      stubMode: false,
+    })
+    expect(result.results[0]).toMatchObject({
+      ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+      name: 'SESSION_SIGNING_KEY',
+      sourceId: 'local',
+      providerKind: 'local-encrypted-store',
+      ownerServiceId: '@serviceadmin',
+      state: 'present',
+      auditStatus: 'audit_available',
+      valueSearch: 'supported',
+    })
+    expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+    expect(JSON.stringify(result)).not.toContain(
+      'provider-token-must-not-render'
+    )
+  })
+
+  it('does not request live managed secret rows in explicit stub mode', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchSecretsBrokerManagedSecrets } = await import('./client')
+
+    const result = await fetchSecretsBrokerManagedSecrets()
+
+    expect(result.stubMode).toBe(true)
+    expect(result.results).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('reports unavailable when Service Lasso cannot return @secretsbroker metadata', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
     vi.stubGlobal(

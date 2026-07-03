@@ -48,6 +48,32 @@ export type SecretsBrokerOverview = {
   stubMode: boolean
 }
 
+export type SecretsBrokerManagedSecret = {
+  id: string
+  ref: string
+  name: string
+  sourceId: string
+  providerKind: string
+  ownerServiceId: string
+  workspaceId: string
+  state: string
+  outcome: string
+  capabilities: string[]
+  policy: string
+  auditStatus: string
+  valueSearch: string
+}
+
+export type SecretsBrokerManagedSecretsResult = {
+  state: SecretsBrokerLiveState
+  summary: string
+  query: string
+  valueSearch: boolean
+  results: SecretsBrokerManagedSecret[]
+  checkedAt: string
+  stubMode: boolean
+}
+
 type RuntimeServiceResponse = {
   service?: DashboardService | null
 }
@@ -76,6 +102,32 @@ type RawBrokerSourcesResponse = {
   audit?: unknown
 }
 
+type RawManagedSecret = {
+  id?: unknown
+  ref?: unknown
+  name?: unknown
+  sourceId?: unknown
+  providerKind?: unknown
+  ownerServiceId?: unknown
+  workspaceId?: unknown
+  state?: unknown
+  outcome?: unknown
+  capabilities?: unknown
+  policy?: unknown
+  auditStatus?: unknown
+  valueSearch?: unknown
+}
+
+type RawManagedSecretsResponse = {
+  query?: unknown
+  valueSearch?: unknown
+  outcome?: unknown
+  status?: unknown
+  summary?: unknown
+  reason?: unknown
+  results?: unknown
+}
+
 type HttpJsonError = Error & {
   status?: number
 }
@@ -96,6 +148,14 @@ function optionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+function requiredString(value: unknown, fallback: string) {
+  return optionalString(value) ?? fallback
+}
+
+function optionalBoolean(value: unknown) {
+  return typeof value === 'boolean' ? value : false
+}
+
 function normalizeCapabilities(value: unknown) {
   if (!isRecord(value)) {
     return {}
@@ -107,6 +167,16 @@ function normalizeCapabilities(value: unknown) {
       Boolean(capabilityValue),
     ])
   )
+}
+
+function normalizeStringList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item) => optionalString(item))
+    .filter((item): item is string => Boolean(item))
 }
 
 function normalizeSourceState(value: unknown): SecretsBrokerSourceState {
@@ -215,6 +285,33 @@ function normalizeSources(value: unknown): SecretsBrokerSourceStatus[] {
         optionalString(source.message) ??
         `${provider} source reported ${state}.`,
       capabilities: normalizeCapabilities(source.capabilities),
+    }
+  })
+}
+
+function normalizeManagedSecrets(value: unknown): SecretsBrokerManagedSecret[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter(isRecord).map((secret: RawManagedSecret, index) => {
+    const ref = requiredString(secret.ref, `secret-metadata-${index + 1}`)
+    const name = requiredString(secret.name, ref)
+
+    return {
+      id: requiredString(secret.id, ref),
+      ref,
+      name,
+      sourceId: requiredString(secret.sourceId, 'unknown-source'),
+      providerKind: requiredString(secret.providerKind, 'unknown-provider'),
+      ownerServiceId: requiredString(secret.ownerServiceId, 'unknown-service'),
+      workspaceId: requiredString(secret.workspaceId, 'unknown-workspace'),
+      state: requiredString(secret.state, 'unknown'),
+      outcome: requiredString(secret.outcome, 'unknown'),
+      capabilities: normalizeStringList(secret.capabilities),
+      policy: requiredString(secret.policy, 'policy-unavailable'),
+      auditStatus: requiredString(secret.auditStatus, 'audit-unavailable'),
+      valueSearch: requiredString(secret.valueSearch, 'unsupported'),
     }
   })
 }
@@ -385,5 +482,69 @@ export async function fetchSecretsBrokerOverview(): Promise<SecretsBrokerOvervie
         : undefined
 
     return buildUnsupportedOverview(service, checkedAt, status)
+  }
+}
+
+export async function fetchSecretsBrokerManagedSecrets(
+  search = ''
+): Promise<SecretsBrokerManagedSecretsResult> {
+  const checkedAt = new Date().toISOString()
+  const query = search.trim()
+
+  if (isServiceAdminStubModeEnabled()) {
+    return {
+      state: 'ready',
+      summary:
+        'Explicit Service Admin stub mode is enabled; live managed secret rows are not requested.',
+      query,
+      valueSearch: false,
+      results: [],
+      checkedAt,
+      stubMode: true,
+    }
+  }
+
+  const searchParam = query ? `?search=${encodeURIComponent(query)}` : ''
+
+  try {
+    const payload = await fetchJson<RawManagedSecretsResponse>(
+      `/api/services/${encodeServiceId('@secretsbroker')}/proxy/v1/management/secrets${searchParam}`
+    )
+    const results = normalizeManagedSecrets(payload.results)
+
+    return {
+      state:
+        optionalString(payload.outcome) === 'ready' ||
+        optionalString(payload.status) === 'ready'
+          ? 'ready'
+          : 'degraded',
+      summary:
+        optionalString(payload.summary) ??
+        optionalString(payload.reason) ??
+        'Secrets Broker managed secret metadata was read from the runtime proxy.',
+      query: optionalString(payload.query) ?? query,
+      valueSearch: optionalBoolean(payload.valueSearch),
+      results,
+      checkedAt,
+      stubMode: false,
+    }
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return {
+      state: status === 404 ? 'unsupported' : 'unavailable',
+      summary:
+        status === 404
+          ? 'Secrets Broker managed secrets route is not exposed by the runtime yet.'
+          : 'Secrets Broker managed secrets route is unavailable.',
+      query,
+      valueSearch: false,
+      results: [],
+      checkedAt,
+      stubMode: false,
+    }
   }
 }
