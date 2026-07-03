@@ -29,6 +29,7 @@ import {
   fetchSecretsBrokerOverview,
   fetchSecretsBrokerSecretDryRun,
   fetchSecretsBrokerSecretOperationStatus,
+  submitSecretsBrokerSecretApply,
   type SecretsBrokerSecretDryRunAction,
   type SecretsBrokerManagedSecretsResult,
   type SecretsBrokerLiveState,
@@ -331,6 +332,8 @@ function LiveManagedSecretsTable({
   const rows = managedSecrets?.results ?? []
   const [dryRunAction, setDryRunAction] =
     useState<SecretsBrokerSecretDryRunAction>('reset')
+  const [applyAuditReason, setApplyAuditReason] = useState('')
+  const [applyReasonRejected, setApplyReasonRejected] = useState(false)
   const liveDryRun = useMutation({
     mutationFn: ({
       ref,
@@ -356,10 +359,40 @@ function LiveManagedSecretsTable({
       fetchSecretsBrokerSecretOperationStatus(operationId),
   })
   const liveOperationStatusResult = liveOperationStatus.data
+  const liveApply = useMutation({
+    mutationFn: () =>
+      submitSecretsBrokerSecretApply({
+        action: dryRunAction,
+        ref: liveDryRunResult?.ref ?? '',
+        operationId: liveDryRunResult?.operationId ?? '',
+        serviceId: liveDryRunResult?.affectedServices[0] ?? '@serviceadmin',
+        reason: applyAuditReason,
+      }),
+  })
+  const liveApplyResult = liveApply.data
   const dryRunDisabledReason = (row: (typeof rows)[number]) =>
     liveDryRunSupported(row, dryRunAction)
       ? null
       : `${dryRunAction} dry-run not advertised for this row`
+  const applyReasonReady = Boolean(applyAuditReason.trim())
+  const liveApplyReady = Boolean(
+    liveDryRunResult &&
+    liveDryRunResult.state === 'ready' &&
+    liveDryRunResult.operationId &&
+    liveDryRunResult.requiresConfirmation &&
+    !liveDryRunResult.applied &&
+    applyReasonReady
+  )
+
+  function updateApplyAuditReason(nextReason: string) {
+    if (managedSecretAuditReasonHasSecretMaterial(nextReason)) {
+      setApplyReasonRejected(true)
+      return
+    }
+
+    setApplyReasonRejected(false)
+    setApplyAuditReason(nextReason)
+  }
 
   return (
     <Card>
@@ -564,6 +597,42 @@ function LiveManagedSecretsTable({
               Ref: {liveDryRunResult.ref}
             </div>
             <div className='mt-3'>
+              <div className='mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]'>
+                <div>
+                  <label
+                    className='text-xs font-medium text-muted-foreground uppercase'
+                    htmlFor='live-secret-apply-audit-reason'
+                  >
+                    Live apply audit reason
+                  </label>
+                  <Input
+                    id='live-secret-apply-audit-reason'
+                    aria-label='Live apply audit reason'
+                    className='mt-1'
+                    placeholder='Required before live apply submit'
+                    value={applyAuditReason}
+                    onChange={(event) =>
+                      updateApplyAuditReason(event.target.value)
+                    }
+                  />
+                  <div className='mt-1 text-xs text-muted-foreground'>
+                    {applyReasonRejected
+                      ? 'Secret-like material was rejected from the live apply audit reason.'
+                      : liveApplyReady
+                        ? 'Apply submit is gated by this audit reason and the latest dry-run operation id.'
+                        : 'Apply submit remains locked until dry-run is ready and an audit reason is provided.'}
+                  </div>
+                </div>
+                <div className='flex items-end'>
+                  <Button
+                    type='button'
+                    disabled={!liveApplyReady || liveApply.isPending}
+                    onClick={() => liveApply.mutate()}
+                  >
+                    Submit live apply
+                  </Button>
+                </div>
+              </div>
               <Button
                 type='button'
                 variant='outline'
@@ -650,6 +719,60 @@ function LiveManagedSecretsTable({
           <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
             Live operation status failed before safe metadata could be
             displayed.
+          </div>
+        ) : null}
+
+        {liveApply.isPending ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Submitting live apply using the broker operation id and audit reason
+            metadata only.
+          </div>
+        ) : liveApplyResult ? (
+          <div
+            aria-live='polite'
+            className='rounded-md border bg-muted/30 p-3 text-sm'
+          >
+            <div className='mb-2 flex flex-wrap items-center gap-2'>
+              <Badge variant={liveStateVariant[liveApplyResult.state]}>
+                {liveApplyResult.state}
+              </Badge>
+              <Badge variant='outline'>{liveApplyResult.status}</Badge>
+              <Badge variant='outline'>{liveApplyResult.outcome}</Badge>
+              <Badge variant='outline'>
+                {liveApplyResult.terminal ? 'terminal' : 'not terminal'}
+              </Badge>
+            </div>
+            <div className='font-medium'>Live apply submit metadata</div>
+            <div className='mt-1 text-muted-foreground'>
+              {liveApplyResult.summary}
+            </div>
+            <div className='mt-3 grid gap-3 md:grid-cols-3'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Operation
+                </div>
+                <div className='break-all'>{liveApplyResult.operationId}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Correlation
+                </div>
+                <div className='break-all'>{liveApplyResult.correlationId}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Next action
+                </div>
+                <div>{liveApplyResult.nextAction}</div>
+              </div>
+            </div>
+            <div className='mt-3 text-xs break-all text-muted-foreground'>
+              Ref: {liveApplyResult.ref} · Audit: {liveApplyResult.auditStatus}
+            </div>
+          </div>
+        ) : liveApply.isError ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Live apply submit failed before safe metadata could be displayed.
           </div>
         ) : null}
       </CardContent>

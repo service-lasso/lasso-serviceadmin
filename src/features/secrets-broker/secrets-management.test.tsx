@@ -98,7 +98,7 @@ describe('Secrets Broker secrets management page', () => {
 
   it('renders live managed secret rows in non-stub mode when the broker advertises management metadata', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/dashboard/services/%40secretsbroker') {
         return new Response(
           JSON.stringify({ service: { status: 'running' } }),
@@ -210,6 +210,40 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/reset/apply'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: expect.stringMatching(/^service-admin-reset-apply-/),
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          operationId: 'op-live-reset',
+          reason: 'operator approved reset after preview',
+          confirm: true,
+        })
+
+        return new Response(
+          JSON.stringify({
+            operationId: 'op-live-reset',
+            ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            operation: 'reset',
+            status: 'submitted',
+            outcome: 'pending',
+            terminal: false,
+            retrySafe: false,
+            auditStatus: 'audit_recorded',
+            correlationId: 'corr-live-apply',
+            nextAction: 'poll_operation_status',
+            value: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+            requestBody: { value: 'replacement-value-must-not-render' },
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -240,6 +274,17 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/confirm_and_apply_with_audit_reason/i)
     ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Submit live apply/i })
+    ).toBeDisabled()
+    await user.type(
+      screen.getByLabelText(/Live apply audit reason/i),
+      'operator approved reset after preview'
+    )
+    await user.click(screen.getByRole('button', { name: /Submit live apply/i }))
+    expect(await screen.findByText(/Live apply submit metadata/i)).toBeVisible()
+    expect(screen.getByText(/corr-live-apply/i)).toBeVisible()
+    expect(screen.getByText(/poll_operation_status/i)).toBeVisible()
     await user.click(
       screen.getByRole('button', {
         name: /Check broker operation status/i,
@@ -253,6 +298,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
     expect(
       screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/replacement-value-must-not-render/i)
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Simulate stub apply/i })
