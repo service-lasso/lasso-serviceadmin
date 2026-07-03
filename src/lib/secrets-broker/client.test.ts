@@ -200,6 +200,78 @@ describe('Secrets Broker live client', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('submits metadata-only live dry-run requests and sanitizes the response', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        url ===
+        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secrets/reset/dry-run'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(init?.body).toBeTypeOf('string')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: 'req-reset-preview',
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          reason: 'operator requested reset preview',
+          confirm: false,
+        })
+
+        return jsonResponse({
+          requestId: 'req-reset-preview',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          operation: 'reset',
+          mode: 'dry-run',
+          outcome: 'dry_run_ready',
+          applied: false,
+          requiresConfirmation: true,
+          auditStatus: 'audit_ready',
+          nextAction: 'confirm_and_apply_with_audit_reason',
+          affectedRefs: ['services/@serviceadmin/runtime/SESSION_SIGNING_KEY'],
+          affectedServices: ['@serviceadmin'],
+          value: 'DEMO_REVEAL_VALUE_42',
+          providerToken: 'provider-token-must-not-render',
+          requestBody: { value: 'replacement-value-must-not-render' },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchSecretsBrokerSecretDryRun } = await import('./client')
+
+    const result = await fetchSecretsBrokerSecretDryRun({
+      action: 'reset',
+      ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+      serviceId: '@serviceadmin',
+      reason: 'operator requested reset preview',
+      requestId: 'req-reset-preview',
+    })
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      requestId: 'req-reset-preview',
+      operation: 'reset',
+      mode: 'dry-run',
+      outcome: 'dry_run_ready',
+      applied: false,
+      requiresConfirmation: true,
+      auditStatus: 'audit_ready',
+      nextAction: 'confirm_and_apply_with_audit_reason',
+      stubMode: false,
+    })
+    expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+    expect(JSON.stringify(result)).not.toContain(
+      'provider-token-must-not-render'
+    )
+    expect(JSON.stringify(result)).not.toContain(
+      'replacement-value-must-not-render'
+    )
+  })
+
   it('reports unavailable when Service Lasso cannot return @secretsbroker metadata', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
     vi.stubGlobal(
