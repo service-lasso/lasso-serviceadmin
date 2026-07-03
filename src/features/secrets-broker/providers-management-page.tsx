@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -24,6 +25,11 @@ import {
   Trash2,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -89,6 +95,22 @@ const lifecycleVariant: Record<
   ready: 'default',
 }
 
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
 function providerTypeLabel(provider: SecretsBrokerSourceBackend) {
   return provider.type === 'local' ? 'local-encrypted-store' : provider.type
 }
@@ -106,6 +128,101 @@ function EnabledBadge({ enabled }: { enabled: boolean }) {
     <Badge className='bg-emerald-600 hover:bg-emerald-600'>Enabled</Badge>
   ) : (
     <Badge variant='outline'>Disabled</Badge>
+  )
+}
+
+function LiveSourceMetadata({
+  overview,
+  loading,
+  error,
+}: {
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const visibleSources = overview?.sources.slice(0, 3) ?? []
+
+  return (
+    <section
+      aria-label='Live provider source metadata'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live provider source metadata
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker provider metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker provider source metadata.'
+                  : 'Broker provider source metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Sources
+          </div>
+          <div>{overview?.sourceCount ?? 0}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Provider config
+          </div>
+          <div>
+            {overview?.capabilities.providerConfig ? 'available' : 'blocked'}
+          </div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Telemetry
+          </div>
+          <div>{overview?.telemetryAvailable ? 'available' : 'blocked'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Audit
+          </div>
+          <div>{overview?.auditAvailable ? 'available' : 'blocked'}</div>
+        </div>
+      </div>
+
+      {visibleSources.length ? (
+        <div className='mt-3 grid gap-2 md:grid-cols-3'>
+          {visibleSources.map((source) => (
+            <div key={source.id} className='rounded-md border bg-muted/30 p-3'>
+              <div className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='font-medium'>{source.label}</span>
+                <Badge variant='outline'>{source.state}</Badge>
+              </div>
+              <div className='mt-1 text-xs text-muted-foreground'>
+                {source.provider} · {source.reason}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -601,6 +718,10 @@ export function ProvidersManagementPage() {
 
   const data = useMemo(() => getConfiguredSecretsBrokerProviders(), [])
   const addableProviders = useMemo(() => getAddableSecretsBrokerProviders(), [])
+  const liveBrokerOverviewQuery = useQuery({
+    queryKey: ['secrets-broker', 'providers', 'live-source-metadata'],
+    queryFn: fetchSecretsBrokerOverview,
+  })
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'priority', desc: false },
     { id: 'provider', desc: false },
@@ -669,6 +790,12 @@ export function ProvidersManagementPage() {
         </div>
 
         <div className='flex flex-1 flex-col gap-4'>
+          <LiveSourceMetadata
+            overview={liveBrokerOverviewQuery.data}
+            loading={liveBrokerOverviewQuery.isLoading}
+            error={liveBrokerOverviewQuery.isError}
+          />
+
           {selectedAction?.action === 'add' ? (
             <ProviderActionPanel
               selection={selectedAction}

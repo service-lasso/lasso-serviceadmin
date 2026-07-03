@@ -368,6 +368,15 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.getByRole('heading', { name: /Secrets Broker providers/i })
     ).toBeVisible()
+    expect(
+      await screen.findByRole('region', {
+        name: /Live provider source metadata/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Explicit Service Admin stub mode is enabled/i)
+    ).toBeVisible()
+    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
     expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
     expect(
       screen.getByRole('button', { name: /^Add provider$/i })
