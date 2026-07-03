@@ -1262,7 +1262,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
 
     await page.getByPlaceholder(/Search providers/i).fill('aws')
-    await expect(page.getByText(/No enabled providers match/i)).toBeVisible()
+    await expect(page.getByText(/No configured providers match/i)).toBeVisible()
     await expect(page.getByText(/DEMO_REVEAL_VALUE_42/i)).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
