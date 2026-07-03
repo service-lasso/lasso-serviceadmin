@@ -162,6 +162,15 @@ describe('Secrets Broker overview dashboard', () => {
     await renderRoute('/secrets-broker')
 
     expect(screen.getByText(/@secretsbroker overview/i)).toBeVisible()
+    expect(
+      await screen.findByRole('region', {
+        name: /Live Secrets Broker status/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Explicit Service Admin stub mode is enabled/i)
+    ).toBeVisible()
+    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
     expect(screen.getByText(/@secretsbroker healthy/i)).toBeVisible()
     expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
     expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()

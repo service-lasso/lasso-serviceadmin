@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -13,6 +14,11 @@ import {
   X,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview as SecretsBrokerLiveOverview,
+} from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -537,6 +543,36 @@ const brokerOverviewStateVariant: Record<
   degraded: 'secondary',
   offline: 'destructive',
   unconfigured: 'outline',
+}
+
+const liveBrokerStateCopy: Record<SecretsBrokerLiveState, string> = {
+  ready: 'Ready',
+  loading: 'Loading',
+  unavailable: 'Unavailable',
+  'setup-needed': 'Setup needed',
+  locked: 'Locked',
+  'auth-required': 'Auth required',
+  'policy-denied': 'Policy denied',
+  unsupported: 'Unsupported',
+  degraded: 'Degraded',
+  'audit-unavailable': 'Audit unavailable',
+}
+
+function liveBrokerStateToOverviewState(
+  state: SecretsBrokerLiveState
+): SecretsBrokerOverviewState {
+  if (state === 'ready' || state === 'loading') return 'healthy'
+  if (state === 'setup-needed') return 'unconfigured'
+  if (state === 'degraded' || state === 'audit-unavailable') return 'degraded'
+  return 'offline'
+}
+
+function formatLiveAvailability(value: boolean) {
+  return value ? 'available' : 'unavailable'
+}
+
+function formatLiveBrokerMode(overview: SecretsBrokerLiveOverview) {
+  return overview.stubMode ? 'stub fixture metadata' : 'runtime proxy metadata'
 }
 
 const diagnosticStatusCopy: Record<SecretsBrokerDiagnosticStatus, string> = {
@@ -2115,6 +2151,15 @@ export function SecretsBrokerSetupWizard({
     brokerOverviewScenarios.find(
       (scenario) => scenario.id === overviewScenarioId
     ) ?? brokerOverviewScenarios[0]
+  const liveBrokerOverviewQuery = useQuery({
+    queryKey: ['secrets-broker', 'overview', 'live'],
+    queryFn: fetchSecretsBrokerOverview,
+    enabled: focusSection === 'overview',
+  })
+  const liveBrokerOverview = liveBrokerOverviewQuery.data
+  const liveBrokerOverviewState = liveBrokerOverview
+    ? liveBrokerStateToOverviewState(liveBrokerOverview.state)
+    : 'offline'
   const readyCount = wizardSources.filter(
     (source) => source.status === 'ready'
   ).length
@@ -2269,6 +2314,104 @@ export function SecretsBrokerSetupWizard({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div
+                  aria-label='Live Secrets Broker status'
+                  className='rounded-lg border p-4'
+                  role='region'
+                >
+                  <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div>
+                      <div className='flex flex-wrap items-center gap-2 font-medium'>
+                        <Network className='size-4' />
+                        Live broker status
+                        <Badge
+                          variant={
+                            brokerOverviewStateVariant[liveBrokerOverviewState]
+                          }
+                        >
+                          {liveBrokerOverview
+                            ? liveBrokerStateCopy[liveBrokerOverview.state]
+                            : liveBrokerOverviewQuery.isError
+                              ? 'Unavailable'
+                              : 'Loading'}
+                        </Badge>
+                      </div>
+                      <p className='mt-2 text-sm text-muted-foreground'>
+                        {liveBrokerOverview
+                          ? liveBrokerOverview.summary
+                          : liveBrokerOverviewQuery.isError
+                            ? 'Live broker metadata could not be read from the runtime boundary.'
+                            : 'Checking live broker metadata from the runtime boundary.'}
+                      </p>
+                    </div>
+                    {liveBrokerOverview ? (
+                      <Badge variant='outline'>
+                        {formatLiveBrokerMode(liveBrokerOverview)}
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+                    <div>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Sources
+                      </div>
+                      <div>{liveBrokerOverview?.sourceCount ?? 0}</div>
+                    </div>
+                    <div>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Service state
+                      </div>
+                      <div>
+                        {liveBrokerOverview?.service?.status ?? 'unknown'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Telemetry
+                      </div>
+                      <div>
+                        {liveBrokerOverview
+                          ? formatLiveAvailability(
+                              liveBrokerOverview.telemetryAvailable
+                            )
+                          : 'unknown'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className='text-xs font-medium text-muted-foreground uppercase'>
+                        Audit
+                      </div>
+                      <div>
+                        {liveBrokerOverview
+                          ? formatLiveAvailability(
+                              liveBrokerOverview.auditAvailable
+                            )
+                          : 'unknown'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {liveBrokerOverview?.sources.length ? (
+                    <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                      {liveBrokerOverview.sources.slice(0, 4).map((source) => (
+                        <div
+                          key={source.id}
+                          className='rounded-md border bg-muted/30 p-3 text-sm'
+                        >
+                          <div className='flex flex-wrap items-center gap-2'>
+                            <span className='font-medium'>{source.label}</span>
+                            <Badge variant='outline'>{source.state}</Badge>
+                          </div>
+                          <div className='mt-1 text-xs text-muted-foreground'>
+                            {source.provider} · {source.reason}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className='grid gap-4 lg:grid-cols-[1.2fr_1fr]'>
