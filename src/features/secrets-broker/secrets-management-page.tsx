@@ -563,7 +563,11 @@ function LiveManagedSecretsTable({
                 {liveDryRunResult.applied ? 'applied' : 'not applied'}
               </Badge>
             </div>
-            <div className='font-medium'>Live dry-run accepted</div>
+            <div className='font-medium'>
+              {liveDryRunResult.state === 'ready'
+                ? 'Live dry-run accepted'
+                : 'Live dry-run unavailable'}
+            </div>
             <div className='mt-1 text-muted-foreground'>
               {liveDryRunResult.summary}
             </div>
