@@ -88,6 +88,7 @@ export type SecretsBrokerSecretDryRunResult = {
   state: SecretsBrokerLiveState
   summary: string
   requestId: string
+  operationId: string
   ref: string
   operation: string
   mode: string
@@ -100,6 +101,23 @@ export type SecretsBrokerSecretDryRunResult = {
   affectedServices: string[]
   lockoutActive: boolean
   retryAfterSeconds: number
+  stubMode: boolean
+}
+
+export type SecretsBrokerSecretOperationStatusResult = {
+  state: SecretsBrokerLiveState
+  summary: string
+  operationId: string
+  ref: string
+  operation: string
+  status: string
+  outcome: string
+  terminal: boolean
+  retrySafe: boolean
+  auditStatus: string
+  correlationId: string
+  nextAction: string
+  checkedAt: string
   stubMode: boolean
 }
 
@@ -159,6 +177,7 @@ type RawManagedSecretsResponse = {
 
 type RawManagedSecretDryRunResponse = {
   requestId?: unknown
+  operationId?: unknown
   ref?: unknown
   operation?: unknown
   mode?: unknown
@@ -171,6 +190,20 @@ type RawManagedSecretDryRunResponse = {
   affectedServices?: unknown
   lockoutActive?: unknown
   retryAfterSeconds?: unknown
+}
+
+type RawManagedSecretOperationStatusResponse = {
+  operationId?: unknown
+  ref?: unknown
+  operation?: unknown
+  status?: unknown
+  outcome?: unknown
+  terminal?: unknown
+  retrySafe?: unknown
+  auditStatus?: unknown
+  correlationId?: unknown
+  nextAction?: unknown
+  checkedAt?: unknown
 }
 
 type HttpJsonError = Error & {
@@ -400,6 +433,7 @@ function normalizeDryRunResponse(
 ): SecretsBrokerSecretDryRunResult {
   const outcome = requiredString(payload.outcome, 'degraded')
   const mode = requiredString(payload.mode, dryRunModeForAction(request.action))
+  const operationId = requiredString(payload.operationId, request.requestId)
 
   return {
     state: normalizeDryRunState(outcome),
@@ -408,6 +442,7 @@ function normalizeDryRunResponse(
         ? 'Live broker dry-run returned safe metadata and did not apply a mutation.'
         : 'Live broker dry-run failed closed with safe metadata only.',
     requestId: requiredString(payload.requestId, request.requestId),
+    operationId,
     ref: requiredString(payload.ref, request.ref),
     operation: requiredString(payload.operation, request.action),
     mode,
@@ -420,6 +455,65 @@ function normalizeDryRunResponse(
     affectedServices: normalizeStringList(payload.affectedServices),
     lockoutActive: optionalBoolean(payload.lockoutActive),
     retryAfterSeconds: optionalNumber(payload.retryAfterSeconds),
+    stubMode: false,
+  }
+}
+
+function normalizeOperationStatusState(
+  status: string,
+  outcome: string
+): SecretsBrokerLiveState {
+  const normalizedStatus = status.toLowerCase().replace(/_/g, '-')
+  const normalizedOutcome = outcome.toLowerCase().replace(/_/g, '-')
+
+  if (
+    normalizedStatus === 'succeeded' ||
+    normalizedStatus === 'success' ||
+    normalizedStatus === 'applied' ||
+    normalizedOutcome === 'success' ||
+    normalizedOutcome === 'applied'
+  ) {
+    return 'ready'
+  }
+
+  if (normalizedStatus === 'pending' || normalizedStatus === 'running') {
+    return 'loading'
+  }
+
+  if (normalizedStatus === 'locked') return 'locked'
+  if (normalizedStatus === 'auth-required') return 'auth-required'
+  if (normalizedStatus === 'policy-denied') return 'policy-denied'
+  if (normalizedStatus === 'unsupported') return 'unsupported'
+  if (normalizedStatus === 'audit-unavailable') return 'audit-unavailable'
+
+  return 'degraded'
+}
+
+function normalizeOperationStatusResponse(
+  payload: RawManagedSecretOperationStatusResponse,
+  operationId: string
+): SecretsBrokerSecretOperationStatusResult {
+  const status = requiredString(payload.status, 'unknown')
+  const outcome = requiredString(payload.outcome, status)
+  const state = normalizeOperationStatusState(status, outcome)
+
+  return {
+    state,
+    summary:
+      state === 'ready'
+        ? 'Live broker operation status returned terminal safe metadata.'
+        : 'Live broker operation status returned safe metadata without secret material.',
+    operationId: requiredString(payload.operationId, operationId),
+    ref: requiredString(payload.ref, 'unknown-ref'),
+    operation: requiredString(payload.operation, 'unknown-operation'),
+    status,
+    outcome,
+    terminal: optionalBoolean(payload.terminal),
+    retrySafe: optionalBoolean(payload.retrySafe),
+    auditStatus: requiredString(payload.auditStatus, 'audit-unavailable'),
+    correlationId: requiredString(payload.correlationId, 'unavailable'),
+    nextAction: requiredString(payload.nextAction, 'inspect_status'),
+    checkedAt: requiredString(payload.checkedAt, new Date().toISOString()),
     stubMode: false,
   }
 }
@@ -690,6 +784,7 @@ export async function fetchSecretsBrokerSecretDryRun(
       summary:
         'Explicit Service Admin stub mode is enabled; live broker dry-run was not requested.',
       requestId,
+      operationId: requestId,
       ref,
       operation: request.action,
       mode: dryRunModeForAction(request.action),
@@ -711,6 +806,7 @@ export async function fetchSecretsBrokerSecretDryRun(
       state: 'unsupported',
       summary: 'A managed secret ref is required before live dry-run preview.',
       requestId,
+      operationId: requestId,
       ref: '',
       operation: request.action,
       mode: dryRunModeForAction(request.action),
@@ -753,6 +849,7 @@ export async function fetchSecretsBrokerSecretDryRun(
           ? 'Secrets Broker live dry-run route is not exposed by the runtime yet.'
           : 'Secrets Broker live dry-run route is unavailable.',
       requestId,
+      operationId: requestId,
       ref,
       operation: request.action,
       mode: dryRunModeForAction(request.action),
@@ -766,6 +863,87 @@ export async function fetchSecretsBrokerSecretDryRun(
       affectedServices: [serviceId],
       lockoutActive: false,
       retryAfterSeconds: 0,
+      stubMode: false,
+    }
+  }
+}
+
+export async function fetchSecretsBrokerSecretOperationStatus(
+  operationId: string
+): Promise<SecretsBrokerSecretOperationStatusResult> {
+  const normalizedOperationId = operationId.trim()
+  const checkedAt = new Date().toISOString()
+
+  if (isServiceAdminStubModeEnabled()) {
+    return {
+      state: 'unsupported',
+      summary:
+        'Explicit Service Admin stub mode is enabled; live operation status was not requested.',
+      operationId: normalizedOperationId,
+      ref: 'stub-mode',
+      operation: 'stub-mode',
+      status: 'stub_mode',
+      outcome: 'stub_mode',
+      terminal: false,
+      retrySafe: false,
+      auditStatus: 'stub-mode',
+      correlationId: 'stub-mode',
+      nextAction: 'disable_stub_mode_for_live_status',
+      checkedAt,
+      stubMode: true,
+    }
+  }
+
+  if (!normalizedOperationId) {
+    return {
+      state: 'unsupported',
+      summary:
+        'A broker operation id is required before live status can be read.',
+      operationId: '',
+      ref: 'unknown-ref',
+      operation: 'unknown-operation',
+      status: 'invalid_operation_id',
+      outcome: 'invalid_operation_id',
+      terminal: true,
+      retrySafe: false,
+      auditStatus: 'audit-unavailable',
+      correlationId: 'unavailable',
+      nextAction: 'select_operation_id',
+      checkedAt,
+      stubMode: false,
+    }
+  }
+
+  try {
+    const payload = await fetchJson<RawManagedSecretOperationStatusResponse>(
+      `/api/services/${encodeServiceId('@secretsbroker')}/proxy/v1/management/secret-operations/${encodeURIComponent(normalizedOperationId)}`
+    )
+
+    return normalizeOperationStatusResponse(payload, normalizedOperationId)
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return {
+      state: status === 404 ? 'unsupported' : 'unavailable',
+      summary:
+        status === 404
+          ? 'Secrets Broker live operation status route is not exposed by the runtime yet.'
+          : 'Secrets Broker live operation status route is unavailable.',
+      operationId: normalizedOperationId,
+      ref: 'unknown-ref',
+      operation: 'unknown-operation',
+      status: status === 404 ? 'unsupported' : 'unavailable',
+      outcome: status === 404 ? 'unsupported' : 'unavailable',
+      terminal: true,
+      retrySafe: false,
+      auditStatus: 'audit-unavailable',
+      correlationId: 'unavailable',
+      nextAction:
+        status === 404 ? 'inspect_capability' : 'retry_or_inspect_status',
+      checkedAt,
       stubMode: false,
     }
   }

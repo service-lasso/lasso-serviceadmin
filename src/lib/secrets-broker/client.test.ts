@@ -272,6 +272,63 @@ describe('Secrets Broker live client', () => {
     )
   })
 
+  it('reads metadata-only operation status by operation id and sanitizes the response', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (
+        url ===
+        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secret-operations/op-live-reset'
+      ) {
+        return jsonResponse({
+          operationId: 'op-live-reset',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          operation: 'reset',
+          status: 'succeeded',
+          outcome: 'applied',
+          terminal: true,
+          retrySafe: false,
+          auditStatus: 'audit_recorded',
+          correlationId: 'corr-live-reset',
+          nextAction: 'review_audit_metadata',
+          value: 'DEMO_REVEAL_VALUE_42',
+          providerToken: 'provider-token-must-not-render',
+          responseBody: { value: 'replacement-value-must-not-render' },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchSecretsBrokerSecretOperationStatus } = await import('./client')
+
+    const result =
+      await fetchSecretsBrokerSecretOperationStatus('op-live-reset')
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      operationId: 'op-live-reset',
+      operation: 'reset',
+      status: 'succeeded',
+      outcome: 'applied',
+      terminal: true,
+      retrySafe: false,
+      auditStatus: 'audit_recorded',
+      correlationId: 'corr-live-reset',
+      nextAction: 'review_audit_metadata',
+      stubMode: false,
+    })
+    expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+    expect(JSON.stringify(result)).not.toContain(
+      'provider-token-must-not-render'
+    )
+    expect(JSON.stringify(result)).not.toContain(
+      'replacement-value-must-not-render'
+    )
+  })
+
   it('reports unavailable when Service Lasso cannot return @secretsbroker metadata', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
     vi.stubGlobal(

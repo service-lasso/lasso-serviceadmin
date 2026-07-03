@@ -28,6 +28,7 @@ import {
   fetchSecretsBrokerManagedSecrets,
   fetchSecretsBrokerOverview,
   fetchSecretsBrokerSecretDryRun,
+  fetchSecretsBrokerSecretOperationStatus,
   type SecretsBrokerSecretDryRunAction,
   type SecretsBrokerManagedSecretsResult,
   type SecretsBrokerLiveState,
@@ -350,6 +351,11 @@ function LiveManagedSecretsTable({
       }),
   })
   const liveDryRunResult = liveDryRun.data
+  const liveOperationStatus = useMutation({
+    mutationFn: (operationId: string) =>
+      fetchSecretsBrokerSecretOperationStatus(operationId),
+  })
+  const liveOperationStatusResult = liveOperationStatus.data
   const dryRunDisabledReason = (row: (typeof rows)[number]) =>
     liveDryRunSupported(row, dryRunAction)
       ? null
@@ -537,6 +543,12 @@ function LiveManagedSecretsTable({
               </div>
               <div>
                 <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Operation
+                </div>
+                <div className='break-all'>{liveDryRunResult.operationId}</div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
                   Audit
                 </div>
                 <div>{liveDryRunResult.auditStatus}</div>
@@ -551,10 +563,93 @@ function LiveManagedSecretsTable({
             <div className='mt-3 text-xs break-all text-muted-foreground'>
               Ref: {liveDryRunResult.ref}
             </div>
+            <div className='mt-3'>
+              <Button
+                type='button'
+                variant='outline'
+                disabled={
+                  liveOperationStatus.isPending || !liveDryRunResult.operationId
+                }
+                onClick={() =>
+                  liveOperationStatus.mutate(liveDryRunResult.operationId)
+                }
+              >
+                Check broker operation status
+              </Button>
+            </div>
           </div>
         ) : liveDryRun.isError ? (
           <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
             Live dry-run preview failed before safe metadata could be displayed.
+          </div>
+        ) : null}
+
+        {liveOperationStatus.isPending ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Reading live broker operation status by operation id.
+          </div>
+        ) : liveOperationStatusResult ? (
+          <div
+            aria-live='polite'
+            className='rounded-md border bg-muted/30 p-3 text-sm'
+          >
+            <div className='mb-2 flex flex-wrap items-center gap-2'>
+              <Badge
+                variant={liveStateVariant[liveOperationStatusResult.state]}
+              >
+                {liveOperationStatusResult.state}
+              </Badge>
+              <Badge variant='outline'>
+                {liveOperationStatusResult.status}
+              </Badge>
+              <Badge variant='outline'>
+                {liveOperationStatusResult.terminal
+                  ? 'terminal'
+                  : 'not terminal'}
+              </Badge>
+              <Badge variant='outline'>
+                {liveOperationStatusResult.retrySafe
+                  ? 'retry safe'
+                  : 'retry blocked'}
+              </Badge>
+            </div>
+            <div className='font-medium'>Live operation status metadata</div>
+            <div className='mt-1 text-muted-foreground'>
+              {liveOperationStatusResult.summary}
+            </div>
+            <div className='mt-3 grid gap-3 md:grid-cols-3'>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Operation
+                </div>
+                <div className='break-all'>
+                  {liveOperationStatusResult.operationId}
+                </div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Correlation
+                </div>
+                <div className='break-all'>
+                  {liveOperationStatusResult.correlationId}
+                </div>
+              </div>
+              <div>
+                <div className='text-xs font-medium text-muted-foreground uppercase'>
+                  Next action
+                </div>
+                <div>{liveOperationStatusResult.nextAction}</div>
+              </div>
+            </div>
+            <div className='mt-3 text-xs break-all text-muted-foreground'>
+              Ref: {liveOperationStatusResult.ref} · Audit:{' '}
+              {liveOperationStatusResult.auditStatus}
+            </div>
+          </div>
+        ) : liveOperationStatus.isError ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
+            Live operation status failed before safe metadata could be
+            displayed.
           </div>
         ) : null}
       </CardContent>
