@@ -560,7 +560,15 @@ function normalizeOperationStatusState(
     return 'ready'
   }
 
-  if (normalizedStatus === 'pending' || normalizedStatus === 'running') {
+  if (
+    normalizedStatus === 'pending' ||
+    normalizedStatus === 'running' ||
+    normalizedStatus === 'submitted' ||
+    normalizedStatus === 'accepted' ||
+    normalizedStatus === 'queued' ||
+    normalizedOutcome === 'pending' ||
+    normalizedOutcome === 'running'
+  ) {
     return 'loading'
   }
 

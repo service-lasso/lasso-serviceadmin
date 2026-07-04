@@ -383,7 +383,7 @@ describe('Secrets Broker live client', () => {
     })
 
     expect(result).toMatchObject({
-      state: 'degraded',
+      state: 'loading',
       operationId: 'op-live-reset',
       operation: 'reset',
       status: 'submitted',
