@@ -202,6 +202,13 @@ const liveDryRunActions: Array<{
   { label: 'Policy preview', value: 'policy' },
 ]
 
+const liveDryRunModeLabels: Record<SecretsBrokerSecretDryRunAction, string> = {
+  edit: 'edit dry-run',
+  reset: 'reset dry-run',
+  delete: 'delete dry-run',
+  policy: 'policy preview',
+}
+
 function liveDryRunSupported(
   row: { capabilities: string[] },
   action: SecretsBrokerSecretDryRunAction
@@ -387,7 +394,7 @@ function LiveManagedSecretsTable({
   const dryRunDisabledReason = (row: (typeof rows)[number]) =>
     liveDryRunSupported(row, dryRunAction)
       ? null
-      : `${dryRunAction} dry-run not advertised for this row`
+      : `${liveDryRunModeLabels[dryRunAction]} not advertised for this row`
   const applyReasonReady = Boolean(applyAuditReason.trim())
   const liveApplyReady = Boolean(
     liveDryRunResult &&
@@ -551,7 +558,8 @@ function LiveManagedSecretsTable({
                               })
                             }
                           >
-                            Preview {dryRunAction} dry-run for {row.name}
+                            Preview {liveDryRunModeLabels[dryRunAction]} for{' '}
+                            {row.name}
                           </Button>
                           <div className='text-xs text-muted-foreground'>
                             {disabledReason ??
