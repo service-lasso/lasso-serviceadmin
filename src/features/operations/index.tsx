@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   type ColumnDef,
@@ -15,6 +16,10 @@ import {
 } from '@tanstack/react-table'
 import { Activity, ClipboardCheck, FileChartColumn } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerAuditEvents,
+  type SecretsBrokerAuditEventMetadata,
+} from '@/lib/secrets-broker/client'
 import {
   useServiceTelemetryPreview,
   useServices,
@@ -50,7 +55,6 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import {
   auditEventTypeLabel,
   secretsBrokerAuditEvents,
-  type SecretsBrokerAuditEvent,
 } from '@/features/secrets-broker/audit-events'
 
 type OperationsSource = 'Service Lasso' | 'Secrets Broker'
@@ -435,17 +439,35 @@ function buildSecretsBrokerTelemetryRows(
 }
 
 function buildAuditRows(): AuditLogRow[] {
-  const brokerRows = secretsBrokerAuditEvents.map(
-    (event: SecretsBrokerAuditEvent): AuditLogRow => ({
+  return buildAuditRowsFromBrokerEvents(
+    secretsBrokerAuditEvents.map((event) => ({
       id: event.id,
       event: auditEventTypeLabel(event.type),
+      actorType: event.actorType,
+      actorId: event.actorId,
+      outcome: event.outcome,
+      policyDecision: event.policyDecision,
+      tamperEvidence: event.tamperEvidence.status,
+      recordedAt: event.timestamp,
+      summary: event.normalizedReason,
+    }))
+  )
+}
+
+function buildAuditRowsFromBrokerEvents(
+  events: SecretsBrokerAuditEventMetadata[]
+): AuditLogRow[] {
+  const brokerRows = events.map(
+    (event): AuditLogRow => ({
+      id: event.id,
+      event: event.event.replace(/_/g, ' '),
       source: 'Secrets Broker',
       actor: `${event.actorType}: ${event.actorId}`,
       outcome: event.outcome,
       policy: event.policyDecision,
-      tamperEvidence: event.tamperEvidence.status,
-      recordedAt: event.timestamp,
-      safeSummary: event.normalizedReason,
+      tamperEvidence: event.tamperEvidence,
+      recordedAt: event.recordedAt,
+      safeSummary: event.summary,
     })
   )
 
@@ -951,8 +973,35 @@ export function OperationsAuditLogging() {
       'Operations audit events across Service Lasso and Secrets Broker sources.',
   })
 
-  const rows = useMemo(() => buildAuditRows(), [])
-  const auditSummary = useMemo(() => buildAuditSummary(rows), [rows])
+  const brokerAuditQuery = useQuery({
+    queryKey: ['operations', 'audit', 'secrets-broker'],
+    queryFn: fetchSecretsBrokerAuditEvents,
+  })
+  const brokerAudit = brokerAuditQuery.data
+  const rows = useMemo(() => {
+    if (brokerAudit && !brokerAudit.stubMode) {
+      return buildAuditRowsFromBrokerEvents(
+        brokerAudit.state === 'ready' ? brokerAudit.events : []
+      )
+    }
+
+    return buildAuditRows()
+  }, [brokerAudit])
+  const auditSourceStatus: AuditSourceStatus =
+    brokerAudit && !brokerAudit.stubMode
+      ? brokerAudit.state === 'ready'
+        ? 'live'
+        : 'unavailable'
+      : 'fixture'
+  const auditSummary = useMemo(
+    () =>
+      buildAuditSummary(
+        rows,
+        auditSourceStatus,
+        brokerAudit?.rawMaterialReturned === true
+      ),
+    [auditSourceStatus, brokerAudit?.rawMaterialReturned, rows]
+  )
   const outcomes = useMemo(
     () =>
       Array.from(new Set(rows.map((row) => row.outcome)))

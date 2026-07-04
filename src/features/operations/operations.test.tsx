@@ -1,9 +1,14 @@
 import { renderRoute } from '@/test/render-route'
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildAuditSummary } from './index'
 
 describe('Operations pages', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+  })
+
   it('renders telemetry rows for Service Lasso and Secrets Broker without secret material', async () => {
     const { container } = await renderRoute('/operations/telemetry')
 
@@ -72,6 +77,57 @@ describe('Operations pages', () => {
     expect(container).not.toHaveTextContent(/DEMO_REVEAL_VALUE_42/i)
     expect(container).not.toHaveTextContent(/ACTUAL_SECRET/i)
     expect(container).not.toHaveTextContent(/BOT_TOKEN=/i)
+  })
+
+  it('prefers live Secrets Broker audit rows and drops unsafe payload fields', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/services/%40secretsbroker/proxy/v1/audit/events') {
+          return new Response(
+            JSON.stringify({
+              state: 'ready',
+              summary: 'Live broker audit metadata available.',
+              rawMaterialReturned: false,
+              events: [
+                {
+                  id: 'audit-live-secret-rotation',
+                  eventType: 'secret_rotated',
+                  actorType: 'operator',
+                  actorId: 'serviceadmin',
+                  outcome: 'success',
+                  policyDecision: 'allow: audited rotation metadata only',
+                  chainStatus: 'verified',
+                  recordedAt: '2026-07-05T06:31:00Z',
+                  summary: 'Rotation completed with safe audit metadata.',
+                  rawValue: 'DEMO_REVEAL_VALUE_42',
+                  providerToken: 'provider-token-must-not-render',
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        throw new Error(`Unexpected URL: ${url}`)
+      })
+    )
+
+    const { container } = await renderRoute('/operations/audit-logging', {
+      stubData: false,
+    })
+
+    expect(await screen.findByText(/Live runtime audit/i)).toBeVisible()
+    expect(screen.getByText(/secret rotated/i)).toBeVisible()
+    expect(
+      screen.getByText(/allow: audited rotation metadata only/i)
+    ).toBeVisible()
+    expect(screen.queryByText(/resolve granted/i)).not.toBeInTheDocument()
+    expect(container).not.toHaveTextContent(/DEMO_REVEAL_VALUE_42/i)
+    expect(container).not.toHaveTextContent(/provider-token-must-not-render/i)
   })
 
   it('summarizes live audit card state from safe metadata', () => {
