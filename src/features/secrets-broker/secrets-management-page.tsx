@@ -30,6 +30,7 @@ import {
   fetchSecretsBrokerSecretDryRun,
   fetchSecretsBrokerSecretOperationStatus,
   submitSecretsBrokerSecretApply,
+  submitSecretsBrokerSecretReveal,
   type SecretsBrokerSecretDryRunAction,
   type SecretsBrokerManagedSecretsResult,
   type SecretsBrokerLiveState,
@@ -241,6 +242,12 @@ function liveDryRunSupported(
   return capabilities.some((capability) => capability.includes('policy'))
 }
 
+function liveRevealSupported(row: { capabilities: string[] }) {
+  return row.capabilities.some((capability) =>
+    capability.toLowerCase().includes('reveal')
+  )
+}
+
 function LiveSecretMetadata({
   overview,
   loading,
@@ -344,11 +351,21 @@ function LiveManagedSecretsTable({
   loading: boolean
   enabled: boolean
 }) {
-  const rows = managedSecrets?.results ?? []
+  const rows = useMemo(
+    () => managedSecrets?.results ?? [],
+    [managedSecrets?.results]
+  )
   const [dryRunAction, setDryRunAction] =
     useState<SecretsBrokerSecretDryRunAction>('reset')
   const [applyAuditReason, setApplyAuditReason] = useState('')
   const [applyReasonRejected, setApplyReasonRejected] = useState(false)
+  const [revealRef, setRevealRef] = useState('')
+  const [revealAuditReason, setRevealAuditReason] = useState('')
+  const [revealReasonRejected, setRevealReasonRejected] = useState(false)
+  const [revealConfirmed, setRevealConfirmed] = useState(false)
+  const revealRows = useMemo(() => rows.filter(liveRevealSupported), [rows])
+  const selectedRevealRow =
+    revealRows.find((row) => row.ref === revealRef) ?? revealRows[0] ?? null
   const liveDryRun = useMutation({
     mutationFn: ({
       ref,
@@ -369,6 +386,15 @@ function LiveManagedSecretsTable({
       }),
   })
   const liveDryRunResult = liveDryRun.data
+  const liveReveal = useMutation({
+    mutationFn: () =>
+      submitSecretsBrokerSecretReveal({
+        ref: selectedRevealRow?.ref ?? '',
+        serviceId: selectedRevealRow?.ownerServiceId ?? '@serviceadmin',
+        reason: revealAuditReason,
+      }),
+  })
+  const liveRevealResult = liveReveal.data
   const liveOperationStatus = useMutation({
     mutationFn: (operationId: string) =>
       fetchSecretsBrokerSecretOperationStatus(operationId),
@@ -404,6 +430,14 @@ function LiveManagedSecretsTable({
     !liveDryRunResult.applied &&
     applyReasonReady
   )
+  const revealReasonReady = Boolean(revealAuditReason.trim())
+  const liveRevealReady = Boolean(
+    enabled &&
+    selectedRevealRow &&
+    revealReasonReady &&
+    revealConfirmed &&
+    !revealReasonRejected
+  )
 
   function updateApplyAuditReason(nextReason: string) {
     if (managedSecretAuditReasonHasSecretMaterial(nextReason)) {
@@ -413,6 +447,16 @@ function LiveManagedSecretsTable({
 
     setApplyReasonRejected(false)
     setApplyAuditReason(nextReason)
+  }
+
+  function updateRevealAuditReason(nextReason: string) {
+    if (managedSecretAuditReasonHasSecretMaterial(nextReason)) {
+      setRevealReasonRejected(true)
+      return
+    }
+
+    setRevealReasonRejected(false)
+    setRevealAuditReason(nextReason)
   }
 
   return (
@@ -578,6 +622,153 @@ function LiveManagedSecretsTable({
             No live managed secret metadata rows were returned for this query.
           </div>
         )}
+
+        <section
+          aria-label='Live controlled reveal request'
+          className='rounded-md border bg-muted/20 p-3 text-sm'
+        >
+          <div className='flex flex-wrap items-center gap-2'>
+            <Eye className='h-4 w-4 text-muted-foreground' />
+            <div className='font-medium'>Live controlled reveal request</div>
+            <Badge variant={revealRows.length > 0 ? 'default' : 'outline'}>
+              {revealRows.length > 0
+                ? `${revealRows.length} reveal-capable rows`
+                : 'no reveal capability'}
+            </Badge>
+          </div>
+          <div className='mt-1 text-muted-foreground'>
+            Calls `POST /v1/management/secrets/reveal` only after a safe audit
+            reason and explicit confirmation. The response may contain a
+            time-limited value, but this page keeps metadata only.
+          </div>
+          {revealRows.length > 0 ? (
+            <div className='mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'>
+              <div>
+                <label
+                  className='text-xs font-medium text-muted-foreground uppercase'
+                  htmlFor='live-secret-reveal-ref'
+                >
+                  Reveal ref
+                </label>
+                <select
+                  id='live-secret-reveal-ref'
+                  aria-label='Live reveal secret ref'
+                  className='mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={selectedRevealRow?.ref ?? ''}
+                  onChange={(event) => setRevealRef(event.target.value)}
+                >
+                  {revealRows.map((row) => (
+                    <option key={row.ref} value={row.ref}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  className='text-xs font-medium text-muted-foreground uppercase'
+                  htmlFor='live-secret-reveal-audit-reason'
+                >
+                  Reveal audit reason
+                </label>
+                <Input
+                  id='live-secret-reveal-audit-reason'
+                  aria-label='Live reveal audit reason'
+                  className='mt-1'
+                  placeholder='Required before controlled reveal'
+                  value={revealAuditReason}
+                  onChange={(event) =>
+                    updateRevealAuditReason(event.target.value)
+                  }
+                />
+                <div className='mt-1 text-xs text-muted-foreground'>
+                  {revealReasonRejected
+                    ? 'Secret-like material was rejected from the reveal audit reason.'
+                    : revealReasonReady
+                      ? 'Audit reason ready for broker reveal policy check.'
+                      : 'Audit reason is required before reveal can leave this page.'}
+                </div>
+              </div>
+              <div className='flex flex-col justify-end gap-2'>
+                <label className='flex items-center gap-2 text-xs text-muted-foreground'>
+                  <input
+                    type='checkbox'
+                    checked={revealConfirmed}
+                    onChange={(event) =>
+                      setRevealConfirmed(event.target.checked)
+                    }
+                  />
+                  Confirm controlled reveal
+                </label>
+                <Button
+                  type='button'
+                  disabled={!liveRevealReady || liveReveal.isPending}
+                  onClick={() => liveReveal.mutate()}
+                >
+                  Request live controlled reveal
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className='mt-3 rounded-md border bg-muted/40 p-3 text-muted-foreground'>
+              No live rows currently advertise reveal capability.
+            </div>
+          )}
+
+          {liveReveal.isPending ? (
+            <div className='mt-3 rounded-md border bg-muted/40 p-3 text-muted-foreground'>
+              Requesting live controlled reveal metadata from the broker.
+            </div>
+          ) : liveRevealResult ? (
+            <div
+              aria-live='polite'
+              className='mt-3 rounded-md border bg-background/80 p-3'
+            >
+              <div className='mb-2 flex flex-wrap items-center gap-2'>
+                <Badge variant={liveStateVariant[liveRevealResult.state]}>
+                  {liveRevealResult.state}
+                </Badge>
+                <Badge variant='outline'>{liveRevealResult.outcome}</Badge>
+                <Badge variant='outline'>
+                  ttl {liveRevealResult.ttlSeconds}s
+                </Badge>
+              </div>
+              <div className='font-medium'>Live controlled reveal metadata</div>
+              <div className='mt-1 text-muted-foreground'>
+                {liveRevealResult.summary}
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Request
+                  </div>
+                  <div className='break-all'>{liveRevealResult.requestId}</div>
+                </div>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Audit
+                  </div>
+                  <div>{liveRevealResult.auditStatus}</div>
+                </div>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Value
+                  </div>
+                  <div>{liveRevealResult.valueStatus}</div>
+                </div>
+              </div>
+              <div className='mt-3 text-xs break-all text-muted-foreground'>
+                Ref: {liveRevealResult.ref} · Next action:{' '}
+                {liveRevealResult.nextAction}
+              </div>
+            </div>
+          ) : liveReveal.isError ? (
+            <div className='mt-3 rounded-md border bg-muted/40 p-3 text-muted-foreground'>
+              Live controlled reveal failed before safe metadata could be
+              displayed.
+            </div>
+          ) : null}
+        </section>
 
         {liveDryRun.isPending ? (
           <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>

@@ -189,6 +189,40 @@ describe('Secrets Broker secrets management page', () => {
 
       if (
         url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/reveal'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: expect.stringMatching(/^service-admin-reveal-/),
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          reason: 'operator troubleshooting session issue',
+        })
+
+        return new Response(
+          JSON.stringify({
+            requestId: 'req-live-reveal',
+            ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            operation: 'reveal',
+            mode: 'apply',
+            outcome: 'ready',
+            ttlSeconds: 60,
+            auditStatus: 'audit_recorded',
+            nextAction: 'close_reveal_window',
+            affectedRefs: [
+              'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            ],
+            affectedServices: ['@serviceadmin'],
+            value: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+            metadata: { value: 'nested-value-must-not-render' },
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url ===
         '/api/services/%40secretsbroker/proxy/v1/management/secret-operations/op-live-apply'
       ) {
         return new Response(
@@ -263,6 +297,25 @@ describe('Secrets Broker secrets management page', () => {
     ).toBeVisible()
     expect(screen.getByText(/local-encrypted-store/i)).toBeVisible()
     expect(screen.getByText(/audit_available/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Request live controlled reveal/i })
+    ).toBeDisabled()
+    await user.type(
+      screen.getByLabelText(/Live reveal audit reason/i),
+      'operator troubleshooting session issue'
+    )
+    await user.click(screen.getByLabelText(/Confirm controlled reveal/i))
+    await user.click(
+      screen.getByRole('button', { name: /Request live controlled reveal/i })
+    )
+    expect(
+      await screen.findByText(/Live controlled reveal metadata/i)
+    ).toBeVisible()
+    expect(screen.getByText(/req-live-reveal/i)).toBeVisible()
+    expect(screen.getByText(/audit_recorded/i)).toBeVisible()
+    expect(
+      screen.getByText(/discarded_by_service_admin_after_metadata_mapping/i)
+    ).toBeVisible()
     await user.click(
       screen.getByRole('button', {
         name: /Preview reset dry-run for SESSION_SIGNING_KEY/i,
@@ -299,6 +352,9 @@ describe('Secrets Broker secrets management page', () => {
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
     expect(
       screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/nested-value-must-not-render/i)
     ).not.toBeInTheDocument()
     expect(
       screen.queryByText(/replacement-value-must-not-render/i)

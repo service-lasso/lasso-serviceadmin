@@ -404,6 +404,76 @@ describe('Secrets Broker live client', () => {
     )
   })
 
+  it('submits live controlled reveal requests and discards returned values', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        url ===
+        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secrets/reveal'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(init?.body).toBeTypeOf('string')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: 'req-live-reveal',
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          reason: 'operator troubleshooting session issue',
+        })
+
+        return jsonResponse({
+          requestId: 'req-live-reveal',
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          operation: 'reveal',
+          mode: 'apply',
+          outcome: 'ready',
+          ttlSeconds: 60,
+          auditStatus: 'audit_recorded',
+          nextAction: 'close_reveal_window',
+          affectedRefs: ['services/@serviceadmin/runtime/SESSION_SIGNING_KEY'],
+          affectedServices: ['@serviceadmin'],
+          value: 'DEMO_REVEAL_VALUE_42',
+          providerToken: 'provider-token-must-not-render',
+          metadata: { value: 'nested-value-must-not-render' },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { submitSecretsBrokerSecretReveal } = await import('./client')
+
+    const result = await submitSecretsBrokerSecretReveal({
+      ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+      serviceId: '@serviceadmin',
+      reason: 'operator troubleshooting session issue',
+      requestId: 'req-live-reveal',
+    })
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      requestId: 'req-live-reveal',
+      ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+      operation: 'reveal',
+      mode: 'apply',
+      outcome: 'ready',
+      auditStatus: 'audit_recorded',
+      nextAction: 'close_reveal_window',
+      ttlSeconds: 60,
+      valueStatus: 'discarded_by_service_admin_after_metadata_mapping',
+      affectedRefs: ['services/@serviceadmin/runtime/SESSION_SIGNING_KEY'],
+      affectedServices: ['@serviceadmin'],
+      stubMode: false,
+    })
+    expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+    expect(JSON.stringify(result)).not.toContain(
+      'provider-token-must-not-render'
+    )
+    expect(JSON.stringify(result)).not.toContain('nested-value-must-not-render')
+  })
+
   it('reports unavailable when Service Lasso cannot return @secretsbroker metadata', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
     vi.stubGlobal(
