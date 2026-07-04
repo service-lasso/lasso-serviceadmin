@@ -97,6 +97,13 @@ export type SecretsBrokerSecretApplyRequest = {
   requestId?: string
 }
 
+export type SecretsBrokerSecretRevealRequest = {
+  ref: string
+  serviceId?: string
+  reason: string
+  requestId?: string
+}
+
 export type SecretsBrokerSecretDryRunResult = {
   state: SecretsBrokerLiveState
   summary: string
@@ -110,6 +117,25 @@ export type SecretsBrokerSecretDryRunResult = {
   requiresConfirmation: boolean
   auditStatus: string
   nextAction: string
+  affectedRefs: string[]
+  affectedServices: string[]
+  lockoutActive: boolean
+  retryAfterSeconds: number
+  stubMode: boolean
+}
+
+export type SecretsBrokerSecretRevealResult = {
+  state: SecretsBrokerLiveState
+  summary: string
+  requestId: string
+  ref: string
+  operation: string
+  mode: string
+  outcome: string
+  auditStatus: string
+  nextAction: string
+  ttlSeconds: number
+  valueStatus: string
   affectedRefs: string[]
   affectedServices: string[]
   lockoutActive: boolean
@@ -203,6 +229,10 @@ type RawManagedSecretDryRunResponse = {
   affectedServices?: unknown
   lockoutActive?: unknown
   retryAfterSeconds?: unknown
+}
+
+type RawManagedSecretRevealResponse = RawManagedSecretDryRunResponse & {
+  ttlSeconds?: unknown
 }
 
 type RawManagedSecretOperationStatusResponse = {
@@ -472,6 +502,39 @@ function normalizeDryRunResponse(
     requiresConfirmation: optionalBoolean(payload.requiresConfirmation),
     auditStatus: requiredString(payload.auditStatus, 'audit-unavailable'),
     nextAction: requiredString(payload.nextAction, 'inspect_status'),
+    affectedRefs: normalizeStringList(payload.affectedRefs),
+    affectedServices: normalizeStringList(payload.affectedServices),
+    lockoutActive: optionalBoolean(payload.lockoutActive),
+    retryAfterSeconds: optionalNumber(payload.retryAfterSeconds),
+    stubMode: false,
+  }
+}
+
+function normalizeRevealResponse(
+  payload: RawManagedSecretRevealResponse,
+  request: Required<SecretsBrokerSecretRevealRequest>
+): SecretsBrokerSecretRevealResult {
+  const outcome = requiredString(payload.outcome, 'degraded')
+  const state = normalizeDryRunState(outcome)
+
+  return {
+    state,
+    summary:
+      state === 'ready'
+        ? 'Live broker controlled reveal returned a time-limited result; Service Admin kept metadata only.'
+        : 'Live broker controlled reveal failed closed with safe metadata only.',
+    requestId: requiredString(payload.requestId, request.requestId),
+    ref: requiredString(payload.ref, request.ref),
+    operation: requiredString(payload.operation, 'reveal'),
+    mode: requiredString(payload.mode, 'apply'),
+    outcome,
+    auditStatus: requiredString(payload.auditStatus, 'audit-unavailable'),
+    nextAction: requiredString(payload.nextAction, 'review_reveal_metadata'),
+    ttlSeconds: optionalNumber(payload.ttlSeconds),
+    valueStatus:
+      state === 'ready'
+        ? 'discarded_by_service_admin_after_metadata_mapping'
+        : 'not_available',
     affectedRefs: normalizeStringList(payload.affectedRefs),
     affectedServices: normalizeStringList(payload.affectedServices),
     lockoutActive: optionalBoolean(payload.lockoutActive),
@@ -880,6 +943,109 @@ export async function fetchSecretsBrokerSecretDryRun(
       auditStatus: 'audit-unavailable',
       nextAction:
         status === 404 ? 'inspect_capability' : 'retry_or_inspect_status',
+      affectedRefs: ref ? [ref] : [],
+      affectedServices: [serviceId],
+      lockoutActive: false,
+      retryAfterSeconds: 0,
+      stubMode: false,
+    }
+  }
+}
+
+export async function submitSecretsBrokerSecretReveal(
+  request: SecretsBrokerSecretRevealRequest
+): Promise<SecretsBrokerSecretRevealResult> {
+  const ref = request.ref.trim()
+  const serviceId = request.serviceId?.trim() || '@serviceadmin'
+  const reason = request.reason.trim()
+  const requestId =
+    request.requestId?.trim() ||
+    `service-admin-reveal-${Date.now().toString(36)}`
+  const normalizedRequest: Required<SecretsBrokerSecretRevealRequest> = {
+    ref,
+    serviceId,
+    reason,
+    requestId,
+  }
+
+  if (isServiceAdminStubModeEnabled()) {
+    return {
+      state: 'unsupported',
+      summary:
+        'Explicit Service Admin stub mode is enabled; live broker reveal was not requested.',
+      requestId,
+      ref: ref || 'stub-mode',
+      operation: 'reveal',
+      mode: 'apply',
+      outcome: 'stub_mode',
+      auditStatus: 'stub-mode',
+      nextAction: 'disable_stub_mode_for_live_reveal',
+      ttlSeconds: 0,
+      valueStatus: 'not_requested',
+      affectedRefs: ref ? [ref] : [],
+      affectedServices: [serviceId],
+      lockoutActive: false,
+      retryAfterSeconds: 0,
+      stubMode: true,
+    }
+  }
+
+  if (!ref || !reason) {
+    return {
+      state: 'unsupported',
+      summary:
+        'A managed secret ref and audit reason are required before live reveal can be requested.',
+      requestId,
+      ref: ref || 'unknown-ref',
+      operation: 'reveal',
+      mode: 'apply',
+      outcome: 'reveal_not_ready',
+      auditStatus: 'audit-unavailable',
+      nextAction: 'complete_reveal_gate',
+      ttlSeconds: 0,
+      valueStatus: 'not_requested',
+      affectedRefs: ref ? [ref] : [],
+      affectedServices: [serviceId],
+      lockoutActive: false,
+      retryAfterSeconds: 0,
+      stubMode: false,
+    }
+  }
+
+  try {
+    const payload = await postJson<RawManagedSecretRevealResponse>(
+      `/api/services/${encodeServiceId('@secretsbroker')}/proxy/v1/management/secrets/reveal`,
+      {
+        requestId,
+        serviceId,
+        ref,
+        reason,
+      }
+    )
+
+    return normalizeRevealResponse(payload, normalizedRequest)
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return {
+      state: status === 404 ? 'unsupported' : 'unavailable',
+      summary:
+        status === 404
+          ? 'Secrets Broker live reveal route is not exposed by the runtime yet.'
+          : 'Secrets Broker live reveal route is unavailable.',
+      requestId,
+      ref,
+      operation: 'reveal',
+      mode: 'apply',
+      outcome: status === 404 ? 'unsupported' : 'unavailable',
+      auditStatus: 'audit-unavailable',
+      nextAction:
+        status === 404 ? 'inspect_capability' : 'retry_or_inspect_status',
+      ttlSeconds: 0,
+      valueStatus: 'not_available',
       affectedRefs: ref ? [ref] : [],
       affectedServices: [serviceId],
       lockoutActive: false,
