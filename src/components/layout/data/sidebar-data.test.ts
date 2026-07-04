@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { helpCenterNavigationCoverage } from '@/features/help-center/navigation-coverage'
 import { sidebarData } from './sidebar-data'
 
 describe('sidebar navigation data', () => {
@@ -25,6 +28,15 @@ function collectNavTitles() {
     group.items.flatMap((item) => [
       item.title,
       ...(item.items?.map((child) => child.title) ?? []),
+    ])
+  )
+}
+
+function collectNavRoutes() {
+  return sidebarData.navGroups.flatMap((group) =>
+    group.items.flatMap((item) => [
+      ...(item.url ? [item.url] : []),
+      ...(item.items?.flatMap((child) => (child.url ? [child.url] : [])) ?? []),
     ])
   )
 }
@@ -78,5 +90,38 @@ describe('sidebar optional page classification', () => {
       'Telemetry',
       'Audit',
     ])
+  })
+})
+
+describe('Help Center navigation coverage', () => {
+  it('keeps every primary navigation route covered by a doc or explicit exception', () => {
+    const routes = collectNavRoutes()
+    const coverageByRoute = new Map(
+      helpCenterNavigationCoverage.map((entry) => [entry.route, entry])
+    )
+
+    expect([...coverageByRoute.keys()].sort()).toEqual([...routes].sort())
+
+    for (const route of routes) {
+      const coverage = coverageByRoute.get(route)
+
+      expect(coverage).toBeDefined()
+      expect(
+        Boolean(coverage?.articleId) !== Boolean(coverage?.exception)
+      ).toBe(true)
+
+      if (coverage?.articleId) {
+        const articlePath = join(process.cwd(), 'docs', coverage.articleId)
+
+        expect(existsSync(articlePath)).toBe(true)
+      }
+
+      if (coverage?.exception) {
+        expect(coverage.exception.issue).toMatch(
+          /^service-lasso\/lasso-serviceadmin#\d+$/
+        )
+        expect(coverage.exception.reason.trim().length).toBeGreaterThan(24)
+      }
+    }
   })
 })
