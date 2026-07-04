@@ -421,12 +421,103 @@ describe('Secrets Broker secrets management page', () => {
     await renderRoute('/secrets-broker/secrets', { stubData: false })
 
     expect(
-      await screen.findByText(/Live managed secrets unavailable/i)
+      await screen.findByText(/Managed secrets route unsupported/i)
     ).toBeVisible()
     expect(
       screen.getByText(/managed secrets route is not exposed/i)
     ).toBeVisible()
     expect(screen.getByText(/no fixture fallback/i)).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /Preview reset dry-run/i })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps live managed rows closed when the broker returns a typed blocked list state', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/dashboard/services/%40secretsbroker') {
+        return new Response(
+          JSON.stringify({ service: { status: 'running' } }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
+        return new Response(
+          JSON.stringify({
+            state: 'ready',
+            summary: 'Broker metadata available.',
+            capabilities: {
+              sourcesStatus: true,
+              managementSecrets: true,
+            },
+            audit: { available: true },
+            sources: [
+              {
+                id: '@secretsbroker/local/default',
+                label: 'Local encrypted store',
+                provider: 'local',
+                state: 'ready',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
+      ) {
+        return new Response(
+          JSON.stringify({
+            outcome: 'policy_denied',
+            summary: 'Broker denied managed secret metadata for this session.',
+            valueSearch: false,
+            results: [
+              {
+                ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+                name: 'SESSION_SIGNING_KEY',
+                sourceId: 'local',
+                providerKind: 'local-encrypted-store',
+                ownerServiceId: '@serviceadmin',
+                workspaceId: 'local',
+                state: 'present',
+                outcome: 'ready',
+                capabilities: ['metadata', 'reset'],
+                policy: 'blocked-policy',
+                auditStatus: 'audit_available',
+                valueSearch: 'unsupported',
+                rawValue: 'DEMO_REVEAL_VALUE_42',
+                providerToken: 'provider-token-must-not-render',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/secrets-broker/secrets', { stubData: false })
+
+    expect(
+      await screen.findByText(/Policy blocked managed secret listing/i)
+    ).toBeVisible()
+    expect(screen.getAllByText(/policy-denied/i)[0]).toBeVisible()
+    expect(screen.getByText(/actions closed/i)).toBeVisible()
+    expect(
+      screen.getByText(/Broker denied managed secret metadata/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Review broker policy and request a scoped grant/i)
+    ).toBeVisible()
     expect(
       screen.queryByRole('button', { name: /Preview reset dry-run/i })
     ).not.toBeInTheDocument()

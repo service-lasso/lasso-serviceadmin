@@ -160,6 +160,52 @@ const liveStateVariant: Record<
   'audit-unavailable': 'destructive',
 }
 
+const liveManagedSecretsStateCopy: Record<
+  SecretsBrokerLiveState,
+  { title: string; nextAction: string }
+> = {
+  ready: {
+    title: 'Live managed secrets ready',
+    nextAction: 'Live metadata rows can be shown without raw values.',
+  },
+  loading: {
+    title: 'Live managed secrets loading',
+    nextAction: 'Wait for the broker to return safe metadata.',
+  },
+  unavailable: {
+    title: 'Live managed secrets unavailable',
+    nextAction: 'Check broker reachability and runtime proxy health.',
+  },
+  'setup-needed': {
+    title: 'Broker setup required',
+    nextAction: 'Complete Secrets Broker setup before listing managed secrets.',
+  },
+  locked: {
+    title: 'Broker locked',
+    nextAction: 'Unlock the configured store before listing managed secrets.',
+  },
+  'auth-required': {
+    title: 'Provider authentication required',
+    nextAction: 'Reconnect the provider before listing managed secrets.',
+  },
+  'policy-denied': {
+    title: 'Policy blocked managed secret listing',
+    nextAction: 'Review broker policy and request a scoped grant.',
+  },
+  unsupported: {
+    title: 'Managed secrets route unsupported',
+    nextAction: 'Inspect runtime capability metadata before enabling actions.',
+  },
+  degraded: {
+    title: 'Live managed secrets degraded',
+    nextAction: 'Review broker health and source status before taking action.',
+  },
+  'audit-unavailable': {
+    title: 'Audit unavailable',
+    nextAction: 'Restore audit availability before listing managed secrets.',
+  },
+}
+
 const providerOptions = Array.from(
   new Set(managedSecretRows.map((row) => row.provider))
 )
@@ -415,8 +461,11 @@ function LiveManagedSecretsTable({
     liveApplyResult?.operationId ?? liveDryRunResult?.operationId ?? ''
   const liveStatusSource = liveApplyResult ? 'submitted apply' : 'dry-run'
   const managedSecretsUnavailable = Boolean(
-    managedSecrets && managedSecrets.state !== 'ready' && rows.length === 0
+    managedSecrets && managedSecrets.state !== 'ready'
   )
+  const managedSecretsStateCopy = managedSecrets
+    ? liveManagedSecretsStateCopy[managedSecrets.state]
+    : null
   const dryRunDisabledReason = (row: (typeof rows)[number]) =>
     liveDryRunSupported(row, dryRunAction)
       ? null
@@ -503,10 +552,18 @@ function LiveManagedSecretsTable({
                 {managedSecrets.state}
               </Badge>
               <Badge variant='outline'>no fixture fallback</Badge>
+              <Badge variant='outline'>actions closed</Badge>
             </div>
-            <div className='font-medium'>Live managed secrets unavailable</div>
+            <div className='font-medium'>
+              {managedSecretsStateCopy?.title ??
+                'Live managed secrets unavailable'}
+            </div>
             <p className='mt-1 text-muted-foreground'>
               {managedSecrets.summary}
+            </p>
+            <p className='mt-2 text-xs font-medium text-muted-foreground'>
+              {managedSecretsStateCopy?.nextAction ??
+                'Resolve broker state before listing managed secrets.'}
             </p>
           </div>
         ) : rows.length ? (
