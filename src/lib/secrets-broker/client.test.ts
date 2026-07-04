@@ -200,6 +200,83 @@ describe('Secrets Broker live client', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('reads metadata-only audit event rows from the live broker route', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (
+          url ===
+          'http://runtime.test/api/services/%40secretsbroker/proxy/v1/audit/events'
+        ) {
+          return jsonResponse({
+            state: 'ready',
+            summary: 'Live audit metadata available.',
+            rawMaterialReturned: false,
+            events: [
+              {
+                id: 'audit-live-1',
+                eventType: 'secret_rotated',
+                actorType: 'operator',
+                actorId: 'serviceadmin',
+                outcome: 'success',
+                policyDecision: 'allow: rotation policy matched',
+                chainStatus: 'verified',
+                recordedAt: '2026-07-05T06:31:00Z',
+                summary: 'Secret rotation metadata recorded.',
+                rawValue: 'DEMO_REVEAL_VALUE_42',
+                providerToken: 'provider-token-must-not-render',
+              },
+            ],
+          })
+        }
+
+        throw new Error(`Unexpected URL: ${url}`)
+      })
+    )
+
+    const { fetchSecretsBrokerAuditEvents } = await import('./client')
+
+    const result = await fetchSecretsBrokerAuditEvents()
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      summary: 'Live audit metadata available.',
+      rawMaterialReturned: false,
+      stubMode: false,
+    })
+    expect(result.events[0]).toMatchObject({
+      id: 'audit-live-1',
+      event: 'secret_rotated',
+      actorType: 'operator',
+      actorId: 'serviceadmin',
+      outcome: 'success',
+      policyDecision: 'allow: rotation policy matched',
+      tamperEvidence: 'verified',
+      recordedAt: '2026-07-05T06:31:00Z',
+      summary: 'Secret rotation metadata recorded.',
+    })
+    expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+    expect(JSON.stringify(result)).not.toContain(
+      'provider-token-must-not-render'
+    )
+  })
+
+  it('does not request live audit rows in explicit stub mode', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchSecretsBrokerAuditEvents } = await import('./client')
+
+    const result = await fetchSecretsBrokerAuditEvents()
+
+    expect(result.stubMode).toBe(true)
+    expect(result.events).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['locked', 'locked'],
     ['auth_required', 'auth-required'],

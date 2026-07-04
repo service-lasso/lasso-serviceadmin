@@ -160,6 +160,27 @@ export type SecretsBrokerSecretOperationStatusResult = {
   stubMode: boolean
 }
 
+export type SecretsBrokerAuditEventMetadata = {
+  id: string
+  event: string
+  actorType: string
+  actorId: string
+  outcome: string
+  policyDecision: string
+  tamperEvidence: string
+  recordedAt: string
+  summary: string
+}
+
+export type SecretsBrokerAuditEventsResult = {
+  state: SecretsBrokerLiveState
+  summary: string
+  events: SecretsBrokerAuditEventMetadata[]
+  checkedAt: string
+  rawMaterialReturned: boolean
+  stubMode: boolean
+}
+
 type RuntimeServiceResponse = {
   service?: DashboardService | null
 }
@@ -247,6 +268,37 @@ type RawManagedSecretOperationStatusResponse = {
   correlationId?: unknown
   nextAction?: unknown
   checkedAt?: unknown
+}
+
+type RawAuditEventResponse = {
+  id?: unknown
+  event?: unknown
+  eventType?: unknown
+  type?: unknown
+  actorType?: unknown
+  actorId?: unknown
+  actor?: unknown
+  outcome?: unknown
+  policyDecision?: unknown
+  policy?: unknown
+  tamperEvidence?: unknown
+  chainStatus?: unknown
+  recordedAt?: unknown
+  timestamp?: unknown
+  summary?: unknown
+  normalizedReason?: unknown
+  reason?: unknown
+}
+
+type RawAuditEventsResponse = {
+  state?: unknown
+  status?: unknown
+  outcome?: unknown
+  summary?: unknown
+  reason?: unknown
+  events?: unknown
+  results?: unknown
+  rawMaterialReturned?: unknown
 }
 
 type HttpJsonError = Error & {
@@ -464,6 +516,56 @@ function normalizeManagedSecrets(value: unknown): SecretsBrokerManagedSecret[] {
       valueSearch: requiredString(secret.valueSearch, 'unsupported'),
     }
   })
+}
+
+function normalizeAuditEvents(
+  value: unknown
+): SecretsBrokerAuditEventMetadata[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter(isRecord)
+    .map((event): SecretsBrokerAuditEventMetadata => {
+      const rawEvent = event as RawAuditEventResponse
+      const actor = optionalString(rawEvent.actor)
+
+      return {
+        id:
+          optionalString(rawEvent.id) ??
+          optionalString(rawEvent.event) ??
+          'audit-event',
+        event:
+          optionalString(rawEvent.eventType) ??
+          optionalString(rawEvent.type) ??
+          optionalString(rawEvent.event) ??
+          'audit_event',
+        actorType: requiredString(rawEvent.actorType, 'unknown'),
+        actorId:
+          optionalString(rawEvent.actorId) ??
+          actor?.replace(/^[^:]+:\s*/, '') ??
+          'unknown',
+        outcome: requiredString(rawEvent.outcome, 'unavailable'),
+        policyDecision:
+          optionalString(rawEvent.policyDecision) ??
+          optionalString(rawEvent.policy) ??
+          'policy metadata unavailable',
+        tamperEvidence:
+          optionalString(rawEvent.chainStatus) ??
+          optionalString(rawEvent.tamperEvidence) ??
+          'unavailable',
+        recordedAt:
+          optionalString(rawEvent.recordedAt) ??
+          optionalString(rawEvent.timestamp) ??
+          new Date(0).toISOString(),
+        summary:
+          optionalString(rawEvent.summary) ??
+          optionalString(rawEvent.normalizedReason) ??
+          optionalString(rawEvent.reason) ??
+          'Secrets Broker audit metadata returned without raw material.',
+      }
+    })
 }
 
 function normalizeDryRunState(outcome: string): SecretsBrokerLiveState {
@@ -898,6 +1000,60 @@ export async function fetchSecretsBrokerManagedSecrets(
       valueSearch: false,
       results: [],
       checkedAt,
+      stubMode: false,
+    }
+  }
+}
+
+export async function fetchSecretsBrokerAuditEvents(): Promise<SecretsBrokerAuditEventsResult> {
+  const checkedAt = new Date().toISOString()
+
+  if (isServiceAdminStubModeEnabled()) {
+    return {
+      state: 'ready',
+      summary:
+        'Explicit Service Admin stub mode is enabled; live audit events are not requested.',
+      events: [],
+      checkedAt,
+      rawMaterialReturned: false,
+      stubMode: true,
+    }
+  }
+
+  try {
+    const payload = await fetchJson<RawAuditEventsResponse>(
+      `/api/services/${encodeServiceId('@secretsbroker')}/proxy/v1/audit/events`
+    )
+    const events = normalizeAuditEvents(payload.events ?? payload.results)
+
+    return {
+      state: normalizeManagedSecretsState(
+        payload.state ?? payload.status ?? payload.outcome
+      ),
+      summary:
+        optionalString(payload.summary) ??
+        optionalString(payload.reason) ??
+        'Secrets Broker audit metadata was read from the runtime proxy.',
+      events,
+      checkedAt,
+      rawMaterialReturned: payload.rawMaterialReturned === true,
+      stubMode: false,
+    }
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return {
+      state: status === 404 ? 'unsupported' : 'unavailable',
+      summary:
+        status === 404
+          ? 'Secrets Broker audit events route is not exposed by the runtime yet.'
+          : 'Secrets Broker audit events route is unavailable.',
+      events: [],
+      checkedAt,
+      rawMaterialReturned: false,
       stubMode: false,
     }
   }
