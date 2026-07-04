@@ -380,6 +380,68 @@ describe('Secrets Broker live client', () => {
     )
   })
 
+  it.each([
+    ['locked', 'locked'],
+    ['source_auth_required', 'auth-required'],
+    ['policy_denied', 'policy-denied'],
+    ['unsupported', 'unsupported'],
+    ['audit_unavailable', 'audit-unavailable'],
+  ])(
+    'preserves blocked operation outcomes as typed state for %s',
+    async (outcome, expectedState) => {
+      vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+      const fetchMock = vi.fn(async (url: string) => {
+        if (
+          url ===
+          'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secret-operations/op-live-blocked'
+        ) {
+          return jsonResponse({
+            operationId: 'op-live-blocked',
+            ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+            operation: 'reset',
+            status: 'failed',
+            outcome,
+            terminal: true,
+            retrySafe: false,
+            auditStatus:
+              outcome === 'audit_unavailable'
+                ? 'audit_unavailable'
+                : 'audit_recorded',
+            correlationId: 'corr-live-blocked',
+            nextAction: 'inspect_safe_blocker_metadata',
+            rawValue: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          })
+        }
+
+        throw new Error(`Unexpected URL: ${url}`)
+      })
+
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { fetchSecretsBrokerSecretOperationStatus } =
+        await import('./client')
+
+      const result =
+        await fetchSecretsBrokerSecretOperationStatus('op-live-blocked')
+
+      expect(result).toMatchObject({
+        state: expectedState,
+        operationId: 'op-live-blocked',
+        status: 'failed',
+        outcome,
+        terminal: true,
+        nextAction: 'inspect_safe_blocker_metadata',
+        stubMode: false,
+      })
+      expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+      expect(JSON.stringify(result)).not.toContain(
+        'provider-token-must-not-render'
+      )
+    }
+  )
+
   it('submits metadata-only live apply requests and sanitizes the response', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
 

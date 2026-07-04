@@ -597,11 +597,39 @@ function normalizeOperationStatusState(
     return 'loading'
   }
 
-  if (normalizedStatus === 'locked') return 'locked'
-  if (normalizedStatus === 'auth-required') return 'auth-required'
-  if (normalizedStatus === 'policy-denied') return 'policy-denied'
-  if (normalizedStatus === 'unsupported') return 'unsupported'
-  if (normalizedStatus === 'audit-unavailable') return 'audit-unavailable'
+  if (normalizedStatus === 'locked' || normalizedOutcome === 'locked') {
+    return 'locked'
+  }
+
+  if (
+    normalizedStatus === 'auth-required' ||
+    normalizedStatus === 'source-auth-required' ||
+    normalizedOutcome === 'auth-required' ||
+    normalizedOutcome === 'source-auth-required'
+  ) {
+    return 'auth-required'
+  }
+
+  if (
+    normalizedStatus === 'policy-denied' ||
+    normalizedOutcome === 'policy-denied'
+  ) {
+    return 'policy-denied'
+  }
+
+  if (
+    normalizedStatus === 'unsupported' ||
+    normalizedOutcome === 'unsupported'
+  ) {
+    return 'unsupported'
+  }
+
+  if (
+    normalizedStatus === 'audit-unavailable' ||
+    normalizedOutcome === 'audit-unavailable'
+  ) {
+    return 'audit-unavailable'
+  }
 
   return 'degraded'
 }
