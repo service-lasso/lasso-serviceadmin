@@ -74,7 +74,11 @@ export type SecretsBrokerManagedSecretsResult = {
   stubMode: boolean
 }
 
-export type SecretsBrokerSecretDryRunAction = 'edit' | 'reset' | 'policy'
+export type SecretsBrokerSecretDryRunAction =
+  | 'edit'
+  | 'reset'
+  | 'delete'
+  | 'policy'
 
 export type SecretsBrokerSecretDryRunRequest = {
   action: SecretsBrokerSecretDryRunAction

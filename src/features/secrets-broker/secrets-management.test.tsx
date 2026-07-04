@@ -381,6 +381,173 @@ describe('Secrets Broker secrets management page', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('submits live delete dry-run and apply metadata when the broker advertises delete capability', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/dashboard/services/%40secretsbroker') {
+        return new Response(
+          JSON.stringify({ service: { status: 'running' } }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
+        return new Response(
+          JSON.stringify({
+            state: 'ready',
+            summary: 'Broker metadata available.',
+            capabilities: {
+              sourcesStatus: true,
+              managementSecrets: true,
+            },
+            audit: { available: true },
+            sources: [
+              {
+                id: '@secretsbroker/local/default',
+                label: 'Local encrypted store',
+                provider: 'local',
+                state: 'ready',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
+      ) {
+        return new Response(
+          JSON.stringify({
+            outcome: 'ready',
+            valueSearch: false,
+            results: [
+              {
+                ref: 'services/@serviceadmin/runtime/LEGACY_API_TOKEN',
+                name: 'LEGACY_API_TOKEN',
+                sourceId: 'local',
+                providerKind: 'local-encrypted-store',
+                ownerServiceId: '@serviceadmin',
+                workspaceId: 'local',
+                state: 'stale',
+                outcome: 'ready',
+                capabilities: ['metadata', 'delete'],
+                policy: 'local-writeback-policy',
+                auditStatus: 'audit_available',
+                valueSearch: 'unsupported',
+                rawValue: 'DEMO_REVEAL_VALUE_42',
+                providerToken: 'provider-token-must-not-render',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/delete/dry-run'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: expect.stringMatching(/^service-admin-delete-/),
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/LEGACY_API_TOKEN',
+          reason:
+            'Service Admin operator requested metadata-only dry-run preview.',
+          confirm: false,
+        })
+
+        return new Response(
+          JSON.stringify({
+            requestId: 'req-live-delete',
+            operationId: 'op-live-delete',
+            ref: 'services/@serviceadmin/runtime/LEGACY_API_TOKEN',
+            operation: 'delete',
+            mode: 'dry-run',
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresConfirmation: true,
+            auditStatus: 'audit_ready',
+            nextAction: 'confirm_and_apply_with_audit_reason',
+            affectedRefs: ['services/@serviceadmin/runtime/LEGACY_API_TOKEN'],
+            affectedServices: ['@serviceadmin'],
+            value: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/delete/apply'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: expect.stringMatching(/^service-admin-delete-apply-/),
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/LEGACY_API_TOKEN',
+          operationId: 'op-live-delete',
+          reason: 'operator approved delete after preview',
+          confirm: true,
+        })
+
+        return new Response(
+          JSON.stringify({
+            operationId: 'op-live-delete-apply',
+            ref: 'services/@serviceadmin/runtime/LEGACY_API_TOKEN',
+            operation: 'delete',
+            status: 'submitted',
+            outcome: 'pending',
+            terminal: false,
+            retrySafe: false,
+            auditStatus: 'audit_recorded',
+            correlationId: 'corr-live-delete',
+            nextAction: 'poll_operation_status',
+            rawValue: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/secrets-broker/secrets', { stubData: false })
+
+    await user.selectOptions(
+      await screen.findByLabelText(/Live dry-run action for LEGACY_API_TOKEN/i),
+      'delete'
+    )
+    await user.click(
+      screen.getByRole('button', {
+        name: /Preview delete dry-run for LEGACY_API_TOKEN/i,
+      })
+    )
+    expect(await screen.findByText(/Live dry-run accepted/i)).toBeVisible()
+    expect(screen.getByText(/op-live-delete/i)).toBeVisible()
+    expect(
+      screen.getByText(/confirm_and_apply_with_audit_reason/i)
+    ).toBeVisible()
+    await user.type(
+      screen.getByLabelText(/Live apply audit reason/i),
+      'operator approved delete after preview'
+    )
+    await user.click(screen.getByRole('button', { name: /Submit live apply/i }))
+    expect(await screen.findByText(/Live apply submit metadata/i)).toBeVisible()
+    expect(screen.getByText(/op-live-delete-apply/i)).toBeVisible()
+    expect(screen.getByText(/corr-live-delete/i)).toBeVisible()
+    expect(screen.getByText(/poll_operation_status/i)).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
+  })
+
   it('shows fail-closed metadata when a live dry-run route is unsupported', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (url: string) => {

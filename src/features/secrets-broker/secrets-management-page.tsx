@@ -198,6 +198,7 @@ const liveDryRunActions: Array<{
 }> = [
   { label: 'Edit dry-run', value: 'edit' },
   { label: 'Reset dry-run', value: 'reset' },
+  { label: 'Delete dry-run', value: 'delete' },
   { label: 'Policy preview', value: 'policy' },
 ]
 
@@ -220,6 +221,13 @@ function liveDryRunSupported(
     return capabilities.some(
       (capability) =>
         capability.includes('reset') || capability.includes('rotate')
+    )
+  }
+
+  if (action === 'delete') {
+    return capabilities.some(
+      (capability) =>
+        capability.includes('delete') || capability.includes('decommission')
     )
   }
 
