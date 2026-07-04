@@ -200,6 +200,57 @@ describe('Secrets Broker live client', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['locked', 'locked'],
+    ['auth_required', 'auth-required'],
+    ['policy_denied', 'policy-denied'],
+    ['unsupported', 'unsupported'],
+    ['audit_unavailable', 'audit-unavailable'],
+    ['unconfigured', 'setup-needed'],
+  ])(
+    'maps managed secrets list outcome %s into typed state %s',
+    async (outcome, expectedState) => {
+      vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          if (
+            url ===
+            'http://runtime.test/api/services/%40secretsbroker/proxy/v1/management/secrets'
+          ) {
+            return jsonResponse({
+              outcome,
+              summary: 'Broker returned a typed management-list state.',
+              results: [
+                {
+                  ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+                  rawValue: 'DEMO_REVEAL_VALUE_42',
+                  providerToken: 'provider-token-must-not-render',
+                },
+              ],
+            })
+          }
+
+          throw new Error(`Unexpected URL: ${url}`)
+        })
+      )
+
+      const { fetchSecretsBrokerManagedSecrets } = await import('./client')
+
+      const result = await fetchSecretsBrokerManagedSecrets()
+
+      expect(result.state).toBe(expectedState)
+      expect(result.summary).toBe(
+        'Broker returned a typed management-list state.'
+      )
+      expect(JSON.stringify(result)).not.toContain('DEMO_REVEAL_VALUE_42')
+      expect(JSON.stringify(result)).not.toContain(
+        'provider-token-must-not-render'
+      )
+    }
+  )
+
   it('submits metadata-only live dry-run requests and sanitizes the response', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
 
