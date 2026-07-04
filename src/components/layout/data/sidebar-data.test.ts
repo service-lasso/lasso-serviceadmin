@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
 import { helpCenterNavigationCoverage } from '@/features/help-center/navigation-coverage'
 import { sidebarData } from './sidebar-data'
 
@@ -36,8 +36,7 @@ function collectNavRoutes() {
   return sidebarData.navGroups.flatMap((group) =>
     group.items.flatMap((item) => [
       ...(item.url ? [item.url] : []),
-      ...(item.items?.flatMap((child) => (child.url ? [child.url] : [])) ??
-        []),
+      ...(item.items?.flatMap((child) => (child.url ? [child.url] : [])) ?? []),
     ])
   )
 }
