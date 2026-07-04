@@ -548,6 +548,175 @@ describe('Secrets Broker secrets management page', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('submits live policy preview and apply metadata when the broker advertises policy capability', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/dashboard/services/%40secretsbroker') {
+        return new Response(
+          JSON.stringify({ service: { status: 'running' } }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
+        return new Response(
+          JSON.stringify({
+            state: 'ready',
+            summary: 'Broker metadata available.',
+            capabilities: {
+              sourcesStatus: true,
+              managementSecrets: true,
+            },
+            audit: { available: true },
+            sources: [
+              {
+                id: '@secretsbroker/local/default',
+                label: 'Local encrypted store',
+                provider: 'local',
+                state: 'ready',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
+      ) {
+        return new Response(
+          JSON.stringify({
+            outcome: 'ready',
+            valueSearch: false,
+            results: [
+              {
+                ref: 'services/@serviceadmin/runtime/POLICY_BOUND_SECRET',
+                name: 'POLICY_BOUND_SECRET',
+                sourceId: 'local',
+                providerKind: 'local-encrypted-store',
+                ownerServiceId: '@serviceadmin',
+                workspaceId: 'local',
+                state: 'present',
+                outcome: 'ready',
+                capabilities: ['metadata', 'policy'],
+                policy: 'default-service-policy',
+                auditStatus: 'audit_available',
+                valueSearch: 'unsupported',
+                rawValue: 'DEMO_REVEAL_VALUE_42',
+                providerToken: 'provider-token-must-not-render',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/policy/preview'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: expect.stringMatching(/^service-admin-policy-/),
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/POLICY_BOUND_SECRET',
+          reason:
+            'Service Admin operator requested metadata-only dry-run preview.',
+          confirm: false,
+        })
+
+        return new Response(
+          JSON.stringify({
+            requestId: 'req-live-policy',
+            operationId: 'op-live-policy',
+            ref: 'services/@serviceadmin/runtime/POLICY_BOUND_SECRET',
+            operation: 'policy',
+            mode: 'preview',
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresConfirmation: true,
+            auditStatus: 'audit_ready',
+            nextAction: 'confirm_and_apply_with_audit_reason',
+            affectedRefs: [
+              'services/@serviceadmin/runtime/POLICY_BOUND_SECRET',
+            ],
+            affectedServices: ['@serviceadmin'],
+            rawValue: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url ===
+        '/api/services/%40secretsbroker/proxy/v1/management/secrets/policy/apply'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(init?.body as string)).toEqual({
+          requestId: expect.stringMatching(/^service-admin-policy-apply-/),
+          serviceId: '@serviceadmin',
+          ref: 'services/@serviceadmin/runtime/POLICY_BOUND_SECRET',
+          operationId: 'op-live-policy',
+          reason: 'operator approved policy after preview',
+          confirm: true,
+        })
+
+        return new Response(
+          JSON.stringify({
+            operationId: 'op-live-policy-apply',
+            ref: 'services/@serviceadmin/runtime/POLICY_BOUND_SECRET',
+            operation: 'policy',
+            status: 'submitted',
+            outcome: 'pending',
+            terminal: false,
+            retrySafe: false,
+            auditStatus: 'audit_recorded',
+            correlationId: 'corr-live-policy',
+            nextAction: 'poll_operation_status',
+            rawValue: 'DEMO_REVEAL_VALUE_42',
+            providerToken: 'provider-token-must-not-render',
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/secrets-broker/secrets', { stubData: false })
+
+    await user.selectOptions(
+      await screen.findByLabelText(
+        /Live dry-run action for POLICY_BOUND_SECRET/i
+      ),
+      'policy'
+    )
+    await user.click(
+      screen.getByRole('button', {
+        name: /Preview policy preview for POLICY_BOUND_SECRET/i,
+      })
+    )
+    expect(await screen.findByText(/Live dry-run accepted/i)).toBeVisible()
+    expect(screen.getByText(/op-live-policy/i)).toBeVisible()
+    expect(screen.getAllByText(/^preview$/i)[0]).toBeVisible()
+    await user.type(
+      screen.getByLabelText(/Live apply audit reason/i),
+      'operator approved policy after preview'
+    )
+    await user.click(screen.getByRole('button', { name: /Submit live apply/i }))
+    expect(await screen.findByText(/Live apply submit metadata/i)).toBeVisible()
+    expect(screen.getByText(/op-live-policy-apply/i)).toBeVisible()
+    expect(screen.getByText(/corr-live-policy/i)).toBeVisible()
+    expect(screen.getByText(/poll_operation_status/i)).toBeVisible()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
+  })
+
   it('shows fail-closed metadata when a live dry-run route is unsupported', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (url: string) => {
