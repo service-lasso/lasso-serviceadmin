@@ -1163,6 +1163,7 @@ test.describe('Secrets Broker browser coverage', () => {
   }) => {
     const sections = [
       ['/secrets-broker/sources', /Secrets Broker providers/i],
+      ['/secrets-broker/configuration', /^Configuration$/i],
       ['/secrets-broker/backup-keys', /Local encrypted store/i],
       ['/secrets-broker/topology', /Secrets Broker topology/i],
       ['/operations/audit-logging', /^Audit$/i],
@@ -1177,7 +1178,6 @@ test.describe('Secrets Broker browser coverage', () => {
 
     const removedRoutes = [
       ['/secrets-broker/provider-connections', /\/secrets-broker\/sources$/],
-      ['/secrets-broker/configuration', /\/secrets-broker\/sources$/],
       ['/secrets-broker/diagnostics', /\/secrets-broker\/sources$/],
       ['/secrets-broker/secret-inventory', /\/secrets-broker\/sources$/],
       ['/secrets-broker/workflow-boundaries', /\/secrets-broker\/sources$/],
