@@ -1,12 +1,19 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   DatabaseZap,
   GitBranch,
   KeyRound,
+  PlugZap,
   ShieldCheck,
   Wrench,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -55,6 +62,121 @@ const migrationStateLabels: Record<MigrationState, string> = {
   'apply-partial': 'Migration partial failure',
 }
 
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
+function LiveProviderConfigurationMetadata({
+  overview,
+  loading,
+  error,
+}: {
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const visibleSources = overview?.sources.slice(0, 3) ?? []
+
+  return (
+    <section
+      aria-label='Live provider configuration metadata'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live provider configuration metadata
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker provider configuration metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker provider configuration metadata.'
+                  : 'Broker provider configuration metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Sources
+          </div>
+          <div>{overview?.sourceCount ?? 0}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Provider config
+          </div>
+          <div>
+            {overview?.capabilities.providerConfig ? 'available' : 'blocked'}
+          </div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Audit
+          </div>
+          <div>{overview?.auditAvailable ? 'available' : 'blocked'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Next gate
+          </div>
+          <div>
+            {overview?.capabilities.providerConfig
+              ? 'validate handles'
+              : 'inspect broker capability'}
+          </div>
+        </div>
+      </div>
+
+      {visibleSources.length ? (
+        <div className='mt-3 grid gap-2 md:grid-cols-3'>
+          {visibleSources.map((source) => (
+            <div key={source.id} className='rounded-md border bg-muted/30 p-3'>
+              <div className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='font-medium'>{source.label}</span>
+                <Badge variant='outline'>{source.state}</Badge>
+              </div>
+              <div className='mt-1 text-xs text-muted-foreground'>
+                {source.provider} · {source.reason}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 export function ProviderConfigurationPage() {
   const [providerState, setProviderState] =
     useState<ProviderState>('local-default')
@@ -62,6 +184,10 @@ export function ProviderConfigurationPage() {
     useState<MigrationState>('dry-run-ready')
   const [auditReason, setAuditReason] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const liveOverview = useQuery({
+    queryKey: ['secrets-broker', 'provider-configuration', 'overview'],
+    queryFn: fetchSecretsBrokerOverview,
+  })
 
   usePageMetadata({
     title: 'Service Admin - Secrets Broker Configuration',
@@ -132,6 +258,12 @@ export function ProviderConfigurationPage() {
             </div>
           </CardContent>
         </Card>
+
+        <LiveProviderConfigurationMetadata
+          overview={liveOverview.data}
+          loading={liveOverview.isLoading}
+          error={liveOverview.isError}
+        />
 
         <div className='grid gap-4 md:grid-cols-4'>
           <Card>

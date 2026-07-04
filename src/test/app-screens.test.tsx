@@ -65,6 +65,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Providers',
   },
   {
+    path: '/secrets-broker/configuration',
+    heading: /^Configuration$/i,
+    title: 'Service Admin - Secrets Broker Configuration',
+  },
+  {
     path: '/secrets-broker/topology',
     heading: /^Secrets Broker topology$/i,
     title: 'Service Admin - Secrets Broker Topology',
@@ -103,7 +108,6 @@ const appScreens: ScreenCase[] = [
 
 const removedSecretsBrokerRoutes = [
   ['/secrets-broker/provider-connections', '/secrets-broker/sources'],
-  ['/secrets-broker/configuration', '/secrets-broker/sources'],
   ['/secrets-broker/diagnostics', '/secrets-broker/sources'],
   ['/secrets-broker/secret-inventory', '/secrets-broker/sources'],
   ['/secrets-broker/workflow-boundaries', '/secrets-broker/sources'],
