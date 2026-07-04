@@ -308,6 +308,79 @@ describe('Secrets Broker secrets management page', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('shows fail-closed status when the live managed secrets list route is unsupported', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/dashboard/services/%40secretsbroker') {
+        return new Response(
+          JSON.stringify({ service: { status: 'running' } }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
+        return new Response(
+          JSON.stringify({
+            state: 'ready',
+            summary: 'Broker metadata available.',
+            capabilities: {
+              sourcesStatus: true,
+              managementSecrets: true,
+            },
+            audit: { available: true },
+            sources: [
+              {
+                id: '@secretsbroker/local/default',
+                label: 'Local encrypted store',
+                provider: 'local',
+                state: 'ready',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (
+        url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
+      ) {
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+                rawValue: 'DEMO_REVEAL_VALUE_42',
+                providerToken: 'provider-token-must-not-render',
+              },
+            ],
+          }),
+          { status: 404, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/secrets-broker/secrets', { stubData: false })
+
+    expect(
+      await screen.findByText(/Live managed secrets unavailable/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/managed secrets route is not exposed/i)
+    ).toBeVisible()
+    expect(screen.getByText(/no fixture fallback/i)).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /Preview reset dry-run/i })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/provider-token-must-not-render/i)
+    ).not.toBeInTheDocument()
+  })
+
   it('shows fail-closed metadata when a live dry-run route is unsupported', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (url: string) => {

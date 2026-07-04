@@ -373,6 +373,9 @@ function LiveManagedSecretsTable({
   const liveStatusOperationId =
     liveApplyResult?.operationId ?? liveDryRunResult?.operationId ?? ''
   const liveStatusSource = liveApplyResult ? 'submitted apply' : 'dry-run'
+  const managedSecretsUnavailable = Boolean(
+    managedSecrets && managedSecrets.state !== 'ready' && rows.length === 0
+  )
   const dryRunDisabledReason = (row: (typeof rows)[number]) =>
     liveDryRunSupported(row, dryRunAction)
       ? null
@@ -433,6 +436,19 @@ function LiveManagedSecretsTable({
         ) : loading ? (
           <div className='rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground'>
             Loading live secret metadata rows.
+          </div>
+        ) : managedSecretsUnavailable && managedSecrets ? (
+          <div className='rounded-md border bg-muted/40 p-3 text-sm'>
+            <div className='mb-2 flex flex-wrap items-center gap-2'>
+              <Badge variant={liveStateVariant[managedSecrets.state]}>
+                {managedSecrets.state}
+              </Badge>
+              <Badge variant='outline'>no fixture fallback</Badge>
+            </div>
+            <div className='font-medium'>Live managed secrets unavailable</div>
+            <p className='mt-1 text-muted-foreground'>
+              {managedSecrets.summary}
+            </p>
           </div>
         ) : rows.length ? (
           <div className='overflow-x-auto rounded-md border'>
