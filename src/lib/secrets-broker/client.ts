@@ -384,6 +384,31 @@ function normalizeOverviewState(
   return 'ready'
 }
 
+function normalizeManagedSecretsState(value: unknown): SecretsBrokerLiveState {
+  const normalized = optionalString(value)?.toLowerCase().replace(/_/g, '-')
+
+  if (normalized === 'ready' || normalized === 'success') return 'ready'
+  if (normalized === 'loading' || normalized === 'pending') return 'loading'
+  if (normalized === 'unconfigured' || normalized === 'missing') {
+    return 'setup-needed'
+  }
+
+  if (
+    normalized === 'unavailable' ||
+    normalized === 'setup-needed' ||
+    normalized === 'locked' ||
+    normalized === 'auth-required' ||
+    normalized === 'policy-denied' ||
+    normalized === 'unsupported' ||
+    normalized === 'degraded' ||
+    normalized === 'audit-unavailable'
+  ) {
+    return normalized
+  }
+
+  return 'degraded'
+}
+
 function normalizeSources(value: unknown): SecretsBrokerSourceStatus[] {
   if (!Array.isArray(value)) {
     return []
@@ -813,13 +838,12 @@ export async function fetchSecretsBrokerManagedSecrets(
       `/api/services/${encodeServiceId('@secretsbroker')}/proxy/v1/management/secrets${searchParam}`
     )
     const results = normalizeManagedSecrets(payload.results)
+    const state = normalizeManagedSecretsState(
+      payload.outcome ?? payload.status
+    )
 
     return {
-      state:
-        optionalString(payload.outcome) === 'ready' ||
-        optionalString(payload.status) === 'ready'
-          ? 'ready'
-          : 'degraded',
+      state,
       summary:
         optionalString(payload.summary) ??
         optionalString(payload.reason) ??
