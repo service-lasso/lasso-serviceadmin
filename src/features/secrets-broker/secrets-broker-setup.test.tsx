@@ -1054,6 +1054,11 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.getByRole('heading', { name: /Secrets Broker topology/i })
     ).toBeVisible()
+    expect(
+      await screen.findByText(/Live topology source status/i)
+    ).toBeVisible()
+    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+    expect(screen.getByText(/Local encrypted store/i)).toBeVisible()
     expect(await screen.findByText(/Runtime inventory source/i)).toBeVisible()
     expect(screen.getByText(/Derived from table rows/i)).toBeVisible()
     expect(screen.getByRole('columnheader', { name: /service/i })).toBeVisible()
