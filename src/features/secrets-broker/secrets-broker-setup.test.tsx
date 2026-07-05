@@ -278,6 +278,13 @@ describe('Secrets Broker overview dashboard', () => {
         name: /Local encrypted store/i,
       })
     ).toBeVisible()
+    expect(
+      await screen.findByRole('region', {
+        name: /Live local store metadata/i,
+      })
+    ).toBeVisible()
+    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+    expect(screen.getByText(/Local fixture source is ready/i)).toBeVisible()
     expect(screen.getAllByText(/Backup and keys/i)[0]).toBeVisible()
     expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
     expect(screen.getAllByText(/reconnect_required/i)[0]).toBeVisible()

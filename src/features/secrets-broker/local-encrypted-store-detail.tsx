@@ -1,13 +1,20 @@
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ClipboardCheck,
   FileKey2,
   HardDrive,
   LockKeyhole,
+  PlugZap,
   Route,
   ShieldCheck,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,9 +49,126 @@ const resolutionSteps = [
   'Locked, policy_denied, auth_required, or config_error states fail closed.',
 ]
 
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
+function formatLiveAvailability(value: boolean | undefined) {
+  return value ? 'available' : 'blocked'
+}
+
+function LiveLocalStoreMetadata({
+  overview,
+  loading,
+  error,
+}: {
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const localSource = overview?.sources.find((source) =>
+    source.id.toLowerCase().includes('local')
+  )
+
+  return (
+    <section
+      aria-label='Live local store metadata'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live local store metadata
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker local-store metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker local-store metadata.'
+                  : 'Broker local-store metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Local source
+          </div>
+          <div>{localSource?.state ?? 'not reported'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Source count
+          </div>
+          <div>{overview?.sourceCount ?? 0}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Reveal
+          </div>
+          <div>{formatLiveAvailability(localSource?.capabilities.reveal)}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Mutation
+          </div>
+          <div>
+            {formatLiveAvailability(localSource?.capabilities.mutation)}
+          </div>
+        </div>
+      </div>
+
+      {localSource ? (
+        <div className='mt-3 rounded-md border bg-muted/30 p-3 text-sm'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <span className='font-medium'>{localSource.label}</span>
+            <Badge variant='outline'>{localSource.provider}</Badge>
+          </div>
+          <div className='mt-1 text-xs text-muted-foreground'>
+            {localSource.reason}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 export function LocalEncryptedStoreProviderDetail() {
   const provider = getLocalEncryptedStoreProvider()
   const backupStatus = secretsBrokerBackupKeyStatus
+  const liveOverview = useQuery({
+    queryKey: ['secrets-broker', 'local-store', 'overview'],
+    queryFn: fetchSecretsBrokerOverview,
+  })
 
   if (!provider) return null
 
@@ -69,6 +193,12 @@ export function LocalEncryptedStoreProviderDetail() {
           <Badge variant='outline'>Metadata only</Badge>
         </div>
       </div>
+
+      <LiveLocalStoreMetadata
+        overview={liveOverview.data}
+        loading={liveOverview.isLoading}
+        error={liveOverview.isError}
+      />
 
       <div className='grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]'>
         <Card>
