@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   type ColumnDef,
@@ -17,11 +18,16 @@ import {
   Activity,
   AlertTriangle,
   Network,
+  PlugZap,
   Search as SearchIcon,
   ShieldCheck,
   X,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+} from '@/lib/secrets-broker/client'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import { cn } from '@/lib/utils'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
@@ -66,6 +72,39 @@ const mappingStatusLabels: Record<SecretVariableMappingStatus, string> = {
   unmapped: 'Unmapped',
   'missing-source': 'Missing source',
   unknown: 'Unknown',
+}
+
+const liveBrokerStateLabels: Record<SecretsBrokerLiveState, string> = {
+  ready: 'Ready',
+  loading: 'Loading',
+  unavailable: 'Unavailable',
+  'setup-needed': 'Setup needed',
+  locked: 'Locked',
+  'auth-required': 'Auth required',
+  'policy-denied': 'Policy denied',
+  unsupported: 'Unsupported',
+  degraded: 'Degraded',
+  'audit-unavailable': 'Audit unavailable',
+}
+
+const liveBrokerStateVariants: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
+function formatLiveAvailability(value: boolean) {
+  return value ? 'available' : 'unavailable'
 }
 
 function MappingStatusBadge({
@@ -353,6 +392,11 @@ export function SecretsBrokerTopologyPage() {
   })
 
   const servicesQuery = useServices()
+  const liveBrokerOverviewQuery = useQuery({
+    queryKey: ['secrets-broker', 'topology-live-overview'],
+    queryFn: fetchSecretsBrokerOverview,
+  })
+  const liveBrokerOverview = liveBrokerOverviewQuery.data
   const [topologySearchQuery, setTopologySearchQuery] = useState('')
   const topology = useMemo(
     () => buildSecretsBrokerTopology(servicesQuery.data ?? []),
@@ -437,6 +481,109 @@ export function SecretsBrokerTopologyPage() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardContent
+                className='space-y-3 p-4'
+                role='region'
+                aria-label='Live topology source status'
+              >
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                  <div>
+                    <div className='flex flex-wrap items-center gap-2 font-medium'>
+                      <PlugZap className='size-4' /> Live topology source status
+                      {liveBrokerOverview ? (
+                        <Badge
+                          variant={
+                            liveBrokerStateVariants[liveBrokerOverview.state]
+                          }
+                        >
+                          {liveBrokerStateLabels[liveBrokerOverview.state]}
+                        </Badge>
+                      ) : liveBrokerOverviewQuery.isError ? (
+                        <Badge variant='destructive'>Unavailable</Badge>
+                      ) : (
+                        <Badge variant='secondary'>Loading</Badge>
+                      )}
+                    </div>
+                    <p className='mt-1 text-sm text-muted-foreground'>
+                      {liveBrokerOverview
+                        ? liveBrokerOverview.summary
+                        : liveBrokerOverviewQuery.isError
+                          ? 'Topology is using safe runtime inventory relationships because live broker metadata could not be read.'
+                          : 'Checking live broker source metadata before showing topology relationships.'}
+                    </p>
+                  </div>
+                  {liveBrokerOverview ? (
+                    <Badge variant='outline'>
+                      {liveBrokerOverview.stubMode
+                        ? 'stub fixture metadata'
+                        : 'runtime proxy metadata'}
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className='grid gap-3 text-sm md:grid-cols-4'>
+                  <div>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Live sources
+                    </div>
+                    <div>{liveBrokerOverview?.sourceCount ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Runtime service
+                    </div>
+                    <div>
+                      {liveBrokerOverview?.service?.status ?? 'unknown'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Telemetry
+                    </div>
+                    <div>
+                      {liveBrokerOverview
+                        ? formatLiveAvailability(
+                            liveBrokerOverview.telemetryAvailable
+                          )
+                        : 'unknown'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Audit
+                    </div>
+                    <div>
+                      {liveBrokerOverview
+                        ? formatLiveAvailability(
+                            liveBrokerOverview.auditAvailable
+                          )
+                        : 'unknown'}
+                    </div>
+                  </div>
+                </div>
+
+                {liveBrokerOverview?.sources.length ? (
+                  <div className='grid gap-2 md:grid-cols-3'>
+                    {liveBrokerOverview.sources.slice(0, 3).map((source) => (
+                      <div
+                        key={source.id}
+                        className='rounded-md border bg-muted/30 p-3 text-sm'
+                      >
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <span className='font-medium'>{source.label}</span>
+                          <Badge variant='outline'>{source.state}</Badge>
+                        </div>
+                        <div className='mt-1 text-xs text-muted-foreground'>
+                          {source.provider} · {source.reason}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader className='space-y-1'>
