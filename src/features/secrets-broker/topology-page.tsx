@@ -107,6 +107,33 @@ function formatLiveAvailability(value: boolean) {
   return value ? 'available' : 'unavailable'
 }
 
+function normalizeLiveSourceKey(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function rowHasLiveSourceProof(
+  row: SecretVariableMappingRow,
+  liveBrokerOverview: Awaited<ReturnType<typeof fetchSecretsBrokerOverview>>
+) {
+  const rowSource = normalizeLiveSourceKey(row.source)
+  const rowProvider = normalizeLiveSourceKey(row.provider)
+
+  return liveBrokerOverview.sources.some((source) => {
+    const sourceId = normalizeLiveSourceKey(source.id)
+    const provider = normalizeLiveSourceKey(source.provider)
+    const label = normalizeLiveSourceKey(source.label)
+
+    return (
+      rowSource === sourceId ||
+      rowSource.includes(sourceId) ||
+      rowSource.includes(provider) ||
+      rowProvider === provider ||
+      rowProvider.startsWith(`${provider}/`) ||
+      rowProvider.includes(label)
+    )
+  })
+}
+
 function MappingStatusBadge({
   status,
 }: {
@@ -413,6 +440,15 @@ export function SecretsBrokerTopologyPage() {
   const unmappedCount = topology.rows.filter(
     (row) => row.status !== 'mapped'
   ).length
+  const mappedRows = topology.rows.filter((row) => row.status === 'mapped')
+  const liveSourceMatchedRowCount = liveBrokerOverview
+    ? mappedRows.filter((row) => rowHasLiveSourceProof(row, liveBrokerOverview))
+        .length
+    : 0
+  const liveSourcePendingRowCount =
+    liveBrokerOverview && mappedRows.length
+      ? mappedRows.length - liveSourceMatchedRowCount
+      : mappedRows.length
   const hasTopologySearch = topologySearchQuery.trim().length > 0
   const topologyHasMatches =
     filteredTopology.nodes.length > 0 || filteredTopology.rows.length > 0
@@ -560,6 +596,33 @@ export function SecretsBrokerTopologyPage() {
                             liveBrokerOverview.auditAvailable
                           )
                         : 'unknown'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className='grid gap-3 text-sm md:grid-cols-3'>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Mapped refs
+                    </div>
+                    <div className='text-lg font-semibold'>
+                      {mappedRows.length}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Live source matched refs
+                    </div>
+                    <div className='text-lg font-semibold'>
+                      {liveSourceMatchedRowCount}
+                    </div>
+                  </div>
+                  <div className='rounded-md border bg-muted/30 p-3'>
+                    <div className='text-xs font-medium text-muted-foreground uppercase'>
+                      Source proof pending
+                    </div>
+                    <div className='text-lg font-semibold'>
+                      {liveSourcePendingRowCount}
                     </div>
                   </div>
                 </div>
