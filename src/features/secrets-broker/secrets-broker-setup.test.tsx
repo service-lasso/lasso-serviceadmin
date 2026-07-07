@@ -761,6 +761,15 @@ describe('Secrets Broker overview dashboard', () => {
       })
     ).toBeVisible()
     expect(screen.getByText(/Safe metadata summary/i)).toBeVisible()
+    expect(
+      await screen.findByRole('region', {
+        name: /Live connection source metadata/i,
+      })
+    ).toBeVisible()
+    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+    expect(screen.getByText(/Local fixture source is ready/i)).toBeVisible()
+    expect(screen.getByText(/^Connection source$/i)).toBeVisible()
+    expect(screen.getByText(/Live match/i)).toBeVisible()
     expect(screen.getByText(/Status and health/i)).toBeVisible()
     expect(screen.getByText(/Secret material state/i)).toBeVisible()
     expect(screen.getByText(/Lifecycle status/i)).toBeVisible()
