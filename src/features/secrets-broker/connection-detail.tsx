@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -6,11 +7,17 @@ import {
   Clock3,
   KeyRound,
   Link2,
+  PlugZap,
   ShieldAlert,
   ShieldCheck,
   XCircle,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -113,6 +120,22 @@ const actionVariant: Record<
   unsupported: 'outline',
 }
 
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
 function StateIcon({ state }: { state: SecretsBrokerProviderConnectionState }) {
   if (state === 'healthy') return <CheckCircle2 className='size-4' />
   if (state === 'degraded') return <AlertTriangle className='size-4' />
@@ -168,6 +191,98 @@ function MetadataGrid({
         </div>
       ))}
     </div>
+  )
+}
+
+function LiveConnectionSourceMetadata({
+  connection,
+  overview,
+  loading,
+  error,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const matchingSource = overview?.sources.find(
+    (source) =>
+      source.id === connection.source ||
+      source.id === connection.id ||
+      source.label === connection.title
+  )
+
+  return (
+    <section
+      aria-label='Live connection source metadata'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live connection source metadata
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker connection metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker source metadata for this connection.'
+                  : 'Broker connection metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Connection source
+          </div>
+          <div>{connection.source}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Live match
+          </div>
+          <div>{matchingSource ? matchingSource.state : 'not advertised'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Provider
+          </div>
+          <div>{matchingSource?.provider ?? connection.provider}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Mutation
+          </div>
+          <div>
+            {matchingSource?.capabilities.mutation ? 'available' : 'blocked'}
+          </div>
+        </div>
+      </div>
+
+      <div className='mt-3 rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground'>
+        {matchingSource
+          ? matchingSource.reason
+          : 'The live broker overview did not advertise this exact connection source. This page keeps fixture detail visible as metadata only and fails closed for live source actions.'}
+      </div>
+    </section>
   )
 }
 
@@ -509,6 +624,11 @@ export function SecretsBrokerProviderConnectionDetailPage({
   connectionId: string
 }) {
   const connection = getSecretsBrokerProviderConnectionDetail(connectionId)
+  const liveOverviewQuery = useQuery({
+    queryKey: ['secrets-broker', 'connection-detail', connectionId, 'overview'],
+    queryFn: fetchSecretsBrokerOverview,
+    enabled: Boolean(connection),
+  })
 
   usePageMetadata({
     title: connection
@@ -571,6 +691,13 @@ export function SecretsBrokerProviderConnectionDetailPage({
             <MetadataGrid connection={connection} />
           </CardContent>
         </Card>
+
+        <LiveConnectionSourceMetadata
+          connection={connection}
+          overview={liveOverviewQuery.data}
+          loading={liveOverviewQuery.isLoading}
+          error={liveOverviewQuery.isError}
+        />
 
         <div className='grid gap-4 lg:grid-cols-2'>
           <Card>
