@@ -1074,6 +1074,8 @@ describe('Secrets Broker overview dashboard', () => {
       await screen.findByText(/Live topology source status/i)
     ).toBeVisible()
     expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+    expect(screen.getByText(/Live source matched refs/i)).toBeVisible()
+    expect(screen.getByText(/Source proof pending/i)).toBeVisible()
     expect(screen.getByText(/Local encrypted store/i)).toBeVisible()
     expect(await screen.findByText(/Runtime inventory source/i)).toBeVisible()
     expect(screen.getByText(/Derived from table rows/i)).toBeVisible()
