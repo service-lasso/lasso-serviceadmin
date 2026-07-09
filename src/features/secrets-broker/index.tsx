@@ -15,9 +15,13 @@ import {
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  fetchSecretsBrokerManagedSecrets,
   fetchSecretsBrokerOverview,
+  type SecretsBrokerManagedSecretsResult,
+  type SecretsBrokerManagedSecret,
   type SecretsBrokerLiveState,
   type SecretsBrokerOverview as SecretsBrokerLiveOverview,
+  type SecretsBrokerSourceStatus,
 } from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -159,6 +163,38 @@ type SecretsBrokerOverviewScenario = {
     nextAction: string
   }
   emptyState?: string
+}
+
+type ServiceSecretJourneyState = 'ready' | 'missing-ref' | 'locked-store'
+
+type ServiceSecretJourneyStep = {
+  id: string
+  label: string
+  summary: string
+  status: 'ready' | 'blocked' | 'pending' | 'warning'
+  evidence: string
+  nextAction: string
+}
+
+type ServiceSecretJourneyScenario = {
+  id: ServiceSecretJourneyState
+  label: string
+  heading: string
+  summary: string
+  service: {
+    id: string
+    name: string
+    manifestPath: string
+  }
+  metadata: {
+    namespace: string
+    provider: string
+    storeState: string
+    startupOutcome: string
+    writeBackOutcome: string
+    auditCorrelation: string
+  }
+  steps: ServiceSecretJourneyStep[]
 }
 
 export type SecretsBrokerSectionFocus =
@@ -494,6 +530,428 @@ const brokerOverviewScenarios: SecretsBrokerOverviewScenario[] = [
   },
 ]
 
+const nodeSampleSecretJourneyScenarios: ServiceSecretJourneyScenario[] = [
+  {
+    id: 'ready',
+    label: 'Ready journey',
+    heading: 'Node Sample Service ready',
+    summary:
+      'Manifest-declared broker refs are planned, provisioned, resolved, passed to runtime metadata, and written back only where policy allows.',
+    service: {
+      id: 'node-sample-service',
+      name: 'Node Sample Service',
+      manifestPath: 'services/node-sample-service/service.json',
+    },
+    metadata: {
+      namespace: 'service/node-sample-service',
+      provider: '@secretsbroker/local/default',
+      storeState: 'initialized and unlocked',
+      startupOutcome: 'resolve_ready',
+      writeBackOutcome: 'writeback_allowed',
+      auditCorrelation: 'audit-node-sample-ready-001',
+    },
+    steps: [
+      {
+        id: 'manifest',
+        label: 'Manifest policy declared',
+        summary:
+          'Broker policy, imports, and write-back targets are visible as refs and handles only.',
+        status: 'ready',
+        evidence: 'broker.policy: required + generated refs',
+        nextAction: 'Open service details to review manifest metadata.',
+      },
+      {
+        id: 'plan',
+        label: 'Service Lasso plans refs',
+        summary:
+          'Startup plan recognizes required, optional, generated, and write-back refs before launch.',
+        status: 'ready',
+        evidence: 'plan/node-sample-service/startup-secrets',
+        nextAction: 'Review Secrets table for ref status.',
+      },
+      {
+        id: 'store',
+        label: 'Local encrypted store ready',
+        summary:
+          'The local store is initialized and unlocked before generated first-run material is requested.',
+        status: 'ready',
+        evidence: '@secretsbroker/local/default unlocked',
+        nextAction: 'Keep backup metadata current.',
+      },
+      {
+        id: 'provision',
+        label: 'First-run secret provisioned',
+        summary:
+          'Generated material is stored by the broker and never rendered in Service Admin.',
+        status: 'ready',
+        evidence: 'generated ref present: yes',
+        nextAction: 'Verify audit event correlation.',
+      },
+      {
+        id: 'resolve',
+        label: 'Startup resolve succeeds',
+        summary:
+          'Runtime receives secret availability metadata while values stay outside the UI.',
+        status: 'ready',
+        evidence: 'startup outcome: resolve_ready',
+        nextAction: 'Open service variables for masked runtime rows.',
+      },
+      {
+        id: 'writeback',
+        label: 'Write-back policy recorded',
+        summary:
+          'Broker confirms which generated refs may be refreshed or written back after startup.',
+        status: 'ready',
+        evidence: 'policy decision: writeback_allowed',
+        nextAction: 'Review audit logging before rotation.',
+      },
+    ],
+  },
+  {
+    id: 'missing-ref',
+    label: 'Missing ref',
+    heading: 'Node Sample Service missing ref',
+    summary:
+      'A required ref is declared but not present in the broker metadata, so startup remains blocked without exposing the expected value.',
+    service: {
+      id: 'node-sample-service',
+      name: 'Node Sample Service',
+      manifestPath: 'services/node-sample-service/service.json',
+    },
+    metadata: {
+      namespace: 'service/node-sample-service',
+      provider: '@secretsbroker/local/default',
+      storeState: 'initialized and unlocked',
+      startupOutcome: 'blocked_missing_ref',
+      writeBackOutcome: 'not_attempted',
+      auditCorrelation: 'audit-node-sample-missing-001',
+    },
+    steps: [
+      {
+        id: 'manifest',
+        label: 'Manifest policy declared',
+        summary:
+          'The required ref handle is present in the service manifest metadata.',
+        status: 'ready',
+        evidence: 'broker.imports: required ref',
+        nextAction: 'Confirm the declared handle is intentional.',
+      },
+      {
+        id: 'plan',
+        label: 'Service Lasso plans refs',
+        summary:
+          'The startup plan marks the missing required ref before the service launches.',
+        status: 'warning',
+        evidence: 'plan status: missing_required_ref',
+        nextAction: 'Open Secrets to create or map the ref.',
+      },
+      {
+        id: 'store',
+        label: 'Local encrypted store ready',
+        summary:
+          'Store state is healthy, so the blocker is scoped to missing ref metadata.',
+        status: 'ready',
+        evidence: '@secretsbroker/local/default unlocked',
+        nextAction: 'Use the broker workflow instead of entering values here.',
+      },
+      {
+        id: 'provision',
+        label: 'First-run secret not available',
+        summary:
+          'Provisioning did not produce the required ref metadata for this startup.',
+        status: 'blocked',
+        evidence: 'generated ref present: no',
+        nextAction: 'Run the broker provisioning workflow for this service.',
+      },
+      {
+        id: 'resolve',
+        label: 'Startup resolve blocked',
+        summary:
+          'Runtime launch is held until the broker reports safe ready metadata.',
+        status: 'blocked',
+        evidence: 'startup outcome: blocked_missing_ref',
+        nextAction: 'Resolve the missing ref, then restart the service.',
+      },
+      {
+        id: 'writeback',
+        label: 'Write-back skipped',
+        summary:
+          'No write-back attempt is made while required startup refs are unresolved.',
+        status: 'pending',
+        evidence: 'policy decision: not_attempted',
+        nextAction: 'Retry only after startup resolve succeeds.',
+      },
+    ],
+  },
+  {
+    id: 'locked-store',
+    label: 'Locked store',
+    heading: 'Node Sample Service locked store',
+    summary:
+      'Broker metadata shows the local encrypted store is locked, so Service Admin gives operators a clear unlock path without exposing material.',
+    service: {
+      id: 'node-sample-service',
+      name: 'Node Sample Service',
+      manifestPath: 'services/node-sample-service/service.json',
+    },
+    metadata: {
+      namespace: 'service/node-sample-service',
+      provider: '@secretsbroker/local/default',
+      storeState: 'locked',
+      startupOutcome: 'blocked_store_locked',
+      writeBackOutcome: 'not_attempted',
+      auditCorrelation: 'audit-node-sample-locked-001',
+    },
+    steps: [
+      {
+        id: 'manifest',
+        label: 'Manifest policy declared',
+        summary:
+          'The manifest can be inspected while source material remains broker-owned.',
+        status: 'ready',
+        evidence: 'broker.policy: available',
+        nextAction: 'Review policy and imports.',
+      },
+      {
+        id: 'plan',
+        label: 'Service Lasso plans refs',
+        summary:
+          'Required and generated refs are known, but source access is unavailable.',
+        status: 'warning',
+        evidence: 'plan status: source_locked',
+        nextAction: 'Unlock the configured source before launch.',
+      },
+      {
+        id: 'store',
+        label: 'Local encrypted store locked',
+        summary:
+          'The broker cannot confirm or provision refs until the local store is unlocked.',
+        status: 'blocked',
+        evidence: '@secretsbroker/local/default locked',
+        nextAction: 'Open Providers to unlock the local encrypted store.',
+      },
+      {
+        id: 'provision',
+        label: 'First-run secret pending',
+        summary:
+          'Generated material is not requested while the source is unavailable.',
+        status: 'pending',
+        evidence: 'generated ref present: unknown',
+        nextAction: 'Retry provisioning after unlock.',
+      },
+      {
+        id: 'resolve',
+        label: 'Startup resolve blocked',
+        summary:
+          'Runtime startup waits for broker-ready metadata instead of falling back to unsafe defaults.',
+        status: 'blocked',
+        evidence: 'startup outcome: blocked_store_locked',
+        nextAction: 'Unlock source, then restart the service.',
+      },
+      {
+        id: 'writeback',
+        label: 'Write-back skipped',
+        summary:
+          'Write-back remains disabled until store access and startup resolve are healthy.',
+        status: 'pending',
+        evidence: 'policy decision: not_attempted',
+        nextAction: 'Retry after successful startup resolve.',
+      },
+    ],
+  },
+]
+
+function findNodeSampleManagedSecret(
+  managedSecrets?: SecretsBrokerManagedSecretsResult
+) {
+  return managedSecrets?.results.find((secret) =>
+    [secret.ownerServiceId, secret.ref, secret.name, secret.id].some((value) =>
+      value.toLowerCase().includes('node-sample')
+    )
+  )
+}
+
+function findNodeSampleSource(overview?: SecretsBrokerLiveOverview) {
+  return (
+    overview?.sources.find((source) =>
+      source.id.toLowerCase().includes('local/default')
+    ) ?? overview?.sources[0]
+  )
+}
+
+function sourceStoreState(source?: SecretsBrokerSourceStatus) {
+  if (!source) return 'source metadata unavailable'
+  return `${source.state}: ${source.reason}`
+}
+
+function buildLiveReadyNodeSampleJourney(
+  base: ServiceSecretJourneyScenario,
+  secret: SecretsBrokerManagedSecret,
+  source?: SecretsBrokerSourceStatus
+): ServiceSecretJourneyScenario {
+  return {
+    ...base,
+    summary:
+      'Live broker metadata reports the Node Sample Service managed ref without exposing material.',
+    metadata: {
+      namespace: secret.ref,
+      provider: secret.sourceId,
+      storeState: sourceStoreState(source),
+      startupOutcome: secret.outcome,
+      writeBackOutcome: secret.policy,
+      auditCorrelation: secret.auditStatus,
+    },
+    steps: base.steps.map((step) => {
+      if (step.id === 'plan') {
+        return {
+          ...step,
+          evidence: `live managed ref: ${secret.ref}`,
+          nextAction: 'Review live Secrets table metadata for this ref.',
+        }
+      }
+      if (step.id === 'store') {
+        return {
+          ...step,
+          evidence: `${secret.sourceId} ${secret.state}`,
+          nextAction:
+            source?.state === 'ready'
+              ? step.nextAction
+              : (source?.reason ?? step.nextAction),
+          status: source?.state === 'ready' ? 'ready' : 'warning',
+        }
+      }
+      if (step.id === 'resolve') {
+        return {
+          ...step,
+          evidence: `live outcome: ${secret.outcome}`,
+        }
+      }
+      if (step.id === 'writeback') {
+        return {
+          ...step,
+          evidence: `live policy: ${secret.policy}`,
+        }
+      }
+      return step
+    }),
+  }
+}
+
+function buildLiveMissingNodeSampleJourney(
+  base: ServiceSecretJourneyScenario,
+  managedSecrets?: SecretsBrokerManagedSecretsResult,
+  source?: SecretsBrokerSourceStatus
+): ServiceSecretJourneyScenario {
+  const unsupported = managedSecrets?.state === 'unsupported'
+  const unavailable = !managedSecrets || managedSecrets.state === 'unavailable'
+
+  return {
+    ...base,
+    summary: unsupported
+      ? 'The runtime does not expose live managed-secret journey metadata yet, so this view falls back to a safe unavailable contract.'
+      : unavailable
+        ? 'Live managed-secret metadata could not be read, so startup readiness cannot be confirmed from runtime data.'
+        : 'Live broker metadata returned no Node Sample Service managed ref rows, so the journey is treated as missing metadata.',
+    metadata: {
+      ...base.metadata,
+      provider: source?.id ?? base.metadata.provider,
+      storeState: sourceStoreState(source),
+      startupOutcome: unsupported
+        ? 'live_contract_unavailable'
+        : unavailable
+          ? 'live_metadata_unavailable'
+          : 'blocked_missing_ref',
+      writeBackOutcome: 'not_attempted',
+      auditCorrelation: managedSecrets?.checkedAt ?? 'live check not completed',
+    },
+    steps: base.steps.map((step) => {
+      if (step.id === 'plan') {
+        return {
+          ...step,
+          status: unsupported ? 'pending' : 'warning',
+          evidence: unsupported
+            ? 'runtime route: management/secrets unsupported'
+            : `managed rows: ${managedSecrets?.results.length ?? 0}`,
+          nextAction: unsupported
+            ? 'Add or document the runtime managed-secret journey route contract.'
+            : step.nextAction,
+        }
+      }
+      if (step.id === 'store') {
+        return {
+          ...step,
+          evidence: source ? `${source.id} ${source.state}` : step.evidence,
+          nextAction: source?.reason ?? step.nextAction,
+          status: source?.state === 'ready' ? 'ready' : 'warning',
+        }
+      }
+      return step
+    }),
+  }
+}
+
+function buildLiveLockedNodeSampleJourney(
+  base: ServiceSecretJourneyScenario,
+  source?: SecretsBrokerSourceStatus
+): ServiceSecretJourneyScenario {
+  return {
+    ...base,
+    summary:
+      'Live broker metadata reports the source as locked, so startup remains blocked until the source is unlocked outside the secret-value surface.',
+    metadata: {
+      ...base.metadata,
+      provider: source?.id ?? base.metadata.provider,
+      storeState: sourceStoreState(source),
+      auditCorrelation: source?.reason ?? base.metadata.auditCorrelation,
+    },
+    steps: base.steps.map((step) =>
+      step.id === 'store'
+        ? {
+            ...step,
+            evidence: source ? `${source.id} ${source.state}` : step.evidence,
+            nextAction: source?.reason ?? step.nextAction,
+          }
+        : step
+    ),
+  }
+}
+
+function buildNodeSampleSecretJourneyScenarios(
+  overview?: SecretsBrokerLiveOverview,
+  managedSecrets?: SecretsBrokerManagedSecretsResult
+): ServiceSecretJourneyScenario[] {
+  if (!overview || overview.stubMode || managedSecrets?.stubMode) {
+    return nodeSampleSecretJourneyScenarios
+  }
+
+  const source = findNodeSampleSource(overview)
+  const managedSecret = findNodeSampleManagedSecret(managedSecrets)
+
+  return nodeSampleSecretJourneyScenarios.map((scenario) => {
+    if (
+      scenario.id === 'ready' &&
+      managedSecret &&
+      overview.state !== 'locked' &&
+      source?.state !== 'locked'
+    ) {
+      return buildLiveReadyNodeSampleJourney(scenario, managedSecret, source)
+    }
+
+    if (scenario.id === 'missing-ref' && !managedSecret) {
+      return buildLiveMissingNodeSampleJourney(scenario, managedSecrets, source)
+    }
+
+    if (
+      scenario.id === 'locked-store' &&
+      (overview.state === 'locked' || source?.state === 'locked')
+    ) {
+      return buildLiveLockedNodeSampleJourney(scenario, source)
+    }
+
+    return scenario
+  })
+}
+
 const brokerOverviewStateCopy: Record<SecretsBrokerOverviewState, string> = {
   healthy: 'Healthy',
   degraded: 'Degraded',
@@ -556,6 +1014,16 @@ const liveBrokerStateCopy: Record<SecretsBrokerLiveState, string> = {
   unsupported: 'Unsupported',
   degraded: 'Degraded',
   'audit-unavailable': 'Audit unavailable',
+}
+
+const serviceSecretJourneyStatusVariant: Record<
+  ServiceSecretJourneyStep['status'],
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  blocked: 'destructive',
+  pending: 'outline',
+  warning: 'secondary',
 }
 
 function liveBrokerStateToOverviewState(
@@ -655,6 +1123,200 @@ const sourceActionCopy: Record<
   'view-diagnostics': 'View diagnostics',
   'edit-configuration': 'Edit configuration',
   'view-examples': 'View examples',
+}
+
+function NodeSampleSecretJourneyView({
+  liveOverview,
+  liveManagedSecrets,
+  liveManagedSecretsLoading,
+}: {
+  liveOverview?: SecretsBrokerLiveOverview
+  liveManagedSecrets?: SecretsBrokerManagedSecretsResult
+  liveManagedSecretsLoading?: boolean
+}) {
+  const [journeyState, setJourneyState] =
+    useState<ServiceSecretJourneyState>('ready')
+  const journeyScenarios = buildNodeSampleSecretJourneyScenarios(
+    liveOverview,
+    liveManagedSecrets
+  )
+  const journey =
+    journeyScenarios.find((scenario) => scenario.id === journeyState) ??
+    journeyScenarios[0]
+
+  const blockedSteps = journey.steps.filter(
+    (step) => step.status === 'blocked'
+  ).length
+  const metadataMode = liveOverview
+    ? formatLiveBrokerMode(liveOverview)
+    : liveManagedSecretsLoading
+      ? 'checking runtime proxy metadata'
+      : 'stub fixture metadata'
+
+  return (
+    <Card id='node-sample-secret-journey'>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle className='flex items-center gap-2'>
+              <KeyRound className='size-4' /> Service secret journey
+            </CardTitle>
+            <CardDescription>
+              Node Sample Service first-run secret lifecycle from manifest
+              declaration through runtime usage and audited write-back metadata.
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Badge variant={blockedSteps ? 'destructive' : 'default'}>
+              {blockedSteps} blocked
+            </Badge>
+            <Badge variant='outline'>{metadataMode}</Badge>
+            <Badge variant='outline'>Metadata only</Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-4 lg:grid-cols-[minmax(0,0.72fr)_minmax(260px,0.28fr)]'>
+          <div className='space-y-4'>
+            <div className='max-w-sm'>
+              <label
+                htmlFor='node-sample-secret-journey-state'
+                className='mb-1 block text-xs text-muted-foreground'
+              >
+                Journey state
+              </label>
+              <select
+                id='node-sample-secret-journey-state'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={journeyState}
+                onChange={(event) =>
+                  setJourneyState(
+                    event.target.value as ServiceSecretJourneyState
+                  )
+                }
+              >
+                {journeyScenarios.map((scenario) => (
+                  <option key={scenario.id} value={scenario.id}>
+                    {scenario.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className='rounded-lg border p-4'>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <div className='text-lg font-semibold'>{journey.heading}</div>
+                  <p className='mt-1 text-sm text-muted-foreground'>
+                    {journey.summary}
+                  </p>
+                </div>
+                <Badge variant='secondary'>
+                  {journey.metadata.startupOutcome}
+                </Badge>
+              </div>
+              <div className='mt-4 grid gap-3 text-sm md:grid-cols-3'>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Service
+                  </div>
+                  <div>{journey.service.name}</div>
+                  <div className='text-xs text-muted-foreground'>
+                    {journey.service.id}
+                  </div>
+                </div>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Namespace
+                  </div>
+                  <div>{journey.metadata.namespace}</div>
+                  <div className='text-xs text-muted-foreground'>
+                    {journey.service.manifestPath}
+                  </div>
+                </div>
+                <div>
+                  <div className='text-xs font-medium text-muted-foreground uppercase'>
+                    Provider / store
+                  </div>
+                  <div>{journey.metadata.provider}</div>
+                  <div className='text-xs text-muted-foreground'>
+                    {journey.metadata.storeState}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className='grid gap-3'>
+              {journey.steps.map((step, index) => (
+                <div
+                  key={step.id}
+                  className='grid gap-3 rounded-lg border p-3 text-sm md:grid-cols-[auto_minmax(0,1fr)_minmax(220px,0.34fr)]'
+                >
+                  <div className='flex size-8 items-center justify-center rounded-full border bg-muted text-sm font-semibold'>
+                    {index + 1}
+                  </div>
+                  <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <div className='font-medium'>{step.label}</div>
+                      <Badge
+                        variant={serviceSecretJourneyStatusVariant[step.status]}
+                      >
+                        {step.status}
+                      </Badge>
+                    </div>
+                    <p className='mt-1 text-muted-foreground'>{step.summary}</p>
+                  </div>
+                  <div className='min-w-0 rounded-md bg-muted/40 p-2 text-xs'>
+                    <div className='font-medium'>Evidence</div>
+                    <div className='mt-1 break-all text-muted-foreground'>
+                      {step.evidence}
+                    </div>
+                    <div className='mt-2 font-medium'>Next action</div>
+                    <div className='mt-1 text-muted-foreground'>
+                      {step.nextAction}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className='space-y-3'>
+            <div className='rounded-lg border p-3 text-sm'>
+              <div className='font-medium'>Safe metadata contract</div>
+              <div className='mt-3 grid gap-2 text-xs text-muted-foreground'>
+                <div>startup: {journey.metadata.startupOutcome}</div>
+                <div>write-back: {journey.metadata.writeBackOutcome}</div>
+                <div>audit: {journey.metadata.auditCorrelation}</div>
+                <div>source: {metadataMode}</div>
+                <div>raw value: hidden</div>
+                <div>copy value: unavailable</div>
+              </div>
+            </div>
+            <div className='grid gap-2'>
+              <Button variant='outline' size='sm' asChild>
+                <a href={`/services/${journey.service.id}?tab=config`}>
+                  Service details
+                </a>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <Link to='/secrets-broker/secrets'>Secrets table</Link>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <Link to='/secrets-broker/sources'>Providers</Link>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <Link to='/operations/audit-logging'>Audit Logging</Link>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <Link to='/secrets-broker'>Overview</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 const providerConnectionStatusCopy: Record<
@@ -2157,6 +2819,14 @@ export function SecretsBrokerSetupWizard({
     enabled: focusSection === 'overview',
   })
   const liveBrokerOverview = liveBrokerOverviewQuery.data
+  const liveManagedSecretsQuery = useQuery({
+    queryKey: ['secrets-broker', 'managed-secrets', 'node-sample'],
+    queryFn: () => fetchSecretsBrokerManagedSecrets('node-sample'),
+    enabled:
+      focusSection === 'overview' &&
+      Boolean(liveBrokerOverview) &&
+      liveBrokerOverview?.stubMode === false,
+  })
   const liveBrokerOverviewState = liveBrokerOverview
     ? liveBrokerStateToOverviewState(liveBrokerOverview.state)
     : 'offline'
@@ -2632,6 +3302,12 @@ export function SecretsBrokerSetupWizard({
                 </div>
               </CardContent>
             </Card>
+
+            <NodeSampleSecretJourneyView
+              liveOverview={liveBrokerOverview}
+              liveManagedSecrets={liveManagedSecretsQuery.data}
+              liveManagedSecretsLoading={liveManagedSecretsQuery.isFetching}
+            />
 
             <div className='grid gap-4 md:grid-cols-3'>
               <Card>
