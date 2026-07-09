@@ -15,9 +15,13 @@ import {
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  fetchSecretsBrokerManagedSecrets,
   fetchSecretsBrokerOverview,
+  type SecretsBrokerManagedSecretsResult,
+  type SecretsBrokerManagedSecret,
   type SecretsBrokerLiveState,
   type SecretsBrokerOverview as SecretsBrokerLiveOverview,
+  type SecretsBrokerSourceStatus,
 } from '@/lib/secrets-broker/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -757,6 +761,197 @@ const nodeSampleSecretJourneyScenarios: ServiceSecretJourneyScenario[] = [
   },
 ]
 
+function findNodeSampleManagedSecret(
+  managedSecrets?: SecretsBrokerManagedSecretsResult
+) {
+  return managedSecrets?.results.find((secret) =>
+    [secret.ownerServiceId, secret.ref, secret.name, secret.id].some((value) =>
+      value.toLowerCase().includes('node-sample')
+    )
+  )
+}
+
+function findNodeSampleSource(overview?: SecretsBrokerLiveOverview) {
+  return (
+    overview?.sources.find((source) =>
+      source.id.toLowerCase().includes('local/default')
+    ) ?? overview?.sources[0]
+  )
+}
+
+function sourceStoreState(source?: SecretsBrokerSourceStatus) {
+  if (!source) return 'source metadata unavailable'
+  return `${source.state}: ${source.reason}`
+}
+
+function buildLiveReadyNodeSampleJourney(
+  base: ServiceSecretJourneyScenario,
+  secret: SecretsBrokerManagedSecret,
+  source?: SecretsBrokerSourceStatus
+): ServiceSecretJourneyScenario {
+  return {
+    ...base,
+    summary:
+      'Live broker metadata reports the Node Sample Service managed ref without exposing material.',
+    metadata: {
+      namespace: secret.ref,
+      provider: secret.sourceId,
+      storeState: sourceStoreState(source),
+      startupOutcome: secret.outcome,
+      writeBackOutcome: secret.policy,
+      auditCorrelation: secret.auditStatus,
+    },
+    steps: base.steps.map((step) => {
+      if (step.id === 'plan') {
+        return {
+          ...step,
+          evidence: `live managed ref: ${secret.ref}`,
+          nextAction: 'Review live Secrets table metadata for this ref.',
+        }
+      }
+      if (step.id === 'store') {
+        return {
+          ...step,
+          evidence: `${secret.sourceId} ${secret.state}`,
+          nextAction:
+            source?.state === 'ready'
+              ? step.nextAction
+              : (source?.reason ?? step.nextAction),
+          status: source?.state === 'ready' ? 'ready' : 'warning',
+        }
+      }
+      if (step.id === 'resolve') {
+        return {
+          ...step,
+          evidence: `live outcome: ${secret.outcome}`,
+        }
+      }
+      if (step.id === 'writeback') {
+        return {
+          ...step,
+          evidence: `live policy: ${secret.policy}`,
+        }
+      }
+      return step
+    }),
+  }
+}
+
+function buildLiveMissingNodeSampleJourney(
+  base: ServiceSecretJourneyScenario,
+  managedSecrets?: SecretsBrokerManagedSecretsResult,
+  source?: SecretsBrokerSourceStatus
+): ServiceSecretJourneyScenario {
+  const unsupported = managedSecrets?.state === 'unsupported'
+  const unavailable = !managedSecrets || managedSecrets.state === 'unavailable'
+
+  return {
+    ...base,
+    summary: unsupported
+      ? 'The runtime does not expose live managed-secret journey metadata yet, so this view falls back to a safe unavailable contract.'
+      : unavailable
+        ? 'Live managed-secret metadata could not be read, so startup readiness cannot be confirmed from runtime data.'
+        : 'Live broker metadata returned no Node Sample Service managed ref rows, so the journey is treated as missing metadata.',
+    metadata: {
+      ...base.metadata,
+      provider: source?.id ?? base.metadata.provider,
+      storeState: sourceStoreState(source),
+      startupOutcome: unsupported
+        ? 'live_contract_unavailable'
+        : unavailable
+          ? 'live_metadata_unavailable'
+          : 'blocked_missing_ref',
+      writeBackOutcome: 'not_attempted',
+      auditCorrelation: managedSecrets?.checkedAt ?? 'live check not completed',
+    },
+    steps: base.steps.map((step) => {
+      if (step.id === 'plan') {
+        return {
+          ...step,
+          status: unsupported ? 'pending' : 'warning',
+          evidence: unsupported
+            ? 'runtime route: management/secrets unsupported'
+            : `managed rows: ${managedSecrets?.results.length ?? 0}`,
+          nextAction: unsupported
+            ? 'Add or document the runtime managed-secret journey route contract.'
+            : step.nextAction,
+        }
+      }
+      if (step.id === 'store') {
+        return {
+          ...step,
+          evidence: source ? `${source.id} ${source.state}` : step.evidence,
+          nextAction: source?.reason ?? step.nextAction,
+          status: source?.state === 'ready' ? 'ready' : 'warning',
+        }
+      }
+      return step
+    }),
+  }
+}
+
+function buildLiveLockedNodeSampleJourney(
+  base: ServiceSecretJourneyScenario,
+  source?: SecretsBrokerSourceStatus
+): ServiceSecretJourneyScenario {
+  return {
+    ...base,
+    summary:
+      'Live broker metadata reports the source as locked, so startup remains blocked until the source is unlocked outside the secret-value surface.',
+    metadata: {
+      ...base.metadata,
+      provider: source?.id ?? base.metadata.provider,
+      storeState: sourceStoreState(source),
+      auditCorrelation: source?.reason ?? base.metadata.auditCorrelation,
+    },
+    steps: base.steps.map((step) =>
+      step.id === 'store'
+        ? {
+            ...step,
+            evidence: source ? `${source.id} ${source.state}` : step.evidence,
+            nextAction: source?.reason ?? step.nextAction,
+          }
+        : step
+    ),
+  }
+}
+
+function buildNodeSampleSecretJourneyScenarios(
+  overview?: SecretsBrokerLiveOverview,
+  managedSecrets?: SecretsBrokerManagedSecretsResult
+): ServiceSecretJourneyScenario[] {
+  if (!overview || overview.stubMode || managedSecrets?.stubMode) {
+    return nodeSampleSecretJourneyScenarios
+  }
+
+  const source = findNodeSampleSource(overview)
+  const managedSecret = findNodeSampleManagedSecret(managedSecrets)
+
+  return nodeSampleSecretJourneyScenarios.map((scenario) => {
+    if (
+      scenario.id === 'ready' &&
+      managedSecret &&
+      overview.state !== 'locked' &&
+      source?.state !== 'locked'
+    ) {
+      return buildLiveReadyNodeSampleJourney(scenario, managedSecret, source)
+    }
+
+    if (scenario.id === 'missing-ref' && !managedSecret) {
+      return buildLiveMissingNodeSampleJourney(scenario, managedSecrets, source)
+    }
+
+    if (
+      scenario.id === 'locked-store' &&
+      (overview.state === 'locked' || source?.state === 'locked')
+    ) {
+      return buildLiveLockedNodeSampleJourney(scenario, source)
+    }
+
+    return scenario
+  })
+}
+
 const brokerOverviewStateCopy: Record<SecretsBrokerOverviewState, string> = {
   healthy: 'Healthy',
   degraded: 'Degraded',
@@ -930,17 +1125,33 @@ const sourceActionCopy: Record<
   'view-examples': 'View examples',
 }
 
-function NodeSampleSecretJourneyView() {
+function NodeSampleSecretJourneyView({
+  liveOverview,
+  liveManagedSecrets,
+  liveManagedSecretsLoading,
+}: {
+  liveOverview?: SecretsBrokerLiveOverview
+  liveManagedSecrets?: SecretsBrokerManagedSecretsResult
+  liveManagedSecretsLoading?: boolean
+}) {
   const [journeyState, setJourneyState] =
     useState<ServiceSecretJourneyState>('ready')
+  const journeyScenarios = buildNodeSampleSecretJourneyScenarios(
+    liveOverview,
+    liveManagedSecrets
+  )
   const journey =
-    nodeSampleSecretJourneyScenarios.find(
-      (scenario) => scenario.id === journeyState
-    ) ?? nodeSampleSecretJourneyScenarios[0]
+    journeyScenarios.find((scenario) => scenario.id === journeyState) ??
+    journeyScenarios[0]
 
   const blockedSteps = journey.steps.filter(
     (step) => step.status === 'blocked'
   ).length
+  const metadataMode = liveOverview
+    ? formatLiveBrokerMode(liveOverview)
+    : liveManagedSecretsLoading
+      ? 'checking runtime proxy metadata'
+      : 'stub fixture metadata'
 
   return (
     <Card id='node-sample-secret-journey'>
@@ -959,6 +1170,7 @@ function NodeSampleSecretJourneyView() {
             <Badge variant={blockedSteps ? 'destructive' : 'default'}>
               {blockedSteps} blocked
             </Badge>
+            <Badge variant='outline'>{metadataMode}</Badge>
             <Badge variant='outline'>Metadata only</Badge>
           </div>
         </div>
@@ -983,7 +1195,7 @@ function NodeSampleSecretJourneyView() {
                   )
                 }
               >
-                {nodeSampleSecretJourneyScenarios.map((scenario) => (
+                {journeyScenarios.map((scenario) => (
                   <option key={scenario.id} value={scenario.id}>
                     {scenario.label}
                   </option>
@@ -1076,6 +1288,7 @@ function NodeSampleSecretJourneyView() {
                 <div>startup: {journey.metadata.startupOutcome}</div>
                 <div>write-back: {journey.metadata.writeBackOutcome}</div>
                 <div>audit: {journey.metadata.auditCorrelation}</div>
+                <div>source: {metadataMode}</div>
                 <div>raw value: hidden</div>
                 <div>copy value: unavailable</div>
               </div>
@@ -2606,6 +2819,14 @@ export function SecretsBrokerSetupWizard({
     enabled: focusSection === 'overview',
   })
   const liveBrokerOverview = liveBrokerOverviewQuery.data
+  const liveManagedSecretsQuery = useQuery({
+    queryKey: ['secrets-broker', 'managed-secrets', 'node-sample'],
+    queryFn: () => fetchSecretsBrokerManagedSecrets('node-sample'),
+    enabled:
+      focusSection === 'overview' &&
+      Boolean(liveBrokerOverview) &&
+      liveBrokerOverview?.stubMode === false,
+  })
   const liveBrokerOverviewState = liveBrokerOverview
     ? liveBrokerStateToOverviewState(liveBrokerOverview.state)
     : 'offline'
@@ -3082,7 +3303,11 @@ export function SecretsBrokerSetupWizard({
               </CardContent>
             </Card>
 
-            <NodeSampleSecretJourneyView />
+            <NodeSampleSecretJourneyView
+              liveOverview={liveBrokerOverview}
+              liveManagedSecrets={liveManagedSecretsQuery.data}
+              liveManagedSecretsLoading={liveManagedSecretsQuery.isFetching}
+            />
 
             <div className='grid gap-4 md:grid-cols-3'>
               <Card>

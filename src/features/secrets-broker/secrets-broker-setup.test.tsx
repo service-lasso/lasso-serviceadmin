@@ -170,7 +170,7 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.getByText(/Explicit Service Admin stub mode is enabled/i)
     ).toBeVisible()
-    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+    expect(screen.getAllByText(/stub fixture metadata/i)[0]).toBeVisible()
     expect(screen.getByText(/@secretsbroker healthy/i)).toBeVisible()
     expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
     expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()
