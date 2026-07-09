@@ -247,6 +247,29 @@ describe('service detail quick actions', () => {
     expect(screen.getByText('Diagnostics + recent logs')).toBeVisible()
   })
 
+  it('links Node Sample Service details to the metadata-only secret journey', async () => {
+    __setStubServicesForTest([buildNodeSampleService()])
+
+    await renderRoute('/services/node-sample-service')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Node Sample Service$/i })
+      ).toBeVisible()
+    })
+
+    const quickActions = within(
+      screen.getByTestId('service-detail-quick-actions')
+    )
+
+    expect(
+      quickActions.getByRole('link', { name: /open secret journey/i })
+    ).toHaveAttribute(
+      'href',
+      '/secrets-broker#node-sample-secret-journey'
+    )
+  })
+
   it('keeps the Config tab focused on the server.json editor', async () => {
     const user = userEvent.setup()
 

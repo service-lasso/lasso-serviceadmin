@@ -22,6 +22,7 @@ import {
   Copy,
   ExternalLink,
   HeartPulse,
+  KeyRound,
   Link2,
   Network,
   PackageCheck,
@@ -1463,6 +1464,13 @@ function ServiceDetailQuickAction({
   )
 }
 
+function hasServiceSecretJourneyEntryPoint(service: DashboardService) {
+  return (
+    service.id === 'node-sample-service' ||
+    service.metadata.packageId === '@service-lasso/node-sample-service'
+  )
+}
+
 function EnvironmentTable({
   serviceId,
   variables,
@@ -1814,6 +1822,16 @@ export function ServiceDetail({
                         <ArrowRight className='size-4' />
                       </Link>
                     </ServiceDetailQuickAction>
+                    {hasServiceSecretJourneyEntryPoint(service) ? (
+                      <ServiceDetailQuickAction label='Secret journey'>
+                        <a
+                          href='/secrets-broker#node-sample-secret-journey'
+                          aria-label='Open secret journey'
+                        >
+                          <KeyRound className='size-4' />
+                        </a>
+                      </ServiceDetailQuickAction>
+                    ) : null}
                     <ServiceDetailQuickAction label='Network'>
                       <Link to='/network' aria-label='Open network'>
                         <Network className='size-4' />
