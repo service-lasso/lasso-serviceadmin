@@ -17,8 +17,10 @@ import {
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
-import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
-import type { ServiceLogType } from '@/lib/service-lasso-dashboard/types'
+import type {
+  DashboardService,
+  ServiceLogType,
+} from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
