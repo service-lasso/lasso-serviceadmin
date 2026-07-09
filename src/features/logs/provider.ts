@@ -43,9 +43,15 @@ export type ServiceLogChunk = {
 export type ServiceLogSource = {
   kind?: 'current' | 'archive' | string
   stream?: 'combined' | 'stdout' | 'stderr' | string
+  id?: string
+  label?: string
+  name?: string
+  fileName?: string
   runId?: string
   path?: string | null
   available?: boolean
+  cursor?: string | number | null
+  offset?: string | number | null
 }
 
 export type ServiceTerminalStdinCapability = {
