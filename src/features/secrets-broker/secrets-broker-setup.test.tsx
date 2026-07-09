@@ -209,6 +209,55 @@ describe('Secrets Broker overview dashboard', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('renders the Node Sample Service secret journey ready and blocked states safely', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker')
+
+    expect(screen.getByText(/Service secret journey/i)).toBeVisible()
+    expect(screen.getByText(/Node Sample Service ready/i)).toBeVisible()
+    expect(screen.getAllByText(/resolve_ready/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/writeback_allowed/i)[0]).toBeVisible()
+    expect(screen.getByText(/raw value: hidden/i)).toBeVisible()
+    expect(screen.getByText(/copy value: unavailable/i)).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: /^Service details$/i })
+    ).toHaveAttribute('href', '/services/node-sample-service?tab=config')
+    expect(
+      screen.getByRole('link', { name: /^Secrets table$/i })
+    ).toHaveAttribute('href', '/secrets-broker/secrets')
+    expect(
+      screen
+        .getAllByRole('link', { name: /^Providers$/i })
+        .some((link) => link.getAttribute('href') === '/secrets-broker/sources')
+    ).toBe(true)
+    expect(
+      screen.getByRole('link', { name: /^Audit Logging$/i })
+    ).toHaveAttribute('href', '/operations/audit-logging')
+
+    await user.selectOptions(
+      screen.getByLabelText(/Journey state/i),
+      'missing-ref'
+    )
+    expect(screen.getByText(/Node Sample Service missing ref/i)).toBeVisible()
+    expect(screen.getAllByText(/blocked_missing_ref/i)[0]).toBeVisible()
+    expect(screen.getByText(/First-run secret not available/i)).toBeVisible()
+
+    await user.selectOptions(
+      screen.getByLabelText(/Journey state/i),
+      'locked-store'
+    )
+    expect(screen.getByText(/Node Sample Service locked store/i)).toBeVisible()
+    expect(screen.getAllByText(/blocked_store_locked/i)[0]).toBeVisible()
+    expect(screen.getByText(/Local encrypted store locked/i)).toBeVisible()
+    expect(
+      screen.queryByText(/correct-horse-battery-staple/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/generated-secret-value/i)
+    ).not.toBeInTheDocument()
+    assertNoSecretMaterial(collectBrowserLeakSurfaces())
+  })
+
   it('redirects the removed operational controls route to Audit', async () => {
     const { router } = await renderRoute('/secrets-broker/operational-controls')
 
