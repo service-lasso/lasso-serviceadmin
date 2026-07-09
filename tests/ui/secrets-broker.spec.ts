@@ -82,7 +82,7 @@ test.describe('Secrets Broker browser coverage', () => {
     ).toBeVisible()
     await expect(page.getByRole('link', { name: 'Add provider' })).toBeVisible()
     await expect(
-      page.getByRole('main').getByRole('link', { name: 'Audit' })
+      page.getByRole('main').getByRole('link', { name: 'Audit', exact: true })
     ).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'View provider status' })
