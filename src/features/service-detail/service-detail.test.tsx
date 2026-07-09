@@ -264,10 +264,7 @@ describe('service detail quick actions', () => {
 
     expect(
       quickActions.getByRole('link', { name: /open secret journey/i })
-    ).toHaveAttribute(
-      'href',
-      '/secrets-broker#node-sample-secret-journey'
-    )
+    ).toHaveAttribute('href', '/secrets-broker#node-sample-secret-journey')
   })
 
   it('keeps the Config tab focused on the server.json editor', async () => {
