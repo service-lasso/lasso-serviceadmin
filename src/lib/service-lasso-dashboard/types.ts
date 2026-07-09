@@ -6,6 +6,7 @@ export type ServiceLogType =
   | 'stderr'
   | 'access'
   | 'error'
+  | (string & {})
 
 export type ServiceLink = {
   label: string

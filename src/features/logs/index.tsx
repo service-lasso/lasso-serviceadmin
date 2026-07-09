@@ -18,6 +18,7 @@ import {
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import type { ServiceLogType } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -50,6 +52,7 @@ import {
   fetchServiceLogsOverview,
   type ServiceLogOverview,
   type ServiceLogInfo,
+  type ServiceLogSource,
 } from './provider'
 
 const route = getRouteApi('/_authenticated/logs/')
@@ -95,11 +98,131 @@ function LogsLoading() {
 const DEFAULT_LOG_CHUNK_SIZE = 100
 const LOAD_OLDER_THRESHOLD_PX = 48
 const FOLLOW_POLL_MS = 4000
+const ALL_LOG_SOURCE = 'default'
 
 type LogViewerScrollArgs = {
   scrollTop: number
   scrollHeight: number
   clientHeight: number
+}
+
+type LogSourceOption = {
+  id: ServiceLogType
+  label: string
+  description: string
+  path?: string | null
+  available?: boolean
+  source?: ServiceLogSource
+}
+
+function titleCaseSource(value: string) {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function labelForLogSource(sourceId: string, source?: ServiceLogSource) {
+  if (source?.label) return source.label
+  if (source?.name) return source.name
+  if (sourceId === ALL_LOG_SOURCE || sourceId === 'combined') return 'All'
+  if (sourceId === 'stdout') return 'stdout'
+  if (sourceId === 'stderr') return 'stderr'
+  if (sourceId === 'access') return 'Access log'
+  if (sourceId === 'error') return 'Error log'
+  return titleCaseSource(sourceId)
+}
+
+function sourceIdFor(source: ServiceLogSource) {
+  return source.id ?? source.stream ?? source.kind ?? source.path ?? ''
+}
+
+function buildLogSourceOptions(
+  logInfo: ServiceLogInfo | null,
+  overview: ServiceLogOverview | null
+) {
+  const sourceMap = new Map<string, LogSourceOption>()
+
+  function addSource(option: LogSourceOption) {
+    const existing = sourceMap.get(option.id)
+    sourceMap.set(option.id, {
+      ...existing,
+      ...option,
+      available: option.available ?? existing?.available,
+      path: option.path ?? existing?.path,
+      source: option.source ?? existing?.source,
+    })
+  }
+
+  addSource({
+    id: ALL_LOG_SOURCE,
+    label: 'All',
+    description: 'Merged stdout, stderr, and service log entries.',
+    available: logInfo?.available,
+    path: logInfo?.path ?? overview?.logPath,
+  })
+
+  for (const type of logInfo?.availableTypes ?? []) {
+    addSource({
+      id: type,
+      label: labelForLogSource(type),
+      description:
+        type === ALL_LOG_SOURCE
+          ? 'Merged stdout, stderr, and service log entries.'
+          : `${labelForLogSource(type)} source reported by the runtime.`,
+    })
+  }
+
+  for (const source of logInfo?.sources ?? []) {
+    const id = sourceIdFor(source)
+    if (!id) continue
+
+    addSource({
+      id,
+      label: labelForLogSource(id, source),
+      description: [
+        source.stream ?? source.kind ?? 'runtime source',
+        source.fileName ?? source.path,
+      ]
+        .filter(Boolean)
+        .join(' - '),
+      path: source.path,
+      available: source.available,
+      source,
+    })
+  }
+
+  if (overview?.stdoutPath) {
+    addSource({
+      id: 'stdout',
+      label: 'stdout',
+      description: 'Process stdout stream.',
+      path: overview.stdoutPath,
+      available: true,
+    })
+  }
+
+  if (overview?.stderrPath) {
+    addSource({
+      id: 'stderr',
+      label: 'stderr',
+      description: 'Process stderr stream.',
+      path: overview.stderrPath,
+      available: true,
+    })
+  }
+
+  return Array.from(sourceMap.values()).sort((left, right) => {
+    const order = [ALL_LOG_SOURCE, 'stdout', 'stderr', 'access', 'error']
+    const leftOrder = order.indexOf(left.id)
+    const rightOrder = order.indexOf(right.id)
+    if (leftOrder !== -1 || rightOrder !== -1) {
+      return (
+        (leftOrder === -1 ? 999 : leftOrder) -
+        (rightOrder === -1 ? 999 : rightOrder)
+      )
+    }
+    return left.label.localeCompare(right.label)
+  })
 }
 
 function RealServiceLogViewer({
@@ -208,6 +331,14 @@ function buildLogEmptyState(
   const isProvider =
     service.role === 'provider' || service.metadata.serviceType === 'provider'
 
+  if (logInfo?.available === false) {
+    return {
+      title: 'Selected log source is unavailable',
+      description:
+        'The runtime reported this source, but it is not readable in the current environment.',
+    }
+  }
+
   if (isProvider) {
     return {
       title: 'Provider service has no daemon log entries',
@@ -275,10 +406,12 @@ function ServiceLogEmptyState({
   service,
   logInfo,
   overview,
+  sourceLabel,
 }: {
   service: DashboardService
   logInfo: ServiceLogInfo | null
   overview: ServiceLogOverview | null
+  sourceLabel: string
 }) {
   const state = buildLogEmptyState(service, logInfo)
   const entries = overview?.entries.slice(0, 5) ?? []
@@ -289,6 +422,9 @@ function ServiceLogEmptyState({
         <div className='font-medium'>{state.title}</div>
         <p className='mt-1 text-sm text-muted-foreground'>
           {state.description}
+        </p>
+        <p className='mt-3 text-xs text-muted-foreground'>
+          Selected source: <span className='font-medium'>{sourceLabel}</span>
         </p>
       </div>
       {entries.length ? (
@@ -321,9 +457,13 @@ function ServiceLogEmptyState({
 
 function ServiceLazyLogViewer({
   service,
+  selectedSource,
+  onSourceChange,
   paused,
 }: {
   service: DashboardService | null
+  selectedSource: ServiceLogType
+  onSourceChange: (source: ServiceLogType) => void
   paused: boolean
 }) {
   const [logInfo, setLogInfo] = useState<ServiceLogInfo | null>(null)
@@ -363,7 +503,7 @@ function ServiceLazyLogViewer({
       setLoadingOlder(true)
       const olderChunk = await fetchServiceLogChunk(
         service,
-        'default',
+        selectedSource,
         nextBefore,
         DEFAULT_LOG_CHUNK_SIZE
       )
@@ -381,7 +521,7 @@ function ServiceLazyLogViewer({
     } finally {
       setLoadingOlder(false)
     }
-  }, [hasMore, loadingOlder, nextBefore, service])
+  }, [hasMore, loadingOlder, nextBefore, selectedSource, service])
 
   useEffect(() => {
     let cancelled = false
@@ -403,26 +543,51 @@ function ServiceLazyLogViewer({
 
       debugLogs('loadInitial start', {
         serviceId: service.id,
+        source: selectedSource,
         paused,
       })
 
       try {
         setLoading(true)
         setError(null)
-        const [info, chunk, overview] = await Promise.all([
+        const [defaultInfo, chunk, overview] = await Promise.all([
           fetchServiceLogInfo(service, 'default'),
           fetchServiceLogChunk(
             service,
-            'default',
+            selectedSource,
             undefined,
             DEFAULT_LOG_CHUNK_SIZE
           ),
           fetchServiceLogsOverview(service).catch(() => null),
         ])
+        const sourceInfo =
+          selectedSource === ALL_LOG_SOURCE
+            ? defaultInfo
+            : {
+                ...defaultInfo,
+                type: selectedSource,
+                available:
+                  chunk.available ??
+                  defaultInfo.sources?.find(
+                    (source) => sourceIdFor(source) === selectedSource
+                  )?.available ??
+                  defaultInfo.available,
+                path:
+                  chunk.path ??
+                  defaultInfo.sources?.find(
+                    (source) => sourceIdFor(source) === selectedSource
+                  )?.path ??
+                  defaultInfo.path,
+                source:
+                  chunk.source ??
+                  defaultInfo.sources?.find(
+                    (source) => sourceIdFor(source) === selectedSource
+                  ),
+              }
 
         if (cancelled) return
 
-        setLogInfo(info)
+        setLogInfo(sourceInfo)
         setLogOverview(overview)
         setLines(chunk.lines)
         setHasMore(chunk.hasMore)
@@ -431,7 +596,8 @@ function ServiceLazyLogViewer({
 
         debugLogs('loadInitial state applied', {
           serviceId: service.id,
-          logPath: info.path,
+          source: selectedSource,
+          logPath: sourceInfo.path,
           lineCount: chunk.lines.length,
           totalLines: chunk.totalLines,
           hasMore: chunk.hasMore,
@@ -461,7 +627,7 @@ function ServiceLazyLogViewer({
     return () => {
       cancelled = true
     }
-  }, [paused, service])
+  }, [paused, selectedSource, service])
 
   useLayoutEffect(() => {
     const adjustment = prependAdjustmentRef.current
@@ -489,7 +655,7 @@ function ServiceLazyLogViewer({
       try {
         const newestChunk = await fetchServiceLogChunk(
           service,
-          'default',
+          selectedSource,
           undefined,
           DEFAULT_LOG_CHUNK_SIZE
         )
@@ -530,7 +696,7 @@ function ServiceLazyLogViewer({
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [loading, loadingOlder, paused, service])
+  }, [loading, loadingOlder, paused, selectedSource, service])
 
   const handleViewerScroll = useCallback(
     (args: LogViewerScrollArgs) => {
@@ -544,6 +710,7 @@ function ServiceLazyLogViewer({
   useEffect(() => {
     debugLogs('viewer render state', {
       serviceId: service?.id ?? null,
+      selectedSource,
       hasError: Boolean(error),
       loading,
       loadingOlder,
@@ -563,6 +730,7 @@ function ServiceLazyLogViewer({
     logInfo?.path,
     logOverview?.entries.length,
     nextBefore,
+    selectedSource,
     service,
     totalLines,
   ])
@@ -575,63 +743,105 @@ function ServiceLazyLogViewer({
     )
   }
 
-  if (error) {
-    return (
-      <div className='flex h-[640px] items-center justify-center rounded-md border bg-muted/30 px-6 text-sm text-destructive'>
-        {error}
-      </div>
-    )
-  }
-
-  if (loading) {
-    return <Skeleton className='h-[640px] w-full' />
-  }
+  const sourceOptions = buildLogSourceOptions(logInfo, logOverview)
+  const activeSource =
+    sourceOptions.find((source) => source.id === selectedSource) ??
+    sourceOptions[0]
+  const sourceLabel = activeSource?.label ?? labelForLogSource(selectedSource)
 
   return (
     <div className='space-y-3'>
       <ServiceLogsOverviewPanel overview={logOverview} />
-      <div className='space-y-1 text-xs text-muted-foreground'>
-        <div
-          className='truncate whitespace-nowrap'
-          title={
-            logInfo?.path ??
-            service.metadata.logPath ??
-            'resolved by service endpoint'
-          }
+      <div className='space-y-2'>
+        <Tabs
+          value={selectedSource}
+          onValueChange={(value) => onSourceChange(value as ServiceLogType)}
         >
-          Source:{' '}
-          <span className='font-medium'>
-            {logInfo?.path ??
-              service.metadata.logPath ??
-              'resolved by service endpoint'}
+          <TabsList className='h-auto flex-wrap justify-start'>
+            {sourceOptions.map((source) => (
+              <TabsTrigger
+                key={source.id}
+                value={source.id}
+                className={
+                  source.id === 'stderr'
+                    ? 'data-[state=active]:text-destructive'
+                    : undefined
+                }
+              >
+                {source.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className='flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground'>
+          <span>
+            Source: <span className='font-medium'>{sourceLabel}</span>
           </span>
-        </div>
-        <div
-          className='truncate whitespace-nowrap'
-          title={`Showing newest tail first, chunk size ${DEFAULT_LOG_CHUNK_SIZE}, total ${totalLines.toLocaleString()} lines`}
-        >
-          Showing newest tail first, chunk size {DEFAULT_LOG_CHUNK_SIZE}, total{' '}
-          {totalLines.toLocaleString()} lines
+          {activeSource?.path ? <span>{activeSource.path}</span> : null}
+          {activeSource?.source?.runId ? (
+            <span>Run: {activeSource.source.runId}</span>
+          ) : null}
+          {activeSource?.source?.cursor ? (
+            <span>Cursor: {activeSource.source.cursor}</span>
+          ) : null}
+          {activeSource?.source?.offset ? (
+            <span>Offset: {activeSource.source.offset}</span>
+          ) : null}
         </div>
       </div>
-      {lines.length ? (
-        <div ref={viewerRef}>
-          <RealServiceLogViewer
-            key={`${service.id}:${logInfo?.path ?? 'default'}`}
-            service={service}
-            paused={paused}
-            lines={lines}
-            loadingOlder={loadingOlder}
-            hasMore={hasMore}
-            onScroll={handleViewerScroll}
-          />
+      {error ? (
+        <div className='flex h-[640px] items-center justify-center rounded-md border bg-muted/30 px-6 text-sm text-destructive'>
+          {error}
         </div>
+      ) : loading ? (
+        <Skeleton className='h-[640px] w-full' />
       ) : (
-        <ServiceLogEmptyState
-          service={service}
-          logInfo={logInfo}
-          overview={logOverview}
-        />
+        <>
+          <div className='space-y-1 text-xs text-muted-foreground'>
+            <div
+              className='truncate whitespace-nowrap'
+              title={
+                logInfo?.path ??
+                service.metadata.logPath ??
+                'resolved by service endpoint'
+              }
+            >
+              Source:{' '}
+              <span className='font-medium'>
+                {logInfo?.path ??
+                  service.metadata.logPath ??
+                  'resolved by service endpoint'}
+              </span>
+            </div>
+            <div
+              className='truncate whitespace-nowrap'
+              title={`Showing newest tail first, chunk size ${DEFAULT_LOG_CHUNK_SIZE}, total ${totalLines.toLocaleString()} lines`}
+            >
+              Showing newest tail first, chunk size {DEFAULT_LOG_CHUNK_SIZE},
+              total {totalLines.toLocaleString()} lines
+            </div>
+          </div>
+          {lines.length ? (
+            <div ref={viewerRef}>
+              <RealServiceLogViewer
+                key={`${service.id}:${selectedSource}:${logInfo?.path ?? 'default'}`}
+                service={service}
+                paused={paused}
+                lines={lines}
+                loadingOlder={loadingOlder}
+                hasMore={hasMore}
+                onScroll={handleViewerScroll}
+              />
+            </div>
+          ) : (
+            <ServiceLogEmptyState
+              service={service}
+              logInfo={logInfo}
+              overview={logOverview}
+              sourceLabel={sourceLabel}
+            />
+          )}
+        </>
       )}
     </div>
   )
@@ -653,6 +863,8 @@ export function Logs() {
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
   const effectiveSelectedServiceId = searchState.service ?? selectedServiceId
+  const selectedSource = (searchState.source ??
+    ALL_LOG_SOURCE) as ServiceLogType
 
   const filteredServices = useMemo(() => {
     const normalized = serviceQuery.trim().toLowerCase()
@@ -680,6 +892,17 @@ export function Logs() {
       search: (previous) => ({
         ...(previous as Record<string, unknown>),
         service: serviceId,
+        source: searchState.source,
+      }),
+    })
+  }
+
+  const selectSource = (source: ServiceLogType) => {
+    void navigate({
+      search: (previous) => ({
+        ...(previous as Record<string, unknown>),
+        service: selectedService?.id,
+        source: source === ALL_LOG_SOURCE ? undefined : source,
       }),
     })
   }
@@ -761,11 +984,11 @@ export function Logs() {
                 </CardHeader>
                 <CardContent>
                   <div className='text-sm font-medium'>
-                    {selectedService?.metadata.logPath ?? 'Resolved by API'}
+                    {labelForLogSource(selectedSource)}
                   </div>
                   <p className='text-xs text-muted-foreground'>
-                    The browser only requests service + type. The server
-                    resolves the real path.
+                    Deep links can focus service and source. The server resolves
+                    the real path.
                   </p>
                 </CardContent>
               </Card>
@@ -872,6 +1095,8 @@ export function Logs() {
                 <CardContent>
                   <ServiceLazyLogViewer
                     service={selectedService}
+                    selectedSource={selectedSource}
+                    onSourceChange={selectSource}
                     paused={paused}
                   />
                 </CardContent>
