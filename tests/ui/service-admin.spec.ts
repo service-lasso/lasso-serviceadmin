@@ -105,16 +105,19 @@ test('services table filters and opens service detail', async ({ page }) => {
   ).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Start service', exact: true })
-  ).toBeEnabled()
+  ).toBeDisabled()
   await expect(
     page.getByRole('button', { name: 'Start service', exact: true })
-  ).toHaveClass(/hover:bg-emerald-600/)
+  ).toHaveAttribute('title', 'Start service unavailable for Service Admin UI')
   await expect(
     page.getByRole('button', { name: 'Stop service', exact: true })
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Stop service', exact: true })
   ).toHaveClass(/hover:bg-red-600/)
+  await expect(
+    page.getByRole('button', { name: 'Restart service', exact: true })
+  ).toBeDisabled()
   await page.getByRole('tab', { name: /variables/i }).click()
   await expect(page.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toBeVisible()
 })

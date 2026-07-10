@@ -189,6 +189,50 @@ describe('service detail overview metadata table', () => {
 })
 
 describe('service detail quick actions', () => {
+  it('puts primary lifecycle controls in the header without duplicate overview actions', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const lifecycleControls = within(
+      screen.getByTestId('service-detail-lifecycle-controls')
+    )
+
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Start service' })
+    ).toBeDisabled()
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Stop service' })
+    ).toBeEnabled()
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Restart service' })
+    ).toBeDisabled()
+
+    expect(
+      screen.getAllByRole('button', { name: 'Start service' })
+    ).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: 'Stop service' })
+    ).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: 'Restart service' })
+    ).toHaveLength(1)
+
+    await user.click(
+      lifecycleControls.getByRole('button', { name: 'Stop service' })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Stopped')).toBeVisible()
+    })
+  })
+
   it('keeps jump actions in the header and removes duplicate log-panel actions', async () => {
     const user = userEvent.setup()
 
