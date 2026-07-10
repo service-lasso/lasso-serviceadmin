@@ -4,7 +4,7 @@ import { renderRoute } from './render-route'
 
 type ScreenCase = {
   path: string
-  heading: RegExp
+  heading?: RegExp
   title?: string
 }
 
@@ -16,7 +16,6 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/services',
-    heading: /^Services$/i,
     title: 'Service Admin - Services',
   },
   {
@@ -137,15 +136,36 @@ describe('app screens', () => {
   it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
     await renderRoute(path)
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: heading })).toBeVisible()
-    })
+    if (heading) {
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: heading })).toBeVisible()
+      })
+    }
 
     if (title) {
       await waitFor(() => {
         expect(document.title).toBe(title)
       })
     }
+  })
+
+  it('moves Services page identity into the header without a duplicated body heading', async () => {
+    await renderRoute('/services')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-page-identity')).toHaveAccessibleName(
+        'Current page: Services'
+      )
+    })
+
+    expect(
+      screen.queryByRole('heading', { name: /^Services$/i })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        /Manage Service Lasso services, inspect runtime state, and open the detail view/i
+      )
+    ).not.toBeInTheDocument()
   })
 
   it.each(removedSecretsBrokerRoutes)(
