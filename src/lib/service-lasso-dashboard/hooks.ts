@@ -85,16 +85,35 @@ export function useDashboardAction() {
           'Start services request accepted. Services status refreshed.'
         )
       }
+
+      if (typeof action === 'object' && action.kind === 'service-lifecycle') {
+        const label = {
+          start: 'Start service',
+          stop: 'Stop service',
+          restart: 'Restart service',
+        }[action.action]
+
+        toast.success(`${label} request accepted. Service status refreshed.`)
+      }
     },
     onError: (error, action) => {
-      if (action !== 'reload-runtime' && action !== 'start-services') {
+      const isLifecycleAction =
+        typeof action === 'object' && action.kind === 'service-lifecycle'
+
+      if (
+        action !== 'reload-runtime' &&
+        action !== 'start-services' &&
+        !isLifecycleAction
+      ) {
         return
       }
 
       const fallback =
         action === 'reload-runtime'
           ? 'Runtime reload failed. Check the Service Lasso runtime API logs.'
-          : 'Start services failed. Check the Service Lasso runtime API logs.'
+          : action === 'start-services'
+            ? 'Start services failed. Check the Service Lasso runtime API logs.'
+            : 'Service lifecycle action failed. Check the Service Lasso runtime API logs.'
 
       const message =
         error instanceof Error && error.message.trim()

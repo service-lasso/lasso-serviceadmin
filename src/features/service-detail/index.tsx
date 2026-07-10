@@ -34,6 +34,7 @@ import {
   ScrollText,
   Send,
   Split,
+  Square,
   Terminal,
   Undo2,
   Wrench,
@@ -1464,6 +1465,114 @@ function ServiceDetailQuickAction({
   )
 }
 
+type LifecycleActionKind = Extract<
+  ServiceAction['kind'],
+  'start' | 'stop' | 'restart'
+>
+
+const lifecycleHeaderActions: Array<{
+  kind: LifecycleActionKind
+  label: string
+  icon: ReactNode
+}> = [
+  { kind: 'start', label: 'Start service', icon: <Play className='size-4' /> },
+  { kind: 'stop', label: 'Stop service', icon: <Square className='size-4' /> },
+  {
+    kind: 'restart',
+    label: 'Restart service',
+    icon: <RefreshCw className='size-4' />,
+  },
+]
+
+function isLifecycleAction(action: ServiceAction): action is ServiceAction & {
+  kind: LifecycleActionKind
+} {
+  return (
+    action.kind === 'start' ||
+    action.kind === 'stop' ||
+    action.kind === 'restart'
+  )
+}
+
+function ServiceLifecycleHeaderControls({
+  service,
+}: {
+  service: DashboardService
+}) {
+  const actionMutation = useDashboardAction()
+  const isProvider =
+    service.role === 'provider' || service.metadata.serviceType === 'provider'
+  const availableActions = new Set(
+    service.actions.filter(isLifecycleAction).map((action) => action.kind)
+  )
+  const pendingAction =
+    typeof actionMutation.variables === 'object' &&
+    actionMutation.variables?.kind === 'service-lifecycle'
+      ? actionMutation.variables.action
+      : null
+
+  const runAction = (action: LifecycleActionKind) => {
+    actionMutation.mutate({
+      kind: 'service-lifecycle',
+      serviceId: service.id,
+      action,
+    })
+  }
+
+  return (
+    <div
+      className='flex flex-wrap items-center justify-center gap-2'
+      data-testid='service-detail-lifecycle-controls'
+    >
+      {lifecycleHeaderActions.map((action) => {
+        const isBlockedByState =
+          (action.kind === 'start' && service.status === 'running') ||
+          (action.kind !== 'start' && service.status === 'stopped')
+        const isAvailable =
+          availableActions.has(action.kind) &&
+          !isProvider &&
+          service.installed &&
+          !isBlockedByState
+        const isPending =
+          actionMutation.isPending && pendingAction === action.kind
+        const disabled = actionMutation.isPending || !isAvailable
+        const title = isAvailable
+          ? action.label
+          : `${action.label} unavailable for ${service.name}`
+
+        return (
+          <Tooltip key={action.kind}>
+            <TooltipTrigger asChild>
+              <span className='inline-flex'>
+                <Button
+                  type='button'
+                  size='icon'
+                  variant='outline'
+                  className={lifecycleActionButtonClass(
+                    action.kind,
+                    'size-10 shrink-0'
+                  )}
+                  aria-label={action.label}
+                  title={title}
+                  disabled={disabled}
+                  onClick={() => runAction(action.kind)}
+                >
+                  {isPending ? (
+                    <RefreshCw className='size-4 animate-spin' />
+                  ) : (
+                    action.icon
+                  )}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{title}</TooltipContent>
+          </Tooltip>
+        )
+      })}
+    </div>
+  )
+}
+
 function hasServiceSecretJourneyEntryPoint(service: DashboardService) {
   return (
     service.id === 'node-sample-service' ||
@@ -1767,10 +1876,13 @@ export function ServiceDetail({
         ) : (
           (() => {
             const service = serviceQuery.data
+            const secondaryActions = service.actions.filter(
+              (action) => !isLifecycleAction(action)
+            )
 
             return (
               <>
-                <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'>
                   <div className='space-y-3'>
                     <div className='flex items-center gap-3'>
                       <Button asChild size='sm' variant='outline'>
@@ -1791,8 +1903,9 @@ export function ServiceDetail({
                       </p>
                     </div>
                   </div>
+                  <ServiceLifecycleHeaderControls service={service} />
                   <div
-                    className='flex flex-wrap justify-start gap-2 sm:justify-end'
+                    className='flex flex-wrap justify-start gap-2 lg:justify-end'
                     data-testid='service-detail-quick-actions'
                   >
                     <ServiceDetailQuickAction label='Logs'>
@@ -1922,13 +2035,19 @@ export function ServiceDetail({
                           </CardTitle>
                         </CardHeader>
                         <CardContent className='flex flex-wrap gap-2'>
-                          {service.actions.map((action) => (
-                            <ServiceActionButton
-                              key={action.id}
-                              action={action}
-                              service={service}
-                            />
-                          ))}
+                          {secondaryActions.length ? (
+                            secondaryActions.map((action) => (
+                              <ServiceActionButton
+                                key={action.id}
+                                action={action}
+                                service={service}
+                              />
+                            ))
+                          ) : (
+                            <p className='text-sm text-muted-foreground'>
+                              No secondary actions are available.
+                            </p>
+                          )}
                         </CardContent>
                       </Card>
                     </div>
