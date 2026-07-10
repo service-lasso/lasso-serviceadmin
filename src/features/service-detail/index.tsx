@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Copy,
+  Eye,
   ExternalLink,
   HeartPulse,
   KeyRound,
@@ -1693,14 +1694,22 @@ function EnvironmentTable({
                     data-testid='service-detail-variable-actions'
                   >
                     <CopyValueButton value={variable.value} />
-                    <Button variant='outline' size='sm' asChild>
-                      <Link
-                        to='/variables'
-                        search={{ service: serviceId, key: variable.key }}
-                      >
-                        Open variables
-                      </Link>
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant='outline' size='icon' asChild>
+                          <Link
+                            to='/variables'
+                            search={{ service: serviceId, key: variable.key }}
+                            aria-label='View variable'
+                            title='View variable'
+                            className='size-7'
+                          >
+                            <Eye className='size-3.5' />
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>View variable</TooltipContent>
+                    </Tooltip>
                   </div>
                 </TableCell>
               </TableRow>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   type ColumnDef,
@@ -227,9 +227,12 @@ export function Variables({ service, search, navigate }: VariablesProps) {
   })
 
   const servicesQuery = useServices()
+  const focusedRowRef = useRef<HTMLTableRowElement | null>(null)
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'key', desc: false },
   ])
+  const focusedVariableKey =
+    typeof search.key === 'string' ? search.key : undefined
 
   const {
     globalFilter,
@@ -355,6 +358,22 @@ export function Variables({ service, search, navigate }: VariablesProps) {
     ensurePageInRange(table.getPageCount())
   }, [table, ensurePageInRange])
 
+  const visibleFocusedRowId = focusedVariableKey
+    ? table
+        .getRowModel()
+        .rows.find((row) => row.original.key === focusedVariableKey)?.id
+    : undefined
+
+  useEffect(() => {
+    if (!visibleFocusedRowId) return
+
+    focusedRowRef.current?.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+    })
+    focusedRowRef.current?.focus({ preventScroll: true })
+  }, [visibleFocusedRowId])
+
   return (
     <>
       <Header fixed>
@@ -450,25 +469,41 @@ export function Variables({ service, search, navigate }: VariablesProps) {
                 </TableHeader>
                 <TableBody>
                   {table.getRowModel().rows.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} className='group/row'>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            className={cn(
-                              'min-w-0 bg-background align-top group-hover/row:bg-muted',
-                              cell.column.columnDef.meta?.className,
-                              cell.column.columnDef.meta?.tdClassName
-                            )}
-                          >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
+                    table.getRowModel().rows.map((row) => {
+                      const isFocused = row.id === visibleFocusedRowId
+
+                      return (
+                        <TableRow
+                          key={row.id}
+                          ref={isFocused ? focusedRowRef : undefined}
+                          className={cn(
+                            'group/row outline-none',
+                            isFocused &&
+                              'ring-2 ring-primary/55 ring-offset-2 ring-offset-background'
+                          )}
+                          tabIndex={isFocused ? -1 : undefined}
+                          data-variable-focused={isFocused ? 'true' : undefined}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell
+                              key={cell.id}
+                              className={cn(
+                                'min-w-0 bg-background align-top group-hover/row:bg-muted',
+                                isFocused &&
+                                  'bg-primary/10 group-hover/row:bg-primary/15',
+                                cell.column.columnDef.meta?.className,
+                                cell.column.columnDef.meta?.tdClassName
+                              )}
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      )
+                    })
                   ) : (
                     <TableRow>
                       <TableCell

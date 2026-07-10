@@ -158,7 +158,12 @@ test('service detail variables table keeps long values inside their columns', as
   expect(valueFitsColumn).toBe(true)
 
   await expect(row.getByTestId('service-detail-variable-actions')).toBeVisible()
-  await expect(row.getByRole('link', { name: 'Open variables' })).toBeVisible()
+  const viewVariableLink = row.getByRole('link', { name: 'View variable' })
+  await expect(viewVariableLink).toBeVisible()
+  await expect(viewVariableLink).toHaveAttribute(
+    'href',
+    /\/variables\?service=%40serviceadmin&key=/
+  )
 })
 
 test('service detail tabs are deep-linkable and restore through browser history', async ({
