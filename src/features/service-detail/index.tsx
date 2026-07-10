@@ -49,6 +49,7 @@ import {
   buildServiceNodeStyle,
   getServiceNodeImage,
 } from '@/lib/service-graph'
+import { renderServiceEndpointUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import {
   useDashboardAction,
@@ -134,6 +135,24 @@ const editableShortcutTargetSelector = [
   '.xterm',
 ].join(', ')
 
+type EndpointAccessLocation = Parameters<typeof renderServiceEndpointUrl>[1]
+
+export function buildServiceEndpointDisplayRows(
+  endpoints: ServiceEndpoint[],
+  accessLocation?: EndpointAccessLocation
+) {
+  return endpoints.map((endpoint) => {
+    const endpointUrl = renderServiceEndpointUrl(endpoint, accessLocation)
+
+    return {
+      endpoint,
+      endpointUrl,
+      hasResolvedUrl: Boolean(endpointUrl),
+      showSourceUrl: Boolean(endpointUrl) && endpointUrl !== endpoint.url,
+    }
+  })
+}
+
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
     return (
@@ -204,8 +223,14 @@ function canOpenEndpointUrl(url: string) {
   }
 }
 
-function EndpointRowActions({ endpoint }: { endpoint: ServiceEndpoint }) {
-  const canOpen = canOpenEndpointUrl(endpoint.url)
+function EndpointRowActions({
+  endpoint,
+  endpointUrl,
+}: {
+  endpoint: ServiceEndpoint
+  endpointUrl: string
+}) {
+  const canOpen = canOpenEndpointUrl(endpointUrl)
 
   return (
     <div className='flex items-center gap-1'>
@@ -223,7 +248,7 @@ function EndpointRowActions({ endpoint }: { endpoint: ServiceEndpoint }) {
         disabled={!canOpen}
       >
         {canOpen ? (
-          <a href={endpoint.url} target='_blank' rel='noreferrer'>
+          <a href={endpointUrl} target='_blank' rel='noreferrer'>
             <ExternalLink className='size-3.5' />
             <span className='sr-only'>Open {endpoint.label} endpoint</span>
           </a>
@@ -237,7 +262,7 @@ function EndpointRowActions({ endpoint }: { endpoint: ServiceEndpoint }) {
         )}
       </Button>
       <CopyValueButton
-        value={endpoint.url}
+        value={endpointUrl}
         label={`Copy ${endpoint.label} URL`}
       />
       <Button
@@ -250,7 +275,7 @@ function EndpointRowActions({ endpoint }: { endpoint: ServiceEndpoint }) {
       >
         <Link
           to='/service-routes'
-          search={{ route: endpoint.url, page: 1, pageSize: 10 }}
+          search={{ route: endpointUrl, page: 1, pageSize: 10 }}
         >
           <Network className='size-3.5' />
           <span className='sr-only'>
@@ -263,6 +288,8 @@ function EndpointRowActions({ endpoint }: { endpoint: ServiceEndpoint }) {
 }
 
 function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
+  const rows = buildServiceEndpointDisplayRows(endpoints)
+
   return (
     <div className='overflow-x-auto rounded-md border'>
       <Table>
@@ -279,21 +306,37 @@ function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
         </TableHeader>
         <TableBody>
           {endpoints.length ? (
-            endpoints.map((endpoint) => (
-              <TableRow key={`${endpoint.label}-${endpoint.url}`}>
-                <TableCell className='font-medium'>{endpoint.label}</TableCell>
-                <TableCell>{endpoint.protocol.toUpperCase()}</TableCell>
-                <TableCell>{endpoint.bind}</TableCell>
-                <TableCell>{endpoint.port}</TableCell>
-                <TableCell>{endpoint.exposure}</TableCell>
-                <TableCell className='max-w-[360px] min-w-[220px] font-mono text-xs break-all text-muted-foreground'>
-                  {endpoint.url || 'No URL recorded'}
-                </TableCell>
-                <TableCell>
-                  <EndpointRowActions endpoint={endpoint} />
-                </TableCell>
-              </TableRow>
-            ))
+            rows.map(
+              ({ endpoint, endpointUrl, hasResolvedUrl, showSourceUrl }) => {
+                return (
+                  <TableRow key={`${endpoint.label}-${endpoint.url}`}>
+                    <TableCell className='font-medium'>
+                      {endpoint.label}
+                    </TableCell>
+                    <TableCell>{endpoint.protocol.toUpperCase()}</TableCell>
+                    <TableCell>{endpoint.bind}</TableCell>
+                    <TableCell>{endpoint.port}</TableCell>
+                    <TableCell>{endpoint.exposure}</TableCell>
+                    <TableCell className='max-w-[360px] min-w-[220px] font-mono text-xs break-all text-muted-foreground'>
+                      <div>
+                        {hasResolvedUrl ? endpointUrl : 'No URL recorded'}
+                      </div>
+                      {showSourceUrl ? (
+                        <div className='mt-1 text-[11px] text-muted-foreground/75'>
+                          Source: {endpoint.url}
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <EndpointRowActions
+                        endpoint={endpoint}
+                        endpointUrl={endpointUrl}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )
+              }
+            )
           ) : (
             <TableRow>
               <TableCell colSpan={7} className='h-20 text-center'>

@@ -7,6 +7,7 @@ import {
   __setStubServicesForTest,
 } from '@/lib/service-lasso-dashboard/stub'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import { buildServiceEndpointDisplayRows } from './index'
 import { buildMetadataTableRows } from './metadata-table'
 
 vi.mock('@/lib/service-lasso-dashboard/client', async () => {
@@ -1283,6 +1284,31 @@ describe('service detail server.json config editor', () => {
 })
 
 describe('service detail endpoints table', () => {
+  it('builds host-aware endpoint URLs for non-local admin access', () => {
+    const [row] = buildServiceEndpointDisplayRows(
+      [
+        {
+          label: 'Local HTTP',
+          url: 'http://127.0.0.1:4020/health?probe=1#ready',
+          bind: '127.0.0.1',
+          port: 4020,
+          protocol: 'http',
+          exposure: 'local',
+        },
+      ],
+      {
+        protocol: 'http:',
+        hostname: '192.168.1.53',
+        host: '192.168.1.53:17700',
+      } as Location
+    )
+
+    expect(row.endpointUrl).toBe(
+      'http://192.168.1.53:4020/health?probe=1#ready'
+    )
+    expect(row.showSourceUrl).toBe(true)
+  })
+
   it('renders actual endpoint URLs with open, copy, and route inventory actions', async () => {
     const user = userEvent.setup()
     const writeText = vi.fn().mockResolvedValue(undefined)
