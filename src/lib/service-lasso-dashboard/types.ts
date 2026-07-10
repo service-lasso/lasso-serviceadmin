@@ -138,6 +138,61 @@ export type DashboardAction =
       action: 'start' | 'stop' | 'restart'
     }
 
+export type AuditEventOutcome = 'success' | 'failure'
+
+export type AuditEvent = {
+  id: string
+  timestamp: string
+  source: string
+  action: string
+  actor: string
+  subject?: string
+  serviceId?: string
+  method?: string
+  routeTemplate?: string
+  outcome: AuditEventOutcome
+  statusCode: number
+  summary: string
+  reason: string | null
+  correlationId: string
+  relatedRevisionId: string | null
+  chainId: string
+  sequence: number
+  previousHash: string | null
+  eventHash: string
+  chainStatus: 'valid'
+}
+
+export type AuditEventsFilters = {
+  serviceId?: string
+  actor?: string
+  action?: string
+  outcome?: AuditEventOutcome
+  source?: string
+  since?: string
+  until?: string
+  query?: string
+  limit?: number
+  cursor?: string
+}
+
+export type AuditEventsPagination = {
+  limit: number
+  nextCursor: string | null
+  total: number
+}
+
+export type AuditEventsResponse = {
+  events: AuditEvent[]
+  pagination: AuditEventsPagination
+}
+
+export type AuditEventsResult = AuditEventsResponse & {
+  status: 'available' | 'unavailable'
+  stubMode: boolean
+  unavailableReason: string | null
+}
+
 export type ServiceConfigRevision = {
   id: string
   createdAt: string

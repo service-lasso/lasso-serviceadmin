@@ -262,6 +262,115 @@ describe('service lasso dashboard runtime client', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('fetches runtime audit events with filters and pagination', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const auditEvent = {
+      id: 'audit-1',
+      timestamp: '2026-06-28T04:15:00.000Z',
+      source: 'runtime',
+      action: 'service.config.save',
+      actor: 'operator-ui',
+      subject: 'server.json',
+      serviceId: '@serviceadmin',
+      method: 'PUT',
+      routeTemplate: '/api/services/:serviceId/config',
+      outcome: 'success',
+      statusCode: 200,
+      summary: 'Config saved with metadata-only audit event.',
+      reason: 'routine update',
+      correlationId: 'correlation-1',
+      relatedRevisionId: 'revision-1',
+      chainId: 'service:@serviceadmin',
+      sequence: 2,
+      previousHash: 'previous-hash',
+      eventHash: 'event-hash',
+      chainStatus: 'valid',
+    }
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (
+        url ===
+        'http://runtime.test/api/audit?serviceId=%40serviceadmin&action=service.config.save&outcome=success&limit=25&cursor=50'
+      ) {
+        return jsonResponse({
+          events: [auditEvent],
+          pagination: { limit: 25, nextCursor: null, total: 1 },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchAuditEvents } = await import('./client')
+
+    await expect(
+      fetchAuditEvents({
+        serviceId: '@serviceadmin',
+        action: 'service.config.save',
+        outcome: 'success',
+        limit: 25,
+        cursor: '50',
+      })
+    ).resolves.toEqual({
+      status: 'available',
+      stubMode: false,
+      unavailableReason: null,
+      events: [auditEvent],
+      pagination: { limit: 25, nextCursor: null, total: 1 },
+    })
+  })
+
+  it('reports the runtime audit API as unavailable on 404 without using stubs', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === 'http://runtime.test/api/audit?limit=10') {
+        return jsonResponse({ detail: 'not found' }, { status: 404 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchAuditEvents } = await import('./client')
+
+    await expect(fetchAuditEvents({ limit: 10 })).resolves.toEqual({
+      status: 'unavailable',
+      stubMode: false,
+      unavailableReason: 'Service Lasso runtime audit API is not available.',
+      events: [],
+      pagination: { limit: 10, nextCursor: null, total: 0 },
+    })
+  })
+
+  it('returns audit fixtures only when explicit stub mode is enabled', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchAuditEvents } = await import('./client')
+
+    const result = await fetchAuditEvents({
+      serviceId: '@serviceadmin',
+      outcome: 'failure',
+      limit: 1,
+    })
+
+    expect(result.status).toBe('available')
+    expect(result.stubMode).toBe(true)
+    expect(result.events).toHaveLength(1)
+    expect(result.events[0]).toMatchObject({
+      action: 'service.config.save',
+      serviceId: '@serviceadmin',
+      outcome: 'failure',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('runs bulk start through the runtime action API before refreshing dashboard status', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
 
