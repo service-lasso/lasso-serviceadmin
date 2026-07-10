@@ -5,6 +5,7 @@ import { useDashboardAction } from './hooks'
 import type { DashboardSummary } from './types'
 
 const mocks = vi.hoisted(() => ({
+  fetchAuditEvents: vi.fn(),
   runDashboardAction: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
@@ -19,9 +20,12 @@ vi.mock('sonner', () => ({
 
 vi.mock('./client', () => ({
   buildServiceLogUrl: vi.fn(),
+  fetchAuditEvents: mocks.fetchAuditEvents,
   fetchDashboardService: vi.fn(),
   fetchDashboardSummary: vi.fn(),
+  fetchServiceTelemetryPreview: vi.fn(),
   fetchServices: vi.fn(),
+  fetchTelemetryPreview: vi.fn(),
   runDashboardAction: mocks.runDashboardAction,
 }))
 
@@ -136,5 +140,35 @@ describe('useDashboardAction', () => {
       'Service Lasso runtime API returned 503: startAll failed because @postgres did not reach healthy state.'
     )
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
+  })
+})
+
+describe('useAuditEvents', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('passes audit filters to the runtime client hook', async () => {
+    mocks.fetchAuditEvents.mockResolvedValueOnce({
+      status: 'available',
+      stubMode: false,
+      unavailableReason: null,
+      events: [],
+      pagination: { limit: 10, nextCursor: null, total: 0 },
+    })
+
+    const { useAuditEvents } = await import('./hooks')
+    const filters = {
+      serviceId: '@serviceadmin',
+      outcome: 'success' as const,
+      limit: 10,
+    }
+
+    const { result } = renderHook(() => useAuditEvents(filters), { wrapper })
+
+    await vi.waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mocks.fetchAuditEvents).toHaveBeenCalledWith(filters)
+    expect(result.current.data?.pagination.limit).toBe(10)
   })
 })

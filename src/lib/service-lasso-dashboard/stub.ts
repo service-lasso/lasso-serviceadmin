@@ -1,4 +1,6 @@
 import type {
+  AuditEventsFilters,
+  AuditEventsResult,
   DashboardAction,
   DashboardService,
   DashboardSummary,
@@ -1001,6 +1003,133 @@ export async function fetchServiceTelemetryPreview(
     serviceId,
     signals,
   } satisfies ServiceTelemetryPreview)
+}
+
+const stubAuditEvents = [
+  {
+    id: 'stub-audit-runtime-reload',
+    timestamp: '2026-06-28T04:15:00.000Z',
+    source: 'service-admin',
+    action: 'runtime.reload',
+    actor: 'operator-ui',
+    outcome: 'success',
+    statusCode: 200,
+    summary: 'Runtime reload accepted from explicit Service Admin stub mode.',
+    reason: 'stub audit fixture',
+    correlationId: 'stub-correlation-runtime-reload',
+    relatedRevisionId: null,
+    chainId: 'runtime',
+    sequence: 1,
+    previousHash: null,
+    eventHash: 'stub-runtime-reload-hash',
+    chainStatus: 'valid',
+  },
+  {
+    id: 'stub-audit-service-start',
+    timestamp: '2026-06-28T04:10:00.000Z',
+    source: 'runtime',
+    action: 'service.lifecycle.start',
+    actor: 'operator-ui',
+    subject: 'start',
+    serviceId: '@serviceadmin',
+    method: 'POST',
+    routeTemplate: '/api/services/:serviceId/start',
+    outcome: 'success',
+    statusCode: 200,
+    summary: 'Service lifecycle start recorded in explicit stub mode.',
+    reason: 'stub audit fixture',
+    correlationId: 'stub-correlation-service-start',
+    relatedRevisionId: null,
+    chainId: 'service:@serviceadmin',
+    sequence: 1,
+    previousHash: null,
+    eventHash: 'stub-service-start-hash',
+    chainStatus: 'valid',
+  },
+  {
+    id: 'stub-audit-config-save',
+    timestamp: '2026-06-28T04:05:00.000Z',
+    source: 'runtime',
+    action: 'service.config.save',
+    actor: 'operator-ui',
+    subject: 'server.json',
+    serviceId: '@serviceadmin',
+    method: 'PUT',
+    routeTemplate: '/api/services/:serviceId/config',
+    outcome: 'failure',
+    statusCode: 409,
+    summary: 'Stub config save rejected by validation guard.',
+    reason: 'stub audit fixture',
+    correlationId: 'stub-correlation-config-save',
+    relatedRevisionId: 'stub-revision-config-save',
+    chainId: 'service:@serviceadmin',
+    sequence: 2,
+    previousHash: 'stub-service-start-hash',
+    eventHash: 'stub-config-save-hash',
+    chainStatus: 'valid',
+  },
+] satisfies AuditEventsResult['events']
+
+function filterStubAuditEvents(filters: AuditEventsFilters = {}) {
+  const query = filters.query?.trim().toLowerCase()
+
+  return stubAuditEvents.filter((event) => {
+    if (filters.serviceId && event.serviceId !== filters.serviceId) return false
+    if (filters.actor && event.actor !== filters.actor) return false
+    if (filters.action && event.action !== filters.action) return false
+    if (filters.outcome && event.outcome !== filters.outcome) return false
+    if (filters.source && event.source !== filters.source) return false
+    if (filters.since && event.timestamp < filters.since) return false
+    if (filters.until && event.timestamp > filters.until) return false
+
+    if (query) {
+      const haystack = [
+        event.id,
+        event.source,
+        event.action,
+        event.actor,
+        event.subject,
+        event.serviceId,
+        event.method,
+        event.routeTemplate,
+        event.summary,
+        event.reason,
+        event.relatedRevisionId,
+      ]
+        .filter((value): value is string => typeof value === 'string')
+        .join(' ')
+        .toLowerCase()
+
+      return haystack.includes(query)
+    }
+
+    return true
+  })
+}
+
+export async function fetchAuditEvents(
+  filters: AuditEventsFilters = {}
+): Promise<AuditEventsResult> {
+  await wait(120)
+
+  const limit = Math.max(1, Math.trunc(filters.limit ?? 100))
+  const cursor = Math.max(0, Number.parseInt(filters.cursor ?? '0', 10) || 0)
+  const events = filterStubAuditEvents(filters)
+  const page = events.slice(cursor, cursor + limit)
+  const nextCursor =
+    cursor + page.length < events.length ? String(cursor + page.length) : null
+
+  return structuredClone({
+    status: 'available',
+    stubMode: true,
+    unavailableReason: null,
+    events: page,
+    pagination: {
+      limit,
+      nextCursor,
+      total: events.length,
+    },
+  } satisfies AuditEventsResult)
 }
 
 export async function fetchDashboardService(serviceId: string) {

@@ -1,5 +1,6 @@
 import {
   buildStubServiceLogUrl,
+  fetchAuditEvents as fetchStubAuditEvents,
   fetchServiceConfigDocument as fetchStubServiceConfigDocument,
   fetchDashboardService as fetchStubDashboardService,
   fetchDashboardSummary as fetchStubDashboardSummary,
@@ -12,6 +13,9 @@ import {
   stubDashboardDataEnabled,
 } from './stub'
 import type {
+  AuditEventsFilters,
+  AuditEventsResponse,
+  AuditEventsResult,
   DashboardAction,
   DashboardService,
   DashboardSummary,
@@ -138,6 +142,82 @@ async function fetchRuntimeServiceTelemetryPreview(serviceId: string) {
   return payload.telemetry
 }
 
+function appendAuditFilter(
+  params: URLSearchParams,
+  key: keyof AuditEventsFilters,
+  value: AuditEventsFilters[keyof AuditEventsFilters]
+) {
+  if (value === undefined || value === null || value === '') return
+  params.set(key, String(value))
+}
+
+function buildAuditQueryString(filters: AuditEventsFilters = {}) {
+  const params = new URLSearchParams()
+
+  appendAuditFilter(params, 'serviceId', filters.serviceId)
+  appendAuditFilter(params, 'actor', filters.actor)
+  appendAuditFilter(params, 'action', filters.action)
+  appendAuditFilter(params, 'outcome', filters.outcome)
+  appendAuditFilter(params, 'source', filters.source)
+  appendAuditFilter(params, 'since', filters.since)
+  appendAuditFilter(params, 'until', filters.until)
+  appendAuditFilter(params, 'query', filters.query)
+  appendAuditFilter(params, 'limit', filters.limit)
+  appendAuditFilter(params, 'cursor', filters.cursor)
+
+  const queryString = params.toString()
+  return queryString ? `?${queryString}` : ''
+}
+
+async function fetchRuntimeAuditEvents(
+  filters: AuditEventsFilters = {}
+): Promise<AuditEventsResult> {
+  const pathname = `/api/audit${buildAuditQueryString(filters)}`
+  const response = await fetch(buildApiUrl(pathname))
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (response.status === 404) {
+    return {
+      status: 'unavailable',
+      stubMode: false,
+      unavailableReason: 'Service Lasso runtime audit API is not available.',
+      events: [],
+      pagination: {
+        limit: filters.limit ?? 100,
+        nextCursor: null,
+        total: 0,
+      },
+    }
+  }
+
+  if (!response.ok) {
+    const body = await readResponseBody(response, contentType)
+    const bodyMessage =
+      typeof body === 'string' && body.trim()
+        ? body.trim()
+        : readApiErrorMessage(body)
+    const suffix = bodyMessage ? `: ${bodyMessage}` : '.'
+
+    throw new Error(
+      `Service Lasso audit API returned ${response.status}${suffix}`
+    )
+  }
+
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new Error('Service Lasso audit API returned non-JSON content.')
+  }
+
+  const payload = (await response.json()) as AuditEventsResponse
+
+  return {
+    status: 'available',
+    stubMode: false,
+    unavailableReason: null,
+    events: payload.events,
+    pagination: payload.pagination,
+  }
+}
+
 async function updateRuntimeFavorite(serviceId: string) {
   const service = await fetchRuntimeDashboardService(serviceId)
   if (!service) {
@@ -226,6 +306,14 @@ export async function fetchServiceTelemetryPreview(serviceId: string) {
   }
 
   return fetchRuntimeServiceTelemetryPreview(serviceId)
+}
+
+export async function fetchAuditEvents(filters: AuditEventsFilters = {}) {
+  if (stubDashboardDataEnabled) {
+    return fetchStubAuditEvents(filters)
+  }
+
+  return fetchRuntimeAuditEvents(filters)
 }
 
 export async function fetchServiceConfigDocument(serviceId: string) {

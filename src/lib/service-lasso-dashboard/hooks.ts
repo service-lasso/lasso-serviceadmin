@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   buildServiceLogUrl,
+  fetchAuditEvents,
   fetchDashboardService,
   fetchDashboardSummary,
   fetchServiceTelemetryPreview,
@@ -10,7 +11,11 @@ import {
   runDashboardAction,
 } from './client'
 import { favoritesMutationEnabled } from './stub'
-import type { DashboardAction, DashboardService } from './types'
+import type {
+  AuditEventsFilters,
+  DashboardAction,
+  DashboardService,
+} from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
 
@@ -39,6 +44,13 @@ export function useServiceTelemetryPreview(serviceId: string) {
   return useQuery({
     queryKey: [...dashboardQueryKey, serviceId, 'telemetry-preview'],
     queryFn: () => fetchServiceTelemetryPreview(serviceId),
+  })
+}
+
+export function useAuditEvents(filters: AuditEventsFilters = {}) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, 'audit-events', filters],
+    queryFn: () => fetchAuditEvents(filters),
   })
 }
 
