@@ -12,7 +12,8 @@ type HeaderProps = React.HTMLAttributes<HTMLElement> & {
 }
 
 function findActiveNavItem(pathname: string): NavItem | undefined {
-  const normalizedPath = pathname === '/' ? pathname : pathname.replace(/\/$/, '')
+  const normalizedPath =
+    pathname === '/' ? pathname : pathname.replace(/\/$/, '')
 
   for (const group of sidebarData.navGroups) {
     for (const item of group.items) {

@@ -226,13 +226,7 @@ export function HelpCenter() {
       </Header>
 
       <Main fluid className='flex h-full flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Help Center</h2>
-            <p className='text-muted-foreground'>
-              Guides and runbooks for operating local Service Lasso services.
-            </p>
-          </div>
+        <div className='flex flex-wrap items-end justify-end gap-2'>
           <div className='flex flex-wrap gap-2'>
             <Button variant='outline' size='sm' asChild>
               <Link to='/services'>Services</Link>

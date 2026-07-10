@@ -174,15 +174,6 @@ function DashboardLoading() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
-            <p className='text-muted-foreground'>
-              Monitor runtime health, launch service actions, and jump to the
-              services you use most.
-            </p>
-          </div>
-        </div>
         <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
           {Array.from({ length: 4 }).map((_, index) => (
             <Card key={index}>
@@ -241,12 +232,6 @@ function DashboardUnavailable({ error }: { error: unknown }) {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div>
-          <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
-          <p className='text-muted-foreground'>
-            Service Admin needs a live Service Lasso runtime API.
-          </p>
-        </div>
         <Card className='border-amber-500/40'>
           <CardHeader>
             <CardTitle className='flex items-center gap-2'>
@@ -312,15 +297,6 @@ export function Dashboard() {
 
       {/* ===== Main ===== */}
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
-            <p className='text-muted-foreground'>
-              Monitor runtime health, launch service actions, and jump to the
-              services you use most.
-            </p>
-          </div>
-        </div>
         <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
           <SummaryCard
             title='Runtime health'
