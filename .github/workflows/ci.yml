@@ -42,10 +42,6 @@ jobs:
       - name: Build the project
         run: npm run build
 
-      - name: Install Playwright dependencies
-        timeout-minutes: 10
-        run: npx playwright install-deps chromium
-
       - name: Verify hosted Chrome
         run: google-chrome --version
 
