@@ -148,4 +148,22 @@ describe('variables page', () => {
       screen.queryByText('${serviceadmin.SESSION_SECRET}')
     ).not.toBeInTheDocument()
   })
+
+  it('focuses and highlights a variable from a direct key deep link', async () => {
+    await renderRoute(
+      '/variables?service=%40serviceadmin&key=SERVICE_LASSO_API_BASE_URL'
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('SERVICE_LASSO_API_BASE_URL')).toBeVisible()
+    })
+    expect(screen.queryByText('WORKER_QUEUE_URL')).not.toBeInTheDocument()
+
+    const row = screen.getByText('SERVICE_LASSO_API_BASE_URL').closest('tr')
+    expect(row).toHaveAttribute('data-variable-focused', 'true')
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(row)
+    })
+  })
 })
