@@ -21,6 +21,12 @@ async function expectNoBlankScreen(page: Page) {
   await expect(page.getByText(/no active session/i)).toHaveCount(0)
 }
 
+async function expectActivePageIdentity(page: Page, identity: string) {
+  await expect(page.getByTestId('active-page-identity')).toHaveAccessibleName(
+    `Current page: ${identity}`
+  )
+}
+
 async function expectNoSecretMaterial(page: Page) {
   const visibleText = await page.locator('body').innerText()
 
@@ -73,9 +79,7 @@ test.describe('Secrets Broker browser coverage', () => {
 
     await expect(page).toHaveURL(/\/secrets-broker$/)
     await expectNoBlankScreen(page)
-    await expect(
-      page.getByRole('heading', { name: /^Overview$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity(page, 'Overview')
     await expect(page.getByText(/@secretsbroker overview/i)).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'View providers' })
@@ -134,7 +138,7 @@ test.describe('Secrets Broker browser coverage', () => {
   }) => {
     await page.goto('/secrets-broker/secrets')
     await expectNoBlankScreen(page)
-    await expect(page.getByRole('heading', { name: /^Secrets$/ })).toBeVisible()
+    await expectActivePageIdentity(page, 'Secrets')
     await expect(page.getByText(/Operator queue/i)).toBeVisible()
     await expect(page.getByText(/Find a ref/i)).toBeVisible()
     await expect(page.getByText(/Pick row action/i)).toBeVisible()
@@ -1162,17 +1166,38 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     const sections = [
-      ['/secrets-broker/sources', /Secrets Broker providers/i],
-      ['/secrets-broker/configuration', /^Configuration$/i],
-      ['/secrets-broker/backup-keys', /Local encrypted store/i],
-      ['/secrets-broker/topology', /Secrets Broker topology/i],
-      ['/operations/audit-logging', /^Audit$/i],
+      {
+        path: '/secrets-broker/sources',
+        identity: 'Providers',
+      },
+      {
+        path: '/secrets-broker/configuration',
+        identity: 'Configuration',
+      },
+      {
+        path: '/secrets-broker/backup-keys',
+        visibleText: /Local encrypted store/i,
+      },
+      {
+        path: '/secrets-broker/topology',
+        identity: 'Topology',
+      },
+      {
+        path: '/operations/audit-logging',
+        identity: 'Audit',
+      },
     ] as const
 
-    for (const [path, label] of sections) {
+    for (const section of sections) {
+      const { path } = section
       await page.goto(path)
       await expectNoBlankScreen(page)
-      await expect(page.getByText(label).first()).toBeVisible()
+      if ('identity' in section) {
+        await expectActivePageIdentity(page, section.identity)
+      }
+      if ('visibleText' in section) {
+        await expect(page.getByText(section.visibleText).first()).toBeVisible()
+      }
       await expectNoSecretMaterial(page)
     }
 
@@ -1242,9 +1267,7 @@ test.describe('Secrets Broker browser coverage', () => {
   }) => {
     await page.goto('/secrets-broker/sources')
     await expectNoBlankScreen(page)
-    await expect(
-      page.getByRole('heading', { name: /Secrets Broker providers/i })
-    ).toBeVisible()
+    await expectActivePageIdentity(page, 'Providers')
     await expect(page.getByText(/Local encrypted store/i).first()).toBeVisible()
 
     await page.getByRole('button', { name: /^Actions$/i }).click()
