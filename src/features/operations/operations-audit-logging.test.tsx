@@ -227,7 +227,8 @@ describe('Operations Audit page', () => {
       target: { value: '' },
     })
     await user.click(screen.getAllByRole('button', { name: /^Source$/i })[0])
-    await user.click(screen.getAllByText('Secrets Broker').at(-1)!)
+    const secretsBrokerOptions = screen.getAllByText('Secrets Broker')
+    await user.click(secretsBrokerOptions[secretsBrokerOptions.length - 1])
 
     expect(screen.queryByText(/service config save/i)).not.toBeInTheDocument()
     expect(screen.getByText(/secret rotated/i)).toBeVisible()
