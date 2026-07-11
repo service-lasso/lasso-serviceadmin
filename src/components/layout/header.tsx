@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useRouterState } from '@tanstack/react-router'
+import { Settings, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -11,7 +12,20 @@ type HeaderProps = React.HTMLAttributes<HTMLElement> & {
   ref?: React.Ref<HTMLElement>
 }
 
-function findActiveNavItem(pathname: string): NavItem | undefined {
+type ActivePageIdentity = Pick<NavItem, 'title' | 'icon'>
+
+const headerRouteFallbacks = {
+  '/settings': {
+    title: 'Settings',
+    icon: Settings,
+  },
+  '/secrets-broker/configuration': {
+    title: 'Configuration',
+    icon: Wrench,
+  },
+} satisfies Record<string, ActivePageIdentity>
+
+function findActiveNavItem(pathname: string): ActivePageIdentity | undefined {
   const normalizedPath =
     pathname === '/' ? pathname : pathname.replace(/\/$/, '')
 
@@ -33,6 +47,12 @@ function findActiveNavItem(pathname: string): NavItem | undefined {
         return item
       }
     }
+  }
+
+  if (normalizedPath in headerRouteFallbacks) {
+    return headerRouteFallbacks[
+      normalizedPath as keyof typeof headerRouteFallbacks
+    ]
   }
 
   return undefined

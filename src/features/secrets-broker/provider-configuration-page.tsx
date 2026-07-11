@@ -6,7 +6,6 @@ import {
   KeyRound,
   PlugZap,
   ShieldCheck,
-  Wrench,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
@@ -215,16 +214,7 @@ export function ProviderConfigurationPage() {
       </Header>
 
       <Main id='content' className='space-y-6'>
-        <div className='flex flex-wrap items-start justify-between gap-4'>
-          <div>
-            <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
-              <Wrench className='size-5' /> Configuration
-            </h1>
-            <p className='mt-1 text-muted-foreground'>
-              Configure provider handles, validate capability, and dry-run ref
-              migration.
-            </p>
-          </div>
+        <div className='flex flex-wrap justify-end gap-4'>
           <Badge variant='secondary'>Handles only · dry-run first</Badge>
         </div>
 

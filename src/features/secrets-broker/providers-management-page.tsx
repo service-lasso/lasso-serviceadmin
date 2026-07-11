@@ -16,7 +16,6 @@ import {
 import {
   Ban,
   CirclePlus,
-  KeyRound,
   MoreHorizontal,
   PlugZap,
   RefreshCw,
@@ -768,15 +767,7 @@ export function ProvidersManagementPage() {
       </Header>
 
       <Main id='content' className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-3'>
-          <div>
-            <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
-              <KeyRound className='size-5' /> Secrets Broker providers
-            </h1>
-            <p className='text-muted-foreground'>
-              Configured provider state, health, and row actions.
-            </p>
-          </div>
+        <div className='flex flex-wrap justify-end gap-3'>
           <div className='flex flex-wrap gap-2'>
             <Badge variant='secondary'>Metadata only</Badge>
             <Button

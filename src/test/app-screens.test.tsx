@@ -56,17 +56,18 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/secrets-broker',
-    heading: /^Overview$/i,
     title: 'Service Admin - Secrets Broker Overview',
   },
   {
+    path: '/secrets-broker/secrets',
+    title: 'Service Admin - Secrets Broker Secrets',
+  },
+  {
     path: '/secrets-broker/sources',
-    heading: /^Secrets Broker providers$/i,
     title: 'Service Admin - Secrets Broker Providers',
   },
   {
     path: '/secrets-broker/configuration',
-    heading: /^Configuration$/i,
     title: 'Service Admin - Secrets Broker Configuration',
   },
   {
@@ -177,6 +178,43 @@ const headerIdentityRoutes: HeaderIdentityCase[] = [
     identity: 'Topology',
     removedHeading: /^Secrets Broker topology$/i,
     removedCopy: /Service variables, SecretRef mappings/i,
+  },
+  {
+    path: '/secrets-broker',
+    identity: 'Overview',
+    removedHeading: /^Overview$/i,
+    removedCopy: /Secrets Broker runtime posture/i,
+  },
+  {
+    path: '/secrets-broker/secrets',
+    identity: 'Secrets',
+    removedHeading: /^Secrets$/i,
+    removedCopy: /Rows never render raw secret values|without raw values/i,
+  },
+  {
+    path: '/secrets-broker/sources',
+    identity: 'Providers',
+    removedHeading: /^Secrets Broker providers$/i,
+    removedCopy: /Configured provider state, health, and row actions/i,
+  },
+  {
+    path: '/secrets-broker/configuration',
+    identity: 'Configuration',
+    removedHeading: /^Configuration$/i,
+    removedCopy: /Configure provider handles, validate capability/i,
+  },
+  {
+    path: '/logs',
+    identity: 'Logs',
+    removedHeading: /^Logs$/i,
+    removedCopy:
+      /Safe service log viewer backed by service-resolved API endpoints/i,
+  },
+  {
+    path: '/settings',
+    identity: 'Settings',
+    removedHeading: /^Settings$/i,
+    removedCopy: /Tune the Service Lasso admin surface/i,
   },
   {
     path: '/operations/telemetry',
