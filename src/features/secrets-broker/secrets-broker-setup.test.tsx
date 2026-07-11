@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import {
   assertNoSecretMaterial,
@@ -115,9 +116,7 @@ describe('Secrets Broker overview dashboard', () => {
   it('shows the operator overview without setup-wall or plaintext values', async () => {
     await renderRoute('/secrets-broker')
 
-    expect(
-      await screen.findByRole('heading', { name: /^Overview$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Overview')
     expect(screen.getAllByText(/Values hidden/i)[0]).toBeVisible()
     expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
     expect(screen.getByText(/Ready providers/i)).toBeVisible()
@@ -264,7 +263,7 @@ describe('Secrets Broker overview dashboard', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/operations/audit-logging')
     })
-    expect(screen.getByRole('heading', { name: /^Audit$/i })).toBeVisible()
+    await expectActivePageIdentity('Audit')
     expect(
       screen.queryByRole('heading', { name: /^Operational Controls$/i })
     ).not.toBeInTheDocument()
@@ -272,9 +271,9 @@ describe('Secrets Broker overview dashboard', () => {
   })
 
   it('keeps overview action-oriented and provider setup detail on the providers page', async () => {
-    await renderRoute('/secrets-broker')
+    const overview = await renderRoute('/secrets-broker')
 
-    expect(screen.getByRole('heading', { name: /^Overview$/i })).toBeVisible()
+    await expectActivePageIdentity('Overview')
     expect(screen.getByText(/Reconnect required/i)).toBeVisible()
     expect(screen.getByText(/Recent denied requests/i)).toBeVisible()
     expect(
@@ -282,11 +281,10 @@ describe('Secrets Broker overview dashboard', () => {
     ).not.toBeInTheDocument()
     expect(screen.queryByText(/Cancel setup/i)).not.toBeInTheDocument()
 
+    overview.unmount()
     await renderRoute('/secrets-broker/sources')
 
-    expect(
-      screen.getByRole('heading', { name: /Secrets Broker providers/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Providers')
     expect(
       screen.getByRole('button', { name: /^Add provider$/i })
     ).toBeVisible()
@@ -421,9 +419,7 @@ describe('Secrets Broker overview dashboard', () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/sources')
 
-    expect(
-      screen.getByRole('heading', { name: /Secrets Broker providers/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Providers')
     expect(
       await screen.findByRole('region', {
         name: /Live provider source metadata/i,
@@ -708,11 +704,7 @@ describe('Secrets Broker overview dashboard', () => {
   it('routes the legacy secret-sources hash to the canonical sources page', async () => {
     const { router } = await renderRoute('/secrets-broker#secret-sources')
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /^Secrets Broker providers$/i })
-      ).toBeVisible()
-    })
+    await expectActivePageIdentity('Providers')
 
     expect(router.state.location.pathname).toBe('/secrets-broker/sources')
     expect(
@@ -1116,9 +1108,7 @@ describe('Secrets Broker overview dashboard', () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/topology')
 
-    expect(
-      screen.getByRole('heading', { name: /Secrets Broker topology/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Topology')
     expect(
       await screen.findByText(/Live topology source status/i)
     ).toBeVisible()
@@ -1254,7 +1244,7 @@ describe('Secrets Broker overview dashboard', () => {
   it('covers audit event types, filtering, and safe detail rendering', async () => {
     await renderRoute('/operations/audit-logging')
 
-    expect(screen.getByRole('heading', { name: /^Audit$/i })).toBeVisible()
+    await expectActivePageIdentity('Audit')
     expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
     expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
 

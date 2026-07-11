@@ -818,13 +818,7 @@ function OperationsTable<TData>({
   )
 }
 
-function OperationsHeader({
-  title,
-  description,
-}: {
-  title: string
-  description: string
-}) {
+function OperationsHeader() {
   return (
     <>
       <Header fixed>
@@ -836,11 +830,7 @@ function OperationsHeader({
         </div>
       </Header>
 
-      <div className='flex flex-wrap items-end justify-between gap-2'>
-        <div>
-          <h2 className='text-2xl font-bold tracking-tight'>{title}</h2>
-          <p className='text-muted-foreground'>{description}</p>
-        </div>
+      <div className='flex flex-wrap items-end justify-end gap-2'>
         <Button variant='outline' size='sm' asChild>
           <Link to='/runtime'>Runtime</Link>
         </Button>
@@ -888,10 +878,7 @@ export function OperationsTelemetry() {
 
   return (
     <>
-      <OperationsHeader
-        title='Telemetry'
-        description='Service Lasso runtime and Secrets Broker telemetry status, with missing sources shown explicitly.'
-      />
+      <OperationsHeader />
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
         <div className='grid gap-4 md:grid-cols-3'>
           <div className='rounded-md border p-4'>
@@ -1019,10 +1006,7 @@ export function OperationsAuditLogging() {
 
   return (
     <>
-      <OperationsHeader
-        title='Audit'
-        description='Metadata-only operation events for Service Lasso and Secrets Broker, including explicit unavailable chain proof states.'
-      />
+      <OperationsHeader />
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
         <div className='grid gap-4 md:grid-cols-5'>
           <div className='rounded-md border p-4'>

@@ -1,5 +1,6 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
-import { screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
@@ -27,11 +28,7 @@ describe('installed page', () => {
   it('renders the installed table without a nested services card wrapper', async () => {
     await renderRoute('/installed')
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /^Installed$/i })
-      ).toBeVisible()
-    })
+    await expectActivePageIdentity('Installed')
 
     expect(screen.queryByText('Installed services')).not.toBeInTheDocument()
     expect(

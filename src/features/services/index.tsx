@@ -59,14 +59,7 @@ export function Services() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Services</h2>
-            <p className='text-muted-foreground'>
-              Manage Service Lasso services, inspect runtime state, and open the
-              detail view from the table below.
-            </p>
-          </div>
+        <div className='flex flex-wrap items-center justify-end gap-2'>
           <div className='flex flex-wrap items-center gap-2'>
             <Button
               type='button'

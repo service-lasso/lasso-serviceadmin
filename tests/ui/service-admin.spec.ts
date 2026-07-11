@@ -1,9 +1,15 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function expectActivePageIdentity(page: Page, identity: string) {
+  await expect(page.getByTestId('active-page-identity')).toHaveAccessibleName(
+    `Current page: ${identity}`
+  )
+}
 
 test('dashboard renders and starts stopped services', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+  await expectActivePageIdentity(page, 'Dashboard')
   await expect(page.getByText('Runtime health', { exact: true })).toBeVisible()
   await expect(page.getByText('1 stopped, 1 degraded')).toBeVisible()
   await expect(page.getByText('2/4')).toBeVisible()
@@ -21,7 +27,7 @@ test('dashboard renders and starts stopped services', async ({ page }) => {
 test('services table filters and opens service detail', async ({ page }) => {
   await page.goto('/services')
 
-  await expect(page.getByRole('heading', { name: 'Services' })).toBeVisible()
+  await expectActivePageIdentity(page, 'Services')
   await expect(
     page.getByRole('button', { name: 'Start all', exact: true })
   ).toBeEnabled()
@@ -201,7 +207,7 @@ test('runtime, network, installed, and variables tables render', async ({
   page,
 }) => {
   await page.goto('/runtime')
-  await expect(page.getByRole('heading', { name: 'Runtime' })).toBeVisible()
+  await expectActivePageIdentity(page, 'Runtime')
   await expect(page.getByText('Runtime status')).toHaveCount(0)
   await expect(
     page.getByRole('columnheader', { name: /service/i })
@@ -212,7 +218,7 @@ test('runtime, network, installed, and variables tables render', async ({
   await expect(page.getByText('Service Admin UI')).toBeVisible()
 
   await page.goto('/network')
-  await expect(page.getByRole('heading', { name: 'Network' })).toBeVisible()
+  await expectActivePageIdentity(page, 'Network')
   await expect(page.getByText('Service endpoints')).toHaveCount(0)
   await expect(
     page.getByRole('columnheader', { name: /endpoint/i })
@@ -221,7 +227,7 @@ test('runtime, network, installed, and variables tables render', async ({
   await expect(page.getByText('http://localhost:17700')).toBeVisible()
 
   await page.goto('/installed')
-  await expect(page.getByRole('heading', { name: 'Installed' })).toBeVisible()
+  await expectActivePageIdentity(page, 'Installed')
   await expect(
     page.getByText('Installed services', { exact: true })
   ).toHaveCount(0)
@@ -236,7 +242,7 @@ test('runtime, network, installed, and variables tables render', async ({
   ).toBeVisible()
 
   await page.goto('/variables')
-  await expect(page.getByRole('heading', { name: 'Variables' })).toBeVisible()
+  await expectActivePageIdentity(page, 'Variables')
   await expect(page.getByText('Environment variables')).toHaveCount(0)
   await expect(page.getByRole('columnheader', { name: /key/i })).toBeVisible()
   await expect(

@@ -4,19 +4,24 @@ import { renderRoute } from './render-route'
 
 type ScreenCase = {
   path: string
-  heading: RegExp
+  heading?: RegExp
   title?: string
+}
+
+type HeaderIdentityCase = {
+  path: string
+  identity: string
+  removedHeading: RegExp
+  removedCopy?: RegExp
 }
 
 const appScreens: ScreenCase[] = [
   {
     path: '/',
-    heading: /^Dashboard$/i,
     title: 'Service Admin - Dashboard',
   },
   {
     path: '/services',
-    heading: /^Services$/i,
     title: 'Service Admin - Services',
   },
   {
@@ -31,57 +36,50 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/dependencies',
-    heading: /^Dependencies$/i,
     title: 'Service Admin - Dependencies',
   },
   {
     path: '/service-routes',
-    heading: /^Service routes$/i,
     title: 'Service Admin - Service Routes',
   },
   {
     path: '/runtime',
-    heading: /^Runtime$/i,
     title: 'Service Admin - Runtime',
   },
   {
     path: '/installed',
-    heading: /^Installed$/i,
     title: 'Service Admin - Installed',
   },
   {
     path: '/variables',
-    heading: /^Variables$/i,
     title: 'Service Admin - Variables',
   },
   {
     path: '/secrets-broker',
-    heading: /^Overview$/i,
     title: 'Service Admin - Secrets Broker Overview',
   },
   {
+    path: '/secrets-broker/secrets',
+    title: 'Service Admin - Secrets Broker Secrets',
+  },
+  {
     path: '/secrets-broker/sources',
-    heading: /^Secrets Broker providers$/i,
     title: 'Service Admin - Secrets Broker Providers',
   },
   {
     path: '/secrets-broker/configuration',
-    heading: /^Configuration$/i,
     title: 'Service Admin - Secrets Broker Configuration',
   },
   {
     path: '/secrets-broker/topology',
-    heading: /^Secrets Broker topology$/i,
     title: 'Service Admin - Secrets Broker Topology',
   },
   {
     path: '/operations/telemetry',
-    heading: /^Telemetry$/i,
     title: 'Service Admin - Operations Telemetry',
   },
   {
     path: '/operations/audit-logging',
-    heading: /^Audit$/i,
     title: 'Service Admin - Operations Audit',
   },
   {
@@ -91,12 +89,10 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/network',
-    heading: /^Network$/i,
     title: 'Service Admin - Network',
   },
   {
     path: '/help-center',
-    heading: /^Help Center$/i,
     title: 'Service Admin - Help Center',
   },
   { path: '/settings', heading: /^Profile$/i },
@@ -133,13 +129,128 @@ const compatibleSecretsBrokerRoutes: ScreenCase[] = [
   },
 ]
 
+const headerIdentityRoutes: HeaderIdentityCase[] = [
+  {
+    path: '/',
+    identity: 'Dashboard',
+    removedHeading: /^Dashboard$/i,
+    removedCopy: /Monitor runtime health, launch service actions/i,
+  },
+  {
+    path: '/services',
+    identity: 'Services',
+    removedHeading: /^Services$/i,
+    removedCopy:
+      /Manage Service Lasso services, inspect runtime state, and open the detail view/i,
+  },
+  {
+    path: '/dependencies',
+    identity: 'Dependencies',
+    removedHeading: /^Dependencies$/i,
+    removedCopy: /inspect dependency topology/i,
+  },
+  {
+    path: '/service-routes',
+    identity: 'Routes',
+    removedHeading: /^Service routes$/i,
+    removedCopy: /Inspect each service endpoint/i,
+  },
+  {
+    path: '/runtime',
+    identity: 'Runtime',
+    removedHeading: /^Runtime$/i,
+    removedCopy: /Runtime state, health, and check history/i,
+  },
+  {
+    path: '/installed',
+    identity: 'Installed',
+    removedHeading: /^Installed$/i,
+    removedCopy: /Installed services and paths/i,
+  },
+  {
+    path: '/variables',
+    identity: 'Variables',
+    removedHeading: /^Variables$/i,
+    removedCopy: /Shared and service-local values/i,
+  },
+  {
+    path: '/secrets-broker/topology',
+    identity: 'Topology',
+    removedHeading: /^Secrets Broker topology$/i,
+    removedCopy: /Service variables, SecretRef mappings/i,
+  },
+  {
+    path: '/secrets-broker',
+    identity: 'Overview',
+    removedHeading: /^Overview$/i,
+    removedCopy: /Secrets Broker runtime posture/i,
+  },
+  {
+    path: '/secrets-broker/secrets',
+    identity: 'Secrets',
+    removedHeading: /^Secrets$/i,
+    removedCopy: /Rows never render raw secret values|without raw values/i,
+  },
+  {
+    path: '/secrets-broker/sources',
+    identity: 'Providers',
+    removedHeading: /^Secrets Broker providers$/i,
+    removedCopy: /Configured provider state, health, and row actions/i,
+  },
+  {
+    path: '/secrets-broker/configuration',
+    identity: 'Configuration',
+    removedHeading: /^Configuration$/i,
+    removedCopy: /Configure provider handles, validate capability/i,
+  },
+  {
+    path: '/logs',
+    identity: 'Logs',
+    removedHeading: /^Logs$/i,
+    removedCopy:
+      /Safe service log viewer backed by service-resolved API endpoints/i,
+  },
+  {
+    path: '/settings',
+    identity: 'Settings',
+    removedHeading: /^Settings$/i,
+    removedCopy: /Tune the Service Lasso admin surface/i,
+  },
+  {
+    path: '/operations/telemetry',
+    identity: 'Telemetry',
+    removedHeading: /^Telemetry$/i,
+    removedCopy: /Service Lasso runtime and Secrets Broker telemetry status/i,
+  },
+  {
+    path: '/operations/audit-logging',
+    identity: 'Audit',
+    removedHeading: /^Audit$/i,
+    removedCopy: /Metadata-only operation events/i,
+  },
+  {
+    path: '/network',
+    identity: 'Network',
+    removedHeading: /^Network$/i,
+    removedCopy: /Endpoints and exposure facts/i,
+  },
+  {
+    path: '/help-center',
+    identity: 'Help Center',
+    removedHeading: /^Help Center$/i,
+    removedCopy: /Guides and runbooks/i,
+  },
+]
+
 describe('app screens', () => {
   it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
     await renderRoute(path)
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: heading })).toBeVisible()
-    })
+    if (heading) {
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: heading })).toBeVisible()
+      })
+    }
 
     if (title) {
       await waitFor(() => {
@@ -147,6 +258,27 @@ describe('app screens', () => {
       })
     }
   })
+
+  it.each(headerIdentityRoutes)(
+    'moves $identity page identity into the header without a duplicated body heading',
+    async ({ path, identity, removedHeading, removedCopy }) => {
+      await renderRoute(path)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('active-page-identity')).toHaveAccessibleName(
+          `Current page: ${identity}`
+        )
+      })
+
+      expect(
+        screen.queryByRole('heading', { name: removedHeading })
+      ).not.toBeInTheDocument()
+
+      if (removedCopy) {
+        expect(screen.queryByText(removedCopy)).not.toBeInTheDocument()
+      }
+    }
+  )
 
   it.each(removedSecretsBrokerRoutes)(
     'redirects removed Secrets Broker route %s to %s',

@@ -1743,17 +1743,7 @@ export function SecretsManagementPage({
         </Header>
 
         <Main id='content' className='space-y-6'>
-          <div className='flex flex-wrap items-start justify-between gap-4'>
-            <div>
-              <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
-                <DatabaseZap className='size-5' /> Secrets
-              </h1>
-              <p className='mt-1 text-muted-foreground'>
-                Secrets Broker management table for safe metadata search,
-                controlled reveal entry, and dry-run edit/reset/delete/policy
-                actions. Rows never render raw secret values.
-              </p>
-            </div>
+          <div className='flex flex-wrap justify-end gap-4'>
             <Badge variant='outline'>Live API required</Badge>
           </div>
 
@@ -1812,16 +1802,7 @@ export function SecretsManagementPage({
       </Header>
 
       <Main id='content' className='space-y-6'>
-        <div className='flex flex-wrap items-start justify-between gap-4'>
-          <div>
-            <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
-              <DatabaseZap className='size-5' /> Secrets
-            </h1>
-            <p className='mt-1 text-muted-foreground'>
-              Search refs, review provider state, and launch dry-run actions
-              without raw values.
-            </p>
-          </div>
+        <div className='flex flex-wrap justify-end gap-4'>
           <Badge variant='secondary'>Stub preview · values hidden</Badge>
         </div>
 

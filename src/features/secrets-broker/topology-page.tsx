@@ -465,16 +465,7 @@ export function SecretsBrokerTopologyPage() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-3'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>
-              Secrets Broker topology
-            </h2>
-            <p className='text-muted-foreground'>
-              Service variables, SecretRef mappings, sources, and unmapped
-              secret-like entries from the runtime service inventory.
-            </p>
-          </div>
+        <div className='flex flex-wrap items-end justify-end gap-3'>
           <div className='flex items-center gap-2 text-sm text-muted-foreground'>
             <ShieldCheck className='size-4' />
             Values hidden

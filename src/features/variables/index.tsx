@@ -386,13 +386,7 @@ export function Variables({ service, search, navigate }: VariablesProps) {
       </Header>
 
       <Main fixed className='min-h-0 gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Variables</h2>
-            <p className='text-muted-foreground'>
-              Shared and service-local values in the standard operator table.
-            </p>
-          </div>
+        <div className='flex flex-wrap items-end justify-end gap-2'>
           <div className='flex flex-wrap gap-2'>
             <Button variant='outline' size='sm' asChild>
               <Link to='/services'>Services</Link>

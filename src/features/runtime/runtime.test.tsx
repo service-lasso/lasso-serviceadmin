@@ -1,5 +1,6 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
-import { screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
@@ -27,9 +28,7 @@ describe('runtime page', () => {
   it('renders the runtime table without a nested status card wrapper', async () => {
     await renderRoute('/runtime')
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /^Runtime$/i })).toBeVisible()
-    })
+    await expectActivePageIdentity('Runtime')
 
     expect(screen.queryByText('Runtime status')).not.toBeInTheDocument()
     expect(screen.queryByText(/services shown/i)).not.toBeInTheDocument()
