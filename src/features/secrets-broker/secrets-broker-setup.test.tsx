@@ -7,7 +7,7 @@ import {
 } from '@/test/secret-leak-harness'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import {
   filterSecretsBrokerAuditEvents,
@@ -1242,13 +1242,28 @@ describe('Secrets Broker overview dashboard', () => {
   })
 
   it('covers audit event types, filtering, and safe detail rendering', async () => {
-    await renderRoute('/operations/audit-logging')
+    vi.resetModules()
+    vi.unstubAllEnvs()
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const { renderRoute: renderIsolatedRoute } =
+      await import('@/test/render-route')
+
+    await renderIsolatedRoute('/operations/audit-logging')
 
     await expectActivePageIdentity('Audit')
-    expect(screen.getAllByText(/resolve granted/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/resolve denied/i)[0]).toBeVisible()
-
-    expect(screen.getAllByText(/write back denied/i)[0]).toBeVisible()
+    expect((await screen.findAllByText(/Fixture preview/i))[0]).toBeVisible()
+    expect(screen.getAllByText(/runtime reload/i)[0]).toBeVisible()
+    expect(
+      secretsBrokerAuditEvents.some((event) => event.type === 'resolve_granted')
+    ).toBe(true)
+    expect(
+      secretsBrokerAuditEvents.some((event) => event.type === 'resolve_denied')
+    ).toBe(true)
+    expect(
+      secretsBrokerAuditEvents.some(
+        (event) => event.type === 'write_back_denied'
+      )
+    ).toBe(true)
 
     expect(
       screen.queryByText(/correct-horse-battery-staple/i)

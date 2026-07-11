@@ -1,6 +1,5 @@
 import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
-import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   auditEventsContainSecretMaterial,
@@ -13,7 +12,6 @@ describe('Secrets Broker audit event viewer', () => {
     const { router } = await renderRoute('/secrets-broker/audit-events')
 
     await expectActivePageIdentity('Audit')
-    expect(screen.getAllByText(/runtime health checked/i)[0]).toBeVisible()
     expect(router.state.location.pathname).toBe('/operations/audit-logging')
   })
 

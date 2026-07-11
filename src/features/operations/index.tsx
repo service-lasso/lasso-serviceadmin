@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   type ColumnDef,
@@ -17,15 +16,14 @@ import {
 import { Activity, ClipboardCheck, FileChartColumn } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
-  fetchSecretsBrokerAuditEvents,
-  type SecretsBrokerAuditEventMetadata,
-} from '@/lib/secrets-broker/client'
-import {
+  useAuditEvents,
   useServiceTelemetryPreview,
   useServices,
   useTelemetryPreview,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type {
+  AuditEvent,
+  AuditEventsResult,
   DashboardService,
   ServiceTelemetryPreview,
   TelemetryPreview,
@@ -52,10 +50,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import {
-  auditEventTypeLabel,
-  secretsBrokerAuditEvents,
-} from '@/features/secrets-broker/audit-events'
+import { secretsBrokerAuditEvents } from '@/features/secrets-broker/audit-events'
 
 type OperationsSource = 'Service Lasso' | 'Secrets Broker'
 type OperationsState = 'available' | 'degraded' | 'unavailable'
@@ -92,6 +87,12 @@ type AuditSummary = {
   chainStatus: 'verified' | 'broken' | 'mixed' | 'unavailable'
   rawMaterialLabel: 'Hidden' | 'Review'
   rawMaterialReturned: boolean
+}
+
+type AuditSourceNotice = {
+  title: string
+  description: string
+  emptyMessage: string
 }
 
 const stateVariant: Record<
@@ -438,66 +439,39 @@ function buildSecretsBrokerTelemetryRows(
   ]
 }
 
-function buildAuditRows(): AuditLogRow[] {
-  return buildAuditRowsFromBrokerEvents(
-    secretsBrokerAuditEvents.map((event) => ({
-      id: event.id,
-      event: auditEventTypeLabel(event.type),
-      actorType: event.actorType,
-      actorId: event.actorId,
-      outcome: event.outcome,
-      policyDecision: event.policyDecision,
-      tamperEvidence: event.tamperEvidence.status,
-      recordedAt: event.timestamp,
-      summary: event.normalizedReason,
-    }))
-  )
+function runtimeAuditSourceLabel(source: string): OperationsSource {
+  return /secret|broker/i.test(source) ? 'Secrets Broker' : 'Service Lasso'
 }
 
-function buildAuditRowsFromBrokerEvents(
-  events: SecretsBrokerAuditEventMetadata[]
-): AuditLogRow[] {
-  const brokerRows = events.map(
+function runtimeAuditActionLabel(action: string) {
+  return action.replace(/[._-]+/g, ' ')
+}
+
+function runtimeAuditPolicyLabel(event: AuditEvent) {
+  if (event.reason?.trim()) return `reason: ${event.reason.trim()}`
+  if (event.routeTemplate)
+    return `${event.method ?? 'request'} ${event.routeTemplate}`
+  return `status ${event.statusCode}`
+}
+
+function runtimeAuditChainStatus(event: AuditEvent) {
+  return event.chainStatus === 'valid' ? 'verified' : event.chainStatus
+}
+
+export function buildAuditRowsFromRuntimeEvents(events: AuditEvent[]) {
+  return events.map(
     (event): AuditLogRow => ({
       id: event.id,
-      event: event.event.replace(/_/g, ' '),
-      source: 'Secrets Broker',
-      actor: `${event.actorType}: ${event.actorId}`,
+      event: runtimeAuditActionLabel(event.action),
+      source: runtimeAuditSourceLabel(event.source),
+      actor: event.actor,
       outcome: event.outcome,
-      policy: event.policyDecision,
-      tamperEvidence: event.tamperEvidence,
-      recordedAt: event.recordedAt,
+      policy: runtimeAuditPolicyLabel(event),
+      tamperEvidence: runtimeAuditChainStatus(event),
+      recordedAt: event.timestamp,
       safeSummary: event.summary,
     })
   )
-
-  return [
-    {
-      id: 'service-lasso-runtime-check',
-      event: 'runtime health checked',
-      source: 'Service Lasso',
-      actor: 'serviceadmin:operator-view',
-      outcome: 'success',
-      policy: 'metadata-only runtime status read',
-      tamperEvidence: 'unavailable',
-      recordedAt: '2026-05-07T18:21:00Z',
-      safeSummary:
-        'Runtime health and service status were viewed without log payloads or secret values.',
-    },
-    {
-      id: 'service-lasso-log-viewer-opened',
-      event: 'log viewer opened',
-      source: 'Service Lasso',
-      actor: 'serviceadmin:operator-view',
-      outcome: 'granted',
-      policy: 'server resolves log paths before browser access',
-      tamperEvidence: 'unavailable',
-      recordedAt: '2026-05-07T18:20:30Z',
-      safeSummary:
-        'Log access surface keeps browser requests scoped to service id and log type.',
-    },
-    ...brokerRows,
-  ]
 }
 
 function auditSourceLabel(status: AuditSourceStatus) {
@@ -540,6 +514,77 @@ export function buildAuditSummary(
       sourceStatus === 'unavailable' ? 'unavailable' : auditChainStatus(rows),
     rawMaterialLabel: rawMaterialReturned ? 'Review' : 'Hidden',
     rawMaterialReturned,
+  }
+}
+
+export function resolveAuditSourceStatus(
+  result?: AuditEventsResult
+): AuditSourceStatus {
+  if (result?.stubMode) return 'fixture'
+  if (result?.status === 'available') return 'live'
+  return 'unavailable'
+}
+
+function buildAuditSourceNotice({
+  isLoading,
+  error,
+  result,
+  rows,
+}: {
+  isLoading: boolean
+  error: Error | null
+  result?: AuditEventsResult
+  rows: AuditLogRow[]
+}): AuditSourceNotice {
+  if (isLoading) {
+    return {
+      title: 'Checking runtime audit source',
+      description:
+        'The page is requesting runtime audit metadata before rendering rows.',
+      emptyMessage: 'Runtime audit events are loading.',
+    }
+  }
+
+  if (error) {
+    return {
+      title: 'Audit unavailable',
+      description: error.message,
+      emptyMessage: 'Runtime audit events are unavailable.',
+    }
+  }
+
+  if (result?.stubMode) {
+    return {
+      title: 'Fixture preview',
+      description:
+        'Explicit Service Admin stub mode is enabled; these rows are sample audit metadata only.',
+      emptyMessage: 'No fixture audit rows match the current filters.',
+    }
+  }
+
+  if (result?.status === 'unavailable') {
+    return {
+      title: 'Audit unavailable',
+      description:
+        result.unavailableReason ??
+        'Service Lasso runtime audit events are unavailable.',
+      emptyMessage: 'Runtime audit events are unavailable.',
+    }
+  }
+
+  if (result?.status === 'available' && rows.length === 0) {
+    return {
+      title: 'Empty audit',
+      description: 'No durable audit events have been recorded yet.',
+      emptyMessage: 'No durable audit events have been recorded yet.',
+    }
+  }
+
+  return {
+    title: 'Live runtime audit',
+    description:
+      'Rows are returned by the Service Lasso runtime audit API as safe metadata.',
+    emptyMessage: 'No audit rows match the current filters.',
   }
 }
 
@@ -960,34 +1005,27 @@ export function OperationsAuditLogging() {
       'Operations audit events across Service Lasso and Secrets Broker sources.',
   })
 
-  const brokerAuditQuery = useQuery({
-    queryKey: ['operations', 'audit', 'secrets-broker'],
-    queryFn: fetchSecretsBrokerAuditEvents,
-  })
-  const brokerAudit = brokerAuditQuery.data
-  const rows = useMemo(() => {
-    if (brokerAudit && !brokerAudit.stubMode) {
-      return buildAuditRowsFromBrokerEvents(
-        brokerAudit.state === 'ready' ? brokerAudit.events : []
-      )
-    }
-
-    return buildAuditRows()
-  }, [brokerAudit])
-  const auditSourceStatus: AuditSourceStatus =
-    brokerAudit && !brokerAudit.stubMode
-      ? brokerAudit.state === 'ready'
-        ? 'live'
-        : 'unavailable'
-      : 'fixture'
-  const auditSummary = useMemo(
+  const auditEventsQuery = useAuditEvents({ limit: 100 })
+  const auditEvents = auditEventsQuery.data
+  const auditError =
+    auditEventsQuery.error instanceof Error ? auditEventsQuery.error : null
+  const rows = useMemo(
     () =>
-      buildAuditSummary(
-        rows,
-        auditSourceStatus,
-        brokerAudit?.rawMaterialReturned === true
-      ),
-    [auditSourceStatus, brokerAudit?.rawMaterialReturned, rows]
+      auditEvents?.status === 'available'
+        ? buildAuditRowsFromRuntimeEvents(auditEvents.events)
+        : [],
+    [auditEvents]
+  )
+  const auditSourceStatus = resolveAuditSourceStatus(auditEvents)
+  const auditNotice = buildAuditSourceNotice({
+    isLoading: auditEventsQuery.isLoading,
+    error: auditError,
+    result: auditEvents,
+    rows,
+  })
+  const auditSummary = useMemo(
+    () => buildAuditSummary(rows, auditSourceStatus, false),
+    [auditSourceStatus, rows]
   )
   const outcomes = useMemo(
     () =>
@@ -1066,28 +1104,38 @@ export function OperationsAuditLogging() {
             </p>
           </div>
         </div>
-        <div className='rounded-md border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground'>
-          Audit rows use safe identifiers, policy metadata, outcomes, and
-          tamper-evidence status only. Secret values, provider credentials,
-          tokens, private keys, raw response bodies, and recovery material are
-          outside this surface.
+        <div className='rounded-md border border-dashed bg-muted/20 p-4 text-sm'>
+          <div className='font-medium text-foreground'>{auditNotice.title}</div>
+          <p className='mt-1 text-muted-foreground'>
+            {auditNotice.description}
+          </p>
+          <p className='mt-2 text-muted-foreground'>
+            Audit rows use safe identifiers, policy metadata, outcomes, and
+            tamper-evidence status only. Secret values, provider credentials,
+            tokens, private keys, raw response bodies, and recovery material are
+            outside this surface.
+          </p>
         </div>
-        <OperationsTable
-          data={rows}
-          columns={auditColumns}
-          searchKey='event'
-          searchPlaceholder='Search audit events...'
-          filters={[
-            { columnId: 'source', title: 'Source', options: sourceOptions },
-            { columnId: 'outcome', title: 'Outcome', options: outcomes },
-            {
-              columnId: 'tamperEvidence',
-              title: 'Chain',
-              options: chainStates,
-            },
-          ]}
-          emptyMessage='No audit rows match the current filters.'
-        />
+        {auditEventsQuery.isLoading ? (
+          <OperationsLoading />
+        ) : (
+          <OperationsTable
+            data={rows}
+            columns={auditColumns}
+            searchKey='event'
+            searchPlaceholder='Search audit events...'
+            filters={[
+              { columnId: 'source', title: 'Source', options: sourceOptions },
+              { columnId: 'outcome', title: 'Outcome', options: outcomes },
+              {
+                columnId: 'tamperEvidence',
+                title: 'Chain',
+                options: chainStates,
+              },
+            ]}
+            emptyMessage={auditNotice.emptyMessage}
+          />
+        )}
       </Main>
     </>
   )

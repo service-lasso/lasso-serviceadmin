@@ -56,20 +56,29 @@ describe('Operations pages', () => {
     expect(container).not.toHaveTextContent(/BOT_TOKEN=/i)
   })
 
-  it('renders audit rows from both operation sources without secret payloads', async () => {
-    const { container } = await renderRoute('/operations/audit-logging')
+  it('renders Service Lasso fixture audit rows without secret payloads', async () => {
+    vi.resetModules()
+    vi.unstubAllEnvs()
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const { renderRoute: renderIsolatedRoute } =
+      await import('@/test/render-route')
+    const { container } = await renderIsolatedRoute('/operations/audit-logging')
 
     await expectActivePageIdentity('Audit')
     expect(container).not.toHaveTextContent(/Audit Logging/i)
-    expect(screen.getByText(/runtime health checked/i)).toBeVisible()
-    expect(screen.getByText(/resolve granted/i)).toBeVisible()
-    expect(screen.getByText(/Fixture preview/i)).toBeVisible()
+    expect((await screen.findAllByText(/runtime reload/i))[0]).toBeVisible()
+    expect(
+      (await screen.findAllByText(/service lifecycle start/i))[0]
+    ).toBeVisible()
+    expect(
+      (await screen.findAllByText(/service config save/i))[0]
+    ).toBeVisible()
+    expect(screen.getAllByText(/Fixture preview/i)[0]).toBeVisible()
     expect(screen.getAllByText(/audit events/i)[0]).toBeVisible()
     expect(screen.getByText(/Durable operator actions/i)).toBeVisible()
     expect(screen.getByText(/rawMaterialReturned=false/i)).toBeVisible()
-    expect(screen.getAllByText(/mixed/i)[0]).toBeVisible()
+    expect(screen.getAllByText(/verified/i)[0]).toBeVisible()
     expect(screen.getAllByText(/Service Lasso/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/Secrets Broker/i)[0]).toBeVisible()
     expect(screen.getByText(/tamper-evidence status only/i)).toBeVisible()
     expect(container).not.toHaveTextContent(/DEMO_REVEAL_VALUE_42/i)
     expect(container).not.toHaveTextContent(/ACTUAL_SECRET/i)
@@ -77,30 +86,38 @@ describe('Operations pages', () => {
   })
 
   it('prefers live Secrets Broker audit rows and drops unsafe payload fields', async () => {
+    vi.resetModules()
+    vi.unstubAllEnvs()
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'false')
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        if (url === '/api/services/%40secretsbroker/proxy/v1/audit/events') {
+        if (url === '/api/audit?limit=100') {
           return new Response(
             JSON.stringify({
-              state: 'ready',
-              summary: 'Live broker audit metadata available.',
-              rawMaterialReturned: false,
               events: [
                 {
                   id: 'audit-live-secret-rotation',
-                  eventType: 'secret_rotated',
-                  actorType: 'operator',
-                  actorId: 'serviceadmin',
+                  timestamp: '2026-07-05T06:31:00Z',
+                  source: 'secretsbroker',
+                  action: 'secret_rotated',
+                  actor: 'serviceadmin',
+                  subject: 'secret://services/example/ref',
+                  serviceId: '@secretsbroker',
                   outcome: 'success',
-                  policyDecision: 'allow: audited rotation metadata only',
-                  chainStatus: 'verified',
-                  recordedAt: '2026-07-05T06:31:00Z',
+                  statusCode: 200,
                   summary: 'Rotation completed with safe audit metadata.',
+                  reason: 'allow: audited rotation metadata only',
+                  chainId: 'audit-chain/live',
+                  sequence: 7,
+                  previousHash: 'previous-hash',
+                  eventHash: 'event-hash',
+                  chainStatus: 'valid',
                   rawValue: 'DEMO_REVEAL_VALUE_42',
                   providerToken: 'provider-token-must-not-render',
                 },
               ],
+              pagination: { limit: 100, nextCursor: null, total: 1 },
             }),
             {
               status: 200,
@@ -113,11 +130,12 @@ describe('Operations pages', () => {
       })
     )
 
+    const { renderRoute } = await import('@/test/render-route')
     const { container } = await renderRoute('/operations/audit-logging', {
       stubData: false,
     })
 
-    expect(await screen.findByText(/Live runtime audit/i)).toBeVisible()
+    expect((await screen.findAllByText(/Live runtime audit/i))[0]).toBeVisible()
     expect(screen.getByText(/secret rotated/i)).toBeVisible()
     expect(
       screen.getByText(/allow: audited rotation metadata only/i)
