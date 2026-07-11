@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -165,9 +166,7 @@ describe('logs page operator states', () => {
   it('exposes Logs actions from the services table', async () => {
     await renderRoute('/services')
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Services' })).toBeVisible()
-    })
+    await expectActivePageIdentity('Services')
 
     await waitFor(() => {
       expect(screen.getByText('Service Admin UI')).toBeVisible()

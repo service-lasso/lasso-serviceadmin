@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -82,9 +83,7 @@ describe('network page', () => {
   it('renders the network table without a nested endpoints card wrapper', async () => {
     await renderRoute('/network')
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /^Network$/i })).toBeVisible()
-    })
+    await expectActivePageIdentity('Network')
 
     expect(screen.queryByText('Service endpoints')).not.toBeInTheDocument()
     expect(screen.queryByText(/endpoints shown/i)).not.toBeInTheDocument()

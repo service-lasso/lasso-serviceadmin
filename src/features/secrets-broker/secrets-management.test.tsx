@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -77,9 +78,7 @@ describe('Secrets Broker secrets management page', () => {
   it('hides stub previews and fixture rows when stub mode is disabled', async () => {
     await renderRoute('/secrets-broker/secrets', { stubData: false })
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(screen.getByText(/Secrets Broker API unavailable/i)).toBeVisible()
     expect(
       await screen.findByRole('region', {
@@ -285,9 +284,7 @@ describe('Secrets Broker secrets management page', () => {
 
     await renderRoute('/secrets-broker/secrets', { stubData: false })
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(await screen.findByText(/Live managed secret rows/i)).toBeVisible()
     expect(screen.getByText(/Management API advertised/i)).toBeVisible()
     expect(screen.getByText(/1 metadata rows/i)).toBeVisible()
@@ -968,12 +965,7 @@ describe('Secrets Broker secrets management page', () => {
   it('renders the Secrets sub-page table with metadata rows and no raw values', async () => {
     await renderRoute('/secrets-broker/secrets')
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Search refs, review provider state/i)
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(screen.getByText(/Operator queue/i)).toBeVisible()
     expect(
       await screen.findByRole('region', {
@@ -1053,9 +1045,7 @@ describe('Secrets Broker secrets management page', () => {
   it('keeps first-screen controls task-oriented before any long prose', async () => {
     await renderRoute('/secrets-broker/secrets')
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(screen.getByText(/Operator queue/i)).toBeVisible()
     expect(screen.getByPlaceholderText(/Search secret metadata/i)).toBeVisible()
     expect(
@@ -1122,9 +1112,7 @@ describe('Secrets Broker secrets management page', () => {
       '/secrets-broker/secrets?secret=payments&provider=provider%20connection&state=missing'
     )
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(screen.getByPlaceholderText(/Search secret metadata/i)).toHaveValue(
       'payments'
     )
@@ -1137,9 +1125,7 @@ describe('Secrets Broker secrets management page', () => {
   it('restores pagination from the route URL without exposing secret values', async () => {
     await renderRoute('/secrets-broker/secrets?page=2&pageSize=1')
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(screen.getAllByText(/Page 2 of 4/i)[0]).toBeVisible()
     expect(screen.getByText(/ZITADEL_CLIENT_CREDENTIAL/i)).toBeVisible()
     expect(screen.queryByText(/DEMO_REVEAL_VALUE_42/i)).not.toBeInTheDocument()
@@ -1150,9 +1136,7 @@ describe('Secrets Broker secrets management page', () => {
       '/secrets-broker/secrets?ref=secret%3A%2F%2Fprovider%2Fzitadel%2Fclient-credential&action=reset'
     )
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(
       screen.getByText(/Reset\/rotate dry-run for ZITADEL_CLIENT_CREDENTIAL/i)
     ).toBeVisible()
@@ -1171,9 +1155,7 @@ describe('Secrets Broker secrets management page', () => {
       '/secrets-broker/secrets?ref=secret%3A%2F%2Funknown%2Fmissing&action=delete'
     )
 
-    expect(
-      await screen.findByRole('heading', { name: /^Secrets$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Secrets')
     expect(
       screen.getByText(/Metadata view for SESSION_SIGNING_KEY/i)
     ).toBeVisible()

@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -51,11 +52,7 @@ describe('variables page', () => {
   it('renders the variables table without a nested environment card wrapper', async () => {
     await renderRoute('/variables')
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /^Variables$/i })
-      ).toBeVisible()
-    })
+    await expectActivePageIdentity('Variables')
 
     expect(screen.queryByText('Environment variables')).not.toBeInTheDocument()
     expect(screen.queryByText(/variable rows shown/i)).not.toBeInTheDocument()

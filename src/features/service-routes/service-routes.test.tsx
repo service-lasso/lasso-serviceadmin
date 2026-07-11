@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -72,11 +73,7 @@ describe('service routes page', () => {
   it('renders service endpoint inventory without secret material', async () => {
     await renderRoute('/service-routes')
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /^Service routes$/i })
-      ).toBeVisible()
-    })
+    await expectActivePageIdentity('Routes')
 
     expect(screen.queryByText('Route inventory')).not.toBeInTheDocument()
     expect(screen.queryByText('LAN routes')).not.toBeInTheDocument()

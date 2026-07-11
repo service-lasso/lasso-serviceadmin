@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,9 +13,7 @@ describe('Operations pages', () => {
   it('renders telemetry rows for Service Lasso and Secrets Broker without secret material', async () => {
     const { container } = await renderRoute('/operations/telemetry')
 
-    expect(
-      await screen.findByRole('heading', { name: /^Telemetry$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Telemetry')
     expect(screen.getAllByText(/Service Lasso runtime/i)[0]).toBeVisible()
     const telemetryState = await screen.findByText(
       /Core telemetry (exporter|preview)/i
@@ -60,9 +59,7 @@ describe('Operations pages', () => {
   it('renders audit rows from both operation sources without secret payloads', async () => {
     const { container } = await renderRoute('/operations/audit-logging')
 
-    expect(
-      await screen.findByRole('heading', { name: /^Audit$/i })
-    ).toBeVisible()
+    await expectActivePageIdentity('Audit')
     expect(container).not.toHaveTextContent(/Audit Logging/i)
     expect(screen.getByText(/runtime health checked/i)).toBeVisible()
     expect(screen.getByText(/resolve granted/i)).toBeVisible()

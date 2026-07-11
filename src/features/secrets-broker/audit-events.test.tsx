@@ -1,3 +1,4 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
@@ -11,11 +12,7 @@ describe('Secrets Broker audit event viewer', () => {
   it('redirects the legacy Secrets Broker audit route to Operations Audit', async () => {
     const { router } = await renderRoute('/secrets-broker/audit-events')
 
-    expect(
-      await screen.findByRole('heading', {
-        name: /^Audit$/i,
-      })
-    ).toBeVisible()
+    await expectActivePageIdentity('Audit')
     expect(screen.getAllByText(/runtime health checked/i)[0]).toBeVisible()
     expect(router.state.location.pathname).toBe('/operations/audit-logging')
   })
