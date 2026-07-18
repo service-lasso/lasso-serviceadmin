@@ -3,10 +3,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  __setStubConfigRevisionsForTest,
   __resetStubServicesForTest,
   __setStubServicesForTest,
 } from '@/lib/service-lasso-dashboard/stub'
-import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import type {
+  DashboardService,
+  ServiceConfigRevision,
+} from '@/lib/service-lasso-dashboard/types'
 import { buildServiceEndpointDisplayRows } from './index'
 import { buildMetadataTableRows } from './metadata-table'
 
@@ -1280,6 +1284,87 @@ describe('service detail server.json config editor', () => {
     expect(
       screen.queryByText(/config-backups\\server\.json/i)
     ).not.toBeInTheDocument()
+  })
+
+  it('filters and paginates backup history while keeping compare selection stable', async () => {
+    const user = userEvent.setup()
+    const revisions: ServiceConfigRevision[] = Array.from(
+      { length: 12 },
+      (_, index) => {
+        const revisionNumber = index + 1
+        return {
+          id: `stub-revision-${revisionNumber}`,
+          createdAt: `2026-07-${String(18 - index).padStart(2, '0')}T03:00:00.000Z`,
+          actor: index === 10 ? 'release-operator' : 'service-admin-web',
+          reason:
+            index === 10
+              ? 'release rollback review'
+              : `config adjustment ${revisionNumber}`,
+          path: `@serviceadmin\\.state\\config-backups\\server-${revisionNumber}.json`,
+          previousHash: `hash-${String(revisionNumber).padStart(2, '0')}-abcdef1234567890`,
+          currentHash: `current-${String(revisionNumber).padStart(2, '0')}`,
+          validationStatus: 'valid',
+          content: `{"revision":${revisionNumber}}`,
+        }
+      }
+    )
+
+    __setStubConfigRevisionsForTest('@serviceadmin', revisions)
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+
+    await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Showing\s+1-10\s+of\s+12/i)).toBeVisible()
+    })
+    expect(screen.getByText('config adjustment 1')).toBeVisible()
+    expect(screen.queryByText(/release rollback review/i)).toBeNull()
+    expect(screen.getByTestId('server-json-diff-original')).toHaveTextContent(
+      /"revision":1/i
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Next backup history page/i })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Showing\s+11-12\s+of\s+12/i)).toBeVisible()
+    })
+    expect(screen.getByText(/release rollback review/i)).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Search backup history/i),
+      'release-operator'
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Showing\s+1-1\s+of\s+1\s+matching\s+12\s+total/i)
+      ).toBeVisible()
+    })
+    expect(screen.getByText(/release rollback review/i)).toBeVisible()
+    expect(screen.queryByText('config adjustment 1')).toBeNull()
+    expect(screen.getByTestId('server-json-diff-original')).toHaveTextContent(
+      /"revision":1/i
+    )
+
+    await user.clear(screen.getByLabelText(/Search backup history/i))
+    await user.type(screen.getByLabelText(/Search backup history/i), 'missing')
+
+    expect(
+      screen.getByText(/No backup revisions match the current filter/i)
+    ).toBeVisible()
   })
 })
 
