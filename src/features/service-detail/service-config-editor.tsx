@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   FileClock,
   GitCompare,
   RefreshCw,
   Save,
+  Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -35,6 +38,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -79,6 +90,27 @@ function revisionLabel(revision: ServiceConfigRevision) {
   )}`
 }
 
+const REVISION_PAGE_SIZE_OPTIONS = [10, 25, 50] as const
+
+function revisionSearchText(revision: ServiceConfigRevision) {
+  return [
+    new Date(revision.createdAt).toLocaleString(),
+    revision.actor,
+    revision.previousHash,
+    shortHash(revision.previousHash),
+    revision.reason ?? 'Not recorded',
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+function sortNewestRevisions(revisions: ServiceConfigRevision[]) {
+  return [...revisions].sort(
+    (left, right) =>
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+  )
+}
+
 function RevisionTable({
   revisions,
   selectedRevisionId,
@@ -88,65 +120,175 @@ function RevisionTable({
   selectedRevisionId: string | null
   onSelect: (revision: ServiceConfigRevision) => void
 }) {
+  const [filter, setFilter] = useState('')
+  const [pageIndex, setPageIndex] = useState(0)
+  const [pageSize, setPageSize] =
+    useState<(typeof REVISION_PAGE_SIZE_OPTIONS)[number]>(10)
+
+  const normalizedFilter = filter.trim().toLowerCase()
+  const sortedRevisions = useMemo(
+    () => sortNewestRevisions(revisions),
+    [revisions]
+  )
+  const filteredRevisions = useMemo(() => {
+    if (!normalizedFilter) return sortedRevisions
+    return sortedRevisions.filter((revision) =>
+      revisionSearchText(revision).includes(normalizedFilter)
+    )
+  }, [normalizedFilter, sortedRevisions])
+  const pageCount = Math.max(1, Math.ceil(filteredRevisions.length / pageSize))
+  const safePageIndex = Math.min(pageIndex, pageCount - 1)
+  const pageStart = safePageIndex * pageSize
+  const visibleRevisions = filteredRevisions.slice(
+    pageStart,
+    pageStart + pageSize
+  )
+  const resultStart = filteredRevisions.length ? pageStart + 1 : 0
+  const resultEnd = Math.min(
+    pageStart + visibleRevisions.length,
+    filteredRevisions.length
+  )
+
+  const emptyMessage = normalizedFilter
+    ? 'No backup revisions match the current filter.'
+    : 'No backup revisions have been recorded for this service yet.'
+
   return (
-    <div className='overflow-x-auto rounded-md border'>
-      <Table className='min-w-[760px] table-fixed'>
-        <colgroup>
-          <col className='w-[24%]' />
-          <col className='w-[16%]' />
-          <col className='w-[18%]' />
-          <col className='w-[22%]' />
-          <col className='w-[20%]' />
-        </colgroup>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Created</TableHead>
-            <TableHead>Actor</TableHead>
-            <TableHead>Previous hash</TableHead>
-            <TableHead>Reason</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {revisions.length ? (
-            revisions.map((revision) => (
-              <TableRow key={revision.id}>
-                <TableCell className='align-top text-sm whitespace-normal'>
-                  {new Date(revision.createdAt).toLocaleString()}
-                </TableCell>
-                <TableCell className='align-top text-sm whitespace-normal'>
-                  {revision.actor}
-                </TableCell>
-                <TableCell className='align-top font-mono text-xs break-all text-muted-foreground'>
-                  {shortHash(revision.previousHash)}
-                </TableCell>
-                <TableCell className='align-top text-sm whitespace-normal text-muted-foreground'>
-                  {revision.reason ?? 'Not recorded'}
-                </TableCell>
-                <TableCell className='align-top'>
-                  <Button
-                    type='button'
-                    size='sm'
-                    variant={
-                      selectedRevisionId === revision.id ? 'default' : 'outline'
-                    }
-                    onClick={() => onSelect(revision)}
-                  >
-                    <GitCompare className='mr-2 size-4' />
-                    Compare
-                  </Button>
+    <div className='space-y-3'>
+      <div className='flex flex-wrap items-center justify-between gap-3'>
+        <label className='relative min-w-0 flex-1 sm:max-w-sm'>
+          <span className='sr-only'>Search backup history</span>
+          <Search className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
+          <Input
+            value={filter}
+            onChange={(event) => {
+              setFilter(event.target.value)
+              setPageIndex(0)
+            }}
+            placeholder='Search backups'
+            className='pl-9'
+          />
+        </label>
+        <div className='flex items-center gap-2 text-sm'>
+          <span className='text-muted-foreground'>Rows</span>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => {
+              setPageSize(Number(value) as typeof pageSize)
+              setPageIndex(0)
+            }}
+          >
+            <SelectTrigger size='sm' aria-label='Rows per page'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REVISION_PAGE_SIZE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={String(option)}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className='overflow-x-auto rounded-md border'>
+        <Table className='min-w-[760px] table-fixed'>
+          <colgroup>
+            <col className='w-[24%]' />
+            <col className='w-[16%]' />
+            <col className='w-[18%]' />
+            <col className='w-[22%]' />
+            <col className='w-[20%]' />
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Created</TableHead>
+              <TableHead>Actor</TableHead>
+              <TableHead>Previous hash</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visibleRevisions.length ? (
+              visibleRevisions.map((revision) => (
+                <TableRow key={revision.id}>
+                  <TableCell className='align-top text-sm whitespace-normal'>
+                    {new Date(revision.createdAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell className='align-top text-sm whitespace-normal'>
+                    {revision.actor}
+                  </TableCell>
+                  <TableCell className='align-top font-mono text-xs break-all text-muted-foreground'>
+                    {shortHash(revision.previousHash)}
+                  </TableCell>
+                  <TableCell className='align-top text-sm whitespace-normal text-muted-foreground'>
+                    {revision.reason ?? 'Not recorded'}
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant={
+                        selectedRevisionId === revision.id
+                          ? 'default'
+                          : 'outline'
+                      }
+                      onClick={() => onSelect(revision)}
+                    >
+                      <GitCompare className='mr-2 size-4' />
+                      Compare
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} className='h-20 text-center'>
+                  {emptyMessage}
                 </TableCell>
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={5} className='h-20 text-center'>
-                No backup revisions have been recorded for this service yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className='flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground'>
+        <div>
+          Showing {resultStart}-{resultEnd} of {filteredRevisions.length}
+          {filteredRevisions.length !== revisions.length
+            ? ` matching ${revisions.length} total`
+            : ''}
+        </div>
+        <div className='flex items-center gap-2'>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}
+            disabled={safePageIndex === 0}
+            aria-label='Previous backup history page'
+          >
+            <ChevronLeft className='size-4' />
+          </Button>
+          <span>
+            Page {safePageIndex + 1} of {pageCount}
+          </span>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() =>
+              setPageIndex(Math.min(pageCount - 1, safePageIndex + 1))
+            }
+            disabled={safePageIndex >= pageCount - 1}
+            aria-label='Next backup history page'
+          >
+            <ChevronRight className='size-4' />
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -258,10 +400,11 @@ export function ServiceConfigEditor({
     setStatus('Loading server.json')
     try {
       const nextDocument = await fetchServiceConfigDocument(service.id)
+      const sortedRevisions = sortNewestRevisions(nextDocument.revisions)
       setDocument(nextDocument)
       setEditorContent(nextDocument.content)
       setSavedContent(nextDocument.content)
-      setSelectedRevisionId(nextDocument.revisions[0]?.id ?? null)
+      setSelectedRevisionId(sortedRevisions[0]?.id ?? null)
       setStatus('Loaded current runtime server.json')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Load failed')
@@ -299,10 +442,11 @@ export function ServiceConfigEditor({
         reason: auditReason,
       })
       const nextDocument = await fetchServiceConfigDocument(service.id)
+      const sortedRevisions = sortNewestRevisions(nextDocument.revisions)
       setDocument(nextDocument)
       setEditorContent(nextDocument.content)
       setSavedContent(nextDocument.content)
-      setSelectedRevisionId(nextDocument.revisions[0]?.id ?? null)
+      setSelectedRevisionId(sortedRevisions[0]?.id ?? null)
       setAuditReason('')
       setStatus('Saved server.json and created a backup revision')
       toast.success('server.json saved with backup history.')

@@ -724,8 +724,17 @@ export function __setStubServicesForTest(nextServices: DashboardService[]) {
   services = syncRelationshipStatuses(structuredClone(nextServices))
 }
 
+export function __setStubConfigRevisionsForTest(
+  serviceId: string,
+  revisions: ServiceConfigRevision[]
+) {
+  stubConfigRevisions.set(serviceId, structuredClone(revisions))
+}
+
 export function __resetStubServicesForTest() {
   services = syncRelationshipStatuses(cloneDefaultServices())
+  stubConfigContents.clear()
+  stubConfigRevisions.clear()
 }
 
 function serviceHealthForStatus(
