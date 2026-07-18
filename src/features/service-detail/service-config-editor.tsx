@@ -149,16 +149,6 @@ function RevisionTable({
     filteredRevisions.length
   )
 
-  useEffect(() => {
-    setPageIndex(0)
-  }, [normalizedFilter, pageSize, revisions.length])
-
-  useEffect(() => {
-    if (pageIndex !== safePageIndex) {
-      setPageIndex(safePageIndex)
-    }
-  }, [pageIndex, safePageIndex])
-
   const emptyMessage = normalizedFilter
     ? 'No backup revisions match the current filter.'
     : 'No backup revisions have been recorded for this service yet.'
@@ -171,7 +161,10 @@ function RevisionTable({
           <Search className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
           <Input
             value={filter}
-            onChange={(event) => setFilter(event.target.value)}
+            onChange={(event) => {
+              setFilter(event.target.value)
+              setPageIndex(0)
+            }}
             placeholder='Search backups'
             className='pl-9'
           />
@@ -182,6 +175,7 @@ function RevisionTable({
             value={String(pageSize)}
             onValueChange={(value) => {
               setPageSize(Number(value) as typeof pageSize)
+              setPageIndex(0)
             }}
           >
             <SelectTrigger size='sm' aria-label='Rows per page'>
@@ -272,7 +266,7 @@ function RevisionTable({
             type='button'
             variant='outline'
             size='sm'
-            onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+            onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}
             disabled={safePageIndex === 0}
             aria-label='Previous backup history page'
           >
@@ -286,7 +280,7 @@ function RevisionTable({
             variant='outline'
             size='sm'
             onClick={() =>
-              setPageIndex((current) => Math.min(pageCount - 1, current + 1))
+              setPageIndex(Math.min(pageCount - 1, safePageIndex + 1))
             }
             disabled={safePageIndex >= pageCount - 1}
             aria-label='Next backup history page'
