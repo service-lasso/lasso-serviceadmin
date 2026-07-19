@@ -15,12 +15,7 @@ export type HelpCenterNavigationCoverage = {
 export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   {
     route: '/',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#327',
-      reason:
-        'Dashboard coverage belongs with the Service Admin overview and navigation guide.',
-    },
+    articleId: 'help/service-admin-overview-and-navigation.md',
   },
   {
     route: '/services',
@@ -110,12 +105,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/settings/appearance',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#327',
-      reason:
-        'Appearance settings belong in the Service Admin overview and navigation guide.',
-    },
+    articleId: 'help/service-admin-overview-and-navigation.md',
   },
   {
     route: '/help-center',
