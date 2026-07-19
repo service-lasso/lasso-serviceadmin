@@ -81,30 +81,15 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/operations/telemetry',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#334',
-      reason:
-        'Telemetry coverage is planned as a dedicated export and redaction guide.',
-    },
+    articleId: 'help/product-status-and-safety.md',
   },
   {
     route: '/operations/audit-logging',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#335',
-      reason:
-        'Audit coverage is planned as a durable action logging contract guide.',
-    },
+    articleId: 'help/product-status-and-safety.md',
   },
   {
     route: '/secrets-broker',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#331',
-      reason:
-        'Secrets Broker overview coverage is planned with the variables and broker safety guide.',
-    },
+    articleId: 'help/product-status-and-safety.md',
   },
   {
     route: '/secrets-broker/secrets',
@@ -121,12 +106,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/secrets-broker/topology',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#331',
-      reason:
-        'Broker topology coverage is planned with the variables and broker safety guide.',
-    },
+    articleId: 'help/product-status-and-safety.md',
   },
   {
     route: '/settings/appearance',
