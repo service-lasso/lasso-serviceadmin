@@ -90,6 +90,8 @@ describe('Operations Audit page', () => {
     expect(
       screen.getByText(/Config saved with metadata-only audit event/i)
     ).toBeVisible()
+    expect(screen.getByText('Durable operator actions')).toBeVisible()
+    expect(screen.getAllByText('1')[0]).toBeVisible()
     expect(screen.queryByText(/stub audit fixture/i)).not.toBeInTheDocument()
     expectUnsafeAuditSentinelsHidden(document.body)
   })
