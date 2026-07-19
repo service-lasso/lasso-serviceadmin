@@ -481,7 +481,7 @@ function auditSourceLabel(status: AuditSourceStatus) {
 }
 
 function isMutatingAuditRow(row: AuditLogRow) {
-  return /committed|changed|completed|rotated|revoked|denied|granted/i.test(
+  return /apply|changed|committed|completed|create|delete|denied|granted|import|install|reload|restart|revoked|rotated|save|start|stop|update|write/i.test(
     `${row.event} ${row.policy}`
   )
 }
