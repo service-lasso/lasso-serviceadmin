@@ -24,3 +24,6 @@
 
 # Ignore auto generated routeTree.gen.ts
 /src/routeTree.gen.ts
+
+# Preserve the byte-for-byte canonical Secrets Broker conformance fixture.
+/src/lib/secrets-broker/fixtures/contract-states.json
