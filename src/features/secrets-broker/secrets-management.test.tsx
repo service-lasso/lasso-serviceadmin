@@ -1,5 +1,6 @@
 import { expectActivePageIdentity } from '@/test/page-identity'
 import { renderRoute } from '@/test/render-route'
+import { canonicalBrokerOverviewResponse } from '@/test/secrets-broker-contract'
 import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -105,29 +106,8 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
-      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
-        return new Response(
-          JSON.stringify({
-            state: 'ready',
-            summary: 'Broker metadata available.',
-            capabilities: {
-              sourcesStatus: true,
-              managementSecrets: true,
-              reveal: false,
-            },
-            audit: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/local/default',
-                label: 'Local encrypted store',
-                provider: 'local',
-                state: 'ready',
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-      }
+      const contractResponse = canonicalBrokerOverviewResponse(url)
+      if (contractResponse) return contractResponse
 
       if (
         url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
@@ -292,7 +272,7 @@ describe('Secrets Broker secrets management page', () => {
     expect(
       screen.getByText(/services\/@serviceadmin\/runtime\/SESSION_SIGNING_KEY/i)
     ).toBeVisible()
-    expect(screen.getByText(/local-encrypted-store/i)).toBeVisible()
+    expect(screen.getAllByText(/local-encrypted-store/i)[0]).toBeVisible()
     expect(screen.getByText(/audit_available/i)).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Request live controlled reveal/i })
@@ -370,28 +350,8 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
-      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
-        return new Response(
-          JSON.stringify({
-            state: 'ready',
-            summary: 'Broker metadata available.',
-            capabilities: {
-              sourcesStatus: true,
-              managementSecrets: true,
-            },
-            audit: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/local/default',
-                label: 'Local encrypted store',
-                provider: 'local',
-                state: 'ready',
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-      }
+      const contractResponse = canonicalBrokerOverviewResponse(url)
+      if (contractResponse) return contractResponse
 
       if (
         url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
@@ -443,28 +403,8 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
-      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
-        return new Response(
-          JSON.stringify({
-            state: 'ready',
-            summary: 'Broker metadata available.',
-            capabilities: {
-              sourcesStatus: true,
-              managementSecrets: true,
-            },
-            audit: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/local/default',
-                label: 'Local encrypted store',
-                provider: 'local',
-                state: 'ready',
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-      }
+      const contractResponse = canonicalBrokerOverviewResponse(url)
+      if (contractResponse) return contractResponse
 
       if (
         url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
@@ -535,28 +475,8 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
-      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
-        return new Response(
-          JSON.stringify({
-            state: 'ready',
-            summary: 'Broker metadata available.',
-            capabilities: {
-              sourcesStatus: true,
-              managementSecrets: true,
-            },
-            audit: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/local/default',
-                label: 'Local encrypted store',
-                provider: 'local',
-                state: 'ready',
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-      }
+      const contractResponse = canonicalBrokerOverviewResponse(url)
+      if (contractResponse) return contractResponse
 
       if (
         url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
@@ -702,28 +622,8 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
-      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
-        return new Response(
-          JSON.stringify({
-            state: 'ready',
-            summary: 'Broker metadata available.',
-            capabilities: {
-              sourcesStatus: true,
-              managementSecrets: true,
-            },
-            audit: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/local/default',
-                label: 'Local encrypted store',
-                provider: 'local',
-                state: 'ready',
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-      }
+      const contractResponse = canonicalBrokerOverviewResponse(url)
+      if (contractResponse) return contractResponse
 
       if (
         url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'
@@ -871,28 +771,8 @@ describe('Secrets Broker secrets management page', () => {
         )
       }
 
-      if (url === '/api/services/%40secretsbroker/proxy/v1/sources/status') {
-        return new Response(
-          JSON.stringify({
-            state: 'ready',
-            summary: 'Broker metadata available.',
-            capabilities: {
-              sourcesStatus: true,
-              managementSecrets: true,
-            },
-            audit: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/local/default',
-                label: 'Local encrypted store',
-                provider: 'local',
-                state: 'ready',
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-      }
+      const contractResponse = canonicalBrokerOverviewResponse(url)
+      if (contractResponse) return contractResponse
 
       if (
         url === '/api/services/%40secretsbroker/proxy/v1/management/secrets'

@@ -3,6 +3,7 @@ import {
   assertNoSecretMaterial,
   collectBrowserLeakSurfaces,
 } from '@/test/secret-leak-harness'
+import { canonicalBrokerOverviewResponse } from '@/test/secrets-broker-contract'
 import { screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -90,33 +91,18 @@ describe('Secrets Broker provider configuration fixtures', () => {
           })
         }
 
-        if (
-          url.endsWith('/api/services/%40secretsbroker/proxy/v1/sources/status')
-        ) {
-          return jsonResponse({
-            state: 'ready',
-            summary: 'Live provider configuration metadata available.',
-            capabilities: {
-              providerConfig: true,
-              managementSecrets: true,
-              reveal: false,
-            },
-            audit: { available: true },
-            telemetry: { available: true },
-            sources: [
-              {
-                id: '@secretsbroker/vault/prod',
-                label: 'Vault production',
-                provider: 'vault',
-                state: 'auth-required',
-                reason: 'Reconnect required before provider actions.',
-                capabilities: { providerConfig: true, reconnect: true },
-                providerToken: 'provider-token-must-not-render',
-                clientSecret: 'client-secret-must-not-render',
-              },
-            ],
-          })
-        }
+        const contractResponse = canonicalBrokerOverviewResponse(url, {
+          description: 'Live provider configuration metadata available.',
+          source: {
+            sourceId: 'vault-prod',
+            kind: 'vault',
+            displayName: 'Vault production',
+            state: 'auth_required',
+            outcome: 'source_auth_required',
+            nextAction: 'reconnect_source',
+          },
+        })
+        if (contractResponse) return contractResponse
 
         throw new Error(`Unexpected URL: ${url}`)
       })

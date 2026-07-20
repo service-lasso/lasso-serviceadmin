@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import contractFixtures from './fixtures/contract-states.json'
 
 function service(status: DashboardService['status'] = 'running') {
   return {
@@ -40,6 +41,212 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
   })
 }
 
+type ContractFixtureCase = {
+  name: string
+  expectedResponse: Record<string, unknown>
+}
+
+function contractResponse(name: string) {
+  const fixture = (contractFixtures.cases as ContractFixtureCase[]).find(
+    (item) => item.name === name
+  )
+
+  if (!fixture) throw new Error(`Missing Broker contract fixture: ${name}`)
+  return structuredClone(fixture.expectedResponse)
+}
+
+function overviewFetch(options?: {
+  sourceStatus?: number
+  sourceLifecycle?: { state: string; outcome?: string }
+  contractVersion?: unknown
+  manifestVersion?: unknown
+  omitOperations?: boolean
+  sourceKind?: string
+  sourceCapabilities?: string[]
+  sourceOperationMaturities?: Record<string, string>
+  operationMaturities?: Record<string, string>
+}) {
+  const capabilities = contractResponse('capabilities-operation-manifest')
+  const contractVersion =
+    options && Object.prototype.hasOwnProperty.call(options, 'contractVersion')
+      ? options.contractVersion
+      : capabilities.contractVersion
+  const manifestVersion =
+    options && Object.prototype.hasOwnProperty.call(options, 'manifestVersion')
+      ? options.manifestVersion
+      : capabilities.manifestVersion
+
+  return vi.fn(async (url: string) => {
+    if (url === 'http://runtime.test/api/dashboard/services/%40secretsbroker') {
+      return jsonResponse({ service: service() })
+    }
+
+    const prefix = 'http://runtime.test/api/services/%40secretsbroker/proxy'
+
+    if (url === `${prefix}/status`) {
+      return jsonResponse({
+        serviceId: '@secretsbroker',
+        apiVersion: 'secretsbroker.local/v1',
+        version: '0.1.0',
+        state: 'ready',
+        ready: true,
+        checkedAt: '2026-07-18T02:00:00Z',
+        description: 'Local-first secret metadata broker.',
+      })
+    }
+
+    if (url === `${prefix}/state`) {
+      return jsonResponse(contractResponse('state-ready'))
+    }
+
+    if (url === `${prefix}/capabilities`) {
+      capabilities.contractVersion = contractVersion
+      capabilities.manifestVersion = manifestVersion
+      if (
+        options?.operationMaturities &&
+        Array.isArray(capabilities.operations)
+      ) {
+        capabilities.operations = (
+          capabilities.operations as Record<string, unknown>[]
+        ).map((operation) => ({
+          ...operation,
+          maturity:
+            options.operationMaturities?.[operation.path as string] ??
+            operation.maturity,
+        }))
+      }
+      if (options?.omitOperations) delete capabilities.operations
+      return jsonResponse(capabilities)
+    }
+
+    if (url === `${prefix}/v1/sources/status`) {
+      if (options?.sourceStatus) {
+        return jsonResponse(
+          { detail: 'not found' },
+          { status: options.sourceStatus }
+        )
+      }
+
+      const payload = contractResponse('source-local-ready')
+      const source = (payload.sources as Record<string, unknown>[])[0]
+      if (source && options?.sourceKind) {
+        source.kind = options.sourceKind
+        source.capabilities = options.sourceCapabilities ?? source.capabilities
+        source.operations = (
+          source.operations as Record<string, unknown>[]
+        ).map((operation) => ({
+          ...operation,
+          maturity:
+            options.sourceOperationMaturities?.[operation.path as string] ??
+            operation.maturity,
+          providerKinds: [options.sourceKind],
+        }))
+      }
+      if (options?.sourceLifecycle) {
+        if (source) {
+          source.state = options.sourceLifecycle.state
+          source.outcome =
+            options.sourceLifecycle.outcome ?? options.sourceLifecycle.state
+          source.lifecycle = {
+            state: options.sourceLifecycle.state,
+            outcome:
+              options.sourceLifecycle.outcome ?? options.sourceLifecycle.state,
+            retryable: false,
+          }
+          if (options.sourceLifecycle.outcome !== 'ready') {
+            source.operations = (
+              source.operations as Record<string, unknown>[]
+            ).map((operation) =>
+              operation.maturity === 'planned' ||
+              operation.maturity === 'unavailable'
+                ? operation
+                : {
+                    ...operation,
+                    maturity: 'unavailable',
+                    limitationCode:
+                      options.sourceLifecycle?.outcome ??
+                      options.sourceLifecycle?.state,
+                    reasonCode: 'source_operation_blocked',
+                    nextAction: 'inspect_source_status',
+                  }
+            )
+          }
+        }
+      }
+      return jsonResponse(payload)
+    }
+
+    if (url === `${prefix}/v1/providers/capabilities`) {
+      const source = (
+        contractResponse('source-local-ready').sources as Record<
+          string,
+          unknown
+        >[]
+      )[0]
+      return jsonResponse({
+        serviceId: '@secretsbroker',
+        apiVersion: 'secretsbroker.local/v1',
+        contractVersion,
+        manifestVersion,
+        outcome: 'ready',
+        capabilities: [
+          {
+            providerKind: 'local-encrypted-store',
+            displayName: 'Local encrypted store',
+            supported: true,
+            capabilities: ['read', 'reveal', 'write/update'],
+            operations: source?.operations,
+            limitations: ['local-first development backend'],
+          },
+        ],
+      })
+    }
+
+    if (url === `${prefix}/v1/providers/config/status`) {
+      const provider = {
+        providerId: 'local',
+        providerKind: 'local-encrypted-store',
+        displayName: 'Local encrypted store',
+        state: 'connected',
+        outcome: 'ready',
+        namespaces: ['*'],
+        capabilities: ['read', 'reveal', 'write/update'],
+        operations: (
+          contractResponse('source-local-ready').sources as Record<
+            string,
+            unknown
+          >[]
+        )[0]?.operations,
+        auditStatus: 'audit_available',
+      }
+      return jsonResponse({
+        serviceId: '@secretsbroker',
+        apiVersion: 'secretsbroker.local/v1',
+        contractVersion,
+        manifestVersion,
+        outcome: 'ready',
+        currentProvider: provider,
+        providers: [provider],
+      })
+    }
+
+    if (url === `${prefix}/v1/telemetry`) {
+      return jsonResponse({
+        serviceId: '@secretsbroker',
+        apiVersion: 'secretsbroker.local/v1',
+        contractVersion,
+        outcome: 'ready',
+      })
+    }
+
+    if (url === `${prefix}/v1/events?limit=1`) {
+      return jsonResponse(contractResponse('events-empty-safe'))
+    }
+
+    throw new Error(`Unexpected URL: ${url}`)
+  })
+}
+
 describe('Secrets Broker live client', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -49,43 +256,7 @@ describe('Secrets Broker live client', () => {
 
   it('reads live broker source metadata by default', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
-
-    const fetchMock = vi.fn(async (url: string) => {
-      if (
-        url === 'http://runtime.test/api/dashboard/services/%40secretsbroker'
-      ) {
-        return jsonResponse({ service: service() })
-      }
-
-      if (
-        url ===
-        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/sources/status'
-      ) {
-        return jsonResponse({
-          state: 'ready',
-          summary: 'Broker metadata available.',
-          capabilities: {
-            managementSecrets: true,
-            providerConfig: true,
-            reveal: false,
-          },
-          telemetry: { available: true },
-          audit: { available: true },
-          sources: [
-            {
-              id: '@secretsbroker/local/default',
-              label: 'Local encrypted store',
-              provider: 'local',
-              state: 'ready',
-              reason: 'Local encrypted store is unlocked.',
-              capabilities: { dryRun: true },
-            },
-          ],
-        })
-      }
-
-      throw new Error(`Unexpected URL: ${url}`)
-    })
+    const fetchMock = overviewFetch()
 
     vi.stubGlobal('fetch', fetchMock)
 
@@ -96,15 +267,223 @@ describe('Secrets Broker live client', () => {
     expect(overview.state).toBe('ready')
     expect(overview.stubMode).toBe(false)
     expect(overview.sourceCount).toBe(1)
+    expect(overview.sources[0]).toMatchObject({
+      id: 'local',
+      label: 'Local encrypted store',
+      provider: 'local-encrypted-store',
+      lifecycleState: 'connected',
+      outcome: 'ready',
+      state: 'ready',
+      capabilityNames: [
+        'read',
+        'reveal',
+        'write/update',
+        'rotate/reset',
+        'audit',
+        'migration',
+        'health',
+      ],
+    })
     expect(overview.capabilities).toMatchObject({
       sourcesStatus: true,
       managementSecrets: true,
-      providerConfig: true,
-      reveal: false,
+      providerConfig: false,
+      reveal: true,
+      mutation: true,
     })
+    expect(overview.contractVersion).toBe('1.1.0')
+    expect(overview.manifestVersion).toBe('1.0.0')
+    expect(overview.operationManifest.state).toBe('ready')
+    expect(overview.operations.length).toBeGreaterThan(0)
+    expect(overview.routes).toEqual(
+      expect.objectContaining({
+        state: 'ready',
+        sources: 'ready',
+        providerConfig: 'ready',
+      })
+    )
+    expect(overview.providerCapabilities[0]?.limitations).toEqual([
+      'local-first development backend',
+    ])
     expect(overview.telemetryAvailable).toBe(true)
     expect(overview.auditAvailable).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(9)
+  })
+
+  it.each([
+    ['1.0.0', 'compatible', ''],
+    ['1.99.0', 'compatible', ''],
+    ['1.2.3-beta.1+build.2', 'compatible', ''],
+    [null, 'missing', 'upgrade_secrets_broker'],
+    ['', 'missing', 'upgrade_secrets_broker'],
+    ['v1', 'malformed', 'repair_or_upgrade_secrets_broker'],
+    ['1.0', 'malformed', 'repair_or_upgrade_secrets_broker'],
+    ['1.0.0-01', 'malformed', 'repair_or_upgrade_secrets_broker'],
+    ['0.9.0', 'unsupported', 'upgrade_secrets_broker'],
+    ['2.0.0', 'unsupported', 'upgrade_service_admin'],
+  ])(
+    'assesses Broker contract version %j as %s',
+    async (version, expectedState, expectedNextAction) => {
+      const { assessSecretsBrokerContractCompatibility } =
+        await import('./client')
+
+      expect(assessSecretsBrokerContractCompatibility(version)).toMatchObject({
+        state: expectedState,
+        observedVersion: typeof version === 'string' ? version : '',
+        supportedRange: '>=1.0.0 <2.0.0',
+        nextAction: expectedNextAction,
+      })
+    }
+  )
+
+  it('accepts additive compatible 1.x Broker contracts', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.stubGlobal('fetch', overviewFetch({ contractVersion: '1.99.0' }))
+
+    const { fetchSecretsBrokerOverview } = await import('./client')
+    const overview = await fetchSecretsBrokerOverview()
+
+    expect(overview.state).toBe('ready')
+    expect(overview.contractCompatibility.state).toBe('compatible')
+    expect(overview.capabilities).toMatchObject({
+      sourcesStatus: true,
+      managementSecrets: true,
+      providerConfig: false,
+      reveal: true,
+      mutation: true,
+    })
+  })
+
+  it('fails closed when a manifest-bearing Broker omits operation records', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.stubGlobal('fetch', overviewFetch({ omitOperations: true }))
+
+    const { fetchSecretsBrokerOverview } = await import('./client')
+    const overview = await fetchSecretsBrokerOverview()
+
+    expect(overview.state).toBe('unsupported')
+    expect(overview.operationManifest.state).toBe('malformed')
+    expect(overview.nextAction).toBe('repair_or_upgrade_secrets_broker')
+    expect(Object.values(overview.capabilities).every((value) => !value)).toBe(
+      true
+    )
+  })
+
+  it('does not treat legacy remote mutation names as executable operations', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.stubGlobal(
+      'fetch',
+      overviewFetch({
+        sourceKind: 'vault',
+        sourceCapabilities: [
+          'read',
+          'reveal',
+          'write/update',
+          'rotate/reset',
+          'policy',
+        ],
+        sourceOperationMaturities: {
+          '/v1/management/secrets/edit/apply': 'unavailable',
+          '/v1/management/secrets/reset/apply': 'unavailable',
+          '/v1/management/secrets/policy/apply': 'planned',
+        },
+      })
+    )
+
+    const { fetchSecretsBrokerOverview } = await import('./client')
+    const overview = await fetchSecretsBrokerOverview()
+
+    expect(overview.state).toBe('ready')
+    expect(overview.sources[0]?.capabilityNames).toEqual(
+      expect.arrayContaining(['write/update', 'rotate/reset', 'policy'])
+    )
+    expect(overview.sources[0]?.capabilities).toMatchObject({
+      reveal: true,
+      mutation: false,
+      write: false,
+      reset: false,
+      policy: false,
+    })
+    expect(overview.capabilities.mutation).toBe(false)
+  })
+
+  it('preserves an unknown operation maturity for diagnostics and blocks that action', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.stubGlobal(
+      'fetch',
+      overviewFetch({
+        operationMaturities: {
+          '/v1/management/secrets/edit/apply': 'future-executable-mode',
+          '/v1/management/secrets/reset/apply': 'future-executable-mode',
+          '/v1/management/secrets/policy/apply': 'future-executable-mode',
+        },
+      })
+    )
+
+    const { fetchSecretsBrokerOverview } = await import('./client')
+    const overview = await fetchSecretsBrokerOverview()
+
+    expect(overview.state).toBe('ready')
+    expect(overview.operationManifest.state).toBe('ready')
+    expect(overview.capabilities.mutation).toBe(false)
+    expect(
+      overview.operations.find(
+        (operation) => operation.path === '/v1/management/secrets/edit/apply'
+      )
+    ).toMatchObject({
+      maturity: 'unknown',
+      rawMaturity: 'future-executable-mode',
+      valid: false,
+    })
+  })
+
+  it('fails closed and preserves diagnostics for a newer incompatible Broker contract', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.stubGlobal('fetch', overviewFetch({ contractVersion: '2.0.0' }))
+
+    const { fetchSecretsBrokerOverview } = await import('./client')
+    const overview = await fetchSecretsBrokerOverview()
+
+    expect(overview.state).toBe('unsupported')
+    expect(overview.outcome).toBe('unsupported')
+    expect(overview.nextAction).toBe('upgrade_service_admin')
+    expect(overview.brokerOutcome).toBe('ready')
+    expect(overview.contractCompatibility).toMatchObject({
+      state: 'unsupported',
+      observedVersion: '2.0.0',
+      nextAction: 'upgrade_service_admin',
+    })
+    expect(Object.values(overview.capabilities)).toEqual(
+      expect.arrayContaining([false])
+    )
+    expect(Object.values(overview.capabilities).every((value) => !value)).toBe(
+      true
+    )
+    expect(overview.sources[0]?.capabilityNames).toContain('reveal')
+    expect(overview.sources[0]?.capabilities).toMatchObject({
+      reveal: false,
+      mutation: false,
+    })
+    expect(overview.telemetryAvailable).toBe(false)
+    expect(overview.auditAvailable).toBe(false)
+    expect(overview.routes.capabilities).toBe('ready')
+    expect(overview.summary).toMatch(/not supported/i)
+    expect(overview.summary).toMatch(/upgrade_service_admin/i)
+  })
+
+  it('fails closed when the Broker omits its contract version', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.stubGlobal('fetch', overviewFetch({ contractVersion: null }))
+
+    const { fetchSecretsBrokerOverview } = await import('./client')
+    const overview = await fetchSecretsBrokerOverview()
+
+    expect(overview.state).toBe('unsupported')
+    expect(overview.contractCompatibility.state).toBe('missing')
+    expect(overview.nextAction).toBe('upgrade_secrets_broker')
+    expect(Object.values(overview.capabilities).every((value) => !value)).toBe(
+      true
+    )
   })
 
   it('uses deterministic fixture metadata only when explicit stub mode is enabled', async () => {
@@ -682,23 +1061,7 @@ describe('Secrets Broker live client', () => {
 
   it('fails closed as unsupported when the broker source route is missing', async () => {
     vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
-
-    const fetchMock = vi.fn(async (url: string) => {
-      if (
-        url === 'http://runtime.test/api/dashboard/services/%40secretsbroker'
-      ) {
-        return jsonResponse({ service: service() })
-      }
-
-      if (
-        url ===
-        'http://runtime.test/api/services/%40secretsbroker/proxy/v1/sources/status'
-      ) {
-        return jsonResponse({ detail: 'not found' }, { status: 404 })
-      }
-
-      throw new Error(`Unexpected URL: ${url}`)
-    })
+    const fetchMock = overviewFetch({ sourceStatus: 404 })
 
     vi.stubGlobal('fetch', fetchMock)
 
@@ -708,44 +1071,25 @@ describe('Secrets Broker live client', () => {
 
     expect(overview.state).toBe('unsupported')
     expect(overview.capabilities.sourcesStatus).toBe(false)
-    expect(overview.summary).toMatch(/not exposed/i)
+    expect(overview.routes.sources).toBe('unsupported')
+    expect(overview.summary).toMatch(/sources \(unsupported\)/i)
   })
 
   it.each([
-    ['locked', 'locked'],
-    ['auth_required', 'auth-required'],
-    ['policy_denied', 'policy-denied'],
-    ['degraded', 'degraded'],
-    ['unconfigured', 'setup-needed'],
+    ['locked', 'locked', 'locked'],
+    ['auth_required', 'source_auth_required', 'auth-required'],
+    ['reconnect_required', 'source_auth_required', 'auth-required'],
+    ['denied', 'policy_denied', 'policy-denied'],
+    ['config_error', 'source_unavailable', 'degraded'],
+    ['degraded', 'source_unavailable', 'degraded'],
+    ['missing', 'setup_needed', 'setup-needed'],
+    ['disabled', 'disabled', 'unsupported'],
   ])(
-    'maps source state %s into overview state %s',
-    async (sourceState, expectedState) => {
+    'maps source lifecycle %s into overview state %s',
+    async (sourceState, outcome, expectedState) => {
       vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
-
-      const fetchMock = vi.fn(async (url: string) => {
-        if (
-          url === 'http://runtime.test/api/dashboard/services/%40secretsbroker'
-        ) {
-          return jsonResponse({ service: service() })
-        }
-
-        if (
-          url ===
-          'http://runtime.test/api/services/%40secretsbroker/proxy/v1/sources/status'
-        ) {
-          return jsonResponse({
-            status: 'ready',
-            sources: [
-              {
-                id: '@secretsbroker/external/ops',
-                provider: 'vault',
-                state: sourceState,
-              },
-            ],
-          })
-        }
-
-        throw new Error(`Unexpected URL: ${url}`)
+      const fetchMock = overviewFetch({
+        sourceLifecycle: { state: sourceState, outcome },
       })
 
       vi.stubGlobal('fetch', fetchMock)
@@ -756,6 +1100,8 @@ describe('Secrets Broker live client', () => {
 
       expect(overview.state).toBe(expectedState)
       expect(overview.sources[0]?.state).toBe(expectedState)
+      expect(overview.sources[0]?.lifecycleState).toBe(sourceState)
+      expect(overview.sources[0]?.outcome).toBe(outcome)
     }
   )
 })

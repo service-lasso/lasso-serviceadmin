@@ -9,6 +9,7 @@ Reference material elsewhere under `docs/` is available to the repo, but it does
 
 - `help/` for operator-facing Help Center guides and runbooks shown in the app
 - `reference/` for design notes and implementation specs that are not shown in the app by default
+- `secrets-broker-contract-consumer.md` for the canonical Broker-to-Admin query and mapping contract
 
 ## Notes
 
