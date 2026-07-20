@@ -130,6 +130,16 @@ describe('Help Center navigation coverage', () => {
     )
   })
 
+  it('maps Operations audit to the audit operator guide', () => {
+    const coverageByRoute = new Map(
+      helpCenterNavigationCoverage.map((entry) => [entry.route, entry])
+    )
+
+    expect(coverageByRoute.get('/operations/audit-logging')?.articleId).toBe(
+      'help/operations-audit-operator-guide.md'
+    )
+  })
+
   it('keeps every primary navigation route covered by a doc or explicit exception', () => {
     const routes = collectNavRoutes()
     const coverageByRoute = new Map(

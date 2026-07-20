@@ -65,7 +65,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/operations/audit-logging',
-    articleId: 'help/product-status-and-safety.md',
+    articleId: 'help/operations-audit-operator-guide.md',
   },
   {
     route: '/secrets-broker',
