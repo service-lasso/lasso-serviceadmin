@@ -120,6 +120,16 @@ describe('Help Center navigation coverage', () => {
     expect(coverageByRoute.get('/service-routes')?.articleId).toBe(routesGuide)
   })
 
+  it('maps Operations telemetry to the telemetry operator guide', () => {
+    const coverageByRoute = new Map(
+      helpCenterNavigationCoverage.map((entry) => [entry.route, entry])
+    )
+
+    expect(coverageByRoute.get('/operations/telemetry')?.articleId).toBe(
+      'help/operations-telemetry-operator-guide.md'
+    )
+  })
+
   it('keeps every primary navigation route covered by a doc or explicit exception', () => {
     const routes = collectNavRoutes()
     const coverageByRoute = new Map(
