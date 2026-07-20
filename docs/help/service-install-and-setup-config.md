@@ -1,27 +1,179 @@
 # Service Install and Setup Config
 
-Use this guide to keep install/setup data consistent across services.
+Use this guide to keep installed service metadata, local paths, and generated
+configuration understandable for operators. The Installed view should answer
+where a service lives, where its local state is written, and which setup action
+created or refreshed that material.
 
-## Required install paths
+## Path fields in Installed
 
-Record these in service metadata so Installed view is useful:
+Record paths in service metadata so Installed can show the local contract
+without asking operators to inspect the host filesystem first.
 
-- install path
-- config path
-- data path
-- optional log/work paths
+| Field | What it means | Operator check |
+| --- | --- | --- |
+| Install path | The root folder or package location that contains the service manifest, runtime payload, scripts, and versioned defaults. | The folder exists on this machine and matches the service id or package identity. |
+| Manifest path | The exact `service.json` file that Service Lasso discovered for the service. | The manifest is the intended one, not an old copy from another services root. |
+| Config path | The effective local configuration file or folder used when the service starts. | Generated config exists after setup and does not expose raw secrets. |
+| Data path | Service-owned durable state, such as databases, indexes, uploads, or generated runtime data. | The location is writable by the service and is not confused with versioned defaults. |
+| Log path | Service stdout/stderr, runtime logs, or service-specific log files when available. | Operators can use Logs or the path to inspect recent startup and action evidence. |
+| Work path | Temporary, cache, queue, build, or scratch space that can be regenerated unless the service contract says otherwise. | The path has enough space and can be cleared only when the service allows it. |
+
+Paths may be absolute when they describe this machine, or relative when the
+runtime resolves them from the service folder. Keep that distinction visible in
+operator docs and examples. A path that is correct on one host can be wrong on
+another host, so do not copy machine-specific paths between machines without
+checking the services root, drive, user profile, mounts, containers, and
+permissions.
+
+## Why metadata must record paths
+
+Installed is a metadata view. It is useful only when the service manifest,
+runtime discovery, or setup actions report the paths they own. Recording those
+paths lets operators:
+
+- distinguish an installed service from a discovered but missing service
+- find the manifest that produced the current row
+- verify whether setup generated config in the expected place
+- separate versioned package files from local state and logs
+- detect stale rows left by moved folders, renamed services, or old services
+  roots
+- collect handoff evidence without exposing raw secret values
+
+If a service has an install or config action but does not report where material
+was written, the action result is hard to validate from Service Admin. Add the
+path metadata before treating the service as operator-ready.
 
 ## Setup flow
 
-A standard setup usually includes:
+A standard setup should make folders and generated config predictable.
 
-1. create folders
-2. copy config templates
-3. set env variables
-4. run initial install action
+1. Create the service folder under the configured services root.
+2. Keep versioned defaults, templates, scripts, and manifest files in the
+   install path.
+3. Create local config, data, log, and work folders with permissions the service
+   runtime can use.
+4. Materialize config from templates, non-sensitive variables, and secret
+   references.
+5. Run the `install` action when dependencies, package files, first-run state,
+   or providers must be prepared.
+6. Run the `config` action when effective config must be generated, refreshed,
+   or opened for review.
+7. Validate Installed, Variables, Service Details, Logs, and Runtime before
+   starting or restarting the service.
 
-## Config hygiene
+Treat `install` and `config` as service actions with visible outcomes, not as
+hidden setup side effects. Operators should be able to see what changed, which
+path was affected, and what to check next.
 
-- keep defaults versioned
-- keep environment-specific values separate
-- avoid hard-coding machine-specific paths in docs/examples
+See [Service Actions](service-actions.md) for action behavior and follow-up
+checks.
+
+## Defaults, generated config, and service data
+
+Keep these categories separate:
+
+| Category | Examples | Where it belongs |
+| --- | --- | --- |
+| Defaults | Sample config, schema, templates, example environment names, documented ports. | Versioned under the install path or package source. |
+| Generated config | Effective config files created from templates, variables, and secret refs. | Config path, usually machine-specific and regenerated by setup. |
+| Operator-edited config | Reviewed local overrides, explicit non-sensitive values, enabled features. | Config path or Variables, with clear ownership. |
+| Service-owned data | Databases, queues, uploads, caches that the service creates while running. | Data or work path, not the defaults folder. |
+| Logs and receipts | Runtime logs, action output, operation ids, setup receipts. | Log path or Service Admin operation evidence. |
+
+Do not store raw credentials in defaults, generated config previews, Help Center
+examples, issue comments, support bundles, or screenshots. Use Variables for
+visible non-sensitive values and secret references for tokens, passwords, API
+keys, private keys, and other sensitive material.
+
+See [Variables and Secrets Broker Safety Guide](variables-and-secrets-broker-safety-guide.md).
+
+## Config revision and backups
+
+When a service supports config revisions, backups, or setup receipts, record the
+relationship between the current config path and its backup material.
+
+- Keep the active generated config easy to identify.
+- Keep previous revisions or backups outside the versioned defaults folder.
+- Name backups with enough time or revision context to support rollback.
+- Redact or omit raw secret values from backups unless the backing secret store
+  explicitly owns and protects them.
+- After a `config` action, check whether Installed, Service Details, or
+  Operations show the generated path, revision, operation id, or backup result.
+
+If a service does not support automatic backups, say so in its operator notes
+and rely on source-controlled defaults plus explicit local change management.
+
+## Machine-specific path warnings
+
+Paths are local evidence. Review them whenever a service moves machines,
+changes users, changes drive letters, runs inside a container, or uses mounted
+storage.
+
+Common warning signs:
+
+- an absolute path includes a username from another machine
+- a drive, mount, or container path is unavailable
+- the manifest path points at an old services root
+- generated config is under the install path when it should be local state
+- data or logs are under a temporary work folder unexpectedly
+- examples hard-code one developer workstation path
+- a service uses provider binaries by path instead of declaring the provider
+  relationship in metadata
+
+Prefer service-relative paths and variables for reusable examples. Use absolute
+paths only when documenting the actual installed state on this machine.
+
+## Troubleshooting Installed
+
+### Installed view is empty
+
+Check:
+
+- the Service Lasso runtime is reachable from Service Admin
+- the configured services root is correct for this machine
+- at least one service folder contains a discoverable `service.json`
+- service discovery or runtime reload has run after adding files
+- Runtime does not report a discovery or manifest parsing error
+- browser data is not showing an old disconnected admin session
+
+### Installed view is stale
+
+Check:
+
+- the service folder was not moved, renamed, or deleted without a runtime reload
+- the manifest `id` still matches the service folder and package identity
+- Project or package changes were deployed to the services root actually used by
+  this machine
+- old service rows are not coming from a second configured services root
+- Service Details, Runtime, and Logs agree with the Installed row
+
+### Paths are missing
+
+Check:
+
+- the manifest or setup result records install, manifest, config, data, log, and
+  work paths where applicable
+- the `install` or `config` action has been run for services that generate local
+  material
+- the runtime API response includes path metadata for the service
+- permission errors did not prevent folder creation
+- service docs distinguish unsupported paths from unknown paths
+
+### Config exists but the service still fails
+
+Check:
+
+- Variables contain the expected non-sensitive values
+- secret references resolve through Secrets Broker policy rather than appearing
+  as raw values
+- generated config points to this machine's paths, ports, and providers
+- install dependencies were prepared before the start action
+- Logs show the same config path the Installed view reports
+
+## Related references
+
+- [Variables and Secrets Broker Safety Guide](variables-and-secrets-broker-safety-guide.md)
+- [Environment Variables: Global and Service Reuse](environment-variables-global-and-service-reuse.md)
+- [Service Actions](service-actions.md)
+- [How to Create a Basic Service](how-to-create-a-basic-service.md)
