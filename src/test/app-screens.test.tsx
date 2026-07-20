@@ -259,6 +259,27 @@ describe('app screens', () => {
     }
   })
 
+  it('loads the operator troubleshooting runbook in Help Center', async () => {
+    await renderRoute(
+      '/help-center?doc=help/operator-troubleshooting-runbooks.md'
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', {
+          name: /^Operator Troubleshooting Runbooks$/i,
+        })
+      ).toBeVisible()
+    })
+
+    expect(
+      screen.getByRole('heading', { name: /^Service Will Not Start$/i })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Secrets Broker Provider Auth Required/i)
+    ).toBeVisible()
+  })
+
   it.each(headerIdentityRoutes)(
     'moves $identity page identity into the header without a duplicated body heading',
     async ({ path, identity, removedHeading, removedCopy }) => {
