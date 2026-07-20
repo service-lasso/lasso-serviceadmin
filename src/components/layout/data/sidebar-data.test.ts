@@ -110,6 +110,16 @@ describe('Help Center navigation coverage', () => {
     )
   })
 
+  it('maps Network and Service Routes to the route operator guide', () => {
+    const coverageByRoute = new Map(
+      helpCenterNavigationCoverage.map((entry) => [entry.route, entry])
+    )
+    const routesGuide = 'help/network-and-service-routes-operator-guide.md'
+
+    expect(coverageByRoute.get('/network')?.articleId).toBe(routesGuide)
+    expect(coverageByRoute.get('/service-routes')?.articleId).toBe(routesGuide)
+  })
+
   it('keeps every primary navigation route covered by a doc or explicit exception', () => {
     const routes = collectNavRoutes()
     const coverageByRoute = new Map(
