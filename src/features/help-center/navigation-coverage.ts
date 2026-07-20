@@ -32,12 +32,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/service-routes',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#333',
-      reason:
-        'Routes documentation is planned as the Network and Service Routes operator guide.',
-    },
+    articleId: 'help/network-and-service-routes-operator-guide.md',
   },
   {
     route: '/logs',
@@ -62,12 +57,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/network',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#333',
-      reason:
-        'Network documentation is planned with the Network and Service Routes operator guide.',
-    },
+    articleId: 'help/network-and-service-routes-operator-guide.md',
   },
   {
     route: '/operations/telemetry',
