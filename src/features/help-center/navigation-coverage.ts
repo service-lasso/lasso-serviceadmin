@@ -41,16 +41,11 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/logs',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#330',
-      reason:
-        'Logs coverage is planned with the Runtime and Logs operator runbook.',
-    },
+    articleId: 'help/runtime-and-logs-operator-runbook.md',
   },
   {
     route: '/runtime',
-    articleId: 'help/health-checks.md',
+    articleId: 'help/runtime-and-logs-operator-runbook.md',
   },
   {
     route: '/installed',
