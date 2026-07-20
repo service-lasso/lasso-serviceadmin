@@ -25,3 +25,12 @@ In Service Admin Variables page, operators should be able to:
 - filter by scope
 - sort columns
 - identify which services consume each variable
+
+## Secret safety
+
+Variables are for non-sensitive values. Sensitive values should be represented
+as Secrets Broker references so Service Admin can show safe metadata without
+rendering the resolved credential.
+
+For the full operator boundary, see
+[Variables and Secrets Broker Safety Guide](variables-and-secrets-broker-safety-guide.md).

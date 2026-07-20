@@ -94,6 +94,22 @@ describe('sidebar optional page classification', () => {
 })
 
 describe('Help Center navigation coverage', () => {
+  it('maps variables and Secrets Broker operator routes to the safety guide', () => {
+    const coverageByRoute = new Map(
+      helpCenterNavigationCoverage.map((entry) => [entry.route, entry])
+    )
+    const safetyGuide = 'help/variables-and-secrets-broker-safety-guide.md'
+
+    expect(coverageByRoute.get('/variables')?.articleId).toBe(safetyGuide)
+    expect(coverageByRoute.get('/secrets-broker')?.articleId).toBe(safetyGuide)
+    expect(coverageByRoute.get('/secrets-broker/secrets')?.articleId).toBe(
+      safetyGuide
+    )
+    expect(coverageByRoute.get('/secrets-broker/topology')?.articleId).toBe(
+      safetyGuide
+    )
+  })
+
   it('keeps every primary navigation route covered by a doc or explicit exception', () => {
     const routes = collectNavRoutes()
     const coverageByRoute = new Map(
