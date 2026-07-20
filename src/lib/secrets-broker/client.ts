@@ -32,7 +32,118 @@ export type SecretsBrokerSourceStatus = {
   provider: string
   state: SecretsBrokerSourceState
   reason: string
+  lifecycleState: string
+  outcome: string
+  nextAction: string
+  enabled: boolean
+  critical: boolean
+  priority: number
+  namespaces: string[]
+  capabilityNames: string[]
   capabilities: Record<string, boolean>
+  operations: SecretsBrokerOperationCapability[]
+}
+
+export type SecretsBrokerRouteName =
+  | 'status'
+  | 'state'
+  | 'capabilities'
+  | 'sources'
+  | 'providerCapabilities'
+  | 'providerConfig'
+  | 'telemetry'
+  | 'events'
+
+export type SecretsBrokerRouteState =
+  | 'ready'
+  | 'unsupported'
+  | 'denied'
+  | 'unavailable'
+
+export const secretsBrokerSupportedContractRange = '>=1.0.0 <2.0.0'
+
+export type SecretsBrokerContractCompatibilityState =
+  | 'compatible'
+  | 'missing'
+  | 'malformed'
+  | 'unsupported'
+  | 'not-applicable'
+
+export type SecretsBrokerContractCompatibility = {
+  state: SecretsBrokerContractCompatibilityState
+  observedVersion: string
+  supportedRange: string
+  reason: string
+  nextAction: string
+}
+
+export type SecretsBrokerOperationMaturity =
+  | 'unavailable'
+  | 'planned'
+  | 'read-only'
+  | 'dry-run'
+  | 'executable'
+  | 'validated'
+  | 'unknown'
+
+export type SecretsBrokerOperationClassification =
+  | 'read'
+  | 'mutation'
+  | 'unknown'
+
+export type SecretsBrokerOperationCapability = {
+  operationId: string
+  method: string
+  path: string
+  maturity: SecretsBrokerOperationMaturity
+  rawMaturity: string
+  classification: SecretsBrokerOperationClassification
+  authenticationRequired: boolean
+  policyRequired: boolean
+  auditRequired: boolean
+  scope: string
+  providerKinds: string[]
+  limitationCode: string
+  reasonCode: string
+  nextAction: string
+  valid: boolean
+}
+
+export type SecretsBrokerOperationManifestState =
+  | 'ready'
+  | 'not-required'
+  | 'missing'
+  | 'malformed'
+  | 'unsupported'
+  | 'not-applicable'
+
+export type SecretsBrokerOperationManifestCompatibility = {
+  state: SecretsBrokerOperationManifestState
+  observedVersion: string
+  reason: string
+  nextAction: string
+}
+
+export type SecretsBrokerProviderCapability = {
+  providerKind: string
+  displayName: string
+  supported: boolean
+  capabilities: string[]
+  operations: SecretsBrokerOperationCapability[]
+  limitations: string[]
+}
+
+export type SecretsBrokerProviderStatus = {
+  providerId: string
+  providerKind: string
+  displayName: string
+  state: string
+  outcome: string
+  nextAction: string
+  auditStatus: string
+  namespaces: string[]
+  capabilities: string[]
+  operations: SecretsBrokerOperationCapability[]
 }
 
 export type SecretsBrokerOverview = {
@@ -45,6 +156,23 @@ export type SecretsBrokerOverview = {
   capabilities: Record<string, boolean>
   telemetryAvailable: boolean
   auditAvailable: boolean
+  apiVersion: string
+  contractVersion: string
+  brokerVersion: string
+  brokerState: string
+  outcome: string
+  nextAction: string
+  brokerOutcome: string
+  brokerNextAction: string
+  contractCompatibility: SecretsBrokerContractCompatibility
+  manifestVersion: string
+  operationManifest: SecretsBrokerOperationManifestCompatibility
+  operations: SecretsBrokerOperationCapability[]
+  endpointCapabilities: string[]
+  featureCapabilities: string[]
+  providerCapabilities: SecretsBrokerProviderCapability[]
+  providers: SecretsBrokerProviderStatus[]
+  routes: Record<SecretsBrokerRouteName, SecretsBrokerRouteState>
   stubMode: boolean
 }
 
@@ -185,28 +313,113 @@ type RuntimeServiceResponse = {
   service?: DashboardService | null
 }
 
-type RawBrokerSource = {
-  id?: unknown
-  name?: unknown
-  label?: unknown
-  provider?: unknown
-  type?: unknown
+type RawBrokerStatusResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  version?: unknown
   state?: unknown
-  status?: unknown
-  reason?: unknown
-  message?: unknown
+  ready?: unknown
+  checkedAt?: unknown
+  description?: unknown
+}
+
+type RawBrokerStateResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  state?: unknown
+  ready?: unknown
+  outcome?: unknown
+  keyState?: unknown
+  nextAction?: unknown
+}
+
+type RawBrokerCapabilitiesResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  contractVersion?: unknown
+  manifestVersion?: unknown
+  version?: unknown
+  endpoints?: unknown
+  features?: unknown
+  futureFeatures?: unknown
+  outcomes?: unknown
+  operations?: unknown
+}
+
+type RawBrokerSource = {
+  sourceId?: unknown
+  kind?: unknown
+  displayName?: unknown
+  enabled?: unknown
+  critical?: unknown
+  priority?: unknown
+  state?: unknown
+  outcome?: unknown
+  nextAction?: unknown
+  lifecycle?: unknown
+  namespaces?: unknown
   capabilities?: unknown
+  operations?: unknown
 }
 
 type RawBrokerSourcesResponse = {
-  status?: unknown
-  state?: unknown
-  summary?: unknown
-  reason?: unknown
+  serviceId?: unknown
+  apiVersion?: unknown
+  sourceConfig?: unknown
   sources?: unknown
+}
+
+type RawProviderCapability = {
+  providerKind?: unknown
+  displayName?: unknown
+  supported?: unknown
   capabilities?: unknown
-  telemetry?: unknown
-  audit?: unknown
+  operations?: unknown
+  limitations?: unknown
+}
+
+type RawProviderCapabilitiesResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  outcome?: unknown
+  capabilities?: unknown
+  manifestVersion?: unknown
+}
+
+type RawProviderStatus = {
+  providerId?: unknown
+  providerKind?: unknown
+  displayName?: unknown
+  state?: unknown
+  outcome?: unknown
+  nextAction?: unknown
+  auditStatus?: unknown
+  namespaces?: unknown
+  capabilities?: unknown
+  operations?: unknown
+}
+
+type RawProviderConfigStatusResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  outcome?: unknown
+  currentProvider?: unknown
+  providers?: unknown
+  manifestVersion?: unknown
+}
+
+type RawTelemetryResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  contractVersion?: unknown
+  outcome?: unknown
+}
+
+type RawEventsResponse = {
+  serviceId?: unknown
+  apiVersion?: unknown
+  outcome?: unknown
+  safety?: unknown
 }
 
 type RawManagedSecret = {
@@ -330,9 +543,13 @@ function optionalBoolean(value: unknown) {
 }
 
 function normalizeCapabilities(value: unknown) {
-  if (!isRecord(value)) {
-    return {}
+  if (Array.isArray(value)) {
+    return Object.fromEntries(
+      normalizeStringList(value).map((capability) => [capability, true])
+    )
   }
+
+  if (!isRecord(value)) return {}
 
   return Object.fromEntries(
     Object.entries(value).map(([key, capabilityValue]) => [
@@ -356,8 +573,257 @@ function optionalNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function normalizeSourceState(value: unknown): SecretsBrokerSourceState {
-  const normalized = optionalString(value)?.toLowerCase().replace(/_/g, '-')
+function normalizeToken(value: unknown) {
+  return optionalString(value)?.toLowerCase().replace(/_/g, '-') ?? ''
+}
+
+const semanticContractVersionPattern =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
+
+export function assessSecretsBrokerContractCompatibility(
+  value: unknown
+): SecretsBrokerContractCompatibility {
+  const observedVersion = optionalString(value) ?? ''
+
+  if (!observedVersion) {
+    return {
+      state: 'missing',
+      observedVersion,
+      supportedRange: secretsBrokerSupportedContractRange,
+      reason: 'Secrets Broker did not report a contract version.',
+      nextAction: 'upgrade_secrets_broker',
+    }
+  }
+
+  const match = semanticContractVersionPattern.exec(observedVersion)
+  if (!match) {
+    return {
+      state: 'malformed',
+      observedVersion,
+      supportedRange: secretsBrokerSupportedContractRange,
+      reason: `Secrets Broker reported malformed contract version ${observedVersion}.`,
+      nextAction: 'repair_or_upgrade_secrets_broker',
+    }
+  }
+
+  const major = Number(match[1])
+  if (major !== 1) {
+    const nextAction =
+      major > 1 ? 'upgrade_service_admin' : 'upgrade_secrets_broker'
+
+    return {
+      state: 'unsupported',
+      observedVersion,
+      supportedRange: secretsBrokerSupportedContractRange,
+      reason: `Secrets Broker contract ${observedVersion} is not supported by this Service Admin release.`,
+      nextAction,
+    }
+  }
+
+  return {
+    state: 'compatible',
+    observedVersion,
+    supportedRange: secretsBrokerSupportedContractRange,
+    reason: `Secrets Broker contract ${observedVersion} is compatible.`,
+    nextAction: '',
+  }
+}
+
+function normalizeOperationCapabilities(
+  value: unknown
+): SecretsBrokerOperationCapability[] {
+  if (!Array.isArray(value)) return []
+
+  const maturities = new Set<SecretsBrokerOperationMaturity>([
+    'unavailable',
+    'planned',
+    'read-only',
+    'dry-run',
+    'executable',
+    'validated',
+  ])
+  const classifications = new Set<SecretsBrokerOperationClassification>([
+    'read',
+    'mutation',
+  ])
+
+  return value.filter(isRecord).map((item) => {
+    const operationId = requiredString(item.operationId, '')
+    const method = requiredString(item.method, '').toUpperCase()
+    const path = requiredString(item.path, '')
+    const rawMaturity = normalizeToken(item.maturity)
+    const maturity = maturities.has(
+      rawMaturity as SecretsBrokerOperationMaturity
+    )
+      ? (rawMaturity as SecretsBrokerOperationMaturity)
+      : 'unknown'
+    const rawClassification = normalizeToken(item.classification)
+    const classification = classifications.has(
+      rawClassification as SecretsBrokerOperationClassification
+    )
+      ? (rawClassification as SecretsBrokerOperationClassification)
+      : 'unknown'
+    const scope = requiredString(item.scope, '')
+    const providerKinds = normalizeStringList(item.providerKinds)
+    const limitationCode = requiredString(item.limitationCode, '')
+    const reasonCode = requiredString(item.reasonCode, '')
+    const nextAction = requiredString(item.nextAction, '')
+    const valid =
+      Boolean(operationId && method && path && scope) &&
+      maturity !== 'unknown' &&
+      classification !== 'unknown' &&
+      typeof item.authenticationRequired === 'boolean' &&
+      typeof item.policyRequired === 'boolean' &&
+      typeof item.auditRequired === 'boolean' &&
+      Array.isArray(item.providerKinds) &&
+      Boolean(limitationCode && reasonCode && nextAction)
+
+    return {
+      operationId,
+      method,
+      path,
+      maturity,
+      rawMaturity,
+      classification,
+      authenticationRequired: optionalBoolean(item.authenticationRequired),
+      policyRequired: optionalBoolean(item.policyRequired),
+      auditRequired: optionalBoolean(item.auditRequired),
+      scope,
+      providerKinds,
+      limitationCode,
+      reasonCode,
+      nextAction,
+      valid,
+    }
+  })
+}
+
+export function assessSecretsBrokerOperationManifest(
+  contractVersion: string,
+  manifestVersionValue: unknown,
+  operations: SecretsBrokerOperationCapability[]
+): SecretsBrokerOperationManifestCompatibility {
+  const contractMatch = semanticContractVersionPattern.exec(contractVersion)
+  const manifestRequired =
+    contractMatch !== null &&
+    Number(contractMatch[1]) === 1 &&
+    Number(contractMatch[2]) >= 1
+
+  if (!manifestRequired) {
+    return {
+      state: 'not-required',
+      observedVersion: optionalString(manifestVersionValue) ?? '',
+      reason:
+        'This compatible Broker contract predates the operation manifest.',
+      nextAction: '',
+    }
+  }
+
+  const observedVersion = optionalString(manifestVersionValue) ?? ''
+  if (!observedVersion) {
+    return {
+      state: 'missing',
+      observedVersion,
+      reason: 'Secrets Broker did not report an operation manifest version.',
+      nextAction: 'upgrade_secrets_broker',
+    }
+  }
+
+  const manifestMatch = semanticContractVersionPattern.exec(observedVersion)
+  if (!manifestMatch) {
+    return {
+      state: 'malformed',
+      observedVersion,
+      reason: `Secrets Broker reported malformed operation manifest version ${observedVersion}.`,
+      nextAction: 'repair_or_upgrade_secrets_broker',
+    }
+  }
+
+  const manifestMajor = Number(manifestMatch[1])
+  if (manifestMajor !== 1) {
+    return {
+      state: 'unsupported',
+      observedVersion,
+      reason: `Secrets Broker operation manifest ${observedVersion} is not supported by this Service Admin release.`,
+      nextAction:
+        manifestMajor > 1 ? 'upgrade_service_admin' : 'upgrade_secrets_broker',
+    }
+  }
+
+  if (!operations.some((operation) => operation.valid)) {
+    return {
+      state: 'malformed',
+      observedVersion,
+      reason:
+        'Secrets Broker operation manifest has no valid operation records.',
+      nextAction: 'repair_or_upgrade_secrets_broker',
+    }
+  }
+
+  return {
+    state: 'ready',
+    observedVersion,
+    reason: `Secrets Broker operation manifest ${observedVersion} is compatible.`,
+    nextAction: '',
+  }
+}
+
+function operationForRoute(
+  operations: SecretsBrokerOperationCapability[],
+  method: string,
+  path: string
+) {
+  return operations.find(
+    (operation) =>
+      operation.valid && operation.method === method && operation.path === path
+  )
+}
+
+function operationAllowsRead(
+  operations: SecretsBrokerOperationCapability[],
+  method: string,
+  path: string
+) {
+  const operation = operationForRoute(operations, method, path)
+  return Boolean(
+    operation &&
+    operation.classification === 'read' &&
+    ['read-only', 'executable', 'validated'].includes(operation.maturity)
+  )
+}
+
+function operationAllowsPlanning(
+  operations: SecretsBrokerOperationCapability[],
+  method: string,
+  path: string
+) {
+  const operation = operationForRoute(operations, method, path)
+  return Boolean(
+    operation &&
+    operation.classification === 'mutation' &&
+    ['dry-run', 'executable', 'validated'].includes(operation.maturity)
+  )
+}
+
+function operationAllowsMutation(
+  operations: SecretsBrokerOperationCapability[],
+  method: string,
+  path: string
+) {
+  const operation = operationForRoute(operations, method, path)
+  return Boolean(
+    operation &&
+    operation.classification === 'mutation' &&
+    ['executable', 'validated'].includes(operation.maturity)
+  )
+}
+
+function normalizeSourceState(
+  lifecycleState: unknown,
+  outcome?: unknown
+): SecretsBrokerSourceState {
+  const normalized = normalizeToken(lifecycleState)
+  const normalizedOutcome = normalizeToken(outcome)
 
   if (
     normalized === 'ready' ||
@@ -376,8 +842,35 @@ function normalizeSourceState(value: unknown): SecretsBrokerSourceState {
     return 'ready'
   }
 
-  if (normalized === 'missing' || normalized === 'unconfigured') {
+  if (normalized === 'connected') return 'ready'
+
+  if (
+    normalized === 'missing' ||
+    normalized === 'unconfigured' ||
+    normalizedOutcome === 'setup-needed'
+  ) {
     return 'setup-needed'
+  }
+
+  if (normalized === 'denied' || normalizedOutcome === 'policy-denied') {
+    return 'policy-denied'
+  }
+
+  if (
+    normalized === 'auth-required' ||
+    normalized === 'reconnect-required' ||
+    normalized === 'revoked' ||
+    normalizedOutcome === 'source-auth-required'
+  ) {
+    return 'auth-required'
+  }
+
+  if (normalized === 'disabled' || normalizedOutcome === 'disabled') {
+    return 'unsupported'
+  }
+
+  if (normalized === 'config-error' || normalized === 'degraded') {
+    return 'degraded'
   }
 
   return 'unavailable'
@@ -393,12 +886,12 @@ function sourceStateToOverviewState(
 function normalizeOverviewState(
   service: DashboardService,
   brokerStatus: unknown,
+  brokerOutcome: unknown,
   sources: SecretsBrokerSourceStatus[],
   capabilities: Record<string, boolean>
 ): SecretsBrokerLiveState {
-  const normalizedStatus = optionalString(brokerStatus)
-    ?.toLowerCase()
-    .replace(/_/g, '-')
+  const normalizedStatus = normalizeToken(brokerStatus)
+  const normalizedOutcome = normalizeToken(brokerOutcome)
 
   if (service.status === 'stopped') {
     return 'unavailable'
@@ -408,7 +901,10 @@ function normalizeOverviewState(
     return 'degraded'
   }
 
-  if (normalizedStatus === 'audit-unavailable') {
+  if (
+    normalizedStatus === 'audit-unavailable' ||
+    normalizedOutcome === 'audit-unavailable'
+  ) {
     return 'audit-unavailable'
   }
 
@@ -424,7 +920,13 @@ function normalizeOverviewState(
     return normalizedStatus
   }
 
-  const blockingSource = sources.find((source) => source.state !== 'ready')
+  const contractState = normalizedStatus || normalizedOutcome
+  if (contractState === 'source-auth-required') return 'auth-required'
+  if (contractState === 'setup-needed') return 'setup-needed'
+
+  const blockingSource = sources.find(
+    (source) => source.enabled && source.critical && source.state !== 'ready'
+  )
   if (blockingSource) {
     return sourceStateToOverviewState(blockingSource.state)
   }
@@ -467,26 +969,148 @@ function normalizeSources(value: unknown): SecretsBrokerSourceStatus[] {
   }
 
   return value.filter(isRecord).map((source: RawBrokerSource, index) => {
-    const id =
-      optionalString(source.id) ??
-      optionalString(source.name) ??
-      `source-${index + 1}`
-    const provider =
-      optionalString(source.provider) ??
-      optionalString(source.type) ??
-      'unknown'
-    const state = normalizeSourceState(source.state ?? source.status)
+    const id = optionalString(source.sourceId) ?? `source-${index + 1}`
+    const provider = optionalString(source.kind) ?? 'unknown'
+    const lifecycle = isRecord(source.lifecycle) ? source.lifecycle : {}
+    const lifecycleState = requiredString(
+      lifecycle.state ?? source.state,
+      'unavailable'
+    )
+    const outcome = requiredString(
+      lifecycle.outcome ?? source.outcome,
+      'source_unavailable'
+    )
+    const nextAction = requiredString(
+      lifecycle.nextAction ?? source.nextAction,
+      ''
+    )
+    const capabilityNames = normalizeStringList(source.capabilities)
+    const advertisedCapabilities = normalizeCapabilities(capabilityNames)
+    const state = normalizeSourceState(lifecycleState, outcome)
 
     return {
       id,
-      label: optionalString(source.label) ?? id,
+      label: optionalString(source.displayName) ?? id,
       provider,
       state,
-      reason:
-        optionalString(source.reason) ??
-        optionalString(source.message) ??
-        `${provider} source reported ${state}.`,
-      capabilities: normalizeCapabilities(source.capabilities),
+      reason: nextAction
+        ? `${outcome}; next action: ${nextAction}.`
+        : `${provider} source reported ${outcome}.`,
+      lifecycleState,
+      outcome,
+      nextAction,
+      enabled: source.enabled === true,
+      critical: source.critical === true,
+      priority: optionalNumber(source.priority),
+      namespaces: normalizeStringList(source.namespaces),
+      capabilityNames,
+      capabilities: {
+        ...advertisedCapabilities,
+        reveal: advertisedCapabilities.reveal === true,
+        mutation:
+          advertisedCapabilities['write/update'] === true ||
+          advertisedCapabilities['rotate/reset'] === true ||
+          advertisedCapabilities.policy === true,
+        write: advertisedCapabilities['write/update'] === true,
+        reset: advertisedCapabilities['rotate/reset'] === true,
+      },
+      operations: normalizeOperationCapabilities(source.operations),
+    }
+  })
+}
+
+const sourceMutationRoutes = [
+  '/v1/management/secrets/edit/apply',
+  '/v1/management/secrets/reset/apply',
+  '/v1/management/secrets/policy/apply',
+] as const
+
+function gateSourceCapabilitiesByManifest(
+  source: SecretsBrokerSourceStatus,
+  useManifest: boolean
+): SecretsBrokerSourceStatus {
+  if (!useManifest) return source
+
+  const write = operationAllowsMutation(
+    source.operations,
+    'POST',
+    '/v1/management/secrets/edit/apply'
+  )
+  const reset = operationAllowsMutation(
+    source.operations,
+    'POST',
+    '/v1/management/secrets/reset/apply'
+  )
+  const policy = operationAllowsMutation(
+    source.operations,
+    'POST',
+    '/v1/management/secrets/policy/apply'
+  )
+  const reveal = operationAllowsRead(
+    source.operations,
+    'POST',
+    '/v1/management/secrets/reveal'
+  )
+
+  return {
+    ...source,
+    capabilities: {
+      ...Object.fromEntries(
+        Object.keys(source.capabilities).map((capability) => [
+          capability,
+          false,
+        ])
+      ),
+      reveal,
+      mutation: write || reset || policy,
+      write,
+      reset,
+      policy,
+    },
+  }
+}
+
+function normalizeProviderCapabilities(
+  value: unknown
+): SecretsBrokerProviderCapability[] {
+  if (!Array.isArray(value)) return []
+
+  return value.filter(isRecord).map((item) => {
+    const capability = item as RawProviderCapability
+    const providerKind = requiredString(capability.providerKind, 'unknown')
+
+    return {
+      providerKind,
+      displayName: requiredString(capability.displayName, providerKind),
+      supported: capability.supported === true,
+      capabilities: normalizeStringList(capability.capabilities),
+      operations: normalizeOperationCapabilities(capability.operations),
+      limitations: normalizeStringList(capability.limitations),
+    }
+  })
+}
+
+function normalizeProviderStatuses(
+  value: unknown
+): SecretsBrokerProviderStatus[] {
+  if (!Array.isArray(value)) return []
+
+  return value.filter(isRecord).map((item) => {
+    const provider = item as RawProviderStatus
+    const providerId = requiredString(provider.providerId, 'unknown')
+    const providerKind = requiredString(provider.providerKind, 'unknown')
+
+    return {
+      providerId,
+      providerKind,
+      displayName: requiredString(provider.displayName, providerId),
+      state: requiredString(provider.state, 'unavailable'),
+      outcome: requiredString(provider.outcome, 'source_unavailable'),
+      nextAction: requiredString(provider.nextAction, ''),
+      auditStatus: requiredString(provider.auditStatus, 'audit_unavailable'),
+      namespaces: normalizeStringList(provider.namespaces),
+      capabilities: normalizeStringList(provider.capabilities),
+      operations: normalizeOperationCapabilities(provider.operations),
     }
   })
 }
@@ -792,32 +1416,114 @@ async function postJson<T>(pathname: string, body: unknown) {
   })
 }
 
-function buildUnsupportedOverview(
-  service: DashboardService,
-  checkedAt: string,
+type BrokerRouteResult<T> = {
+  state: SecretsBrokerRouteState
+  payload: T | null
   status?: number
-): SecretsBrokerOverview {
+}
+
+const unavailableRoutes: Record<
+  SecretsBrokerRouteName,
+  SecretsBrokerRouteState
+> = {
+  status: 'unavailable',
+  state: 'unavailable',
+  capabilities: 'unavailable',
+  sources: 'unavailable',
+  providerCapabilities: 'unavailable',
+  providerConfig: 'unavailable',
+  telemetry: 'unavailable',
+  events: 'unavailable',
+}
+
+function emptyOverviewContract() {
   return {
-    state: 'unsupported',
-    summary:
-      status === 404
-        ? 'Secrets Broker live source status route is not exposed by the runtime yet.'
-        : 'Secrets Broker live source status route is unavailable.',
-    service,
-    checkedAt,
-    sourceCount: 0,
-    sources: [],
-    capabilities: {
-      sourcesStatus: false,
-      managementSecrets: false,
-      providerConfig: false,
-      reveal: false,
-      mutation: false,
+    apiVersion: '',
+    contractVersion: '',
+    brokerVersion: '',
+    brokerState: 'unavailable',
+    outcome: 'source_unavailable',
+    nextAction: '',
+    brokerOutcome: 'source_unavailable',
+    brokerNextAction: '',
+    contractCompatibility: assessSecretsBrokerContractCompatibility(null),
+    manifestVersion: '',
+    operationManifest: {
+      state: 'missing' as const,
+      observedVersion: '',
+      reason: 'Secrets Broker operation manifest is unavailable.',
+      nextAction: 'upgrade_secrets_broker',
     },
-    telemetryAvailable: false,
-    auditAvailable: false,
-    stubMode: false,
+    operations: [] as SecretsBrokerOperationCapability[],
+    endpointCapabilities: [] as string[],
+    featureCapabilities: [] as string[],
+    providerCapabilities: [] as SecretsBrokerProviderCapability[],
+    providers: [] as SecretsBrokerProviderStatus[],
+    routes: { ...unavailableRoutes },
   }
+}
+
+function routeStateForStatus(status?: number): SecretsBrokerRouteState {
+  if (status === 401 || status === 403 || status === 423) return 'denied'
+  if (status === 404 || status === 405 || status === 501) return 'unsupported'
+  return 'unavailable'
+}
+
+async function fetchBrokerRoute<T>(
+  pathname: string
+): Promise<BrokerRouteResult<T>> {
+  try {
+    return { state: 'ready', payload: await fetchJson<T>(pathname) }
+  } catch (error) {
+    const status =
+      error instanceof Error && 'status' in error
+        ? (error as HttpJsonError).status
+        : undefined
+
+    return { state: routeStateForStatus(status), payload: null, status }
+  }
+}
+
+function advertisedRoute(
+  endpoints: string[],
+  method: string,
+  path: string
+): boolean {
+  return endpoints.some((endpoint) => {
+    const separator = endpoint.indexOf(' ')
+    if (separator < 1) return false
+
+    const methods = endpoint.slice(0, separator).split('|')
+    if (!methods.includes(method)) return false
+
+    const pathExpression = endpoint.slice(separator + 1)
+    const alternatives = pathExpression.split('|')
+    const first = alternatives[0] ?? ''
+    const prefix = first.slice(0, first.lastIndexOf('/') + 1)
+    const paths = alternatives.map((alternative, index) =>
+      index === 0 || alternative.startsWith('/')
+        ? alternative
+        : `${prefix}${alternative}`
+    )
+
+    return paths.includes(path)
+  })
+}
+
+function essentialRouteState(
+  routes: Record<SecretsBrokerRouteName, SecretsBrokerRouteState>
+): SecretsBrokerLiveState | null {
+  const essential = [
+    routes.status,
+    routes.state,
+    routes.capabilities,
+    routes.sources,
+  ]
+
+  if (essential.includes('denied')) return 'policy-denied'
+  if (essential.includes('unsupported')) return 'unsupported'
+  if (essential.includes('unavailable')) return 'unavailable'
+  return null
 }
 
 export async function fetchSecretsBrokerOverview(): Promise<SecretsBrokerOverview> {
@@ -838,11 +1544,20 @@ export async function fetchSecretsBrokerOverview(): Promise<SecretsBrokerOvervie
           provider: 'local',
           state: 'ready',
           reason: 'Local fixture source is ready in explicit stub mode.',
+          lifecycleState: 'connected',
+          outcome: 'ready',
+          nextAction: '',
+          enabled: true,
+          critical: true,
+          priority: 0,
+          namespaces: ['*'],
+          capabilityNames: ['read', 'health'],
           capabilities: {
             reveal: false,
             mutation: false,
             dryRun: true,
           },
+          operations: [],
         },
       ],
       capabilities: {
@@ -854,6 +1569,20 @@ export async function fetchSecretsBrokerOverview(): Promise<SecretsBrokerOvervie
       },
       telemetryAvailable: false,
       auditAvailable: false,
+      ...emptyOverviewContract(),
+      contractCompatibility: {
+        state: 'not-applicable',
+        observedVersion: '',
+        supportedRange: secretsBrokerSupportedContractRange,
+        reason: 'Explicit stub mode does not use a live Broker contract.',
+        nextAction: '',
+      },
+      operationManifest: {
+        state: 'not-applicable',
+        observedVersion: '',
+        reason: 'Explicit stub mode does not use a live operation manifest.',
+        nextAction: '',
+      },
       stubMode: true,
     }
   }
@@ -877,6 +1606,7 @@ export async function fetchSecretsBrokerOverview(): Promise<SecretsBrokerOvervie
       capabilities: {},
       telemetryAvailable: false,
       auditAvailable: false,
+      ...emptyOverviewContract(),
       stubMode: false,
     }
   }
@@ -893,52 +1623,276 @@ export async function fetchSecretsBrokerOverview(): Promise<SecretsBrokerOvervie
       capabilities: {},
       telemetryAvailable: false,
       auditAvailable: false,
+      ...emptyOverviewContract(),
       stubMode: false,
     }
   }
 
-  try {
-    const brokerStatus = await fetchJson<RawBrokerSourcesResponse>(
-      `/api/services/${encodeServiceId('@secretsbroker')}/proxy/v1/sources/status`
+  const brokerProxy = `/api/services/${encodeServiceId('@secretsbroker')}/proxy`
+  const [
+    statusResult,
+    stateResult,
+    capabilitiesResult,
+    sourcesResult,
+    providerCapabilitiesResult,
+    providerConfigResult,
+    telemetryResult,
+    eventsResult,
+  ] = await Promise.all([
+    fetchBrokerRoute<RawBrokerStatusResponse>(`${brokerProxy}/status`),
+    fetchBrokerRoute<RawBrokerStateResponse>(`${brokerProxy}/state`),
+    fetchBrokerRoute<RawBrokerCapabilitiesResponse>(
+      `${brokerProxy}/capabilities`
+    ),
+    fetchBrokerRoute<RawBrokerSourcesResponse>(
+      `${brokerProxy}/v1/sources/status`
+    ),
+    fetchBrokerRoute<RawProviderCapabilitiesResponse>(
+      `${brokerProxy}/v1/providers/capabilities`
+    ),
+    fetchBrokerRoute<RawProviderConfigStatusResponse>(
+      `${brokerProxy}/v1/providers/config/status`
+    ),
+    fetchBrokerRoute<RawTelemetryResponse>(`${brokerProxy}/v1/telemetry`),
+    fetchBrokerRoute<RawEventsResponse>(`${brokerProxy}/v1/events?limit=1`),
+  ])
+
+  const routes = {
+    status: statusResult.state,
+    state: stateResult.state,
+    capabilities: capabilitiesResult.state,
+    sources: sourcesResult.state,
+    providerCapabilities: providerCapabilitiesResult.state,
+    providerConfig: providerConfigResult.state,
+    telemetry: telemetryResult.state,
+    events: eventsResult.state,
+  }
+  const brokerStatus = statusResult.payload
+  const brokerState = stateResult.payload
+  const brokerCapabilities = capabilitiesResult.payload
+  const brokerSources = sourcesResult.payload
+  const providerCapabilityPayload = providerCapabilitiesResult.payload
+  const providerConfigPayload = providerConfigResult.payload
+  const telemetryPayload = telemetryResult.payload
+  const eventsPayload = eventsResult.payload
+  const contractCompatibility = assessSecretsBrokerContractCompatibility(
+    brokerCapabilities?.contractVersion
+  )
+  const contractCompatible = contractCompatibility.state === 'compatible'
+  const operations = normalizeOperationCapabilities(
+    brokerCapabilities?.operations
+  )
+  const operationManifest = assessSecretsBrokerOperationManifest(
+    contractCompatibility.observedVersion,
+    brokerCapabilities?.manifestVersion,
+    operations
+  )
+  const useOperationManifest = operationManifest.state !== 'not-required'
+  const operationManifestCompatible =
+    operationManifest.state === 'ready' ||
+    operationManifest.state === 'not-required'
+  const advertisedSources = normalizeSources(brokerSources?.sources)
+  const manifestGatedSources = advertisedSources.map((source) =>
+    gateSourceCapabilitiesByManifest(source, useOperationManifest)
+  )
+  const sources =
+    contractCompatible && operationManifestCompatible
+      ? manifestGatedSources
+      : manifestGatedSources.map((source) => ({
+          ...source,
+          capabilities: Object.fromEntries(
+            Object.keys(source.capabilities).map((capability) => [
+              capability,
+              false,
+            ])
+          ),
+        }))
+  const endpointCapabilities = normalizeStringList(
+    brokerCapabilities?.endpoints
+  )
+  const featureCapabilities = normalizeStringList(brokerCapabilities?.features)
+  const providerCapabilities = normalizeProviderCapabilities(
+    providerCapabilityPayload?.capabilities
+  )
+  const providers = normalizeProviderStatuses(providerConfigPayload?.providers)
+  const readySources = sources.filter(
+    (source) => source.enabled && source.state === 'ready'
+  )
+  const hasReadySourceCapability = (capability: string) =>
+    readySources.some((source) => source.capabilityNames.includes(capability))
+  const hasLegacyMutationRoute =
+    advertisedRoute(
+      endpointCapabilities,
+      'POST',
+      '/v1/management/secrets/edit/apply'
+    ) ||
+    advertisedRoute(
+      endpointCapabilities,
+      'POST',
+      '/v1/management/secrets/reset/apply'
+    ) ||
+    advertisedRoute(
+      endpointCapabilities,
+      'POST',
+      '/v1/management/secrets/policy/apply'
     )
-    const sources = normalizeSources(brokerStatus.sources)
-    const capabilities = {
-      sourcesStatus: true,
-      ...normalizeCapabilities(brokerStatus.capabilities),
-    }
-    const telemetryAvailable =
-      isRecord(brokerStatus.telemetry) &&
-      brokerStatus.telemetry.available === true
-    const auditAvailable =
-      isRecord(brokerStatus.audit) && brokerStatus.audit.available === true
+  const globalReadAvailable = (method: string, path: string) =>
+    useOperationManifest
+      ? operationAllowsRead(operations, method, path)
+      : advertisedRoute(endpointCapabilities, method, path)
+  const globalPlanningAvailable = (method: string, path: string) =>
+    useOperationManifest
+      ? operationAllowsPlanning(operations, method, path)
+      : advertisedRoute(endpointCapabilities, method, path)
+  const globalMutationAvailable = (method: string, path: string) =>
+    useOperationManifest
+      ? operationAllowsMutation(operations, method, path)
+      : advertisedRoute(endpointCapabilities, method, path)
+  const hasManifestMutation = readySources.some((source) =>
+    sourceMutationRoutes.some(
+      (path) =>
+        globalMutationAvailable('POST', path) &&
+        operationAllowsMutation(source.operations, 'POST', path)
+    )
+  )
+  const advertisedCapabilities: Record<string, boolean> = {
+    sourcesStatus:
+      routes.sources === 'ready' &&
+      globalReadAvailable('GET', '/v1/sources/status'),
+    managementSecrets: globalReadAvailable('GET', '/v1/management/secrets'),
+    providerConfig:
+      routes.providerCapabilities === 'ready' &&
+      routes.providerConfig === 'ready' &&
+      providerCapabilityPayload?.outcome === 'ready' &&
+      providerConfigPayload?.outcome === 'ready' &&
+      globalPlanningAvailable('POST', '/v1/providers/config/validate') &&
+      globalMutationAvailable('POST', '/v1/providers/config/apply'),
+    reveal:
+      globalReadAvailable('POST', '/v1/management/secrets/reveal') &&
+      (useOperationManifest
+        ? readySources.some((source) => source.capabilities.reveal)
+        : hasReadySourceCapability('reveal')),
+    mutation: useOperationManifest
+      ? hasManifestMutation
+      : hasLegacyMutationRoute &&
+        (hasReadySourceCapability('write/update') ||
+          hasReadySourceCapability('rotate/reset') ||
+          hasReadySourceCapability('policy')),
+  }
+  const capabilities =
+    contractCompatible && operationManifestCompatible
+      ? advertisedCapabilities
+      : Object.fromEntries(
+          Object.keys(advertisedCapabilities).map((capability) => [
+            capability,
+            false,
+          ])
+        )
+  const eventSafety = isRecord(eventsPayload?.safety)
+    ? eventsPayload.safety
+    : null
+  const telemetryAvailable =
+    contractCompatible &&
+    operationManifestCompatible &&
+    routes.telemetry === 'ready' &&
+    globalReadAvailable('GET', '/v1/telemetry') &&
+    !['unsupported', 'source_unavailable'].includes(
+      requiredString(telemetryPayload?.outcome, 'source_unavailable')
+    )
+  const auditAvailable =
+    contractCompatible &&
+    operationManifestCompatible &&
+    routes.events === 'ready' &&
+    globalReadAvailable('GET', '/v1/events') &&
+    requiredString(eventsPayload?.outcome, 'audit_unavailable') !==
+      'audit_unavailable' &&
+    eventSafety?.metadataOnly === true &&
+    eventSafety.valueMaterialIncluded === false
+  const routeFailure = essentialRouteState(routes)
+  const contractFailure = routes.capabilities === 'ready' && !contractCompatible
+  const operationManifestFailure =
+    routes.capabilities === 'ready' &&
+    contractCompatible &&
+    !operationManifestCompatible
+  const normalizedState = normalizeOverviewState(
+    service,
+    brokerState?.state ?? brokerStatus?.state,
+    brokerState?.outcome,
+    sources,
+    capabilities
+  )
+  const state =
+    routeFailure ??
+    (contractFailure || operationManifestFailure
+      ? 'unsupported'
+      : normalizedState)
+  const unavailableEssentialRoutes = (
+    ['status', 'state', 'capabilities', 'sources'] as const
+  ).filter((route) => routes[route] !== 'ready')
+  const brokerOutcome = requiredString(
+    brokerState?.outcome,
+    'source_unavailable'
+  )
+  const brokerNextAction = requiredString(brokerState?.nextAction, '')
+  const outcome =
+    contractFailure || operationManifestFailure ? 'unsupported' : brokerOutcome
+  const nextAction = contractFailure
+    ? contractCompatibility.nextAction
+    : operationManifestFailure
+      ? operationManifest.nextAction
+      : brokerNextAction
+  const summary = routeFailure
+    ? `Secrets Broker canonical contract is incomplete: ${unavailableEssentialRoutes
+        .map((route) => `${route} (${routes[route]})`)
+        .join(', ')}.`
+    : contractFailure
+      ? `${contractCompatibility.reason} Supported range: ${contractCompatibility.supportedRange}; next action: ${contractCompatibility.nextAction}.`
+      : operationManifestFailure
+        ? `${operationManifest.reason} Next action: ${operationManifest.nextAction}.`
+        : brokerNextAction
+          ? `Secrets Broker reported ${outcome}; next action: ${nextAction}.`
+          : requiredString(
+              brokerStatus?.description,
+              `Secrets Broker reported ${outcome}.`
+            )
 
-    return {
-      state: normalizeOverviewState(
-        service,
-        brokerStatus.state ?? brokerStatus.status,
-        sources,
-        capabilities
-      ),
-      summary:
-        optionalString(brokerStatus.summary) ??
-        optionalString(brokerStatus.reason) ??
-        'Secrets Broker live metadata was read from the runtime proxy.',
-      service,
-      checkedAt,
-      sourceCount: sources.length,
-      sources,
-      capabilities,
-      telemetryAvailable,
-      auditAvailable,
-      stubMode: false,
-    }
-  } catch (error) {
-    const status =
-      error instanceof Error && 'status' in error
-        ? (error as HttpJsonError).status
-        : undefined
-
-    return buildUnsupportedOverview(service, checkedAt, status)
+  return {
+    state,
+    summary,
+    service,
+    checkedAt: requiredString(brokerStatus?.checkedAt, checkedAt),
+    sourceCount: sources.length,
+    sources,
+    capabilities,
+    telemetryAvailable,
+    auditAvailable,
+    apiVersion: requiredString(
+      brokerCapabilities?.apiVersion ?? brokerState?.apiVersion,
+      ''
+    ),
+    contractVersion: contractCompatibility.observedVersion,
+    manifestVersion: operationManifest.observedVersion,
+    brokerVersion: requiredString(
+      brokerCapabilities?.version ?? brokerStatus?.version,
+      ''
+    ),
+    brokerState: requiredString(
+      brokerState?.state ?? brokerStatus?.state,
+      'unavailable'
+    ),
+    outcome,
+    nextAction,
+    brokerOutcome,
+    brokerNextAction,
+    contractCompatibility,
+    operationManifest,
+    operations,
+    endpointCapabilities,
+    featureCapabilities,
+    providerCapabilities,
+    providers,
+    routes,
+    stubMode: false,
   }
 }
 
