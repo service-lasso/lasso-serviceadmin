@@ -58,7 +58,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/variables',
-    articleId: 'help/environment-variables-global-and-service-reuse.md',
+    articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
   {
     route: '/network',
@@ -79,16 +79,11 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/secrets-broker',
-    articleId: 'help/product-status-and-safety.md',
+    articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
   {
     route: '/secrets-broker/secrets',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#331',
-      reason:
-        'Secret inventory safety coverage is planned with the variables and broker safety guide.',
-    },
+    articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
   {
     route: '/secrets-broker/sources',
@@ -96,7 +91,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/secrets-broker/topology',
-    articleId: 'help/product-status-and-safety.md',
+    articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
   {
     route: '/settings/appearance',
