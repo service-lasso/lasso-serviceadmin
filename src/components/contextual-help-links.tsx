@@ -74,6 +74,10 @@ const helpLinksByRoute: Record<string, HelpLink[]> = {
       doc: 'help/service-install-and-setup-config.md',
     },
     {
+      label: 'Support diagnostics',
+      doc: 'help/support-bundle-and-diagnostics-safety-guide.md',
+    },
+    {
       label: 'Secret safety',
       doc: 'help/variables-and-secrets-broker-safety-guide.md',
     },
