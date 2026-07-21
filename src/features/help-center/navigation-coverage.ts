@@ -44,12 +44,7 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/installed',
-    exception: {
-      kind: 'article-planned',
-      issue: 'service-lasso/lasso-serviceadmin#332',
-      reason:
-        'Installed paths coverage is planned as the installed paths and configuration guide.',
-    },
+    articleId: 'help/service-install-and-setup-config.md',
   },
   {
     route: '/variables',

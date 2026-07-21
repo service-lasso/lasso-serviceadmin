@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { ContextualHelpLinks } from '@/components/contextual-help-links'
 
 type MainProps = React.HTMLAttributes<HTMLElement> & {
   constrained?: boolean
@@ -8,6 +9,7 @@ type MainProps = React.HTMLAttributes<HTMLElement> & {
 }
 
 export function Main({
+  children,
   constrained,
   fixed,
   className,
@@ -31,6 +33,9 @@ export function Main({
         className
       )}
       {...props}
-    />
+    >
+      <ContextualHelpLinks />
+      {children}
+    </main>
   )
 }
