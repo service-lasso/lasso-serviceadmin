@@ -302,6 +302,69 @@ describe('app screens', () => {
     expect(screen.getAllByText(/Runtime-backed/i).length).toBeGreaterThan(0)
   })
 
+  it.each([
+    [
+      '/services',
+      'Open Help Center: Service actions',
+      '/help-center?doc=help%2Fservice-actions.md',
+    ],
+    [
+      '/services/@serviceadmin',
+      'Open Help Center: Health checks',
+      '/help-center?doc=help%2Fhealth-checks.md',
+    ],
+    [
+      '/runtime',
+      'Open Help Center: Runtime runbook',
+      '/help-center?doc=help%2Fruntime-and-logs-operator-runbook.md',
+    ],
+    [
+      '/installed',
+      'Open Help Center: Install paths',
+      '/help-center?doc=help%2Fservice-install-and-setup-config.md',
+    ],
+    [
+      '/variables',
+      'Open Help Center: Variables guide',
+      '/help-center?doc=help%2Fenvironment-variables-global-and-service-reuse.md',
+    ],
+    [
+      '/service-routes',
+      'Open Help Center: Routes guide',
+      '/help-center?doc=help%2Fnetwork-and-service-routes-operator-guide.md',
+    ],
+    [
+      '/operations/telemetry',
+      'Open Help Center: Telemetry guide',
+      '/help-center?doc=help%2Foperations-telemetry-operator-guide.md',
+    ],
+    [
+      '/operations/audit-logging',
+      'Open Help Center: Audit guide',
+      '/help-center?doc=help%2Foperations-audit-operator-guide.md',
+    ],
+    [
+      '/secrets-broker/sources',
+      'Open Help Center: Provider setup',
+      '/help-center?doc=help%2Fservice-install-and-setup-config.md',
+    ],
+  ])(
+    'adds contextual Help Center doc links on %s',
+    async (path, accessibleName, href) => {
+      await renderRoute(path)
+
+      expect(
+        screen.getByRole('navigation', {
+          name: /^Contextual Help Center links$/i,
+        })
+      ).toBeVisible()
+
+      expect(
+        screen.getByRole('link', { name: accessibleName })
+      ).toHaveAttribute('href', href)
+    }
+  )
+
   it.each(headerIdentityRoutes)(
     'moves $identity page identity into the header without a duplicated body heading',
     async ({ path, identity, removedHeading, removedCopy }) => {
