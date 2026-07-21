@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { renderRoute } from './render-route'
 
@@ -278,6 +279,27 @@ describe('app screens', () => {
     expect(
       screen.getByText(/Secrets Broker Provider Auth Required/i)
     ).toBeVisible()
+    expect(screen.getAllByText(/Runtime-backed/i).length).toBeGreaterThan(0)
+  })
+
+  it('searches full Help Center articles and keeps maturity badges visible', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/help-center')
+
+    await user.type(
+      screen.getByPlaceholderText(/Search docs/i),
+      'not have an HTTP server'
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', {
+          name: /^Runtime and Logs Operator Runbook$/i,
+        })
+      ).toBeVisible()
+    })
+
+    expect(screen.getAllByText(/Runtime-backed/i).length).toBeGreaterThan(0)
   })
 
   it.each(headerIdentityRoutes)(

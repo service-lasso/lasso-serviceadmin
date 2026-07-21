@@ -35,7 +35,35 @@ type DocEntry = {
   fileName: string
   section: string
   title: string
-  body: string
+  description: string
+  status: DocStatus
+  tags: string[]
+  content: string
+  searchableText: string
+}
+
+type DocStatus =
+  | 'runtime-backed'
+  | 'metadata-only'
+  | 'preview'
+  | 'stub-dev-only'
+  | 'planned'
+  | 'unspecified'
+
+type DocMetadata = {
+  title?: string
+  description?: string
+  status?: DocStatus
+  tags: string[]
+}
+
+const statusLabels: Record<DocStatus, string> = {
+  'runtime-backed': 'Runtime-backed',
+  'metadata-only': 'Metadata-only',
+  preview: 'Preview',
+  'stub-dev-only': 'Stub/dev-only',
+  planned: 'Planned',
+  unspecified: 'Unspecified',
 }
 
 function toTitleCase(input: string) {
@@ -45,23 +73,129 @@ function toTitleCase(input: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
+function normalizeStatus(input?: string): DocStatus {
+  const normalized = input?.trim().toLowerCase().replace(/\s+/g, '-')
+  if (!normalized) return 'unspecified'
+
+  if (normalized.includes('runtime-backed')) return 'runtime-backed'
+  if (normalized.includes('metadata-only')) return 'metadata-only'
+  if (normalized.includes('stub') || normalized.includes('dev-only')) {
+    return 'stub-dev-only'
+  }
+  if (normalized.includes('planned')) return 'planned'
+  if (normalized.includes('preview')) return 'preview'
+
+  return 'unspecified'
+}
+
+function parseTags(input?: string) {
+  if (!input) return []
+
+  return input
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .split(',')
+    .map((tag) => tag.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean)
+}
+
+function parseFrontmatter(body: string): {
+  metadata: DocMetadata
+  content: string
+} {
+  const match = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
+  if (!match) {
+    return {
+      metadata: { tags: [] },
+      content: body,
+    }
+  }
+
+  const metadata = match[1].split(/\r?\n/).reduce<DocMetadata>(
+    (acc, line) => {
+      const parsed = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/)
+      if (!parsed) return acc
+
+      const key = parsed[1].toLowerCase()
+      const value = parsed[2].trim().replace(/^["']|["']$/g, '')
+
+      if (key === 'title') acc.title = value
+      if (key === 'description') acc.description = value
+      if (key === 'status') acc.status = normalizeStatus(value)
+      if (key === 'tags') acc.tags = parseTags(value)
+
+      return acc
+    },
+    { tags: [] }
+  )
+
+  return {
+    metadata,
+    content: body.slice(match[0].length),
+  }
+}
+
+function getStatusFromContent(content: string) {
+  return normalizeStatus(content.match(/^Status:\s*(.+)$/im)?.[1])
+}
+
+function getDescription(content: string) {
+  const withoutTitle = content.replace(/^#\s+.+\r?\n+/, '')
+  const paragraph = withoutTitle
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim())
+    .find(
+      (block) =>
+        block &&
+        !block.startsWith('#') &&
+        !block.startsWith('|') &&
+        !block.startsWith('- ') &&
+        !/^Status:/i.test(block)
+    )
+
+  return paragraph
+    ? paragraph
+        .replace(/\s+/g, ' ')
+        .replace(/[`*_#[\]()]/g, '')
+        .slice(0, 160)
+    : 'Operator Help Center article.'
+}
+
 function buildDocEntries(): DocEntry[] {
   return Object.entries(docsModules)
     .map(([path, body]) => {
+      const { metadata, content } = parseFrontmatter(body)
       const relative = path.replace(/^((\.\.\/)+)?docs\//, '')
       const parts = relative.split('/')
       const fileName = parts[parts.length - 1]
       const section =
         parts.length > 1 ? toTitleCase(parts.slice(0, -1).join(' / ')) : 'Docs'
-      const firstHeading = body.match(/^#\s+(.+)$/m)?.[1]?.trim()
+      const firstHeading = content.match(/^#\s+(.+)$/m)?.[1]?.trim()
+      const title = metadata.title || firstHeading || toTitleCase(fileName)
+      const description = metadata.description || getDescription(content)
+      const status = metadata.status ?? getStatusFromContent(content)
 
       return {
         id: relative.toLowerCase(),
         path: relative,
         fileName,
         section,
-        title: firstHeading || toTitleCase(fileName),
-        body,
+        title,
+        description,
+        status,
+        tags: metadata.tags,
+        content,
+        searchableText: [
+          title,
+          description,
+          statusLabels[status],
+          metadata.tags.join(' '),
+          relative,
+          section,
+          content,
+        ]
+          .join(' ')
+          .toLowerCase(),
       }
     })
     .sort((a, b) => a.path.localeCompare(b.path))
@@ -172,12 +306,7 @@ export function HelpCenter() {
     const normalized = query.trim().toLowerCase()
     if (!normalized) return docs
 
-    return docs.filter((doc) =>
-      [doc.title, doc.path, doc.section, doc.body.slice(0, 500)]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalized)
-    )
+    return docs.filter((doc) => doc.searchableText.includes(normalized))
   }, [docs, query])
 
   const selectedDoc = useMemo(() => {
@@ -268,11 +397,19 @@ export function HelpCenter() {
                                 <div className='truncate text-sm leading-5 font-medium'>
                                   {doc.title}
                                 </div>
-                                <div className='truncate text-[11px] text-muted-foreground'>
-                                  {doc.fileName}
+                                <div className='line-clamp-2 text-[11px] leading-4 text-muted-foreground'>
+                                  {doc.description}
                                 </div>
                               </div>
-                              <FileText className='mt-0.5 size-3.5 shrink-0 text-muted-foreground' />
+                              <div className='flex shrink-0 flex-col items-end gap-1'>
+                                <Badge
+                                  variant='outline'
+                                  className='text-[10px]'
+                                >
+                                  {statusLabels[doc.status]}
+                                </Badge>
+                                <FileText className='size-3.5 text-muted-foreground' />
+                              </div>
                             </div>
                           </button>
                         ))}
@@ -299,19 +436,28 @@ export function HelpCenter() {
                   </CardTitle>
                   <CardDescription>
                     {selectedDoc
-                      ? `${selectedDoc.section} · ${selectedDoc.fileName}`
+                      ? `${selectedDoc.section} · ${selectedDoc.fileName} · ${selectedDoc.description}`
                       : 'Pick a markdown file from the docs list.'}
                   </CardDescription>
                 </div>
                 {selectedDoc ? (
-                  <Badge variant='outline'>{selectedDoc.section}</Badge>
+                  <div className='flex flex-wrap justify-end gap-2'>
+                    <Badge variant='outline'>
+                      {statusLabels[selectedDoc.status]}
+                    </Badge>
+                    {selectedDoc.tags.map((tag) => (
+                      <Badge key={tag} variant='secondary'>
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
                 ) : null}
               </div>
             </CardHeader>
             <CardContent className='min-h-0'>
               {selectedDoc ? (
                 <ScrollArea className='h-[calc(100vh-18rem)] pr-4'>
-                  <MarkdownArticle content={selectedDoc.body} />
+                  <MarkdownArticle content={selectedDoc.content} />
                 </ScrollArea>
               ) : (
                 <div className='rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>
