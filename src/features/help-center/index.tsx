@@ -154,7 +154,10 @@ function getDescription(content: string) {
     )
 
   return paragraph
-    ? paragraph.replace(/\s+/g, ' ').replace(/[`*_#[\]()]/g, '').slice(0, 160)
+    ? paragraph
+        .replace(/\s+/g, ' ')
+        .replace(/[`*_#[\]()]/g, '')
+        .slice(0, 160)
     : 'Operator Help Center article.'
 }
 
@@ -399,7 +402,10 @@ export function HelpCenter() {
                                 </div>
                               </div>
                               <div className='flex shrink-0 flex-col items-end gap-1'>
-                                <Badge variant='outline' className='text-[10px]'>
+                                <Badge
+                                  variant='outline'
+                                  className='text-[10px]'
+                                >
                                   {statusLabels[doc.status]}
                                 </Badge>
                                 <FileText className='size-3.5 text-muted-foreground' />
