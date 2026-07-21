@@ -4,6 +4,19 @@ This folder is the source for Service Admin Help Center content.
 
 Add markdown files under `docs/help/` and they will appear in the in-app Help Center viewer. Markdown files in other `docs/` folders are repo reference material only unless the Help Center loader is intentionally expanded.
 
+Articles may start with optional metadata:
+
+```md
+---
+title: Runtime and Logs Operator Runbook
+description: Runtime triage steps, log source expectations, and recovery paths.
+status: runtime-backed
+tags: runtime, logs, triage
+---
+```
+
+Supported status values are `runtime-backed`, `metadata-only`, `preview`, `stub-dev-only`, and `planned`. If metadata is omitted, the Help Center falls back to the first heading and any leading `Status:` line.
+
 ## Content conventions
 
 - Write for operators first: explain what they can inspect, decide, or do in Service Admin.
