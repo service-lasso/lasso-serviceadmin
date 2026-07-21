@@ -302,6 +302,26 @@ describe('app screens', () => {
     ).toBeVisible()
   })
 
+  it('loads the Service Admin packaging guide in Help Center', async () => {
+    await renderRoute(
+      '/help-center?doc=help/service-admin-packaging-and-release-artifacts.md'
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', {
+          name: /^Service Admin Packaging and Release Artifacts$/i,
+        })
+      ).toBeVisible()
+    })
+
+    expect(screen.getAllByText(/Metadata-only/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/stable service id/i)).toBeVisible()
+    expect(screen.getAllByText(/@serviceadmin/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Platform archive/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/same-origin API calls fail/i)).toBeVisible()
+  })
+
   it('searches full Help Center articles and keeps maturity badges visible', async () => {
     const user = userEvent.setup()
     await renderRoute('/help-center')
