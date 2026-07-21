@@ -1,6 +1,10 @@
 import { render } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Main } from './main'
+
+vi.mock('@/components/contextual-help-links', () => ({
+  ContextualHelpLinks: () => null,
+}))
 
 describe('Main layout container', () => {
   it('uses the available workspace width by default', () => {
