@@ -282,6 +282,26 @@ describe('app screens', () => {
     expect(screen.getAllByText(/Runtime-backed/i).length).toBeGreaterThan(0)
   })
 
+  it('loads the support bundle diagnostics safety guide in Help Center', async () => {
+    await renderRoute(
+      '/help-center?doc=help/support-bundle-and-diagnostics-safety-guide.md'
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', {
+          name: /^Support Bundle and Diagnostics Safety Guide$/i,
+        })
+      ).toBeVisible()
+    })
+
+    expect(screen.getAllByText(/Metadata-only/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/No upload is performed by the UI/i)).toBeVisible()
+    expect(
+      screen.getByText(/Download\/export remains unavailable/i)
+    ).toBeVisible()
+  })
+
   it('searches full Help Center articles and keeps maturity badges visible', async () => {
     const user = userEvent.setup()
     await renderRoute('/help-center')
@@ -347,6 +367,11 @@ describe('app screens', () => {
       '/secrets-broker/sources',
       'Open Help Center: Provider setup',
       '/help-center?doc=help%2Fservice-install-and-setup-config.md',
+    ],
+    [
+      '/secrets-broker/sources',
+      'Open Help Center: Support diagnostics',
+      '/help-center?doc=help%2Fsupport-bundle-and-diagnostics-safety-guide.md',
     ],
   ])(
     'adds contextual Help Center doc links on %s',
