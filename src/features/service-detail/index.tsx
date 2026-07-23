@@ -81,15 +81,15 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import {
-  getServiceUpdateDescription,
-  ServiceUpdateActions,
-  ServiceUpdateBadge,
-} from '@/components/service-update-status'
-import {
   getServiceRecoveryDescription,
   ServiceRecoveryBadge,
   ServiceRecoveryDoctorButton,
 } from '@/components/service-recovery-status'
+import {
+  getServiceUpdateDescription,
+  ServiceUpdateActions,
+  ServiceUpdateBadge,
+} from '@/components/service-update-status'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -149,46 +149,159 @@ function CopyValueButton({
   )
 }
 
+function endpointSelector(endpoint: ServiceEndpoint) {
+  return endpoint.id ? `\${endpoint.${endpoint.id}.port}` : null
+}
+
+function endpointUrl(endpoint: ServiceEndpoint) {
+  if (endpoint.url) return endpoint.url
+  if (endpoint.port === undefined) return undefined
+
+  const protocol =
+    endpoint.protocol === 'http' ||
+    endpoint.protocol === 'https' ||
+    endpoint.protocol === 'tcp'
+      ? endpoint.protocol
+      : 'tcp'
+
+  return `${protocol}://${endpoint.bind ?? '127.0.0.1'}:${endpoint.port}/`
+}
+
+function endpointResolutionMessages(endpoint: ServiceEndpoint) {
+  return [
+    endpoint.resolution?.message,
+    endpoint.error,
+    ...(endpoint.resolution?.errors ?? []),
+    ...(endpoint.resolution?.conflicts ?? []),
+    ...(endpoint.errors ?? []),
+    ...(endpoint.conflicts ?? []),
+  ].filter((message): message is string => Boolean(message))
+}
+
+function EndpointResolutionBadge({ endpoint }: { endpoint: ServiceEndpoint }) {
+  const messages = endpointResolutionMessages(endpoint)
+  const status =
+    endpoint.resolution?.status ??
+    (messages.length > 0
+      ? 'failed'
+      : endpoint.url || endpoint.port
+        ? 'resolved'
+        : 'unknown')
+
+  if (status === 'resolved') {
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Resolved</Badge>
+    )
+  }
+
+  if (status === 'failed' || status === 'conflict') {
+    return <Badge variant='destructive'>{status}</Badge>
+  }
+
+  if (status === 'warning') {
+    return <Badge variant='secondary'>Warning</Badge>
+  }
+
+  return <Badge variant='outline'>Unknown</Badge>
+}
+
 function EndpointsTable({ endpoints }: { endpoints: ServiceEndpoint[] }) {
   return (
     <div className='overflow-x-auto rounded-md border'>
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>ID</TableHead>
+            <TableHead>Kind</TableHead>
             <TableHead>Label</TableHead>
             <TableHead>Protocol</TableHead>
+            <TableHead>Transport</TableHead>
             <TableHead>Bind</TableHead>
             <TableHead>Port</TableHead>
             <TableHead>Exposure</TableHead>
+            <TableHead>Selector</TableHead>
+            <TableHead>Health</TableHead>
+            <TableHead>Resolution</TableHead>
             <TableHead>URL</TableHead>
             <TableHead>Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {endpoints.length ? (
-            endpoints.map((endpoint) => (
-              <TableRow key={`${endpoint.label}-${endpoint.url}`}>
-                <TableCell className='font-medium'>{endpoint.label}</TableCell>
-                <TableCell>{endpoint.protocol.toUpperCase()}</TableCell>
-                <TableCell>{endpoint.bind}</TableCell>
-                <TableCell>{endpoint.port}</TableCell>
-                <TableCell>{endpoint.exposure}</TableCell>
-                <TableCell className='max-w-[280px] text-sm break-all text-muted-foreground'>
-                  {endpoint.url}
-                </TableCell>
-                <TableCell>
-                  <Button asChild size='sm' variant='outline'>
-                    <a href={endpoint.url} target='_blank' rel='noreferrer'>
-                      Open
-                      <ExternalLink className='ml-2 size-3.5' />
-                    </a>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))
+            endpoints.map((endpoint, index) => {
+              const url = endpointUrl(endpoint)
+              const selector = endpointSelector(endpoint)
+              const resolutionMessages = endpointResolutionMessages(endpoint)
+
+              return (
+                <TableRow
+                  key={`${endpoint.id ?? endpoint.label}-${url ?? index}`}
+                >
+                  <TableCell className='font-mono text-xs'>
+                    {endpoint.id ?? 'legacy'}
+                  </TableCell>
+                  <TableCell>{endpoint.kind ?? 'url'}</TableCell>
+                  <TableCell className='font-medium'>
+                    <div>{endpoint.label}</div>
+                    <div className='text-xs text-muted-foreground'>
+                      {endpoint.source ?? 'runtime'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {endpoint.protocol?.toUpperCase() ?? '-'}
+                  </TableCell>
+                  <TableCell>{endpoint.transport ?? '-'}</TableCell>
+                  <TableCell>{endpoint.bind ?? '-'}</TableCell>
+                  <TableCell>
+                    {endpoint.port ?? endpoint.portDefault ?? '-'}
+                  </TableCell>
+                  <TableCell>
+                    {endpoint.exposure ? (
+                      <Badge variant='outline'>{endpoint.exposure}</Badge>
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
+                  <TableCell className='font-mono text-xs'>
+                    {selector ?? '-'}
+                  </TableCell>
+                  <TableCell>
+                    {endpoint.health ?? endpoint.readiness ?? '-'}
+                  </TableCell>
+                  <TableCell className='max-w-[220px] text-sm'>
+                    <div className='space-y-1'>
+                      <EndpointResolutionBadge endpoint={endpoint} />
+                      {resolutionMessages.map((message) => (
+                        <div
+                          key={message}
+                          className='text-xs break-words text-muted-foreground'
+                        >
+                          {message}
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className='max-w-[280px] text-sm break-all text-muted-foreground'>
+                    {url ?? 'Not resolved'}
+                  </TableCell>
+                  <TableCell>
+                    <Button asChild size='sm' variant='outline' disabled={!url}>
+                      {url ? (
+                        <a href={url} target='_blank' rel='noreferrer'>
+                          Open
+                          <ExternalLink className='ml-2 size-3.5' />
+                        </a>
+                      ) : (
+                        <span>Open</span>
+                      )}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })
           ) : (
             <TableRow>
-              <TableCell colSpan={7} className='h-20 text-center'>
+              <TableCell colSpan={13} className='h-20 text-center'>
                 No endpoints are recorded for this service.
               </TableCell>
             </TableRow>
@@ -981,9 +1094,12 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   }>({ serviceId, activeTab: 'overview' })
   const activeTab =
     tabState.serviceId === serviceId ? tabState.activeTab : 'overview'
-  const setActiveTab = useCallback((nextTab: ServiceDetailTab) => {
-    setTabState({ serviceId, activeTab: nextTab })
-  }, [serviceId])
+  const setActiveTab = useCallback(
+    (nextTab: ServiceDetailTab) => {
+      setTabState({ serviceId, activeTab: nextTab })
+    },
+    [serviceId]
+  )
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1135,8 +1251,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       value='setup'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Setup{' '}
-                      <span className='ml-1 italic opacity-80'>(3)</span>
+                      Setup <span className='ml-1 italic opacity-80'>(3)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='metadata'
@@ -1365,7 +1480,8 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           <Link2 className='size-4' /> Endpoints
                         </CardTitle>
                         <CardDescription>
-                          Operator-facing endpoint table for this service.
+                          Resolved endpoint records, selectors, exposure, and
+                          resolution state for this service.
                         </CardDescription>
                       </CardHeader>
                       <CardContent>

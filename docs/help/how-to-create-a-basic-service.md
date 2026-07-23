@@ -42,5 +42,5 @@ After wiring the service:
 
 - confirm it appears in **Services**
 - confirm runtime state in **Runtime**
-- confirm endpoints in **Network**
+- confirm resolved endpoints in **Network** and use endpoint selectors such as `${endpoint.web.port}` when wiring dependent values
 - confirm install/config/data paths in **Installed**

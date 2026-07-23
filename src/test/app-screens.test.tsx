@@ -110,8 +110,31 @@ describe('app screens', () => {
 
     expect(await screen.findByText('seed-admin')).toBeVisible()
     expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0)
+    expect(await screen.findByText(/failed with exit code 1/i)).toBeVisible()
+  })
+
+  it('shows resolved endpoint fields on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/service-admin')
+
+    await user.click(await screen.findByRole('tab', { name: /Endpoints/i }))
+
+    expect(await screen.findByText('web')).toBeVisible()
+    expect(screen.getByText('network')).toBeVisible()
+    expect(screen.getByText('${endpoint.web.port}')).toBeVisible()
+    expect(screen.getAllByText('manifest.endpoints').length).toBeGreaterThan(0)
+  })
+
+  it('surfaces endpoint resolution failures on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/zitadel')
+
+    await user.click(await screen.findByRole('tab', { name: /Endpoints/i }))
+
+    expect(await screen.findByText('OIDC discovery')).toBeVisible()
+    expect(screen.getByText('failed')).toBeVisible()
     expect(
-      await screen.findByText(/failed with exit code 1/i)
+      screen.getByText(/readiness probe exceeded the latency budget/i)
     ).toBeVisible()
   })
 })
