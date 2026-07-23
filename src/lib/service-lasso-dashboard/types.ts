@@ -136,6 +136,63 @@ export type ServiceSetupRunResult = {
   message: string
 }
 
+export type FirstRunSetupStatus =
+  | 'not_required'
+  | 'required'
+  | 'in_progress'
+  | 'generated_key_pending_ack'
+  | 'complete'
+  | 'failed'
+
+export type FirstRunSetupKeySource =
+  | 'generated'
+  | 'supplied'
+  | 'os_keychain'
+  | 'secret_file'
+  | 'environment'
+  | 'cli'
+  | 'unknown'
+
+export type FirstRunSetupState = {
+  status: FirstRunSetupStatus
+  required: boolean
+  localOnly: boolean
+  remoteAllowed: boolean
+  vault: {
+    id: string | null
+    name: string | null
+    keySource: FirstRunSetupKeySource
+    keyFingerprint: string | null
+    keyReveal: {
+      value: string
+      generatedAt: string | null
+      acknowledged: boolean
+    } | null
+  }
+  rootOwner: {
+    id: string | null
+    displayName: string | null
+    createdAt: string | null
+  }
+  machine: {
+    hostname: string | null
+    osUser: string | null
+    platform: string | null
+  }
+  warnings: string[]
+  nextActions: string[]
+  failure: {
+    message: string
+    at: string | null
+  } | null
+}
+
+export type FirstRunSetupActionResult = {
+  ok: boolean
+  setup: FirstRunSetupState
+  message: string
+}
+
 export type ServiceAction = {
   id: string
   label: string

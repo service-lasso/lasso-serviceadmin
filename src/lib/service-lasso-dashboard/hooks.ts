@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  acknowledgeFirstRunVaultKey,
   buildStubServiceLogUrl,
   favoritesMutationEnabled,
   fetchDashboardService,
   fetchDashboardSummary,
+  fetchFirstRunSetupState,
   fetchServiceSetup,
   fetchServices,
   runDashboardAction,
@@ -19,6 +21,7 @@ import type {
 } from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
+const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
 
 export function useDashboardSummary() {
   return useQuery({
@@ -31,6 +34,25 @@ export function useServices() {
   return useQuery({
     queryKey: [...dashboardQueryKey, 'services'],
     queryFn: fetchServices,
+  })
+}
+
+export function useFirstRunSetupState() {
+  return useQuery({
+    queryKey: firstRunSetupQueryKey,
+    queryFn: fetchFirstRunSetupState,
+  })
+}
+
+export function useFirstRunSetupKeyAcknowledgement() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: acknowledgeFirstRunVaultKey,
+    onSuccess: (result) => {
+      queryClient.setQueryData(firstRunSetupQueryKey, result.setup)
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    },
   })
 }
 
