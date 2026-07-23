@@ -379,7 +379,19 @@ let services: DashboardService[] = [
     actions: [
       { id: 'start', label: 'Start service', kind: 'start' },
       { id: 'stop', label: 'Stop service', kind: 'stop' },
-      { id: 'restart', label: 'Restart router', kind: 'restart' },
+      {
+        id: 'restart',
+        label: 'Restart router',
+        kind: 'restart',
+        permission: {
+          allowed: true,
+          actor: 'local-root',
+          mode: 'local-root',
+          requiresConfirmation: true,
+          confirmationLabel: 'Restart router',
+          reason: 'Restarting the edge router briefly interrupts local routing.',
+        },
+      },
       { id: 'install', label: 'Install service', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open dashboard', kind: 'open_admin' },
@@ -503,7 +515,18 @@ let services: DashboardService[] = [
     ],
     actions: [
       { id: 'start', label: 'Start service', kind: 'start' },
-      { id: 'stop', label: 'Stop service', kind: 'stop' },
+      {
+        id: 'stop',
+        label: 'Stop service',
+        kind: 'stop',
+        permission: {
+          allowed: false,
+          actor: 'local-root',
+          mode: 'local-root',
+          reason:
+            'Service Admin cannot stop its own UI process from this operator surface.',
+        },
+      },
       { id: 'reload', label: 'Reload UI', kind: 'reload' },
       { id: 'install', label: 'Install service', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
@@ -884,10 +907,34 @@ let services: DashboardService[] = [
       },
     ],
     actions: [
-      { id: 'restart', label: 'Restart broker', kind: 'restart' },
+      {
+        id: 'restart',
+        label: 'Restart broker',
+        kind: 'restart',
+        permission: {
+          allowed: true,
+          actor: 'local-root',
+          mode: 'local-root',
+          requiresConfirmation: true,
+          confirmationLabel: 'Restart broker',
+          reason:
+            'Restarting the secrets broker can temporarily block dependent service credentials.',
+        },
+      },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_config', label: 'Open config', kind: 'open_config' },
-      { id: 'uninstall', label: 'Uninstall service', kind: 'uninstall' },
+      {
+        id: 'uninstall',
+        label: 'Uninstall service',
+        kind: 'uninstall',
+        permission: {
+          allowed: false,
+          actor: 'remote-anonymous',
+          mode: 'remote-anonymous',
+          reason:
+            'Remote anonymous sessions cannot uninstall security-critical services.',
+        },
+      },
     ],
     updates: {
       ...createEmptyUpdateState('secrets-broker'),
