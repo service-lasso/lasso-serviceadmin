@@ -36,12 +36,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
   DataTableToolbar,
 } from '@/components/data-table'
-import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -84,7 +84,9 @@ const columns: ColumnDef<NetworkRow>[] = [
         >
           {row.original.service.name}
         </Link>
-        <span className='text-xs text-muted-foreground'>{row.original.service.id}</span>
+        <span className='text-xs text-muted-foreground'>
+          {row.original.service.id}
+        </span>
       </div>
     ),
     enableHiding: false,
@@ -103,28 +105,47 @@ const columns: ColumnDef<NetworkRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='URL' />
     ),
-    cell: ({ row }) => (
-      <div className='flex items-start gap-2'>
-        <span className='max-w-[360px] break-all text-sm text-muted-foreground'>
-          {row.original.endpoint.url}
-        </span>
-        <Button
-          type='button'
-          variant='outline'
-          size='icon'
-          className='size-7 shrink-0'
-          title='Copy URL'
-          onClick={() => void copyText(row.original.endpoint.url)}
-        >
-          <Copy className='size-3.5' />
-        </Button>
-        <Button variant='outline' size='icon' className='size-7 shrink-0' asChild>
-          <a href={row.original.endpoint.url} target='_blank' rel='noreferrer'>
-            <ExternalLink className='size-3.5' />
-          </a>
-        </Button>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const url = row.original.endpoint.url
+
+      return (
+        <div className='flex items-start gap-2'>
+          <span className='max-w-[360px] text-sm break-all text-muted-foreground'>
+            {url ?? 'Not resolved'}
+          </span>
+          <Button
+            type='button'
+            variant='outline'
+            size='icon'
+            className='size-7 shrink-0'
+            title='Copy URL'
+            disabled={!url}
+            onClick={() => {
+              if (url) void copyText(url)
+            }}
+          >
+            <Copy className='size-3.5' />
+          </Button>
+          <Button
+            variant='outline'
+            size='icon'
+            className='size-7 shrink-0'
+            disabled={!url}
+            asChild={Boolean(url)}
+          >
+            {url ? (
+              <a href={url} target='_blank' rel='noreferrer'>
+                <ExternalLink className='size-3.5' />
+              </a>
+            ) : (
+              <span>
+                <ExternalLink className='size-3.5' />
+              </span>
+            )}
+          </Button>
+        </div>
+      )
+    },
   },
   {
     id: 'bind',
@@ -132,7 +153,7 @@ const columns: ColumnDef<NetworkRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Bind' />
     ),
-    cell: ({ row }) => row.original.endpoint.bind,
+    cell: ({ row }) => row.original.endpoint.bind ?? '-',
   },
   {
     id: 'port',
@@ -140,7 +161,7 @@ const columns: ColumnDef<NetworkRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Port' />
     ),
-    cell: ({ row }) => row.original.endpoint.port,
+    cell: ({ row }) => row.original.endpoint.port ?? '-',
   },
   {
     id: 'protocol',
@@ -148,7 +169,7 @@ const columns: ColumnDef<NetworkRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Protocol' />
     ),
-    cell: ({ row }) => row.original.endpoint.protocol,
+    cell: ({ row }) => row.original.endpoint.protocol ?? '-',
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
@@ -157,7 +178,12 @@ const columns: ColumnDef<NetworkRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Exposure' />
     ),
-    cell: ({ row }) => <Badge variant='outline'>{row.original.endpoint.exposure}</Badge>,
+    cell: ({ row }) =>
+      row.original.endpoint.exposure ? (
+        <Badge variant='outline'>{row.original.endpoint.exposure}</Badge>
+      ) : (
+        '-'
+      ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
 ]
@@ -186,7 +212,14 @@ export function Network() {
   }, [servicesQuery.data])
 
   const protocols = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.endpoint.protocol))).sort(),
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((row) => row.endpoint.protocol)
+            .filter((protocol): protocol is string => Boolean(protocol))
+        )
+      ).sort(),
     [rows]
   )
 
@@ -245,7 +278,8 @@ export function Network() {
                 <NetworkIcon className='size-4' /> Service endpoints
               </CardTitle>
               <CardDescription>
-                {table.getFilteredRowModel().rows.length} endpoints shown with copy and open actions.
+                {table.getFilteredRowModel().rows.length} endpoints shown with
+                copy and open actions.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
@@ -298,14 +332,20 @@ export function Network() {
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
                           No endpoints match the current filters.
                         </TableCell>
                       </TableRow>

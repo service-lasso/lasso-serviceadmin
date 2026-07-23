@@ -16,12 +16,33 @@ export type ServiceRuntimeHealth = {
 }
 
 export type ServiceEndpoint = {
+  id?: string
+  kind?: string
   label: string
-  url: string
-  bind: string
-  port: number
-  protocol: 'http' | 'https' | 'tcp'
-  exposure: 'local' | 'lan' | 'public'
+  direction?: string
+  transport?: string
+  protocol?: 'http' | 'https' | 'tcp' | 'udp' | string
+  bind?: string
+  port?: number
+  portDefault?: number
+  portStrategy?: string
+  target?: string
+  url?: string
+  exposure?: 'local' | 'lan' | 'public' | string
+  required?: boolean
+  primary?: boolean
+  source?: string
+  health?: 'healthy' | 'warning' | 'critical' | 'unknown' | string
+  readiness?: 'ready' | 'blocked' | 'unknown' | string
+  resolution?: {
+    status?: 'resolved' | 'failed' | 'conflict' | 'warning' | string
+    message?: string
+    errors?: string[]
+    conflicts?: string[]
+  }
+  error?: string
+  errors?: string[]
+  conflicts?: string[]
 }
 
 export type ServiceEnvironmentVariable = {

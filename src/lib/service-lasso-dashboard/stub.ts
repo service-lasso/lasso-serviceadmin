@@ -133,7 +133,9 @@ function createEmptyUpdateState(serviceId: string): ServiceUpdateState {
   }
 }
 
-function createEmptyRecoveryState(serviceId: string): ServiceRecoveryHistoryState {
+function createEmptyRecoveryState(
+  serviceId: string
+): ServiceRecoveryHistoryState {
   return {
     serviceId,
     updatedAt: new Date('2026-04-11T10:00:00+10:00').toISOString(),
@@ -281,20 +283,31 @@ let services: DashboardService[] = [
     },
     endpoints: [
       {
+        id: 'dashboard',
+        kind: 'network',
         label: 'Local dashboard',
         url: 'http://localhost:8080',
         bind: '127.0.0.1',
         port: 8080,
         protocol: 'http',
+        transport: 'tcp',
         exposure: 'local',
+        primary: true,
+        source: 'manifest.endpoints',
+        readiness: 'ready',
       },
       {
+        id: 'route',
+        kind: 'url',
         label: 'LAN route',
         url: 'https://traefik.localtest.me',
         bind: '0.0.0.0',
         port: 443,
         protocol: 'https',
+        transport: 'tcp',
         exposure: 'public',
+        target: 'dashboard',
+        source: 'manifest.endpoints',
       },
     ],
     metadata: {
@@ -396,20 +409,31 @@ let services: DashboardService[] = [
     },
     endpoints: [
       {
+        id: 'web',
+        kind: 'network',
         label: 'Local UI',
         url: 'http://localhost:17700',
         bind: '0.0.0.0',
         port: 17700,
         protocol: 'http',
+        transport: 'tcp',
         exposure: 'local',
+        primary: true,
+        source: 'manifest.endpoints',
+        readiness: 'ready',
       },
       {
+        id: 'lan',
+        kind: 'url',
         label: 'LAN UI',
         url: 'http://192.168.1.53:17700',
         bind: '0.0.0.0',
         port: 17700,
         protocol: 'http',
+        transport: 'tcp',
         exposure: 'lan',
+        target: 'web',
+        source: 'manifest.endpoints',
       },
     ],
     metadata: {
@@ -531,12 +555,35 @@ let services: DashboardService[] = [
     },
     endpoints: [
       {
+        id: 'web',
+        kind: 'network',
         label: 'Local auth UI',
         url: 'http://localhost:8081',
         bind: '127.0.0.1',
         port: 8081,
         protocol: 'http',
+        transport: 'tcp',
         exposure: 'local',
+        primary: true,
+        source: 'manifest.endpoints',
+        readiness: 'blocked',
+      },
+      {
+        id: 'oidc',
+        kind: 'url',
+        label: 'OIDC discovery',
+        protocol: 'https',
+        target: 'web',
+        exposure: 'local',
+        required: true,
+        source: 'manifest.endpoints',
+        health: 'warning',
+        readiness: 'blocked',
+        resolution: {
+          status: 'failed',
+          message:
+            'Endpoint selector ${endpoint.web.port} resolved, but readiness probe exceeded the latency budget.',
+        },
       },
     ],
     metadata: {
@@ -865,7 +912,9 @@ let services: DashboardService[] = [
   },
 ]
 
-function createDemoRecoveryState(serviceId: string): ServiceRecoveryHistoryState {
+function createDemoRecoveryState(
+  serviceId: string
+): ServiceRecoveryHistoryState {
   const base = createEmptyRecoveryState(serviceId)
   const at = new Date('2026-04-11T10:18:00+10:00').toISOString()
 
@@ -945,7 +994,8 @@ function createDemoRecoveryState(serviceId: string): ServiceRecoveryHistoryState
         reason: serviceId === 'service-admin' ? undefined : 'healthy',
         ok: serviceId === 'service-admin' ? true : undefined,
         blocked: serviceId === 'service-admin' ? false : undefined,
-        message: serviceId === 'service-admin' ? undefined : 'Service is healthy.',
+        message:
+          serviceId === 'service-admin' ? undefined : 'Service is healthy.',
         steps: serviceId === 'service-admin' ? [] : undefined,
         at,
       },
@@ -1153,11 +1203,11 @@ export function buildUpdateNotifications(currentServices: DashboardService[]) {
   }
 }
 
-export function buildRecoveryNotifications(currentServices: DashboardService[]) {
+export function buildRecoveryNotifications(
+  currentServices: DashboardService[]
+) {
   const latestEvents = currentServices.flatMap((service) => {
-    const event = service.recovery?.events[
-      service.recovery.events.length - 1
-    ]
+    const event = service.recovery?.events[service.recovery.events.length - 1]
     return event ? [{ service, event }] : []
   })
   const monitorAttentionCount = latestEvents.filter(
@@ -1183,7 +1233,9 @@ export function buildRecoveryNotifications(currentServices: DashboardService[]) 
     )
   }
   if (doctorBlockedCount > 0) {
-    messages.push(`${doctorBlockedCount} doctor/preflight check(s) are blocked.`)
+    messages.push(
+      `${doctorBlockedCount} doctor/preflight check(s) are blocked.`
+    )
   }
   if (hookBlockedCount > 0) {
     messages.push(`${hookBlockedCount} lifecycle hook run(s) are blocked.`)
@@ -1220,7 +1272,8 @@ export async function fetchRuntimeJson<T>(
   const detailsBase = {
     mode,
     path,
-    endpoint: apiBaseUrl == null ? null : buildRuntimeEndpoint(path, apiBaseUrl),
+    endpoint:
+      apiBaseUrl == null ? null : buildRuntimeEndpoint(path, apiBaseUrl),
     status: null,
     contentType: null,
     packagedProxyConfigured: mode === 'packaged-runtime' && apiBaseUrl === '',
@@ -1401,7 +1454,7 @@ export function normalizeServiceSetupPayload(
           state.status === 'timeout' ||
           state.status === 'skipped'
             ? state.status
-            : lastRun?.status ?? 'pending',
+            : (lastRun?.status ?? 'pending'),
         lastRun,
         history,
         skipReason:
