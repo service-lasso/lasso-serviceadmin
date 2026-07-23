@@ -39,8 +39,11 @@
     "depend_on": [
       "traefik"
     ],
-    "healthcheck": {
-      "type": "process"
-    }
+    "healthchecks": [
+      {
+        "id": "process-ready",
+        "type": "process"
+      }
+    ]
   }
 }
