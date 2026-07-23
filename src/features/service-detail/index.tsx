@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
@@ -17,6 +17,8 @@ import {
   HeartPulse,
   Link2,
   PackageCheck,
+  Play,
+  RefreshCw,
   Save,
   ScanSearch,
   Undo2,
@@ -34,6 +36,8 @@ import {
 } from '@/lib/service-graph'
 import {
   useDashboardService,
+  useServiceSetup,
+  useServiceSetupAction,
   useServiceUpdateAction,
 } from '@/lib/service-lasso-dashboard/hooks'
 import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
@@ -44,6 +48,8 @@ import type {
   ServiceEndpoint,
   ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
+  ServiceSetupState,
+  ServiceSetupStep,
   ServiceStatus,
 } from '@/lib/service-lasso-dashboard/types'
 import { useTheme } from '@/context/theme-provider'
@@ -649,6 +655,238 @@ function EnvironmentTable({
   )
 }
 
+function SetupStatusBadge({ status }: { status: ServiceSetupStep['status'] }) {
+  if (status === 'succeeded') {
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Succeeded</Badge>
+    )
+  }
+
+  if (status === 'failed' || status === 'timeout') {
+    return <Badge variant='destructive'>{status}</Badge>
+  }
+
+  if (status === 'skipped') {
+    return <Badge variant='secondary'>Skipped</Badge>
+  }
+
+  return <Badge variant='outline'>Pending</Badge>
+}
+
+function formatSetupDuration(durationMs?: number) {
+  if (typeof durationMs !== 'number') return 'Not recorded'
+  if (durationMs < 1000) return `${durationMs}ms`
+  return `${(durationMs / 1000).toFixed(1)}s`
+}
+
+function SetupLogLinks({ step }: { step: ServiceSetupStep }) {
+  const logs = step.lastRun?.logs
+  const links = [
+    { label: 'log', path: logs?.logPath },
+    { label: 'stdout', path: logs?.stdoutPath },
+    { label: 'stderr', path: logs?.stderrPath },
+  ].filter((link): link is { label: string; path: string } =>
+    Boolean(link.path)
+  )
+
+  if (!links.length) return <span className='text-muted-foreground'>None</span>
+
+  return (
+    <div className='flex flex-wrap gap-2'>
+      {links.map((link) => (
+        <Button key={link.label} variant='outline' size='sm' asChild>
+          <Link to='/logs' search={{ service: step.lastRun?.serviceId }}>
+            {link.label}
+          </Link>
+        </Button>
+      ))}
+    </div>
+  )
+}
+
+function SetupStepsTable({
+  setup,
+  pendingStepId,
+  forceRerun,
+  onRunStep,
+}: {
+  setup: ServiceSetupState
+  pendingStepId?: string
+  forceRerun: boolean
+  onRunStep: (stepId: string) => void
+}) {
+  return (
+    <div className='overflow-x-auto rounded-md border'>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Step</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Last run</TableHead>
+            <TableHead>Duration</TableHead>
+            <TableHead>Exit</TableHead>
+            <TableHead>Logs</TableHead>
+            <TableHead>Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {setup.steps.map((step) => (
+            <TableRow
+              key={step.id}
+              className={
+                step.status === 'failed' || step.status === 'timeout'
+                  ? 'bg-destructive/5'
+                  : undefined
+              }
+            >
+              <TableCell className='min-w-[220px] align-top'>
+                <div className='font-medium'>{step.id}</div>
+                <div className='text-sm text-muted-foreground'>
+                  {step.description ?? 'No description recorded.'}
+                </div>
+                <div className='mt-2 flex flex-wrap gap-2'>
+                  {step.rerun ? (
+                    <Badge variant='outline'>rerun: {step.rerun}</Badge>
+                  ) : null}
+                  {step.rerun === 'manual' ? (
+                    <Badge variant='secondary'>manual-only</Badge>
+                  ) : null}
+                  {step.dependOn?.length ? (
+                    <Badge variant='outline'>
+                      depends: {step.dependOn.join(', ')}
+                    </Badge>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell className='align-top'>
+                <SetupStatusBadge status={step.status} />
+                {step.skipReason ? (
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    {step.skipReason}
+                  </div>
+                ) : null}
+                {step.lastRun?.message && !step.skipReason ? (
+                  <div className='mt-2 text-xs text-muted-foreground'>
+                    {step.lastRun.message}
+                  </div>
+                ) : null}
+              </TableCell>
+              <TableCell className='align-top text-sm text-muted-foreground'>
+                {step.lastRun?.finishedAt ?? 'Never'}
+              </TableCell>
+              <TableCell className='align-top text-sm text-muted-foreground'>
+                {formatSetupDuration(step.lastRun?.durationMs)}
+              </TableCell>
+              <TableCell className='align-top text-sm text-muted-foreground'>
+                {step.lastRun
+                  ? (step.lastRun.exitCode ?? step.lastRun.signal ?? 'none')
+                  : 'Not recorded'}
+              </TableCell>
+              <TableCell className='align-top'>
+                <SetupLogLinks step={step} />
+              </TableCell>
+              <TableCell className='align-top'>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={pendingStepId === step.id}
+                  onClick={() => onRunStep(step.id)}
+                >
+                  {pendingStepId === step.id ? (
+                    <RefreshCw className='mr-2 size-3.5 animate-spin' />
+                  ) : (
+                    <Play className='mr-2 size-3.5' />
+                  )}
+                  {forceRerun ? 'Force step' : 'Run step'}
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function ServiceSetupPanel({
+  setup,
+  loading,
+  pendingStepId,
+  forceRerun,
+  onForceRerunChange,
+  onRunAll,
+  onRunStep,
+}: {
+  setup?: ServiceSetupState
+  loading: boolean
+  pendingStepId?: string
+  forceRerun: boolean
+  onForceRerunChange: (checked: boolean) => void
+  onRunAll: () => void
+  onRunStep: (stepId: string) => void
+}) {
+  if (loading) {
+    return <Skeleton className='h-40 w-full' />
+  }
+
+  const steps = setup?.steps ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div>
+            <CardTitle>Setup steps</CardTitle>
+            <CardDescription>
+              Last run state and rerun controls from the Service Lasso runtime.
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap items-center gap-2'>
+            <label className='flex items-center gap-2 rounded-md border px-3 py-2 text-sm'>
+              <input
+                type='checkbox'
+                checked={forceRerun}
+                onChange={(event) =>
+                  onForceRerunChange(event.currentTarget.checked)
+                }
+              />
+              Force rerun
+            </label>
+            <Button
+              type='button'
+              variant='outline'
+              disabled={!steps.length || pendingStepId === 'all'}
+              onClick={onRunAll}
+            >
+              {pendingStepId === 'all' ? (
+                <RefreshCw className='mr-2 size-4 animate-spin' />
+              ) : (
+                <Play className='mr-2 size-4' />
+              )}
+              Run all
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {steps.length ? (
+          <SetupStepsTable
+            setup={setup!}
+            pendingStepId={pendingStepId}
+            forceRerun={forceRerun}
+            onRunStep={onRunStep}
+          />
+        ) : (
+          <div className='rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>
+            No setup steps are declared for this service.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function renderActionButton(action: ServiceAction, service: DashboardService) {
   const key = action.id
 
@@ -723,6 +961,7 @@ function ServiceDetailLoading() {
 type ServiceDetailTab =
   | 'overview'
   | 'dependencies'
+  | 'setup'
   | 'metadata'
   | 'endpoints'
   | 'variables'
@@ -730,17 +969,21 @@ type ServiceDetailTab =
 
 export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const serviceQuery = useDashboardService(serviceId)
+  const setupQuery = useServiceSetup(serviceId)
+  const setupAction = useServiceSetupAction()
   const updateAction = useServiceUpdateAction()
   const serviceName = serviceQuery.data?.name ?? serviceId
+  const [forceSetupRerun, setForceSetupRerun] = useState(false)
+  const [pendingSetupStepId, setPendingSetupStepId] = useState<string>()
   const [tabState, setTabState] = useState<{
     serviceId: string
     activeTab: ServiceDetailTab
   }>({ serviceId, activeTab: 'overview' })
   const activeTab =
     tabState.serviceId === serviceId ? tabState.activeTab : 'overview'
-  const setActiveTab = (nextTab: ServiceDetailTab) => {
+  const setActiveTab = useCallback((nextTab: ServiceDetailTab) => {
     setTabState({ serviceId, activeTab: nextTab })
-  }
+  }, [serviceId])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -754,10 +997,11 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
       const nextTab = {
         '1': 'overview',
         '2': 'dependencies',
-        '3': 'metadata',
-        '4': 'endpoints',
-        '5': 'variables',
-        '6': 'logs',
+        '3': 'setup',
+        '4': 'metadata',
+        '5': 'endpoints',
+        '6': 'variables',
+        '7': 'logs',
       }[event.key] as ServiceDetailTab | undefined
 
       if (!nextTab) return
@@ -767,12 +1011,31 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [setActiveTab])
 
   usePageMetadata({
     title: `Service Admin - Service - ${serviceName}`,
     description: `Service Admin operator view for service ${serviceName}.`,
   })
+
+  const runSetup = (stepId?: string) => {
+    const pendingId = stepId ?? 'all'
+    setPendingSetupStepId(pendingId)
+    setupAction.mutate(
+      { serviceId, stepId, force: forceSetupRerun },
+      {
+        onSuccess: (result) => {
+          toast.success(result.message)
+        },
+        onError: () => {
+          toast.error('Setup run failed.')
+        },
+        onSettled: () => {
+          setPendingSetupStepId(undefined)
+        },
+      }
+    )
+  }
 
   return (
     <>
@@ -869,31 +1132,38 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       <span className='ml-1 italic opacity-80'>(2)</span>
                     </TabsTrigger>
                     <TabsTrigger
+                      value='setup'
+                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
+                    >
+                      Setup{' '}
+                      <span className='ml-1 italic opacity-80'>(3)</span>
+                    </TabsTrigger>
+                    <TabsTrigger
                       value='metadata'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Metadata{' '}
-                      <span className='ml-1 italic opacity-80'>(3)</span>
+                      <span className='ml-1 italic opacity-80'>(4)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='endpoints'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Endpoints{' '}
-                      <span className='ml-1 italic opacity-80'>(4)</span>
+                      <span className='ml-1 italic opacity-80'>(5)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='variables'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Variables{' '}
-                      <span className='ml-1 italic opacity-80'>(5)</span>
+                      <span className='ml-1 italic opacity-80'>(6)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='logs'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Logs <span className='ml-1 italic opacity-80'>(6)</span>
+                      Logs <span className='ml-1 italic opacity-80'>(7)</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -1029,6 +1299,18 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         />
                       </CardContent>
                     </Card>
+                  </TabsContent>
+
+                  <TabsContent value='setup' className='mt-0'>
+                    <ServiceSetupPanel
+                      setup={setupQuery.data}
+                      loading={setupQuery.isLoading}
+                      pendingStepId={pendingSetupStepId}
+                      forceRerun={forceSetupRerun}
+                      onForceRerunChange={setForceSetupRerun}
+                      onRunAll={() => runSetup()}
+                      onRunStep={(stepId) => runSetup(stepId)}
+                    />
                   </TabsContent>
 
                   <TabsContent value='metadata' className='mt-0'>

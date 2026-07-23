@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { renderRoute } from './render-route'
 
@@ -76,5 +77,41 @@ describe('app screens', () => {
         expect(document.title).toBe(title)
       })
     }
+  })
+
+  it('shows compact empty setup state on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/service-admin')
+
+    await user.click(await screen.findByRole('tab', { name: /Setup/i }))
+
+    expect(
+      await screen.findByText(/No setup steps are declared for this service/i)
+    ).toBeVisible()
+  })
+
+  it('shows succeeded and skipped setup steps on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/traefik')
+
+    await user.click(await screen.findByRole('tab', { name: /Setup/i }))
+
+    expect(await screen.findByText('generate-certificate')).toBeVisible()
+    expect(await screen.findByText('prepare-cache')).toBeVisible()
+    expect(await screen.findByText('Succeeded')).toBeVisible()
+    expect(await screen.findByText('Skipped')).toBeVisible()
+  })
+
+  it('makes failed setup steps visually obvious on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/zitadel')
+
+    await user.click(await screen.findByRole('tab', { name: /Setup/i }))
+
+    expect(await screen.findByText('seed-admin')).toBeVisible()
+    expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0)
+    expect(
+      await screen.findByText(/failed with exit code 1/i)
+    ).toBeVisible()
   })
 })

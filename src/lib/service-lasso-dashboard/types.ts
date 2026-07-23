@@ -62,6 +62,59 @@ export type ServiceLogPreviewEntry = {
   message: string
 }
 
+export type ServiceSetupStepStatus =
+  | 'pending'
+  | 'succeeded'
+  | 'failed'
+  | 'timeout'
+  | 'skipped'
+
+export type ServiceSetupStepRun = {
+  runId: string
+  serviceId: string
+  stepId: string
+  status: ServiceSetupStepStatus
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  command?: string
+  exitCode: number | null
+  signal: string | null
+  message?: string
+  logs?: {
+    logPath?: string
+    stdoutPath?: string
+    stderrPath?: string
+  }
+}
+
+export type ServiceSetupStep = {
+  id: string
+  description?: string
+  rerun?: 'ifMissing' | 'manual' | 'always'
+  dependOn?: string[]
+  status: ServiceSetupStepStatus
+  lastRun: ServiceSetupStepRun | null
+  history: ServiceSetupStepRun[]
+  skipReason?: string
+}
+
+export type ServiceSetupState = {
+  serviceId: string
+  updatedAt: string | null
+  steps: ServiceSetupStep[]
+}
+
+export type ServiceSetupRunResult = {
+  action: 'setup'
+  serviceId: string
+  ok: boolean
+  setup: ServiceSetupState
+  runs: ServiceSetupStepRun[]
+  skipped: Array<{ stepId: string; reason: string }>
+  message: string
+}
+
 export type ServiceAction = {
   id: string
   label: string
@@ -198,6 +251,7 @@ export type DashboardService = {
   actions: ServiceAction[]
   updates?: ServiceUpdateState
   recovery?: ServiceRecoveryHistoryState
+  setup?: ServiceSetupState
 }
 
 export type DashboardRuntime = {
