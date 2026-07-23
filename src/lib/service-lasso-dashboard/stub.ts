@@ -10,14 +10,85 @@ import type {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-export const serviceLassoApiBaseUrl =
-  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
+export type RuntimeApiEnvironment = {
+  DEV?: boolean
+  VITE_SERVICE_LASSO_API_BASE_URL?: string
+  VITE_SERVICE_LASSO_ENABLE_STUB_DATA?: string
+}
+
+export type RuntimeApiMode = 'local-dev' | 'packaged-runtime'
+
+export type RuntimeApiUnavailableDetails = {
+  mode: RuntimeApiMode
+  path: string
+  endpoint: string | null
+  status: number | null
+  contentType: string | null
+  packagedProxyConfigured: boolean
+  reason: 'missing_api_base_url' | 'fetch_failed' | 'http_error' | 'non_json'
+}
+
+export class RuntimeApiUnavailableError extends Error {
+  readonly details: RuntimeApiUnavailableDetails
+
+  constructor(details: RuntimeApiUnavailableDetails, cause?: unknown) {
+    const endpoint = details.endpoint ?? details.path
+    const metadata = [
+      `path ${details.path}`,
+      details.status == null ? null : `status ${details.status}`,
+      details.contentType ? `content-type ${details.contentType}` : null,
+    ]
+      .filter(Boolean)
+      .join(', ')
+    super(
+      `Service Lasso runtime API unavailable for ${endpoint}: ${details.reason}${
+        metadata ? ` (${metadata})` : ''
+      }.`
+    )
+    this.name = 'RuntimeApiUnavailableError'
+    this.details = details
+    if (cause) {
+      Object.defineProperty(this, 'cause', {
+        value: cause,
+        configurable: true,
+        writable: true,
+      })
+    }
+  }
+}
+
+export function resolveRuntimeApiMode(
+  env: RuntimeApiEnvironment = import.meta.env
+): RuntimeApiMode {
+  return env.DEV ? 'local-dev' : 'packaged-runtime'
+}
+
+export function resolveServiceLassoApiBaseUrl(
+  env: RuntimeApiEnvironment = import.meta.env
+) {
+  const configured = env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '')
+  if (configured) return configured
+  return resolveRuntimeApiMode(env) === 'packaged-runtime' ? '' : null
+}
+
+export function isServiceLassoStubDataEnabled(
+  env: RuntimeApiEnvironment = import.meta.env
+) {
+  return (
+    resolveRuntimeApiMode(env) === 'local-dev' &&
+    env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA === 'true'
+  )
+}
+
+export const serviceLassoApiBaseUrl = resolveServiceLassoApiBaseUrl()
+
+export const serviceLassoStubDataEnabled = isServiceLassoStubDataEnabled()
 
 export const favoritesFeatureEnabled =
   import.meta.env.VITE_SERVICE_LASSO_FAVORITES_ENABLED === 'true'
 
 export const favoritesMutationEnabled =
-  favoritesFeatureEnabled && Boolean(serviceLassoApiBaseUrl)
+  favoritesFeatureEnabled && serviceLassoApiBaseUrl !== null
 
 type RemoteServiceMeta = {
   id: string
@@ -67,15 +138,12 @@ function createEmptyRecoveryState(serviceId: string): ServiceRecoveryHistoryStat
 }
 
 async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
-  if (!serviceLassoApiBaseUrl) return null
+  if (serviceLassoApiBaseUrl === null) return null
 
   try {
-    const response = await fetch(`${serviceLassoApiBaseUrl}/api/services/meta`)
-    if (!response.ok) return null
-
-    const payload = (await response.json()) as {
+    const payload = await fetchRuntimeJson<{
       services?: RemoteServiceMeta[]
-    }
+    }>('/api/services/meta')
 
     return payload.services ?? []
   } catch {
@@ -86,15 +154,12 @@ async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
 async function fetchRemoteUpdateStates(): Promise<
   RemoteServiceUpdate[] | null
 > {
-  if (!serviceLassoApiBaseUrl) return null
+  if (serviceLassoApiBaseUrl === null) return null
 
   try {
-    const response = await fetch(`${serviceLassoApiBaseUrl}/api/updates`)
-    if (!response.ok) return null
-
-    const payload = (await response.json()) as {
+    const payload = await fetchRuntimeJson<{
       services?: RemoteServiceUpdate[]
-    }
+    }>('/api/updates')
 
     return payload.services ?? []
   } catch {
@@ -105,15 +170,12 @@ async function fetchRemoteUpdateStates(): Promise<
 async function fetchRemoteRecoveryStates(): Promise<
   RemoteServiceRecovery[] | null
 > {
-  if (!serviceLassoApiBaseUrl) return null
+  if (serviceLassoApiBaseUrl === null) return null
 
   try {
-    const response = await fetch(`${serviceLassoApiBaseUrl}/api/recovery`)
-    if (!response.ok) return null
-
-    const payload = (await response.json()) as {
+    const payload = await fetchRuntimeJson<{
       services?: RemoteServiceRecovery[]
-    }
+    }>('/api/recovery')
 
     return payload.services ?? []
   } catch {
@@ -1012,6 +1074,126 @@ export function buildRecoveryNotifications(currentServices: DashboardService[]) 
   }
 }
 
+function buildRuntimeEndpoint(path: string, apiBaseUrl: string) {
+  return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+export async function fetchRuntimeJson<T>(
+  path: string,
+  options?: {
+    apiBaseUrl?: string | null
+    mode?: RuntimeApiMode
+  }
+) {
+  const apiBaseUrl =
+    options?.apiBaseUrl === undefined
+      ? serviceLassoApiBaseUrl
+      : options.apiBaseUrl
+  const mode = options?.mode ?? resolveRuntimeApiMode()
+  const detailsBase = {
+    mode,
+    path,
+    endpoint: apiBaseUrl == null ? null : buildRuntimeEndpoint(path, apiBaseUrl),
+    status: null,
+    contentType: null,
+    packagedProxyConfigured: mode === 'packaged-runtime' && apiBaseUrl === '',
+  } satisfies Omit<RuntimeApiUnavailableDetails, 'reason'>
+
+  if (apiBaseUrl == null) {
+    throw new RuntimeApiUnavailableError({
+      ...detailsBase,
+      reason: 'missing_api_base_url',
+    })
+  }
+
+  let response: Response
+  const endpoint = buildRuntimeEndpoint(path, apiBaseUrl)
+  const requestDetails = {
+    ...detailsBase,
+    endpoint,
+  }
+
+  try {
+    response = await fetch(endpoint)
+  } catch (error) {
+    throw new RuntimeApiUnavailableError(
+      {
+        ...requestDetails,
+        reason: 'fetch_failed',
+      },
+      error
+    )
+  }
+
+  const contentType = response.headers.get('content-type')
+  const responseDetails = {
+    ...requestDetails,
+    status: response.status,
+    contentType,
+  }
+
+  if (!response.ok) {
+    throw new RuntimeApiUnavailableError({
+      ...responseDetails,
+      reason: 'http_error',
+    })
+  }
+
+  if (!contentType?.toLowerCase().includes('application/json')) {
+    throw new RuntimeApiUnavailableError({
+      ...responseDetails,
+      reason: 'non_json',
+    })
+  }
+
+  try {
+    return (await response.json()) as T
+  } catch (error) {
+    throw new RuntimeApiUnavailableError(
+      {
+        ...responseDetails,
+        reason: 'non_json',
+      },
+      error
+    )
+  }
+}
+
+export function isRuntimeApiUnavailableError(
+  error: unknown
+): error is RuntimeApiUnavailableError {
+  return error instanceof RuntimeApiUnavailableError
+}
+
+export function getRuntimeApiUnavailableCopy(
+  error: unknown,
+  env: RuntimeApiEnvironment = import.meta.env
+) {
+  const mode = resolveRuntimeApiMode(env)
+  const details = isRuntimeApiUnavailableError(error)
+    ? error.details
+    : ({
+        mode,
+        path: '/api/dashboard',
+        endpoint: null,
+        status: null,
+        contentType: null,
+        packagedProxyConfigured: mode === 'packaged-runtime',
+        reason: 'fetch_failed',
+      } satisfies RuntimeApiUnavailableDetails)
+
+  return {
+    title: 'Runtime API unavailable',
+    description:
+      'Service Admin cannot reach or parse the Service Lasso runtime API.',
+    guidance:
+      mode === 'local-dev'
+        ? 'Set VITE_SERVICE_LASSO_API_BASE_URL for a separate runtime API, or set VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true for local fixture development.'
+        : 'Check that the packaged Service Admin runtime API proxy is configured and returning JSON.',
+    details,
+  }
+}
+
 function buildSummary(): DashboardSummary {
   const warnings = buildWarnings(services)
   const updateNotifications = buildUpdateNotifications(services)
@@ -1061,7 +1243,7 @@ function syncFavoriteState(serviceId: string, favorite?: boolean) {
 }
 
 async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
-  if (!favoritesMutationEnabled || !serviceLassoApiBaseUrl) return false
+  if (!favoritesMutationEnabled || serviceLassoApiBaseUrl === null) return false
 
   try {
     const response = await fetch(
@@ -1086,18 +1268,59 @@ async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
 
 export async function fetchDashboardSummary() {
   await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{ summary?: DashboardSummary }>(
+      '/api/dashboard'
+    )
+    if (!payload.summary) {
+      throw new RuntimeApiUnavailableError({
+        mode: resolveRuntimeApiMode(),
+        path: '/api/dashboard',
+        endpoint:
+          serviceLassoApiBaseUrl == null
+            ? null
+            : buildRuntimeEndpoint('/api/dashboard', serviceLassoApiBaseUrl),
+        status: 200,
+        contentType: 'application/json',
+        packagedProxyConfigured:
+          resolveRuntimeApiMode() === 'packaged-runtime' &&
+          serviceLassoApiBaseUrl === '',
+        reason: 'non_json',
+      })
+    }
+
+    return structuredClone(payload.summary)
+  }
+
   await syncRemoteStateFromApi()
   return structuredClone(buildSummary())
 }
 
 export async function fetchServices() {
   await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{ services?: DashboardService[] }>(
+      '/api/dashboard/services'
+    )
+    return structuredClone(payload.services ?? [])
+  }
+
   await syncRemoteStateFromApi()
   return structuredClone(services)
 }
 
 export async function fetchDashboardService(serviceId: string) {
   await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{ service?: DashboardService }>(
+      `/api/dashboard/services/${encodeURIComponent(serviceId)}`
+    )
+    return structuredClone(payload.service ?? null)
+  }
+
   await syncRemoteStateFromApi()
   return (
     structuredClone(services.find((service) => service.id === serviceId)) ??
@@ -1121,7 +1344,7 @@ export async function runServiceUpdateAction(options: {
 }) {
   await wait(120)
 
-  if (!serviceLassoApiBaseUrl) {
+  if (serviceLassoApiBaseUrl === null) {
     return structuredClone(buildSummary())
   }
 
@@ -1172,7 +1395,7 @@ function applyServiceRecoveryState(
 export async function runServiceRecoveryDoctorAction(serviceId: string) {
   await wait(120)
 
-  if (!serviceLassoApiBaseUrl) {
+  if (serviceLassoApiBaseUrl === null) {
     const recovery =
       services.find((service) => service.id === serviceId)?.recovery ??
       createEmptyRecoveryState(serviceId)

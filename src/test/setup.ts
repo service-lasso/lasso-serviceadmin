@@ -4,6 +4,8 @@ import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth-store'
 
+import.meta.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA = 'true'
+
 class ResizeObserverMock {
   observe() {}
   unobserve() {}

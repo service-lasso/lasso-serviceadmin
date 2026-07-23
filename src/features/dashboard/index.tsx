@@ -17,6 +17,7 @@ import {
   useFavoriteFeatureState,
   useToggleFavorite,
 } from '@/lib/service-lasso-dashboard/hooks'
+import { getRuntimeApiUnavailableCopy } from '@/lib/service-lasso-dashboard/stub'
 import type {
   DashboardService,
   ServiceStatus,
@@ -247,6 +248,70 @@ function DashboardLoading() {
   )
 }
 
+function DashboardUnavailable({ error }: { error: unknown }) {
+  const copy = getRuntimeApiUnavailableCopy(error)
+  const details = [
+    ['Requested path', copy.details.path],
+    ['Requested endpoint', copy.details.endpoint ?? 'Not configured'],
+    [
+      'HTTP status',
+      copy.details.status == null ? 'No response' : String(copy.details.status),
+    ],
+    ['Content type', copy.details.contentType ?? 'Unknown'],
+    [
+      'Packaged proxy',
+      copy.details.packagedProxyConfigured ? 'Configured' : 'Not configured',
+    ],
+  ]
+
+  return (
+    <>
+      <Header fixed>
+        <Search />
+        <div className='ms-auto flex items-center space-x-4'>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </div>
+      </Header>
+
+      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        <div className='flex flex-wrap items-end justify-between gap-2'>
+          <div>
+            <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
+            <p className='text-muted-foreground'>
+              Monitor runtime health, launch service actions, and jump to the
+              services you use most.
+            </p>
+          </div>
+        </div>
+        <Card className='border-amber-500/30 bg-amber-500/5'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <AlertTriangle className='size-4 text-amber-600' />
+              {copy.title}
+            </CardTitle>
+            <CardDescription>{copy.description}</CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <p className='text-sm'>{copy.guidance}</p>
+            <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
+              {details.map(([label, value]) => (
+                <div key={label} className='rounded-md border bg-background p-3'>
+                  <div className='text-xs text-muted-foreground'>{label}</div>
+                  <div className='mt-1 break-words text-sm font-medium'>
+                    {value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </Main>
+    </>
+  )
+}
+
 export function Dashboard() {
   usePageMetadata({
     title: 'Service Admin - Dashboard',
@@ -256,6 +321,10 @@ export function Dashboard() {
 
   const summaryQuery = useDashboardSummary()
   const actionMutation = useDashboardAction()
+
+  if (summaryQuery.isError) {
+    return <DashboardUnavailable error={summaryQuery.error} />
+  }
 
   if (summaryQuery.isLoading || !summaryQuery.data) {
     return <DashboardLoading />

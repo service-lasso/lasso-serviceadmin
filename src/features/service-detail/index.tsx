@@ -236,7 +236,7 @@ async function persistNodeLayoutToMeta(
   x: number,
   y: number
 ) {
-  if (!serviceLassoApiBaseUrl) {
+  if (serviceLassoApiBaseUrl === null) {
     throw new Error('Service Lasso API base URL is not configured')
   }
 
@@ -426,7 +426,7 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
   const saveLayoutToMeta = async () => {
     setSavedLayoutMap(layoutMap)
 
-    if (!serviceLassoApiBaseUrl) {
+    if (serviceLassoApiBaseUrl === null) {
       toast.error(
         'Layout save triggered, but API base URL is not configured, so this will reset after reload.'
       )
