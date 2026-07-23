@@ -43,8 +43,11 @@
       "TRAEFIK_ENV": "local"
     },
     "depend_on": [],
-    "healthcheck": {
-      "type": "process"
-    }
+    "healthchecks": [
+      {
+        "id": "process-ready",
+        "type": "process"
+      }
+    ]
   }
 }
