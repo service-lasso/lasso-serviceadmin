@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTheme } from '@/context/theme-provider'
+import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 import {
   buildApiUsageEdge,
   buildDependencyEdge,
@@ -60,9 +61,6 @@ import { ThemeSwitch } from '@/components/theme-switch'
 
 const route = getRouteApi('/_authenticated/dependencies/')
 
-const serviceLassoApiBaseUrl =
-  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
-
 type GraphLayoutMap = Record<string, { x: number; y: number }>
 type GraphOrientation = 'horizontal' | 'vertical'
 
@@ -71,7 +69,7 @@ async function persistNodeLayoutToMeta(
   x: number,
   y: number
 ) {
-  if (!serviceLassoApiBaseUrl) {
+  if (serviceLassoApiBaseUrl === null) {
     throw new Error('Service Lasso API base URL is not configured')
   }
 
@@ -460,7 +458,7 @@ export function Dependencies() {
   const saveLayoutToMeta = async () => {
     setSavedLayoutMap(layoutMap)
 
-    if (!serviceLassoApiBaseUrl) {
+    if (serviceLassoApiBaseUrl === null) {
       toast.error(
         'Layout save triggered, but API base URL is not configured, so this will reset after reload.'
       )
