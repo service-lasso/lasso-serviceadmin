@@ -4,6 +4,10 @@ import type {
   DashboardSummary,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
+  ServiceSetupRunResult,
+  ServiceSetupState,
+  ServiceSetupStep,
+  ServiceSetupStepRun,
   ServiceUpdateAction,
   ServiceUpdateState,
 } from './types'
@@ -949,9 +953,132 @@ function createDemoRecoveryState(serviceId: string): ServiceRecoveryHistoryState
   }
 }
 
+function createSetupRun(
+  serviceId: string,
+  stepId: string,
+  status: ServiceSetupStepRun['status'],
+  options: {
+    startedAt: string
+    durationMs: number
+    exitCode: number | null
+    signal?: string | null
+    message?: string
+  }
+): ServiceSetupStepRun {
+  const startedAt = new Date(options.startedAt).toISOString()
+  const finishedAt = new Date(
+    Date.parse(startedAt) + options.durationMs
+  ).toISOString()
+  const runId = `${startedAt.replace(/[:.]/g, '-')}-${stepId}`
+
+  return {
+    runId,
+    serviceId,
+    stepId,
+    status,
+    startedAt,
+    finishedAt,
+    durationMs: options.durationMs,
+    command: `service-lasso setup run ${serviceId} ${stepId}`,
+    exitCode: options.exitCode,
+    signal: options.signal ?? null,
+    message: options.message,
+    logs: {
+      logPath: `/services/${serviceId}/logs/setup/${stepId}/${runId}/setup.log`,
+      stdoutPath: `/services/${serviceId}/logs/setup/${stepId}/${runId}/stdout.log`,
+      stderrPath: `/services/${serviceId}/logs/setup/${stepId}/${runId}/stderr.log`,
+    },
+  }
+}
+
+function createSetupStep(
+  serviceId: string,
+  step: Omit<ServiceSetupStep, 'lastRun' | 'history' | 'status'> & {
+    lastRun?: ServiceSetupStepRun
+    status?: ServiceSetupStep['status']
+  }
+): ServiceSetupStep {
+  return {
+    ...step,
+    id: step.id,
+    description: step.description ?? `Setup step ${step.id} for ${serviceId}.`,
+    status: step.status ?? step.lastRun?.status ?? 'pending',
+    lastRun: step.lastRun ?? null,
+    history: step.lastRun ? [step.lastRun] : [],
+  }
+}
+
+function createDemoSetupState(serviceId: string): ServiceSetupState {
+  if (serviceId === 'service-admin') {
+    return { serviceId, updatedAt: null, steps: [] }
+  }
+
+  if (serviceId === 'zitadel') {
+    const lastRun = createSetupRun(serviceId, 'seed-admin', 'failed', {
+      startedAt: '2026-04-11T09:59:00+10:00',
+      durationMs: 1421,
+      exitCode: 1,
+      message: 'Setup step "seed-admin" failed with exit code 1.',
+    })
+
+    return {
+      serviceId,
+      updatedAt: lastRun.finishedAt,
+      steps: [
+        createSetupStep(serviceId, {
+          id: 'seed-admin',
+          description: 'Create the initial administrator realm user.',
+          rerun: 'manual',
+          dependOn: ['zitadel-db'],
+          lastRun,
+        }),
+      ],
+    }
+  }
+
+  const certificateRun = createSetupRun(
+    serviceId,
+    'generate-certificate',
+    'succeeded',
+    {
+      startedAt: '2026-04-11T08:31:00+10:00',
+      durationMs: 814,
+      exitCode: 0,
+      message: 'Setup step "generate-certificate" completed.',
+    }
+  )
+  const cacheRun = createSetupRun(serviceId, 'prepare-cache', 'skipped', {
+    startedAt: '2026-04-11T08:32:00+10:00',
+    durationMs: 0,
+    exitCode: null,
+    message: 'setup step already succeeded',
+  })
+
+  return {
+    serviceId,
+    updatedAt: certificateRun.finishedAt,
+    steps: [
+      createSetupStep(serviceId, {
+        id: 'generate-certificate',
+        description: 'Generate local TLS material required by the service.',
+        rerun: 'ifMissing',
+        lastRun: certificateRun,
+      }),
+      createSetupStep(serviceId, {
+        id: 'prepare-cache',
+        description: 'Prepare runtime cache directories.',
+        rerun: 'ifMissing',
+        lastRun: cacheRun,
+        skipReason: cacheRun.message,
+      }),
+    ],
+  }
+}
+
 services = services.map((service) => ({
   ...service,
   recovery: service.recovery ?? createDemoRecoveryState(service.id),
+  setup: service.setup ?? createDemoSetupState(service.id),
 }))
 
 let runtime = {
@@ -1159,6 +1286,138 @@ export async function fetchRuntimeJson<T>(
   }
 }
 
+function isRecord(input: unknown): input is Record<string, unknown> {
+  return typeof input === 'object' && input !== null
+}
+
+function readString(input: unknown) {
+  return typeof input === 'string' ? input : undefined
+}
+
+function readStringArray(input: unknown) {
+  return Array.isArray(input)
+    ? input.filter((item): item is string => typeof item === 'string')
+    : undefined
+}
+
+function normalizeSetupRun(input: unknown): ServiceSetupStepRun | null {
+  if (!isRecord(input)) return null
+
+  const stepId = readString(input.stepId)
+  const serviceId = readString(input.serviceId)
+  const runId = readString(input.runId)
+  const startedAt = readString(input.startedAt)
+  const finishedAt = readString(input.finishedAt)
+  const status = readString(input.status)
+
+  if (!stepId || !serviceId || !runId || !startedAt || !finishedAt || !status) {
+    return null
+  }
+
+  const logs = isRecord(input.logs) ? input.logs : undefined
+
+  return {
+    runId,
+    serviceId,
+    stepId,
+    status:
+      status === 'succeeded' ||
+      status === 'failed' ||
+      status === 'timeout' ||
+      status === 'skipped'
+        ? status
+        : 'pending',
+    startedAt,
+    finishedAt,
+    durationMs:
+      typeof input.durationMs === 'number' && Number.isFinite(input.durationMs)
+        ? input.durationMs
+        : Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
+    command: readString(input.command),
+    exitCode: typeof input.exitCode === 'number' ? input.exitCode : null,
+    signal: readString(input.signal) ?? null,
+    message: readString(input.message),
+    logs: logs
+      ? {
+          logPath: readString(logs.logPath),
+          stdoutPath: readString(logs.stdoutPath),
+          stderrPath: readString(logs.stderrPath),
+        }
+      : undefined,
+  }
+}
+
+export function normalizeServiceSetupPayload(
+  serviceId: string,
+  payload: unknown
+): ServiceSetupState {
+  const input = isRecord(payload) ? payload : {}
+  const rawSetup = isRecord(input.setup) ? input.setup : input
+  const stateSteps = isRecord(rawSetup.steps) ? rawSetup.steps : {}
+  const rawSteps = Array.isArray(input.steps) ? input.steps : []
+
+  const stepIds = new Set<string>()
+  for (const rawStep of rawSteps) {
+    if (typeof rawStep === 'string') {
+      stepIds.add(rawStep)
+    } else if (isRecord(rawStep) && typeof rawStep.id === 'string') {
+      stepIds.add(rawStep.id)
+    }
+  }
+  for (const stepId of Object.keys(stateSteps)) {
+    stepIds.add(stepId)
+  }
+
+  const steps = Array.from(stepIds)
+    .sort((left, right) => left.localeCompare(right))
+    .map((stepId) => {
+      const stepDetails = rawSteps.find(
+        (item) => isRecord(item) && item.id === stepId
+      )
+      const declared = isRecord(stepDetails) ? stepDetails : {}
+      const state = isRecord(stateSteps[stepId]) ? stateSteps[stepId] : {}
+      const lastRun = normalizeSetupRun(state.lastRun)
+      const history = Array.isArray(state.history)
+        ? state.history
+            .map((entry) => normalizeSetupRun(entry))
+            .filter((entry): entry is ServiceSetupStepRun => entry !== null)
+        : []
+
+      return {
+        id: stepId,
+        description: readString(declared.description),
+        rerun:
+          declared.rerun === 'ifMissing' ||
+          declared.rerun === 'manual' ||
+          declared.rerun === 'always'
+            ? declared.rerun
+            : undefined,
+        dependOn:
+          readStringArray(declared.dependOn) ??
+          readStringArray(declared.depend_on),
+        status:
+          state.status === 'succeeded' ||
+          state.status === 'failed' ||
+          state.status === 'timeout' ||
+          state.status === 'skipped'
+            ? state.status
+            : lastRun?.status ?? 'pending',
+        lastRun,
+        history,
+        skipReason:
+          state.status === 'skipped'
+            ? (lastRun?.message ?? readString(state.reason))
+            : undefined,
+      } satisfies ServiceSetupStep
+    })
+
+  return {
+    serviceId: readString(input.serviceId) ?? serviceId,
+    updatedAt: readString(rawSetup.updatedAt) ?? null,
+    steps,
+  }
+}
+
 export function isRuntimeApiUnavailableError(
   error: unknown
 ): error is RuntimeApiUnavailableError {
@@ -1328,6 +1587,29 @@ export async function fetchDashboardService(serviceId: string) {
   )
 }
 
+export async function fetchServiceSetup(serviceId: string) {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<unknown>(
+      `/api/services/${encodeURIComponent(serviceId)}/setup`
+    )
+    return normalizeServiceSetupPayload(serviceId, payload)
+  }
+
+  await syncRemoteStateFromApi()
+  return structuredClone(
+    services.find((service) => service.id === serviceId)?.setup ??
+      createDemoSetupState(serviceId)
+  )
+}
+
+function applyServiceSetupState(serviceId: string, setup: ServiceSetupState) {
+  services = services.map((service) =>
+    service.id === serviceId ? { ...service, setup } : service
+  )
+}
+
 function applyServiceUpdateState(
   serviceId: string,
   update: ServiceUpdateState
@@ -1381,6 +1663,131 @@ export async function runServiceUpdateAction(options: {
   }
 
   return structuredClone(buildSummary())
+}
+
+export async function runServiceSetupAction(options: {
+  serviceId: string
+  stepId?: string
+  force?: boolean
+}) {
+  await wait(120)
+  const existingSetup =
+    services.find((service) => service.id === options.serviceId)?.setup ??
+    createDemoSetupState(options.serviceId)
+
+  if (serviceLassoApiBaseUrl === null) {
+    const selectedSteps = options.stepId
+      ? existingSetup.steps.filter((step) => step.id === options.stepId)
+      : existingSetup.steps.filter((step) => step.rerun !== 'manual')
+    const now = new Date().toISOString()
+    const runs = selectedSteps.map((step) => {
+      const status =
+        step.status === 'succeeded' && options.force !== true
+          ? 'skipped'
+          : 'succeeded'
+      return {
+        runId: `${now.replace(/[:.]/g, '-')}-${step.id}`,
+        serviceId: options.serviceId,
+        stepId: step.id,
+        status,
+        startedAt: now,
+        finishedAt: now,
+        durationMs: 0,
+        command: `service-lasso setup run ${options.serviceId} ${step.id}`,
+        exitCode: status === 'succeeded' ? 0 : null,
+        signal: null,
+        message:
+          status === 'succeeded'
+            ? `Setup step "${step.id}" completed.`
+            : 'setup step already succeeded',
+        logs: step.lastRun?.logs,
+      } satisfies ServiceSetupStepRun
+    })
+    const nextSetup = {
+      ...existingSetup,
+      updatedAt: now,
+      steps: existingSetup.steps.map((step) => {
+        const run = runs.find((item) => item.stepId === step.id)
+        if (!run) return step
+        return {
+          ...step,
+          status: run.status,
+          lastRun: run,
+          history: [...step.history, run].slice(-20),
+          skipReason: run.status === 'skipped' ? run.message : undefined,
+        }
+      }),
+    } satisfies ServiceSetupState
+    applyServiceSetupState(options.serviceId, nextSetup)
+
+    return structuredClone({
+      action: 'setup',
+      serviceId: options.serviceId,
+      ok: true,
+      setup: nextSetup,
+      runs,
+      skipped: runs
+        .filter((run) => run.status === 'skipped')
+        .map((run) => ({
+          stepId: run.stepId,
+          reason: run.message ?? 'setup step skipped',
+        })),
+      message: runs.length
+        ? `Setup completed for "${options.serviceId}".`
+        : `No setup steps ran for "${options.serviceId}".`,
+    } satisfies ServiceSetupRunResult)
+  }
+
+  const endpoint = `${serviceLassoApiBaseUrl}/api/services/${options.serviceId}/setup/run${
+    options.stepId ? `/${encodeURIComponent(options.stepId)}` : ''
+  }`
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ force: options.force === true }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Setup run failed for ${options.serviceId}`)
+  }
+
+  const payload = (await response.json()) as Record<string, unknown>
+  const setup = normalizeServiceSetupPayload(options.serviceId, {
+    serviceId: options.serviceId,
+    steps: existingSetup.steps,
+    setup:
+      payload.setup ??
+      (isRecord(payload.state) && isRecord(payload.state.setup)
+        ? payload.state.setup
+        : undefined),
+  })
+  applyServiceSetupState(options.serviceId, setup)
+
+  return structuredClone({
+    action: 'setup',
+    serviceId: options.serviceId,
+    ok: payload.ok === true,
+    setup,
+    runs: Array.isArray(payload.runs)
+      ? payload.runs
+          .map((entry) => normalizeSetupRun(entry))
+          .filter((entry): entry is ServiceSetupStepRun => entry !== null)
+      : [],
+    skipped: Array.isArray(payload.skipped)
+      ? payload.skipped.filter(
+          (item): item is { stepId: string; reason: string } =>
+            isRecord(item) &&
+            typeof item.stepId === 'string' &&
+            typeof item.reason === 'string'
+        )
+      : [],
+    message:
+      typeof payload.message === 'string'
+        ? payload.message
+        : `Setup completed for "${options.serviceId}".`,
+  } satisfies ServiceSetupRunResult)
 }
 
 function applyServiceRecoveryState(

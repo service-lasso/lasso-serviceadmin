@@ -4,14 +4,17 @@ import {
   favoritesMutationEnabled,
   fetchDashboardService,
   fetchDashboardSummary,
+  fetchServiceSetup,
   fetchServices,
   runDashboardAction,
   runServiceRecoveryDoctorAction,
+  runServiceSetupAction,
   runServiceUpdateAction,
 } from './stub'
 import type {
   DashboardAction,
   DashboardService,
+  ServiceSetupRunResult,
   ServiceUpdateAction,
 } from './types'
 
@@ -35,6 +38,13 @@ export function useDashboardService(serviceId: string) {
   return useQuery({
     queryKey: [...dashboardQueryKey, serviceId],
     queryFn: () => fetchDashboardService(serviceId),
+  })
+}
+
+export function useServiceSetup(serviceId: string) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, serviceId, 'setup'],
+    queryFn: () => fetchServiceSetup(serviceId),
   })
 }
 
@@ -109,6 +119,38 @@ export function useServiceUpdateAction() {
       for (const service of allServices) {
         queryClient.setQueryData([...dashboardQueryKey, service.id], service)
       }
+    },
+  })
+}
+
+export function useServiceSetupAction() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (options: {
+      serviceId: string
+      stepId?: string
+      force?: boolean
+    }) => runServiceSetupAction(options),
+    onSuccess: (result: ServiceSetupRunResult) => {
+      queryClient.setQueryData(
+        [...dashboardQueryKey, result.serviceId, 'setup'],
+        result.setup
+      )
+      queryClient.setQueryData<DashboardService | null>(
+        [...dashboardQueryKey, result.serviceId],
+        (service) => (service ? { ...service, setup: result.setup } : service)
+      )
+      queryClient.setQueryData<DashboardService[]>(
+        [...dashboardQueryKey, 'services'],
+        (services) =>
+          services?.map((service) =>
+            service.id === result.serviceId
+              ? { ...service, setup: result.setup }
+              : service
+          )
+      )
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
     },
   })
 }
