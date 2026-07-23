@@ -149,6 +149,14 @@ export type ServiceAction = {
     | 'open_logs'
     | 'open_config'
     | 'open_admin'
+  permission?: {
+    allowed: boolean
+    actor?: string
+    mode?: 'local-root' | 'signed-in' | 'remote-anonymous' | 'setup'
+    reason?: string
+    requiresConfirmation?: boolean
+    confirmationLabel?: string
+  }
 }
 
 export type ServiceUpdateStateKind =

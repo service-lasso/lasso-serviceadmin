@@ -74,6 +74,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConfigDrawer } from '@/components/config-drawer'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
@@ -1000,8 +1001,39 @@ function ServiceSetupPanel({
   )
 }
 
-function renderActionButton(action: ServiceAction, service: DashboardService) {
+function ServiceActionButton({
+  action,
+  service,
+}: {
+  action: ServiceAction
+  service: DashboardService
+}) {
   const key = action.id
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const permission = action.permission ?? {
+    allowed: false,
+    reason: 'Runtime action wiring is the next backend slice.',
+  }
+
+  if (!permission.allowed) {
+    return (
+      <Button
+        key={key}
+        variant='outline'
+        size='sm'
+        disabled
+        title={permission.reason}
+        className='h-auto max-w-full flex-col items-start gap-0.5 whitespace-normal text-left'
+      >
+        <span>{action.label}</span>
+        {permission.reason ? (
+          <span className='text-[11px] font-normal text-muted-foreground'>
+            {permission.reason}
+          </span>
+        ) : null}
+      </Button>
+    )
+  }
 
   if (action.kind === 'open_logs') {
     return (
@@ -1038,13 +1070,55 @@ function renderActionButton(action: ServiceAction, service: DashboardService) {
     )
   }
 
+  if (permission.requiresConfirmation) {
+    return (
+      <>
+        <Button
+          key={key}
+          variant='outline'
+          size='sm'
+          title={permission.reason}
+          onClick={() => setConfirmOpen(true)}
+        >
+          {action.label}
+        </Button>
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title='Confirm elevated action'
+          desc={
+            <div className='space-y-2'>
+              <p>{permission.reason ?? 'Core marked this action as elevated.'}</p>
+              <p>
+                Actor: {permission.actor ?? 'unknown'}; mode:{' '}
+                {permission.mode ?? 'unknown'}.
+              </p>
+            </div>
+          }
+          confirmText={permission.confirmationLabel ?? action.label}
+          destructive={
+            action.kind === 'stop' ||
+            action.kind === 'restart' ||
+            action.kind === 'uninstall'
+          }
+          handleConfirm={() => {
+            setConfirmOpen(false)
+            toast.info(`${action.label} is waiting for runtime action wiring.`)
+          }}
+        />
+      </>
+    )
+  }
+
   return (
     <Button
       key={key}
       variant='outline'
       size='sm'
-      disabled
-      title='Runtime action wiring is the next backend slice'
+      title={permission.reason}
+      onClick={() =>
+        toast.info(`${action.label} is waiting for runtime action wiring.`)
+      }
     >
       {action.label}
     </Button>
@@ -1386,7 +1460,11 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         </CardHeader>
                         <CardContent className='flex flex-wrap gap-2'>
                           {service.actions.map((action) =>
-                            renderActionButton(action, service)
+                            <ServiceActionButton
+                              key={action.id}
+                              action={action}
+                              service={service}
+                            />
                           )}
                         </CardContent>
                       </Card>

@@ -137,4 +137,32 @@ describe('app screens', () => {
       screen.getByText(/readiness probe exceeded the latency budget/i)
     ).toBeVisible()
   })
+
+  it('shows denied service action reasons on service details', async () => {
+    await renderRoute('/services/service-admin')
+
+    expect(await screen.findByRole('button', { name: /Stop service/i }))
+      .toBeDisabled()
+    expect(
+      screen.getByText(/cannot stop its own UI process/i)
+    ).toBeVisible()
+  })
+
+  it('confirms elevated service actions before continuing', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/traefik')
+
+    await user.click(
+      await screen.findByRole('button', { name: /Restart router/i })
+    )
+
+    expect(
+      await screen.findByRole('alertdialog', {
+        name: /Confirm elevated action/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/briefly interrupts local routing/i)
+    ).toBeVisible()
+  })
 })
