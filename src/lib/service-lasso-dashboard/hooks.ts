@@ -175,6 +175,7 @@ export function useServiceUpdateAction() {
       for (const service of allServices) {
         queryClient.setQueryData([...dashboardQueryKey, service.id], service)
       }
+      queryClient.invalidateQueries({ queryKey: inboxQueryKey })
     },
   })
 }

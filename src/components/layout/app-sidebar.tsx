@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { useLayout } from '@/context/layout-provider'
+import { useInboxSummary } from '@/lib/service-lasso-dashboard/hooks'
 import {
   Sidebar,
   SidebarContent,
@@ -11,9 +13,35 @@ import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
 import { TeamSwitcher } from './team-switcher'
+import { type NavGroup as NavGroupData } from './types'
 
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
+  const inboxQuery = useInboxSummary()
+  const inboxUnreadCount = inboxQuery.data?.counts.unread ?? 0
+  const inboxBadge =
+    !inboxQuery.isError && inboxUnreadCount > 0
+      ? inboxUnreadCount > 99
+        ? '99+'
+        : String(inboxUnreadCount)
+      : undefined
+
+  const navGroups = useMemo<NavGroupData[]>(
+    () =>
+      sidebarData.navGroups.map((group) => ({
+        ...group,
+        items: group.items.map((item) =>
+          item.title === 'Inbox'
+            ? {
+                ...item,
+                badge: inboxBadge,
+              }
+            : item
+        ),
+      })),
+    [inboxBadge]
+  )
+
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader>
@@ -24,7 +52,7 @@ export function AppSidebar() {
         {/* <AppTitle /> */}
       </SidebarHeader>
       <SidebarContent>
-        {sidebarData.navGroups.map((props) => (
+        {navGroups.map((props) => (
           <NavGroup key={props.title} {...props} />
         ))}
       </SidebarContent>

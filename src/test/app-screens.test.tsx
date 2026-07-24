@@ -89,6 +89,14 @@ describe('app screens', () => {
     }
   })
 
+  it('shows unread Inbox count in primary navigation', async () => {
+    await renderRoute('/')
+
+    expect(
+      await screen.findByRole('link', { name: /^Inbox, 3 unread$/i })
+    ).toBeVisible()
+  })
+
   it('shows compact empty setup state on service details', async () => {
     const user = userEvent.setup()
     await renderRoute('/services/service-admin')
