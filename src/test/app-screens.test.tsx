@@ -32,6 +32,11 @@ const appScreens: ScreenCase[] = [
   },
   { path: '/apps', heading: /^App Integrations$/i },
   { path: '/chats', heading: /^Inbox$/i },
+  {
+    path: '/inbox',
+    heading: /^Inbox$/i,
+    title: 'Service Admin - Inbox',
+  },
   { path: '/tasks', heading: /^Tasks$/i },
   { path: '/users', heading: /^User List$/i },
   {
@@ -163,6 +168,47 @@ describe('app screens', () => {
     ).toBeVisible()
     expect(
       screen.getByText(/briefly interrupts local routing/i)
+    ).toBeVisible()
+  })
+
+  it('filters, searches, and opens runtime inbox messages', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/inbox')
+
+    expect(
+      await screen.findByRole('button', {
+        name: /Service Admin update downloaded/i,
+      })
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Errors/i }))
+
+    expect(
+      await screen.findByRole('button', {
+        name: /Zitadel readiness probe failed/i,
+      })
+    ).toBeVisible()
+    expect(screen.queryByText(/Service Admin update downloaded/i)).toBeNull()
+
+    await user.clear(screen.getByLabelText(/Search inbox/i))
+    await user.type(screen.getByLabelText(/Search inbox/i), 'backup')
+    await user.click(screen.getByRole('button', { name: /Workflow/i }))
+
+    expect(
+      await screen.findByRole('button', {
+        name: /Backup workflow waiting for approval/i,
+      })
+    ).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /Backup workflow waiting for approval/i,
+      })
+    )
+
+    expect(screen.getByText(/paused before export/i)).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: /Open Workflow/i })
     ).toBeVisible()
   })
 })

@@ -6,6 +6,10 @@ import type {
   FirstRunSetupKeySource,
   FirstRunSetupState,
   FirstRunSetupStatus,
+  InboxMessage,
+  InboxMessageActionKind,
+  InboxMessageActionResult,
+  InboxSummary,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
   ServiceSetupRunResult,
@@ -114,6 +118,126 @@ type RemoteServiceRecovery = {
   serviceId: string
   recovery: ServiceRecoveryHistoryState
 }
+
+let inboxMessages: InboxMessage[] = [
+  {
+    id: 'update-service-admin-2-3',
+    title: 'Service Admin update downloaded',
+    summary: 'Version 2.3.0 is staged and ready for review.',
+    details:
+      'The runtime downloaded the Service Admin 2.3.0 candidate. Review the changelog, then install during an operator-approved maintenance window.',
+    category: 'update',
+    severity: 'info',
+    createdAt: '2026-07-24T00:18:00Z',
+    read: false,
+    hidden: false,
+    target: {
+      label: 'Service Admin UI',
+      href: '/services/service-admin',
+      kind: 'service',
+    },
+    actions: [
+      {
+        id: 'open-update-service-admin',
+        label: 'Open Update',
+        kind: 'open_update',
+        target: '/services/service-admin',
+      },
+      {
+        id: 'mark-update-read',
+        label: 'Mark Read',
+        kind: 'mark_read',
+      },
+      {
+        id: 'hide-update',
+        label: 'Hide',
+        kind: 'hide',
+      },
+    ],
+  },
+  {
+    id: 'workflow-backup-deferred',
+    title: 'Backup workflow waiting for approval',
+    summary: 'Nightly backup export is paused until the target is confirmed.',
+    details:
+      'The workflow runner prepared the backup plan but paused before export because the destination requires a fresh approval.',
+    category: 'workflow',
+    severity: 'warning',
+    createdAt: '2026-07-23T22:42:00Z',
+    read: false,
+    hidden: false,
+    target: {
+      label: 'Backup workflow',
+      href: '/logs?service=dagu',
+      kind: 'workflow',
+    },
+    actions: [
+      {
+        id: 'open-workflow-backup',
+        label: 'Open Workflow',
+        kind: 'open_workflow',
+        target: '/logs?service=dagu',
+      },
+      {
+        id: 'view-backup-audit',
+        label: 'View Audit',
+        kind: 'view_audit',
+        target: '/logs?service=dagu',
+      },
+    ],
+  },
+  {
+    id: 'system-runtime-reloaded',
+    title: 'Runtime configuration reloaded',
+    summary: 'Canonical services root changed and dashboard data refreshed.',
+    details:
+      'Service Lasso reloaded manifests from the canonical services root and refreshed dashboard service metadata.',
+    category: 'system',
+    severity: 'info',
+    createdAt: '2026-07-23T21:10:00Z',
+    read: true,
+    hidden: false,
+    actions: [
+      {
+        id: 'mark-runtime-unread',
+        label: 'Mark Unread',
+        kind: 'mark_unread',
+      },
+    ],
+  },
+  {
+    id: 'error-zitadel-health',
+    title: 'Zitadel readiness probe failed',
+    summary: 'OIDC discovery exceeded the configured latency budget.',
+    details:
+      'The latest health check marked the Zitadel discovery endpoint as critical. Open logs before retrying the probe.',
+    category: 'error',
+    severity: 'critical',
+    createdAt: '2026-07-23T19:35:00Z',
+    read: false,
+    hidden: false,
+    target: {
+      label: 'Zitadel logs',
+      href: '/logs?service=zitadel',
+      kind: 'logs',
+    },
+    actions: [
+      {
+        id: 'open-zitadel-logs',
+        label: 'Open Logs',
+        kind: 'open_logs',
+        target: '/logs?service=zitadel',
+      },
+      {
+        id: 'retry-zitadel-health',
+        label: 'Retry',
+        kind: 'retry',
+        disabled: true,
+        reason: 'Runtime retry endpoint is pending service-lasso/service-lasso#833.',
+      },
+    ],
+  },
+]
 
 const firstRunSetupStatusAliases: Record<string, FirstRunSetupStatus> = {
   ready: 'not_required',
@@ -1943,6 +2067,132 @@ export async function fetchServices() {
 
   await syncRemoteStateFromApi()
   return structuredClone(services)
+}
+
+function buildInboxSummary(): InboxSummary {
+  const messages = [...inboxMessages].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
+  )
+
+  return {
+    messages,
+    counts: {
+      total: messages.filter((message) => !message.hidden).length,
+      unread: messages.filter((message) => !message.hidden && !message.read)
+        .length,
+      updates: messages.filter(
+        (message) => !message.hidden && message.category === 'update'
+      ).length,
+      system: messages.filter(
+        (message) => !message.hidden && message.category === 'system'
+      ).length,
+      workflow: messages.filter(
+        (message) => !message.hidden && message.category === 'workflow'
+      ).length,
+      errors: messages.filter(
+        (message) => !message.hidden && message.category === 'error'
+      ).length,
+      hidden: messages.filter((message) => message.hidden).length,
+    },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export async function fetchInboxSummary() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{ inbox?: InboxSummary }>(
+      '/api/inbox'
+    )
+    return structuredClone(
+      payload.inbox ?? {
+        messages: [],
+        counts: {
+          total: 0,
+          unread: 0,
+          updates: 0,
+          system: 0,
+          workflow: 0,
+          errors: 0,
+          hidden: 0,
+        },
+        updatedAt: new Date().toISOString(),
+      }
+    )
+  }
+
+  return structuredClone(buildInboxSummary())
+}
+
+export async function runInboxMessageAction(options: {
+  messageId: string
+  action: InboxMessageActionKind
+}) {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<InboxMessageActionResult>(
+      `/api/inbox/messages/${encodeURIComponent(options.messageId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: options.action }),
+      }
+    )
+    return structuredClone(payload)
+  }
+
+  inboxMessages = inboxMessages.map((message) => {
+    if (message.id !== options.messageId) return message
+
+    if (options.action === 'mark_read') {
+      return {
+        ...message,
+        read: true,
+        actions: message.actions.map((action) =>
+          action.kind === 'mark_read'
+            ? { ...action, kind: 'mark_unread', label: 'Mark Unread' }
+            : action
+        ),
+      }
+    }
+
+    if (options.action === 'mark_unread') {
+      return {
+        ...message,
+        read: false,
+        actions: message.actions.map((action) =>
+          action.kind === 'mark_unread'
+            ? { ...action, kind: 'mark_read', label: 'Mark Read' }
+            : action
+        ),
+      }
+    }
+
+    if (options.action === 'hide') {
+      return { ...message, hidden: true, read: true }
+    }
+
+    return message
+  })
+
+  const inbox = buildInboxSummary()
+  const message =
+    inbox.messages.find((item) => item.id === options.messageId) ??
+    inboxMessages.find((item) => item.id === options.messageId)
+
+  if (!message) {
+    throw new Error(`Inbox message ${options.messageId} was not found.`)
+  }
+
+  return structuredClone({
+    ok: true,
+    message,
+    inbox,
+  } satisfies InboxMessageActionResult)
 }
 
 export async function fetchDashboardService(serviceId: string) {

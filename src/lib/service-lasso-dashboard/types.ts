@@ -375,6 +375,74 @@ export type DashboardSummary = {
   }
 }
 
+export type InboxMessageCategory =
+  | 'update'
+  | 'system'
+  | 'workflow'
+  | 'error'
+
+export type InboxMessageSeverity = 'info' | 'warning' | 'critical'
+
+export type InboxMessageActionKind =
+  | 'open_service'
+  | 'open_logs'
+  | 'open_workflow'
+  | 'open_update'
+  | 'retry'
+  | 'view_audit'
+  | 'mark_read'
+  | 'mark_unread'
+  | 'hide'
+
+export type InboxMessageAction = {
+  id: string
+  label: string
+  kind: InboxMessageActionKind
+  target?: string
+  disabled?: boolean
+  reason?: string
+}
+
+export type InboxMessageTarget = {
+  label: string
+  href: string
+  kind: 'service' | 'logs' | 'workflow' | 'update' | 'audit'
+}
+
+export type InboxMessage = {
+  id: string
+  title: string
+  summary: string
+  details: string
+  category: InboxMessageCategory
+  severity: InboxMessageSeverity
+  createdAt: string
+  read: boolean
+  hidden: boolean
+  target?: InboxMessageTarget
+  actions: InboxMessageAction[]
+}
+
+export type InboxSummary = {
+  messages: InboxMessage[]
+  counts: {
+    total: number
+    unread: number
+    updates: number
+    system: number
+    workflow: number
+    errors: number
+    hidden: number
+  }
+  updatedAt: string
+}
+
+export type InboxMessageActionResult = {
+  ok: boolean
+  message: InboxMessage
+  inbox: InboxSummary
+}
+
 export type DashboardAction =
   | 'reload-runtime'
   | 'start-services'

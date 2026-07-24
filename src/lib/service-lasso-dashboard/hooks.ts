@@ -6,9 +6,11 @@ import {
   fetchDashboardService,
   fetchDashboardSummary,
   fetchFirstRunSetupState,
+  fetchInboxSummary,
   fetchServiceSetup,
   fetchServices,
   runDashboardAction,
+  runInboxMessageAction,
   runServiceRecoveryDoctorAction,
   runServiceSetupAction,
   runServiceUpdateAction,
@@ -16,11 +18,13 @@ import {
 import type {
   DashboardAction,
   DashboardService,
+  InboxMessageActionKind,
   ServiceSetupRunResult,
   ServiceUpdateAction,
 } from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
+const inboxQueryKey = ['service-lasso-inbox']
 const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
 
 export function useDashboardSummary() {
@@ -34,6 +38,27 @@ export function useServices() {
   return useQuery({
     queryKey: [...dashboardQueryKey, 'services'],
     queryFn: fetchServices,
+  })
+}
+
+export function useInboxSummary() {
+  return useQuery({
+    queryKey: inboxQueryKey,
+    queryFn: fetchInboxSummary,
+  })
+}
+
+export function useInboxMessageAction() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (options: {
+      messageId: string
+      action: InboxMessageActionKind
+    }) => runInboxMessageAction(options),
+    onSuccess: (result) => {
+      queryClient.setQueryData(inboxQueryKey, result.inbox)
+    },
   })
 }
 
