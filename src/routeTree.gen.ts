@@ -30,6 +30,7 @@ import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
+import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
 import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authenticated/runtime/index'
 import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
@@ -153,6 +154,12 @@ const AuthenticatedServicesIndexRoute =
   AuthenticatedServicesIndexRouteImport.update({
     id: '/services/',
     path: '/services/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecurityIndexRoute =
+  AuthenticatedSecurityIndexRouteImport.update({
+    id: '/security/',
+    path: '/security/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedRuntimeIndexRoute =
@@ -290,6 +297,7 @@ export interface FileRoutesByFullPath {
   '/logs/': typeof AuthenticatedLogsIndexRoute
   '/network/': typeof AuthenticatedNetworkIndexRoute
   '/runtime/': typeof AuthenticatedRuntimeIndexRoute
+  '/security/': typeof AuthenticatedSecurityIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
@@ -327,6 +335,7 @@ export interface FileRoutesByTo {
   '/logs': typeof AuthenticatedLogsIndexRoute
   '/network': typeof AuthenticatedNetworkIndexRoute
   '/runtime': typeof AuthenticatedRuntimeIndexRoute
+  '/security': typeof AuthenticatedSecurityIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
@@ -369,6 +378,7 @@ export interface FileRoutesById {
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
   '/_authenticated/runtime/': typeof AuthenticatedRuntimeIndexRoute
+  '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
@@ -409,6 +419,7 @@ export interface FileRouteTypes {
     | '/logs/'
     | '/network/'
     | '/runtime/'
+    | '/security/'
     | '/services/'
     | '/settings/'
     | '/tasks/'
@@ -446,6 +457,7 @@ export interface FileRouteTypes {
     | '/logs'
     | '/network'
     | '/runtime'
+    | '/security'
     | '/services'
     | '/settings'
     | '/tasks'
@@ -487,6 +499,7 @@ export interface FileRouteTypes {
     | '/_authenticated/logs/'
     | '/_authenticated/network/'
     | '/_authenticated/runtime/'
+    | '/_authenticated/security/'
     | '/_authenticated/services/'
     | '/_authenticated/settings/'
     | '/_authenticated/tasks/'
@@ -658,6 +671,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedServicesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/security/': {
+      id: '/_authenticated/security/'
+      path: '/security'
+      fullPath: '/security/'
+      preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/runtime/': {
       id: '/_authenticated/runtime/'
       path: '/runtime'
@@ -824,6 +844,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
   AuthenticatedRuntimeIndexRoute: typeof AuthenticatedRuntimeIndexRoute
+  AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
@@ -844,6 +865,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,
   AuthenticatedRuntimeIndexRoute: AuthenticatedRuntimeIndexRoute,
+  AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
   AuthenticatedServicesIndexRoute: AuthenticatedServicesIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,

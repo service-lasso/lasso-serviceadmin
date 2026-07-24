@@ -10,6 +10,7 @@ import type {
   InboxMessageActionKind,
   InboxMessageActionResult,
   InboxSummary,
+  ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
   ServiceSetupRunResult,
@@ -340,6 +341,214 @@ function createEmptyRecoveryState(
   }
 }
 
+const securityState: ServiceSecurityState = {
+  updatedAt: new Date('2026-04-11T10:20:00+10:00').toISOString(),
+  currentActor: 'local-root',
+  safety: {
+    lastOwnerProtected: true,
+    selfSecurityAccessProtected: true,
+  },
+  groups: [
+    {
+      id: 'owners',
+      name: 'Owners',
+      description: 'Full Service Lasso administration with recovery access.',
+      builtIn: true,
+      ownerCapable: true,
+      elevated: true,
+      permissionKeys: [
+        'runtime.manage',
+        'services.manage',
+        'security.manage',
+        'backup.restore',
+      ],
+      actorCount: 1,
+      mappingCount: 1,
+      scopeRules: ['all-services', 'all-runtimes'],
+      canEdit: false,
+      canReset: true,
+    },
+    {
+      id: 'operators',
+      name: 'Operators',
+      description: 'Day-to-day service operation without security ownership.',
+      builtIn: true,
+      ownerCapable: false,
+      elevated: false,
+      permissionKeys: [
+        'services.read',
+        'actions.run',
+        'health.repair',
+        'logs.read',
+      ],
+      actorCount: 3,
+      mappingCount: 2,
+      scopeRules: ['profile:default'],
+      canEdit: false,
+      canReset: true,
+    },
+    {
+      id: 'backup-maintainers',
+      name: 'Backup maintainers',
+      description: 'Custom group for backup review and restore preparation.',
+      builtIn: false,
+      ownerCapable: false,
+      elevated: true,
+      permissionKeys: ['backup.read', 'backup.restore', 'audit.read'],
+      actorCount: 2,
+      mappingCount: 1,
+      scopeRules: ['service:secrets-broker', 'service:service-admin'],
+      canEdit: true,
+      canReset: false,
+    },
+  ],
+  permissions: [
+    {
+      key: 'runtime.manage',
+      displayName: 'Manage runtime',
+      description: 'Reload and repair the Service Lasso runtime supervisor.',
+      category: 'Runtime',
+      riskLevel: 'critical',
+      requiresConfirmation: true,
+      usedBy: ['Runtime reload', 'Demo gate recovery'],
+    },
+    {
+      key: 'services.manage',
+      displayName: 'Manage services',
+      description: 'Install, stop, start, and restart managed services.',
+      category: 'Services',
+      riskLevel: 'high',
+      requiresConfirmation: true,
+      usedBy: ['Service actions', 'Setup reruns'],
+    },
+    {
+      key: 'security.manage',
+      displayName: 'Manage security',
+      description: 'Change groups, permissions, and provider mappings.',
+      category: 'Security / groups / mappings',
+      riskLevel: 'critical',
+      requiresConfirmation: true,
+      usedBy: ['Group edit', 'Provider mapping edit'],
+    },
+    {
+      key: 'actions.run',
+      displayName: 'Run actions',
+      description: 'Execute declared service actions from the admin UI.',
+      category: 'Actions',
+      riskLevel: 'medium',
+      requiresConfirmation: false,
+      usedBy: ['Restart router', 'Reload UI'],
+    },
+    {
+      key: 'health.repair',
+      displayName: 'Repair health',
+      description: 'Run doctor and recovery steps for unhealthy services.',
+      category: 'Health / repair / validate',
+      riskLevel: 'high',
+      requiresConfirmation: true,
+      usedBy: ['Recovery doctor'],
+    },
+    {
+      key: 'backup.restore',
+      displayName: 'Restore backups',
+      description: 'Prepare and execute restore flows for backed-up services.',
+      category: 'Backup / restore',
+      riskLevel: 'critical',
+      requiresConfirmation: true,
+      usedBy: ['Restore service data'],
+    },
+    {
+      key: 'audit.read',
+      displayName: 'Read audit trail',
+      description: 'Inspect security and service action history.',
+      category: 'Audit',
+      riskLevel: 'low',
+      requiresConfirmation: false,
+      usedBy: ['Security history', 'Action history'],
+    },
+    {
+      key: 'logs.read',
+      displayName: 'Read logs',
+      description: 'View service logs and runtime diagnostics.',
+      category: 'System / scheduler / supervisor',
+      riskLevel: 'low',
+      requiresConfirmation: false,
+      usedBy: ['Logs'],
+    },
+    {
+      key: 'backup.read',
+      displayName: 'Read backup metadata',
+      description: 'Inspect backup manifests and restore points.',
+      category: 'Files / archive / export',
+      riskLevel: 'medium',
+      requiresConfirmation: false,
+      usedBy: ['Backup inventory'],
+    },
+  ],
+  actorAssignments: [
+    {
+      id: 'local-root-owner',
+      actor: 'local-root',
+      groupId: 'owners',
+      source: 'local',
+      self: true,
+      lastOwner: true,
+    },
+    {
+      id: 'ops-provider-group',
+      actor: 'zitadel:service-lasso-operators',
+      groupId: 'operators',
+      source: 'provider',
+      self: false,
+      lastOwner: false,
+    },
+    {
+      id: 'backup-service-account',
+      actor: 'service-account:backup-runner',
+      groupId: 'backup-maintainers',
+      source: 'service-account',
+      self: false,
+      lastOwner: false,
+    },
+  ],
+  providerMappings: [
+    {
+      id: 'zitadel-owners',
+      provider: 'Zitadel',
+      claimType: 'role',
+      claimValue: 'service-lasso-owner',
+      targetGroupId: 'owners',
+      enabled: true,
+      priority: 10,
+      conflicts: [],
+    },
+    {
+      id: 'zitadel-operators',
+      provider: 'Zitadel',
+      claimType: 'group',
+      claimValue: 'service-lasso-operators',
+      targetGroupId: 'operators',
+      enabled: true,
+      priority: 20,
+      conflicts: [],
+    },
+    {
+      id: 'oidc-backup-maintainers',
+      provider: 'Generic OIDC',
+      claimType: 'service-account',
+      claimValue: 'backup-runner',
+      targetGroupId: 'backup-maintainers',
+      enabled: false,
+      priority: 30,
+      conflicts: ['Disabled until restore approval workflow is enabled.'],
+    },
+  ],
+  auditLinks: [
+    { label: 'Security changes', url: '/logs?source=security', count: 18 },
+    { label: 'Denied actions', url: '/logs?source=denied', count: 4 },
+  ],
+}
+
 async function fetchRemoteServiceMeta(): Promise<RemoteServiceMeta[] | null> {
   if (serviceLassoApiBaseUrl === null) return null
 
@@ -586,13 +795,82 @@ let services: DashboardService[] = [
           mode: 'local-root',
           requiresConfirmation: true,
           confirmationLabel: 'Restart router',
-          reason: 'Restarting the edge router briefly interrupts local routing.',
+          reason:
+            'Restarting the edge router briefly interrupts local routing.',
         },
       },
       { id: 'install', label: 'Install service', kind: 'install' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open dashboard', kind: 'open_admin' },
     ],
+    access: {
+      lastOwnerProtected: true,
+      groups: [
+        {
+          id: 'platform-owners',
+          name: 'Platform Owners',
+          providerMappings: ['ZITADEL: service-lasso-owners'],
+        },
+        {
+          id: 'release-operators',
+          name: 'Release Operators',
+          providerMappings: ['ZITADEL: release-operators'],
+        },
+        {
+          id: 'backup-readers',
+          name: 'Backup Readers',
+          providerMappings: ['Local group: backup-readers'],
+        },
+      ],
+      grants: [
+        {
+          id: 'traefik-owner-runtime',
+          groupId: 'platform-owners',
+          groupName: 'Platform Owners',
+          permissionKey: 'runtime.owner',
+          permissionLabel: 'Runtime owner',
+          scope: {
+            kind: 'runtime',
+            label: 'All runtime',
+          },
+          sensitive: true,
+          elevated: true,
+          lastChangedAt: '2026-04-11T08:22:00+10:00',
+          auditUrl: '/logs?service=traefik&type=access',
+        },
+        {
+          id: 'traefik-restart-action',
+          groupId: 'release-operators',
+          groupName: 'Release Operators',
+          permissionKey: 'service.action.run',
+          permissionLabel: 'Run service action',
+          scope: {
+            kind: 'action',
+            label: 'Traefik restart action',
+            serviceId: 'traefik',
+            actionId: 'restart',
+          },
+          elevated: true,
+          lastChangedAt: '2026-04-11T09:14:00+10:00',
+          auditUrl: '/logs?service=traefik&type=access',
+        },
+        {
+          id: 'traefik-backup-read',
+          groupId: 'backup-readers',
+          groupName: 'Backup Readers',
+          permissionKey: 'service.backup.read',
+          permissionLabel: 'Read service backups',
+          scope: {
+            kind: 'backup-area',
+            label: 'Traefik backups',
+            serviceId: 'traefik',
+            resourceId: 'service-backups',
+          },
+          lastChangedAt: '2026-04-10T16:40:00+10:00',
+          auditUrl: '/logs?service=traefik&type=access',
+        },
+      ],
+    },
     updates: createEmptyUpdateState('traefik'),
   },
   {
@@ -2193,6 +2471,36 @@ export async function runInboxMessageAction(options: {
     message,
     inbox,
   } satisfies InboxMessageActionResult)
+}
+
+export async function fetchSecurityState() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{
+      security?: ServiceSecurityState
+    }>('/api/security')
+    if (!payload.security) {
+      throw new RuntimeApiUnavailableError({
+        mode: resolveRuntimeApiMode(),
+        path: '/api/security',
+        endpoint:
+          serviceLassoApiBaseUrl == null
+            ? null
+            : buildRuntimeEndpoint('/api/security', serviceLassoApiBaseUrl),
+        status: 200,
+        contentType: 'application/json',
+        packagedProxyConfigured:
+          resolveRuntimeApiMode() === 'packaged-runtime' &&
+          serviceLassoApiBaseUrl === '',
+        reason: 'non_json',
+      })
+    }
+
+    return structuredClone(payload.security)
+  }
+
+  return structuredClone(securityState)
 }
 
 export async function fetchDashboardService(serviceId: string) {

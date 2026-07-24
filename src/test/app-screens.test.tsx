@@ -60,6 +60,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Network',
   },
   {
+    path: '/security',
+    heading: /^Security$/i,
+    title: 'Service Admin - Security',
+  },
+  {
     path: '/help-center',
     heading: /^Help Center$/i,
     title: 'Service Admin - Help Center',
@@ -146,11 +151,10 @@ describe('app screens', () => {
   it('shows denied service action reasons on service details', async () => {
     await renderRoute('/services/service-admin')
 
-    expect(await screen.findByRole('button', { name: /Stop service/i }))
-      .toBeDisabled()
     expect(
-      screen.getByText(/cannot stop its own UI process/i)
-    ).toBeVisible()
+      await screen.findByRole('button', { name: /Stop service/i })
+    ).toBeDisabled()
+    expect(screen.getByText(/cannot stop its own UI process/i)).toBeVisible()
   })
 
   it('confirms elevated service actions before continuing', async () => {
@@ -166,9 +170,39 @@ describe('app screens', () => {
         name: /Confirm elevated action/i,
       })
     ).toBeVisible()
+    expect(screen.getByText(/briefly interrupts local routing/i)).toBeVisible()
+  })
+
+  it('shows security groups, permission risk, and generic provider mappings', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/security')
+
     expect(
-      screen.getByText(/briefly interrupts local routing/i)
+      await screen.findByText('Last-owner protection active')
     ).toBeVisible()
+    expect(await screen.findByText('Owners')).toBeVisible()
+    expect(screen.getByText('Backup maintainers')).toBeVisible()
+
+    await user.click(screen.getByRole('tab', { name: /Permissions/i }))
+
+    expect(screen.getAllByText('Critical').length).toBeGreaterThan(0)
+    expect(screen.getByText('Zitadel, Generic OIDC')).toBeVisible()
+  })
+
+  it('shows scoped service access grants on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/traefik')
+
+    await user.click(await screen.findByRole('tab', { name: /Access/i }))
+
+    expect(
+      (await screen.findAllByText('Platform Owners')).length
+    ).toBeGreaterThan(1)
+    expect(screen.getAllByText('Release Operators').length).toBeGreaterThan(1)
+    expect(screen.getByText('Traefik restart action')).toBeVisible()
+    expect(screen.getByText('Runtime owner')).toBeVisible()
+    expect(screen.getByText('Sensitive')).toBeVisible()
+    expect(screen.getByText(/final removal/i)).toBeVisible()
   })
 
   it('filters, searches, and opens runtime inbox messages', async () => {

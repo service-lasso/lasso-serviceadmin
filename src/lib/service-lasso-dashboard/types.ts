@@ -212,8 +212,129 @@ export type ServiceAction = {
     mode?: 'local-root' | 'signed-in' | 'remote-anonymous' | 'setup'
     reason?: string
     requiresConfirmation?: boolean
-    confirmationLabel?: string
+      confirmationLabel?: string
   }
+}
+
+export type SecurityPermissionRisk = 'low' | 'medium' | 'high' | 'critical'
+
+export type SecurityPermissionCategory =
+  | 'Runtime'
+  | 'Services'
+  | 'Actions'
+  | 'Health / repair / validate'
+  | 'Backup / restore'
+  | 'Files / archive / export'
+  | 'SFTP / destinations'
+  | 'Broker / secrets'
+  | 'Security / groups / mappings'
+  | 'Audit'
+  | 'System / scheduler / supervisor'
+
+export type SecurityPermission = {
+  key: string
+  displayName: string
+  description: string
+  category: SecurityPermissionCategory
+  riskLevel: SecurityPermissionRisk
+  requiresConfirmation: boolean
+  usedBy: string[]
+}
+
+export type SecurityGroup = {
+  id: string
+  name: string
+  description: string
+  builtIn: boolean
+  ownerCapable: boolean
+  elevated: boolean
+  permissionKeys: string[]
+  actorCount: number
+  mappingCount: number
+  scopeRules: string[]
+  canEdit: boolean
+  canReset: boolean
+}
+
+export type SecurityActorAssignment = {
+  id: string
+  actor: string
+  groupId: string
+  source: 'local' | 'provider' | 'service-account'
+  self: boolean
+  lastOwner: boolean
+}
+
+export type SecurityProviderMapping = {
+  id: string
+  provider: string
+  claimType: 'group' | 'role' | 'org' | 'service-account' | string
+  claimValue: string
+  targetGroupId: string
+  enabled: boolean
+  priority: number
+  conflicts: string[]
+}
+
+export type SecurityAuditLink = {
+  label: string
+  url: string
+  count: number
+}
+
+export type ServiceSecurityState = {
+  updatedAt: string
+  currentActor: string
+  groups: SecurityGroup[]
+  permissions: SecurityPermission[]
+  actorAssignments: SecurityActorAssignment[]
+  providerMappings: SecurityProviderMapping[]
+  auditLinks: SecurityAuditLink[]
+  safety: {
+    lastOwnerProtected: boolean
+    selfSecurityAccessProtected: boolean
+  }
+}
+
+export type ServicePermissionScope = {
+  kind:
+    | 'runtime'
+    | 'all-services'
+    | 'service'
+    | 'action'
+    | 'file-source'
+    | 'broker-namespace'
+    | 'export-destination'
+    | 'backup-area'
+  label: string
+  serviceId?: string
+  actionId?: string
+  resourceId?: string
+}
+
+export type ServiceAccessGroup = {
+  id: string
+  name: string
+  providerMappings: string[]
+}
+
+export type ServicePermissionGrant = {
+  id: string
+  groupId: string
+  groupName: string
+  permissionKey: string
+  permissionLabel: string
+  scope: ServicePermissionScope
+  sensitive?: boolean
+  elevated?: boolean
+  lastChangedAt: string
+  auditUrl?: string
+}
+
+export type ServiceAccessState = {
+  groups: ServiceAccessGroup[]
+  grants: ServicePermissionGrant[]
+  lastOwnerProtected: boolean
 }
 
 export type ServiceUpdateStateKind =
@@ -338,6 +459,7 @@ export type DashboardService = {
   updates?: ServiceUpdateState
   recovery?: ServiceRecoveryHistoryState
   setup?: ServiceSetupState
+  access?: ServiceAccessState
 }
 
 export type DashboardRuntime = {

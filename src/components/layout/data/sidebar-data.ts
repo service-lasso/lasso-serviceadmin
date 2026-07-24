@@ -11,6 +11,7 @@ import {
   Palette,
   ScrollText,
   Settings,
+  ShieldCheck,
   TimerReset,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
@@ -76,6 +77,11 @@ export const sidebarData: SidebarData = {
           title: 'Network',
           url: '/network',
           icon: Globe,
+        },
+        {
+          title: 'Security',
+          url: '/security',
+          icon: ShieldCheck,
         },
       ],
     },
