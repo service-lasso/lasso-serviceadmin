@@ -136,6 +136,63 @@ export type ServiceSetupRunResult = {
   message: string
 }
 
+export type FirstRunSetupStatus =
+  | 'not_required'
+  | 'required'
+  | 'in_progress'
+  | 'generated_key_pending_ack'
+  | 'complete'
+  | 'failed'
+
+export type FirstRunSetupKeySource =
+  | 'generated'
+  | 'supplied'
+  | 'os_keychain'
+  | 'secret_file'
+  | 'environment'
+  | 'cli'
+  | 'unknown'
+
+export type FirstRunSetupState = {
+  status: FirstRunSetupStatus
+  required: boolean
+  localOnly: boolean
+  remoteAllowed: boolean
+  vault: {
+    id: string | null
+    name: string | null
+    keySource: FirstRunSetupKeySource
+    keyFingerprint: string | null
+    keyReveal: {
+      value: string
+      generatedAt: string | null
+      acknowledged: boolean
+    } | null
+  }
+  rootOwner: {
+    id: string | null
+    displayName: string | null
+    createdAt: string | null
+  }
+  machine: {
+    hostname: string | null
+    osUser: string | null
+    platform: string | null
+  }
+  warnings: string[]
+  nextActions: string[]
+  failure: {
+    message: string
+    at: string | null
+  } | null
+}
+
+export type FirstRunSetupActionResult = {
+  ok: boolean
+  setup: FirstRunSetupState
+  message: string
+}
+
 export type ServiceAction = {
   id: string
   label: string
@@ -155,7 +212,7 @@ export type ServiceAction = {
     mode?: 'local-root' | 'signed-in' | 'remote-anonymous' | 'setup'
     reason?: string
     requiresConfirmation?: boolean
-    confirmationLabel?: string
+      confirmationLabel?: string
   }
 }
 
@@ -237,6 +294,47 @@ export type ServiceSecurityState = {
     lastOwnerProtected: boolean
     selfSecurityAccessProtected: boolean
   }
+}
+
+export type ServicePermissionScope = {
+  kind:
+    | 'runtime'
+    | 'all-services'
+    | 'service'
+    | 'action'
+    | 'file-source'
+    | 'broker-namespace'
+    | 'export-destination'
+    | 'backup-area'
+  label: string
+  serviceId?: string
+  actionId?: string
+  resourceId?: string
+}
+
+export type ServiceAccessGroup = {
+  id: string
+  name: string
+  providerMappings: string[]
+}
+
+export type ServicePermissionGrant = {
+  id: string
+  groupId: string
+  groupName: string
+  permissionKey: string
+  permissionLabel: string
+  scope: ServicePermissionScope
+  sensitive?: boolean
+  elevated?: boolean
+  lastChangedAt: string
+  auditUrl?: string
+}
+
+export type ServiceAccessState = {
+  groups: ServiceAccessGroup[]
+  grants: ServicePermissionGrant[]
+  lastOwnerProtected: boolean
 }
 
 export type ServiceUpdateStateKind =
@@ -361,6 +459,7 @@ export type DashboardService = {
   updates?: ServiceUpdateState
   recovery?: ServiceRecoveryHistoryState
   setup?: ServiceSetupState
+  access?: ServiceAccessState
 }
 
 export type DashboardRuntime = {

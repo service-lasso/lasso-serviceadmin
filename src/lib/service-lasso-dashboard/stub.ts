@@ -2,6 +2,10 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  FirstRunSetupActionResult,
+  FirstRunSetupKeySource,
+  FirstRunSetupState,
+  FirstRunSetupStatus,
   ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
@@ -111,6 +115,75 @@ type RemoteServiceRecovery = {
   serviceId: string
   recovery: ServiceRecoveryHistoryState
 }
+
+const firstRunSetupStatusAliases: Record<string, FirstRunSetupStatus> = {
+  ready: 'not_required',
+  vault_ready: 'not_required',
+  notRequired: 'not_required',
+  'not-required': 'not_required',
+  not_required: 'not_required',
+  required: 'required',
+  setup_required: 'required',
+  'setup-required': 'required',
+  inProgress: 'in_progress',
+  'in-progress': 'in_progress',
+  in_progress: 'in_progress',
+  generatedKeyPendingAck: 'generated_key_pending_ack',
+  generated_key_pending_ack: 'generated_key_pending_ack',
+  generated_key_pending_acknowledgement: 'generated_key_pending_ack',
+  'generated-key-pending-ack': 'generated_key_pending_ack',
+  complete: 'complete',
+  completed: 'complete',
+  setup_complete: 'complete',
+  failed: 'failed',
+  error: 'failed',
+  setup_failed: 'failed',
+}
+
+const firstRunSetupKeySourceAliases: Record<string, FirstRunSetupKeySource> = {
+  generated: 'generated',
+  interactive: 'generated',
+  supplied: 'supplied',
+  external: 'supplied',
+  os_keychain: 'os_keychain',
+  keychain: 'os_keychain',
+  secret_file: 'secret_file',
+  file: 'secret_file',
+  environment: 'environment',
+  env: 'environment',
+  cli: 'cli',
+}
+
+function createDefaultFirstRunSetupState(): FirstRunSetupState {
+  return {
+    status: 'not_required',
+    required: false,
+    localOnly: true,
+    remoteAllowed: false,
+    vault: {
+      id: 'service-lasso-default',
+      name: 'Service Lasso Vault',
+      keySource: 'unknown',
+      keyFingerprint: null,
+      keyReveal: null,
+    },
+    rootOwner: {
+      id: null,
+      displayName: null,
+      createdAt: null,
+    },
+    machine: {
+      hostname: null,
+      osUser: null,
+      platform: null,
+    },
+    warnings: [],
+    nextActions: [],
+    failure: null,
+  }
+}
+
+let firstRunSetupFixture = createDefaultFirstRunSetupState()
 
 function createEmptyUpdateState(serviceId: string): ServiceUpdateState {
   return {
@@ -606,6 +679,74 @@ let services: DashboardService[] = [
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
       { id: 'open_admin', label: 'Open dashboard', kind: 'open_admin' },
     ],
+    access: {
+      lastOwnerProtected: true,
+      groups: [
+        {
+          id: 'platform-owners',
+          name: 'Platform Owners',
+          providerMappings: ['ZITADEL: service-lasso-owners'],
+        },
+        {
+          id: 'release-operators',
+          name: 'Release Operators',
+          providerMappings: ['ZITADEL: release-operators'],
+        },
+        {
+          id: 'backup-readers',
+          name: 'Backup Readers',
+          providerMappings: ['Local group: backup-readers'],
+        },
+      ],
+      grants: [
+        {
+          id: 'traefik-owner-runtime',
+          groupId: 'platform-owners',
+          groupName: 'Platform Owners',
+          permissionKey: 'runtime.owner',
+          permissionLabel: 'Runtime owner',
+          scope: {
+            kind: 'runtime',
+            label: 'All runtime',
+          },
+          sensitive: true,
+          elevated: true,
+          lastChangedAt: '2026-04-11T08:22:00+10:00',
+          auditUrl: '/logs?service=traefik&type=access',
+        },
+        {
+          id: 'traefik-restart-action',
+          groupId: 'release-operators',
+          groupName: 'Release Operators',
+          permissionKey: 'service.action.run',
+          permissionLabel: 'Run service action',
+          scope: {
+            kind: 'action',
+            label: 'Traefik restart action',
+            serviceId: 'traefik',
+            actionId: 'restart',
+          },
+          elevated: true,
+          lastChangedAt: '2026-04-11T09:14:00+10:00',
+          auditUrl: '/logs?service=traefik&type=access',
+        },
+        {
+          id: 'traefik-backup-read',
+          groupId: 'backup-readers',
+          groupName: 'Backup Readers',
+          permissionKey: 'service.backup.read',
+          permissionLabel: 'Read service backups',
+          scope: {
+            kind: 'backup-area',
+            label: 'Traefik backups',
+            serviceId: 'traefik',
+            resourceId: 'service-backups',
+          },
+          lastChangedAt: '2026-04-10T16:40:00+10:00',
+          auditUrl: '/logs?service=traefik&type=access',
+        },
+      ],
+    },
     updates: createEmptyUpdateState('traefik'),
   },
   {
@@ -1519,6 +1660,9 @@ export async function fetchRuntimeJson<T>(
   options?: {
     apiBaseUrl?: string | null
     mode?: RuntimeApiMode
+    method?: string
+    headers?: HeadersInit
+    body?: BodyInit | null
   }
 ) {
   const apiBaseUrl =
@@ -1549,9 +1693,14 @@ export async function fetchRuntimeJson<T>(
     ...detailsBase,
     endpoint,
   }
+  const requestInit: RequestInit = {
+    method: options?.method,
+    headers: options?.headers,
+    body: options?.body,
+  }
 
   try {
-    response = await fetch(endpoint)
+    response = await fetch(endpoint, requestInit)
   } catch (error) {
     throw new RuntimeApiUnavailableError(
       {
@@ -1608,6 +1757,127 @@ function readStringArray(input: unknown) {
   return Array.isArray(input)
     ? input.filter((item): item is string => typeof item === 'string')
     : undefined
+}
+
+function readBoolean(input: unknown) {
+  return typeof input === 'boolean' ? input : undefined
+}
+
+function normalizeFirstRunSetupStatus(input: unknown): FirstRunSetupStatus {
+  if (typeof input !== 'string') return 'not_required'
+  return firstRunSetupStatusAliases[input] ?? 'not_required'
+}
+
+function normalizeFirstRunSetupKeySource(
+  input: unknown
+): FirstRunSetupKeySource {
+  if (typeof input !== 'string') return 'unknown'
+  return firstRunSetupKeySourceAliases[input] ?? 'unknown'
+}
+
+function readNestedRecord(
+  input: Record<string, unknown>,
+  ...keys: string[]
+): Record<string, unknown> {
+  for (const key of keys) {
+    if (isRecord(input[key])) return input[key]
+  }
+  return {}
+}
+
+export function normalizeFirstRunSetupPayload(
+  payload: unknown
+): FirstRunSetupState {
+  const input = isRecord(payload) ? payload : {}
+  const rawSetup = isRecord(input.setup) ? input.setup : input
+  const vault = readNestedRecord(rawSetup, 'vault', 'vaultContext')
+  const key = readNestedRecord(rawSetup, 'key', 'vaultKey', 'keyContext')
+  const reveal = readNestedRecord(key, 'reveal', 'keyReveal')
+  const rootOwner = readNestedRecord(rawSetup, 'rootOwner', 'owner', 'root')
+  const machine = readNestedRecord(rawSetup, 'machine', 'machineContext')
+  const failure = readNestedRecord(rawSetup, 'failure', 'error')
+  const status = normalizeFirstRunSetupStatus(rawSetup.status)
+  const keySource = normalizeFirstRunSetupKeySource(
+    key.source ?? key.keySource ?? rawSetup.keySource ?? rawSetup.key_source
+  )
+  const revealValue = readString(reveal.value ?? reveal.secret ?? reveal.key)
+  const hasReveal =
+    keySource === 'generated' &&
+    revealValue !== undefined &&
+    (readBoolean(reveal.acknowledged) ?? false) !== true
+
+  return {
+    status,
+    required: readBoolean(rawSetup.required) ?? status !== 'not_required',
+    localOnly:
+      readBoolean(rawSetup.localOnly ?? rawSetup.local_only) ??
+      readBoolean(rawSetup.local) ??
+      true,
+    remoteAllowed:
+      readBoolean(rawSetup.remoteAllowed ?? rawSetup.remote_allowed) ?? false,
+    vault: {
+      id: readString(vault.id ?? vault.vaultId ?? rawSetup.vaultId) ?? null,
+      name:
+        readString(vault.name ?? vault.vaultName ?? rawSetup.vaultName) ?? null,
+      keySource,
+      keyFingerprint:
+        readString(
+          key.fingerprint ??
+            key.keyFingerprint ??
+            rawSetup.keyFingerprint ??
+            rawSetup.key_fingerprint
+        ) ?? null,
+      keyReveal: hasReveal
+        ? {
+            value: revealValue,
+            generatedAt:
+              readString(reveal.generatedAt ?? reveal.generated_at) ?? null,
+            acknowledged: false,
+          }
+        : null,
+    },
+    rootOwner: {
+      id:
+        readString(
+          rootOwner.id ?? rootOwner.actorId ?? rootOwner.rootActorId
+        ) ?? null,
+      displayName:
+        readString(
+          rootOwner.displayName ??
+            rootOwner.name ??
+            rootOwner.ownerDisplayName ??
+            rawSetup.ownerDisplayName
+        ) ?? null,
+      createdAt:
+        readString(rootOwner.createdAt ?? rootOwner.created_at) ?? null,
+    },
+    machine: {
+      hostname:
+        readString(machine.hostname ?? machine.host ?? rawSetup.hostname) ??
+        null,
+      osUser:
+        readString(
+          machine.osUser ??
+            machine.os_user ??
+            machine.currentOsUser ??
+            rawSetup.osUser
+        ) ?? null,
+      platform:
+        readString(machine.platform ?? machine.os ?? rawSetup.platform) ?? null,
+    },
+    warnings: readStringArray(rawSetup.warnings) ?? [],
+    nextActions:
+      readStringArray(rawSetup.nextActions ?? rawSetup.next_actions) ?? [],
+    failure:
+      status === 'failed'
+        ? {
+            message:
+              readString(failure.message ?? rawSetup.message) ??
+              'First-run setup failed.',
+            at: readString(failure.at ?? failure.failedAt) ?? null,
+          }
+        : null,
+  }
 }
 
 function normalizeSetupRun(input: unknown): ServiceSetupStepRun | null {
@@ -1833,6 +2103,79 @@ async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
   } catch {
     return false
   }
+}
+
+export function setFirstRunSetupFixtureForTests(
+  fixture: Partial<FirstRunSetupState> | null
+) {
+  firstRunSetupFixture = fixture
+    ? {
+        ...createDefaultFirstRunSetupState(),
+        ...fixture,
+        vault: {
+          ...createDefaultFirstRunSetupState().vault,
+          ...fixture.vault,
+        },
+        rootOwner: {
+          ...createDefaultFirstRunSetupState().rootOwner,
+          ...fixture.rootOwner,
+        },
+        machine: {
+          ...createDefaultFirstRunSetupState().machine,
+          ...fixture.machine,
+        },
+      }
+    : createDefaultFirstRunSetupState()
+}
+
+export async function fetchFirstRunSetupState() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<unknown>('/api/setup')
+    return normalizeFirstRunSetupPayload(payload)
+  }
+
+  return structuredClone(firstRunSetupFixture)
+}
+
+export async function acknowledgeFirstRunVaultKey() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const response = await fetchRuntimeJson<unknown>(
+      '/api/setup/vault-key/acknowledge',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ acknowledged: true }),
+      }
+    )
+    return {
+      ok: true,
+      setup: normalizeFirstRunSetupPayload(response),
+      message: 'Vault key save confirmation recorded.',
+    } satisfies FirstRunSetupActionResult
+  }
+
+  firstRunSetupFixture = {
+    ...firstRunSetupFixture,
+    status: 'complete',
+    required: false,
+    vault: {
+      ...firstRunSetupFixture.vault,
+      keyReveal: null,
+    },
+    nextActions: ['Continue to Service Admin.'],
+  }
+
+  return structuredClone({
+    ok: true,
+    setup: firstRunSetupFixture,
+    message: 'Vault key save confirmation recorded.',
+  } satisfies FirstRunSetupActionResult)
 }
 
 export async function fetchDashboardSummary() {

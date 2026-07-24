@@ -183,4 +183,20 @@ describe('app screens', () => {
     expect(screen.getAllByText('Critical').length).toBeGreaterThan(0)
     expect(screen.getByText('Zitadel, Generic OIDC')).toBeVisible()
   })
+
+  it('shows scoped service access grants on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/traefik')
+
+    await user.click(await screen.findByRole('tab', { name: /Access/i }))
+
+    expect(
+      (await screen.findAllByText('Platform Owners')).length
+    ).toBeGreaterThan(1)
+    expect(screen.getAllByText('Release Operators').length).toBeGreaterThan(1)
+    expect(screen.getByText('Traefik restart action')).toBeVisible()
+    expect(screen.getByText('Runtime owner')).toBeVisible()
+    expect(screen.getByText('Sensitive')).toBeVisible()
+    expect(screen.getByText(/final removal/i)).toBeVisible()
+  })
 })
