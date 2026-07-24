@@ -5,6 +5,7 @@ import {
   favoritesMutationEnabled,
   fetchDashboardService,
   fetchDashboardSummary,
+  fetchSecurityState,
   fetchFirstRunSetupState,
   fetchServiceSetup,
   fetchServices,
@@ -16,6 +17,7 @@ import {
 import type {
   DashboardAction,
   DashboardService,
+  ServiceSecurityState,
   ServiceSetupRunResult,
   ServiceUpdateAction,
 } from './types'
@@ -67,6 +69,13 @@ export function useServiceSetup(serviceId: string) {
   return useQuery({
     queryKey: [...dashboardQueryKey, serviceId, 'setup'],
     queryFn: () => fetchServiceSetup(serviceId),
+  })
+}
+
+export function useSecurityState() {
+  return useQuery<ServiceSecurityState>({
+    queryKey: [...dashboardQueryKey, 'security'],
+    queryFn: fetchSecurityState,
   })
 }
 
@@ -181,7 +190,8 @@ export function useServiceRecoveryDoctorAction() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (serviceId: string) => runServiceRecoveryDoctorAction(serviceId),
+    mutationFn: (serviceId: string) =>
+      runServiceRecoveryDoctorAction(serviceId),
     onSuccess: (result) => {
       const patchService = (service: DashboardService) =>
         service.id === result.serviceId
