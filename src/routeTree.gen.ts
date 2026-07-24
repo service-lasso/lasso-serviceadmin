@@ -35,6 +35,7 @@ import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
 import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authenticated/installed/index'
+import { Route as AuthenticatedInboxIndexRouteImport } from './routes/_authenticated/inbox/index'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
 import { Route as AuthenticatedDependenciesIndexRouteImport } from './routes/_authenticated/dependencies/index'
 import { Route as AuthenticatedChatsIndexRouteImport } from './routes/_authenticated/chats/index'
@@ -184,6 +185,11 @@ const AuthenticatedInstalledIndexRoute =
     path: '/installed/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedInboxIndexRoute = AuthenticatedInboxIndexRouteImport.update({
+  id: '/inbox/',
+  path: '/inbox/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedHelpCenterIndexRoute =
   AuthenticatedHelpCenterIndexRouteImport.update({
     id: '/help-center/',
@@ -286,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/chats/': typeof AuthenticatedChatsIndexRoute
   '/dependencies/': typeof AuthenticatedDependenciesIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
+  '/inbox/': typeof AuthenticatedInboxIndexRoute
   '/installed/': typeof AuthenticatedInstalledIndexRoute
   '/logs/': typeof AuthenticatedLogsIndexRoute
   '/network/': typeof AuthenticatedNetworkIndexRoute
@@ -323,6 +330,7 @@ export interface FileRoutesByTo {
   '/chats': typeof AuthenticatedChatsIndexRoute
   '/dependencies': typeof AuthenticatedDependenciesIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
+  '/inbox': typeof AuthenticatedInboxIndexRoute
   '/installed': typeof AuthenticatedInstalledIndexRoute
   '/logs': typeof AuthenticatedLogsIndexRoute
   '/network': typeof AuthenticatedNetworkIndexRoute
@@ -365,6 +373,7 @@ export interface FileRoutesById {
   '/_authenticated/chats/': typeof AuthenticatedChatsIndexRoute
   '/_authenticated/dependencies/': typeof AuthenticatedDependenciesIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
+  '/_authenticated/inbox/': typeof AuthenticatedInboxIndexRoute
   '/_authenticated/installed/': typeof AuthenticatedInstalledIndexRoute
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
@@ -405,6 +414,7 @@ export interface FileRouteTypes {
     | '/chats/'
     | '/dependencies/'
     | '/help-center/'
+    | '/inbox/'
     | '/installed/'
     | '/logs/'
     | '/network/'
@@ -442,6 +452,7 @@ export interface FileRouteTypes {
     | '/chats'
     | '/dependencies'
     | '/help-center'
+    | '/inbox'
     | '/installed'
     | '/logs'
     | '/network'
@@ -483,6 +494,7 @@ export interface FileRouteTypes {
     | '/_authenticated/chats/'
     | '/_authenticated/dependencies/'
     | '/_authenticated/help-center/'
+    | '/_authenticated/inbox/'
     | '/_authenticated/installed/'
     | '/_authenticated/logs/'
     | '/_authenticated/network/'
@@ -694,6 +706,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInstalledIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/inbox/': {
+      id: '/_authenticated/inbox/'
+      path: '/inbox'
+      fullPath: '/inbox/'
+      preLoaderRoute: typeof AuthenticatedInboxIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/help-center/': {
       id: '/_authenticated/help-center/'
       path: '/help-center'
@@ -820,6 +839,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChatsIndexRoute: typeof AuthenticatedChatsIndexRoute
   AuthenticatedDependenciesIndexRoute: typeof AuthenticatedDependenciesIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
+  AuthenticatedInboxIndexRoute: typeof AuthenticatedInboxIndexRoute
   AuthenticatedInstalledIndexRoute: typeof AuthenticatedInstalledIndexRoute
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
@@ -840,6 +860,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChatsIndexRoute: AuthenticatedChatsIndexRoute,
   AuthenticatedDependenciesIndexRoute: AuthenticatedDependenciesIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
+  AuthenticatedInboxIndexRoute: AuthenticatedInboxIndexRoute,
   AuthenticatedInstalledIndexRoute: AuthenticatedInstalledIndexRoute,
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,

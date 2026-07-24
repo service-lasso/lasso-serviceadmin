@@ -6,6 +6,7 @@ import {
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
+  Inbox,
   LayoutDashboard,
   Palette,
   ScrollText,
@@ -51,6 +52,11 @@ export const sidebarData: SidebarData = {
           title: 'Logs',
           url: '/logs',
           icon: ScrollText,
+        },
+        {
+          title: 'Inbox',
+          url: '/inbox',
+          icon: Inbox,
         },
         {
           title: 'Runtime',
