@@ -141,11 +141,10 @@ describe('app screens', () => {
   it('shows denied service action reasons on service details', async () => {
     await renderRoute('/services/service-admin')
 
-    expect(await screen.findByRole('button', { name: /Stop service/i }))
-      .toBeDisabled()
     expect(
-      screen.getByText(/cannot stop its own UI process/i)
-    ).toBeVisible()
+      await screen.findByRole('button', { name: /Stop service/i })
+    ).toBeDisabled()
+    expect(screen.getByText(/cannot stop its own UI process/i)).toBeVisible()
   })
 
   it('confirms elevated service actions before continuing', async () => {
@@ -161,8 +160,22 @@ describe('app screens', () => {
         name: /Confirm elevated action/i,
       })
     ).toBeVisible()
+    expect(screen.getByText(/briefly interrupts local routing/i)).toBeVisible()
+  })
+
+  it('shows scoped service access grants on service details', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services/traefik')
+
+    await user.click(await screen.findByRole('tab', { name: /Access/i }))
+
     expect(
-      screen.getByText(/briefly interrupts local routing/i)
-    ).toBeVisible()
+      (await screen.findAllByText('Platform Owners')).length
+    ).toBeGreaterThan(1)
+    expect(screen.getAllByText('Release Operators').length).toBeGreaterThan(1)
+    expect(screen.getByText('Traefik restart action')).toBeVisible()
+    expect(screen.getByText('Runtime owner')).toBeVisible()
+    expect(screen.getByText('Sensitive')).toBeVisible()
+    expect(screen.getByText(/final removal/i)).toBeVisible()
   })
 })

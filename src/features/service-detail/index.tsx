@@ -21,6 +21,8 @@ import {
   RefreshCw,
   Save,
   ScanSearch,
+  ShieldAlert,
+  Users,
   Undo2,
   Wrench,
 } from 'lucide-react'
@@ -48,6 +50,7 @@ import type {
   ServiceEndpoint,
   ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
+  ServicePermissionGrant,
   ServiceSetupState,
   ServiceSetupStep,
   ServiceStatus,
@@ -1023,7 +1026,7 @@ function ServiceActionButton({
         size='sm'
         disabled
         title={permission.reason}
-        className='h-auto max-w-full flex-col items-start gap-0.5 whitespace-normal text-left'
+        className='h-auto max-w-full flex-col items-start gap-0.5 text-left whitespace-normal'
       >
         <span>{action.label}</span>
         {permission.reason ? (
@@ -1088,7 +1091,9 @@ function ServiceActionButton({
           title='Confirm elevated action'
           desc={
             <div className='space-y-2'>
-              <p>{permission.reason ?? 'Core marked this action as elevated.'}</p>
+              <p>
+                {permission.reason ?? 'Core marked this action as elevated.'}
+              </p>
               <p>
                 Actor: {permission.actor ?? 'unknown'}; mode:{' '}
                 {permission.mode ?? 'unknown'}.
@@ -1145,10 +1150,144 @@ function ServiceDetailLoading() {
   )
 }
 
+function AccessGrantBadges({ grant }: { grant: ServicePermissionGrant }) {
+  return (
+    <div className='flex flex-wrap gap-1'>
+      <Badge variant='outline'>{grant.scope.kind}</Badge>
+      {grant.sensitive ? <Badge variant='destructive'>Sensitive</Badge> : null}
+      {grant.elevated ? <Badge variant='secondary'>Elevated</Badge> : null}
+    </div>
+  )
+}
+
+function ServiceAccessPanel({ service }: { service: DashboardService }) {
+  const access = service.access
+  const grantsByScope = new Map<string, ServicePermissionGrant[]>()
+
+  for (const grant of access?.grants ?? []) {
+    const scopeKey = grant.scope.label
+    grantsByScope.set(scopeKey, [...(grantsByScope.get(scopeKey) ?? []), grant])
+  }
+
+  if (!access) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className='flex items-center gap-2'>
+            <Users className='size-4' /> Access
+          </CardTitle>
+          <CardDescription>
+            Core access grants are not available for this service yet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+            No service access grants are recorded.
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className='space-y-4'>
+      {access.lastOwnerProtected ? (
+        <Card className='border-amber-300 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20'>
+          <CardHeader className='pb-3'>
+            <CardTitle className='flex items-center gap-2 text-base'>
+              <ShieldAlert className='size-4' /> Last-owner protection
+            </CardTitle>
+            <CardDescription>
+              Owner-capable grants are protected from final removal.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className='flex items-center gap-2'>
+            <Users className='size-4' /> Provider-mapped groups
+          </CardTitle>
+          <CardDescription>
+            Groups with direct or provider-mapped service access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+          {access.groups.map((group) => (
+            <div key={group.id} className='rounded-lg border p-3'>
+              <div className='font-medium'>{group.name}</div>
+              <div className='mt-2 space-y-1 text-sm text-muted-foreground'>
+                {group.providerMappings.map((mapping) => (
+                  <div key={mapping}>{mapping}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Granted permissions by scope</CardTitle>
+          <CardDescription>
+            Service-level access surfaced from catalogue-backed grants.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          {Array.from(grantsByScope.entries()).map(([scope, grants]) => (
+            <div key={scope} className='rounded-md border'>
+              <div className='border-b px-3 py-2 font-medium'>{scope}</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Group</TableHead>
+                    <TableHead>Permission</TableHead>
+                    <TableHead>Risk</TableHead>
+                    <TableHead>Last changed</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {grants.map((grant) => (
+                    <TableRow key={grant.id}>
+                      <TableCell className='font-medium'>
+                        {grant.groupName}
+                      </TableCell>
+                      <TableCell>
+                        <div>{grant.permissionLabel}</div>
+                        <div className='font-mono text-xs text-muted-foreground'>
+                          {grant.permissionKey}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <AccessGrantBadges grant={grant} />
+                      </TableCell>
+                      <TableCell className='text-sm text-muted-foreground'>
+                        {grant.lastChangedAt}
+                      </TableCell>
+                      <TableCell>
+                        <Button size='sm' variant='outline' disabled>
+                          Revoke
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 type ServiceDetailTab =
   | 'overview'
   | 'dependencies'
   | 'setup'
+  | 'access'
   | 'metadata'
   | 'endpoints'
   | 'variables'
@@ -1188,10 +1327,11 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
         '1': 'overview',
         '2': 'dependencies',
         '3': 'setup',
-        '4': 'metadata',
-        '5': 'endpoints',
-        '6': 'variables',
-        '7': 'logs',
+        '4': 'access',
+        '5': 'metadata',
+        '6': 'endpoints',
+        '7': 'variables',
+        '8': 'logs',
       }[event.key] as ServiceDetailTab | undefined
 
       if (!nextTab) return
@@ -1328,31 +1468,37 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       Setup <span className='ml-1 italic opacity-80'>(3)</span>
                     </TabsTrigger>
                     <TabsTrigger
+                      value='access'
+                      className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
+                    >
+                      Access <span className='ml-1 italic opacity-80'>(4)</span>
+                    </TabsTrigger>
+                    <TabsTrigger
                       value='metadata'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Metadata{' '}
-                      <span className='ml-1 italic opacity-80'>(4)</span>
+                      <span className='ml-1 italic opacity-80'>(5)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='endpoints'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Endpoints{' '}
-                      <span className='ml-1 italic opacity-80'>(5)</span>
+                      <span className='ml-1 italic opacity-80'>(6)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='variables'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
                       Variables{' '}
-                      <span className='ml-1 italic opacity-80'>(6)</span>
+                      <span className='ml-1 italic opacity-80'>(7)</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value='logs'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Logs <span className='ml-1 italic opacity-80'>(7)</span>
+                      Logs <span className='ml-1 italic opacity-80'>(8)</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -1459,13 +1605,13 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           </CardTitle>
                         </CardHeader>
                         <CardContent className='flex flex-wrap gap-2'>
-                          {service.actions.map((action) =>
+                          {service.actions.map((action) => (
                             <ServiceActionButton
                               key={action.id}
                               action={action}
                               service={service}
                             />
-                          )}
+                          ))}
                         </CardContent>
                       </Card>
                     </div>
@@ -1504,6 +1650,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       onRunAll={() => runSetup()}
                       onRunStep={(stepId) => runSetup(stepId)}
                     />
+                  </TabsContent>
+
+                  <TabsContent value='access' className='mt-0'>
+                    <ServiceAccessPanel service={service} />
                   </TabsContent>
 
                   <TabsContent value='metadata' className='mt-0'>
