@@ -159,6 +159,47 @@ export type ServiceAction = {
   }
 }
 
+export type ServicePermissionScope = {
+  kind:
+    | 'runtime'
+    | 'all-services'
+    | 'service'
+    | 'action'
+    | 'file-source'
+    | 'broker-namespace'
+    | 'export-destination'
+    | 'backup-area'
+  label: string
+  serviceId?: string
+  actionId?: string
+  resourceId?: string
+}
+
+export type ServiceAccessGroup = {
+  id: string
+  name: string
+  providerMappings: string[]
+}
+
+export type ServicePermissionGrant = {
+  id: string
+  groupId: string
+  groupName: string
+  permissionKey: string
+  permissionLabel: string
+  scope: ServicePermissionScope
+  sensitive?: boolean
+  elevated?: boolean
+  lastChangedAt: string
+  auditUrl?: string
+}
+
+export type ServiceAccessState = {
+  groups: ServiceAccessGroup[]
+  grants: ServicePermissionGrant[]
+  lastOwnerProtected: boolean
+}
+
 export type ServiceUpdateStateKind =
   | 'installed'
   | 'available'
@@ -281,6 +322,7 @@ export type DashboardService = {
   updates?: ServiceUpdateState
   recovery?: ServiceRecoveryHistoryState
   setup?: ServiceSetupState
+  access?: ServiceAccessState
 }
 
 export type DashboardRuntime = {
