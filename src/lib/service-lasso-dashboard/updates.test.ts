@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { applyRemoteUpdateStates, buildUpdateNotifications } from './stub'
+import {
+  applyRemoteUpdateStates,
+  buildUpdateNotifications,
+  fetchInboxSummary,
+} from './stub'
 import type { DashboardService, ServiceUpdateState } from './types'
 
 function updateState(
@@ -123,5 +127,43 @@ describe('service update notifications', () => {
         },
       ])
     ).not.toThrow()
+  })
+
+  it('projects important remote update states into Inbox messages', async () => {
+    applyRemoteUpdateStates([
+      {
+        serviceId: 'service-admin',
+        update: updateState('service-admin', 'failed'),
+      },
+    ])
+
+    const inbox = await fetchInboxSummary()
+    const updateMessage = inbox.messages.find(
+      (message) => message.id === 'update-service-admin'
+    )
+
+    expect(updateMessage).toMatchObject({
+      title: 'Service Admin UI update failed',
+      category: 'update',
+      severity: 'critical',
+      read: false,
+      hidden: false,
+      target: {
+        label: 'Service Admin UI',
+        href: '/services/service-admin',
+        kind: 'update',
+      },
+    })
+    expect(updateMessage?.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'open_update',
+          target: '/services/service-admin',
+        }),
+        expect.objectContaining({ kind: 'mark_read' }),
+        expect.objectContaining({ kind: 'hide' }),
+      ])
+    )
+    expect(inbox.counts.updates).toBeGreaterThan(0)
   })
 })

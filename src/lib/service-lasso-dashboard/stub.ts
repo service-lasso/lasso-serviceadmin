@@ -122,7 +122,7 @@ type RemoteServiceRecovery = {
 
 let inboxMessages: InboxMessage[] = [
   {
-    id: 'update-service-admin-2-3',
+    id: 'update-service-admin',
     title: 'Service Admin update downloaded',
     summary: 'Version 2.3.0 is staged and ready for review.',
     details:
@@ -234,7 +234,8 @@ let inboxMessages: InboxMessage[] = [
         label: 'Retry',
         kind: 'retry',
         disabled: true,
-        reason: 'Runtime retry endpoint is pending service-lasso/service-lasso#833.',
+        reason:
+          'Runtime retry endpoint is pending service-lasso/service-lasso#833.',
       },
     ],
   },
@@ -631,6 +632,13 @@ export function applyRemoteUpdateStates(updateStates: RemoteServiceUpdate[]) {
     ...service,
     updates: updateById.get(service.id) ?? service.updates,
   }))
+
+  for (const updateState of updateStates) {
+    upsertInboxMessageForServiceUpdate(
+      updateState.serviceId,
+      updateState.update
+    )
+  }
 }
 
 export function applyRemoteRecoveryStates(
@@ -2376,6 +2384,176 @@ function buildInboxSummary(): InboxSummary {
   }
 }
 
+function getUpdateVersion(update: ServiceUpdateState) {
+  return (
+    update.downloadedCandidate?.tag ??
+    update.available?.tag ??
+    update.available?.version ??
+    update.lastCheck?.latestTag ??
+    update.lastCheck?.manifestTag ??
+    null
+  )
+}
+
+function buildInboxMessageForServiceUpdate(
+  service: DashboardService,
+  update: ServiceUpdateState,
+  options?: {
+    completed?: boolean
+  }
+): InboxMessage | null {
+  const version = getUpdateVersion(update)
+  const versionText = version ? `Version ${version}` : 'An update'
+  const createdAt =
+    update.failed?.failedAt ??
+    update.downloadedCandidate?.downloadedAt ??
+    update.installDeferred?.deferredAt ??
+    update.available?.publishedAt ??
+    update.updatedAt
+
+  const common = {
+    id: `update-${service.id}`,
+    category: 'update',
+    createdAt,
+    target: {
+      label: service.name,
+      href: `/services/${service.id}`,
+      kind: 'update',
+    },
+    actions: [
+      {
+        id: `open-update-${service.id}`,
+        label: 'Open Update',
+        kind: 'open_update',
+        target: `/services/${service.id}`,
+      },
+      {
+        id: `mark-update-read-${service.id}`,
+        label: 'Mark Read',
+        kind: 'mark_read',
+      },
+      {
+        id: `hide-update-${service.id}`,
+        label: 'Hide',
+        kind: 'hide',
+      },
+    ],
+  } satisfies Partial<InboxMessage>
+
+  if (update.state === 'available') {
+    return {
+      ...common,
+      title: `${service.name} update available`,
+      summary: `${versionText} is available for review.`,
+      details:
+        update.lastCheck?.reason ??
+        `${versionText} is available from the Service Lasso update API.`,
+      severity: 'info',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  if (update.state === 'downloadedCandidate') {
+    return {
+      ...common,
+      title: `${service.name} update downloaded`,
+      summary: `${versionText} is staged and ready for review.`,
+      details:
+        update.downloadedCandidate?.archivePath ??
+        `${versionText} has been downloaded and is waiting for operator review.`,
+      severity: 'info',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  if (update.state === 'installDeferred') {
+    return {
+      ...common,
+      title: `${service.name} update waiting for window`,
+      summary:
+        update.installDeferred?.reason ?? 'Update installation is deferred.',
+      details:
+        update.installDeferred?.nextEligibleAt == null
+          ? 'The update is waiting for an allowed installation window.'
+          : `The update is waiting until ${update.installDeferred.nextEligibleAt}.`,
+      severity: 'warning',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  if (update.state === 'failed') {
+    return {
+      ...common,
+      title: `${service.name} update failed`,
+      summary: update.failed?.reason ?? 'The update check or action failed.',
+      details:
+        update.failed?.sourceStatus ??
+        update.lastCheck?.reason ??
+        'The Service Lasso update API reported a failure.',
+      severity: 'critical',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  if (update.state === 'installed' && options?.completed === true) {
+    return {
+      ...common,
+      title: `${service.name} update completed`,
+      summary: `${versionText} has been installed.`,
+      details:
+        update.lastCheck?.reason ??
+        'The update completed and the service reports the installed state.',
+      severity: 'info',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  return null
+}
+
+function upsertInboxMessageForServiceUpdate(
+  serviceId: string,
+  update: ServiceUpdateState,
+  options?: {
+    completed?: boolean
+  }
+) {
+  const service = services.find((item) => item.id === serviceId)
+  if (!service) return
+
+  const notice = buildInboxMessageForServiceUpdate(service, update, options)
+  if (!notice) return
+
+  const existing = inboxMessages.find((message) => message.id === notice.id)
+  const changed =
+    existing == null ||
+    existing.title !== notice.title ||
+    existing.summary !== notice.summary ||
+    existing.details !== notice.details ||
+    existing.createdAt !== notice.createdAt
+
+  const nextNotice = {
+    ...notice,
+    read: changed ? false : existing.read,
+    hidden: changed ? false : existing.hidden,
+    actions: notice.actions.map((action) =>
+      action.kind === 'mark_read' && !changed && existing.read
+        ? { ...action, kind: 'mark_unread', label: 'Mark Unread' }
+        : action
+    ),
+  } satisfies InboxMessage
+
+  inboxMessages = [
+    nextNotice,
+    ...inboxMessages.filter((message) => message.id !== notice.id),
+  ]
+}
+
 export async function fetchInboxSummary() {
   await wait(120)
 
@@ -2593,6 +2771,9 @@ export async function runServiceUpdateAction(options: {
 
   if (update) {
     applyServiceUpdateState(options.serviceId, update)
+    upsertInboxMessageForServiceUpdate(options.serviceId, update, {
+      completed: options.action === 'install',
+    })
   }
 
   return structuredClone(buildSummary())
