@@ -100,6 +100,58 @@ describe('app screens', () => {
     ).toBeVisible()
   })
 
+  it('opens the Add Service source chooser from services', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services')
+
+    await user.click(
+      await screen.findByRole('button', { name: /^Add Service$/i })
+    )
+
+    expect(
+      await screen.findByRole('dialog', { name: /^Add Service$/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Service Catalog/i })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Service Archive/i })
+    ).toBeVisible()
+    expect(
+      screen.getByText(/built service package or archive/i)
+    ).toBeVisible()
+    expect(screen.queryByText(/GitHub URL/i)).toBeNull()
+    expect(screen.queryByText(/local folder/i)).toBeNull()
+  })
+
+  it('routes Add Service choices to catalog and archive panels', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/services')
+
+    await user.click(
+      await screen.findByRole('button', { name: /^Add Service$/i })
+    )
+    await user.click(screen.getByRole('button', { name: /Service Catalog/i }))
+
+    expect(
+      await screen.findByRole('dialog', { name: /^Service Catalog$/i })
+    ).toBeVisible()
+    expect(screen.getByText('Reverse proxy')).toBeVisible()
+    expect(screen.getAllByRole('button', { name: /^Install$/i })).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: /Source choices/i }))
+    await user.click(screen.getByRole('button', { name: /Service Archive/i }))
+
+    expect(
+      await screen.findByRole('dialog', { name: /^Service Archive$/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/Built service archive/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Upload archive/i })
+    ).toBeVisible()
+    expect(screen.queryByText(/raw source/i)).toBeNull()
+  })
+
   it('shows succeeded and skipped setup steps on service details', async () => {
     const user = userEvent.setup()
     await renderRoute('/services/traefik')
