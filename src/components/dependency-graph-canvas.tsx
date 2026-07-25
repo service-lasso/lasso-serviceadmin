@@ -8,8 +8,8 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from '@xyflow/react'
-import { useTheme } from '@/context/theme-provider'
 import '@xyflow/react/dist/style.css'
+import { useTheme } from '@/context/theme-provider'
 
 type GraphLegendItem = {
   label: string
@@ -60,7 +60,11 @@ export function DependencyGraphCanvas({
   return (
     <div className='space-y-3'>
       <div
-        className={isDark ? 'rounded-lg border bg-slate-950' : 'rounded-lg border bg-slate-50'}
+        className={
+          isDark
+            ? 'rounded-lg border bg-slate-950'
+            : 'rounded-lg border bg-slate-50'
+        }
         style={{ height }}
       >
         <ReactFlow
@@ -80,7 +84,11 @@ export function DependencyGraphCanvas({
           nodesConnectable={false}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={20} size={1} color={isDark ? '#1f2937' : '#cbd5e1'} />
+          <Background
+            gap={20}
+            size={1}
+            color={isDark ? '#1f2937' : '#cbd5e1'}
+          />
           {showControls ? (
             <Controls
               className={
@@ -95,8 +103,14 @@ export function DependencyGraphCanvas({
               pannable
               zoomable
               nodeColor={miniMapNodeColor}
-              maskColor={isDark ? 'rgba(2, 6, 23, 0.5)' : 'rgba(226, 232, 240, 0.65)'}
-              className={isDark ? '!border !border-slate-700 !bg-slate-900' : '!border !border-slate-300 !bg-white'}
+              maskColor={
+                isDark ? 'rgba(2, 6, 23, 0.5)' : 'rgba(226, 232, 240, 0.65)'
+              }
+              className={
+                isDark
+                  ? '!border !border-slate-700 !bg-slate-900'
+                  : '!border !border-slate-300 !bg-white'
+              }
             />
           ) : null}
         </ReactFlow>

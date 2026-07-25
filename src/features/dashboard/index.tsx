@@ -38,13 +38,13 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import {
-  getServiceUpdateDescription,
-  ServiceUpdateBadge,
-} from '@/components/service-update-status'
-import {
   getServiceRecoveryDescription,
   ServiceRecoveryBadge,
 } from '@/components/service-recovery-status'
+import {
+  getServiceUpdateDescription,
+  ServiceUpdateBadge,
+} from '@/components/service-update-status'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -297,9 +297,12 @@ function DashboardUnavailable({ error }: { error: unknown }) {
             <p className='text-sm'>{copy.guidance}</p>
             <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
               {details.map(([label, value]) => (
-                <div key={label} className='rounded-md border bg-background p-3'>
+                <div
+                  key={label}
+                  className='rounded-md border bg-background p-3'
+                >
                   <div className='text-xs text-muted-foreground'>{label}</div>
-                  <div className='mt-1 break-words text-sm font-medium'>
+                  <div className='mt-1 text-sm font-medium break-words'>
                     {value}
                   </div>
                 </div>

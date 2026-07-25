@@ -117,9 +117,7 @@ describe('app screens', () => {
     expect(
       screen.getByRole('button', { name: /Service Archive/i })
     ).toBeVisible()
-    expect(
-      screen.getByText(/built service package or archive/i)
-    ).toBeVisible()
+    expect(screen.getByText(/built service package or archive/i)).toBeVisible()
     expect(screen.queryByText(/GitHub URL/i)).toBeNull()
     expect(screen.queryByText(/local folder/i)).toBeNull()
   })
@@ -137,7 +135,9 @@ describe('app screens', () => {
       await screen.findByRole('dialog', { name: /^Service Catalog$/i })
     ).toBeVisible()
     expect(screen.getByText('Reverse proxy')).toBeVisible()
-    expect(screen.getAllByRole('button', { name: /^Install$/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /^Install$/i })).toHaveLength(
+      2
+    )
 
     await user.click(screen.getByRole('button', { name: /Source choices/i }))
     await user.click(screen.getByRole('button', { name: /Service Archive/i }))
@@ -293,8 +293,6 @@ describe('app screens', () => {
     )
 
     expect(screen.getByText(/paused before export/i)).toBeVisible()
-    expect(
-      screen.getByRole('link', { name: /Open Workflow/i })
-    ).toBeVisible()
+    expect(screen.getByRole('link', { name: /Open Workflow/i })).toBeVisible()
   })
 })

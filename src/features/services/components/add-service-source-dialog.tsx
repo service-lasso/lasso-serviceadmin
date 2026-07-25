@@ -17,7 +17,8 @@ type AddServiceSource = 'catalog' | 'archive'
 const catalogServices = [
   {
     name: 'Reverse proxy',
-    description: 'Approved edge routing package for local Service Lasso stacks.',
+    description:
+      'Approved edge routing package for local Service Lasso stacks.',
   },
   {
     name: 'Identity provider',

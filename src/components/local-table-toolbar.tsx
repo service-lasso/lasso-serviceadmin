@@ -157,7 +157,8 @@ export function LocalTableToolbar({
   onReset,
 }: LocalTableToolbarProps) {
   const isFiltered =
-    searchValue.trim().length > 0 || filters.some((filter) => filter.selectedValues.length > 0)
+    searchValue.trim().length > 0 ||
+    filters.some((filter) => filter.selectedValues.length > 0)
 
   return (
     <div className='flex items-center justify-between'>
@@ -174,7 +175,11 @@ export function LocalTableToolbar({
           ))}
         </div>
         {isFiltered && onReset ? (
-          <Button variant='ghost' onClick={onReset} className='h-8 px-2 lg:px-3'>
+          <Button
+            variant='ghost'
+            onClick={onReset}
+            className='h-8 px-2 lg:px-3'
+          >
             Reset
             <Cross2Icon className='ms-2 h-4 w-4' />
           </Button>

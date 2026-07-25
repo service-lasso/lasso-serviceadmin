@@ -55,7 +55,7 @@ function MetadataItem({
         <Icon className='size-3.5' />
         <span>{label}</span>
       </div>
-      <div className='mt-1 break-words text-sm font-medium'>
+      <div className='mt-1 text-sm font-medium break-words'>
         {value ?? 'Pending'}
       </div>
     </div>
@@ -93,7 +93,7 @@ function GeneratedKeyReveal({ setup }: { setup: FirstRunSetupState }) {
 
       <div>
         <div className='mb-2 text-sm font-medium'>Recovery key</div>
-        <pre className='max-h-40 overflow-auto rounded-md border bg-muted p-3 text-sm whitespace-pre-wrap break-all'>
+        <pre className='max-h-40 overflow-auto rounded-md border bg-muted p-3 text-sm break-all whitespace-pre-wrap'>
           {reveal.value}
         </pre>
       </div>
@@ -218,7 +218,11 @@ function FirstRunSetupContent({ setup }: { setup: FirstRunSetupState }) {
         )}
 
         <section className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-          <MetadataItem icon={KeyRound} label='Vault' value={setup.vault.name} />
+          <MetadataItem
+            icon={KeyRound}
+            label='Vault'
+            value={setup.vault.name}
+          />
           <MetadataItem
             icon={UserRound}
             label='Root owner'
@@ -294,11 +298,7 @@ function FirstRunSetupUnavailable({ error }: { error: unknown }) {
   )
 }
 
-export function FirstRunSetupGate({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export function FirstRunSetupGate({ children }: { children: React.ReactNode }) {
   const setupQuery = useFirstRunSetupState()
 
   if (setupQuery.isLoading || !setupQuery.data) {

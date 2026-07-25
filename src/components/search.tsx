@@ -26,7 +26,7 @@ export function Search({ className, placeholder = 'Search' }: SearchProps) {
       type='button'
       onClick={() => setOpen(true)}
       className={cn(
-        'bg-background text-muted-foreground inline-flex h-9 w-fit items-center gap-2 rounded-md border px-3 text-sm shadow-xs transition-colors hover:bg-accent/40',
+        'inline-flex h-9 w-fit items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-accent/40',
         className
       )}
     >
