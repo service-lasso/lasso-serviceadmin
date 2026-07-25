@@ -227,6 +227,84 @@ describe('app screens', () => {
     expect(screen.queryByText(/raw source/i)).toBeNull()
   })
 
+  it('uploads Service Archive metadata and confirms import', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const endpoint = String(input)
+
+      if (endpoint === '/api/service-archives/upload') {
+        return new Response(
+          JSON.stringify({
+            uploadId: 'upload-123',
+            service: {
+              id: 'echo-import',
+              displayName: 'Echo Import',
+              version: '1.2.3',
+            },
+            trust: 'local archive',
+            validation: {
+              status: 'valid',
+              messages: ['service.json passed validation.'],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (endpoint === '/api/service-archives/import') {
+        return new Response(
+          JSON.stringify({
+            status: 'imported',
+            serviceId: 'echo-import',
+            serviceUrl: '/services/echo-import',
+            message: 'Echo Import was added.',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      return new Response(JSON.stringify({ message: 'Unexpected endpoint' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/services')
+
+    await user.click(
+      await screen.findByRole('button', { name: /^Add Service$/i })
+    )
+    await user.click(screen.getByRole('button', { name: /Service Archive/i }))
+    await user.upload(
+      screen.getByLabelText(/Built service archive/i),
+      new File(['archive'], 'echo-import.zip', { type: 'application/zip' })
+    )
+    await user.click(screen.getByRole('button', { name: /^Upload archive$/i }))
+
+    expect(await screen.findByText('echo-import')).toBeVisible()
+    expect(screen.getByText('Echo Import')).toBeVisible()
+    expect(screen.getByText('1.2.3')).toBeVisible()
+    expect(screen.getByText(/Validation passed/i)).toBeVisible()
+    expect(screen.queryByText(/conflict/i)).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /^Import archive$/i }))
+
+    expect(await screen.findByText(/Echo Import was added/i)).toBeVisible()
+    expect(screen.getByRole('link', { name: /Open service/i })).toHaveAttribute(
+      'href',
+      '/services/echo-import'
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/service-archives/import',
+      expect.objectContaining({
+        body: JSON.stringify({ uploadId: 'upload-123' }),
+        method: 'POST',
+      })
+    )
+  })
+
   it('selects multiple catalog services, versions, and sends install payload', async () => {
     const user = userEvent.setup()
     const fetchMock = mockCatalogApi()
