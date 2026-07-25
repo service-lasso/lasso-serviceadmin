@@ -1,6 +1,6 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { renderRoute } from './render-route'
 
 type ScreenCase = {
@@ -76,6 +76,72 @@ const appScreens: ScreenCase[] = [
   { path: '/settings/notifications', heading: /^Notifications$/i },
 ]
 
+const catalogPackages = [
+  {
+    id: '@traefik',
+    name: 'Traefik',
+    summary: 'Approved edge routing package for Service Lasso.',
+    repo: 'service-lasso/lasso-traefik',
+    approved: true,
+    tags: ['network', 'edge'],
+    defaultVersion: 'v3.5.2',
+    versions: [
+      { version: 'v3.5.2', name: 'v3.5.2', prerelease: false },
+      { version: 'v3.6.0-rc.1', name: 'v3.6.0 RC 1', prerelease: true },
+    ],
+  },
+  {
+    id: '@zitadel',
+    name: 'Zitadel',
+    summary: 'Approved identity provider package.',
+    repo: 'service-lasso/lasso-zitadel',
+    approved: true,
+    tags: ['identity'],
+    defaultVersion: 'v2.71.0',
+    versions: ['v2.71.0', 'v2.70.0'],
+  },
+]
+
+function mockCatalogApi() {
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url === '/api/catalog/packages') {
+        return new Response(JSON.stringify({ packages: catalogPackages }), {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (url === '/api/catalog/install' && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                id: '@traefik',
+                status: 'registered',
+                message: 'Traefik was registered.',
+              },
+              {
+                id: '@zitadel',
+                status: 'conflict',
+                message: 'Zitadel already exists.',
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      return new Response('{}', { status: 404 })
+    }
+  )
+
+  vi.stubGlobal('fetch', fetchMock)
+
+  return fetchMock
+}
+
 describe('app screens', () => {
   it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
     await renderRoute(path)
@@ -117,15 +183,14 @@ describe('app screens', () => {
     expect(
       screen.getByRole('button', { name: /Service Archive/i })
     ).toBeVisible()
-    expect(
-      screen.getByText(/built service package or archive/i)
-    ).toBeVisible()
+    expect(screen.getByText(/built service package or archive/i)).toBeVisible()
     expect(screen.queryByText(/GitHub URL/i)).toBeNull()
     expect(screen.queryByText(/local folder/i)).toBeNull()
   })
 
   it('routes Add Service choices to catalog and archive panels', async () => {
     const user = userEvent.setup()
+    mockCatalogApi()
     await renderRoute('/services')
 
     await user.click(
@@ -133,13 +198,23 @@ describe('app screens', () => {
     )
     await user.click(screen.getByRole('button', { name: /Service Catalog/i }))
 
+    const catalogDialog = await screen.findByRole('dialog', {
+      name: /^Service Catalog$/i,
+    })
+    expect(catalogDialog).toBeVisible()
+    expect(await within(catalogDialog).findByText('Traefik')).toBeVisible()
     expect(
-      await screen.findByRole('dialog', { name: /^Service Catalog$/i })
+      within(catalogDialog).getByLabelText(/Search Service Catalog/i)
     ).toBeVisible()
-    expect(screen.getByText('Reverse proxy')).toBeVisible()
-    expect(screen.getAllByRole('button', { name: /^Install$/i })).toHaveLength(2)
+    expect(
+      within(catalogDialog).getByRole('button', {
+        name: /^Install selected$/i,
+      })
+    ).toBeDisabled()
 
-    await user.click(screen.getByRole('button', { name: /Source choices/i }))
+    await user.click(
+      within(catalogDialog).getByRole('button', { name: /Source choices/i })
+    )
     await user.click(screen.getByRole('button', { name: /Service Archive/i }))
 
     expect(
@@ -150,6 +225,74 @@ describe('app screens', () => {
       screen.getByRole('button', { name: /Upload archive/i })
     ).toBeVisible()
     expect(screen.queryByText(/raw source/i)).toBeNull()
+  })
+
+  it('selects multiple catalog services, versions, and sends install payload', async () => {
+    const user = userEvent.setup()
+    const fetchMock = mockCatalogApi()
+    await renderRoute('/services')
+
+    await user.click(
+      await screen.findByRole('button', { name: /^Add Service$/i })
+    )
+    await user.click(screen.getByRole('button', { name: /Service Catalog/i }))
+
+    const catalogDialog = await screen.findByRole('dialog', {
+      name: /^Service Catalog$/i,
+    })
+    expect(await within(catalogDialog).findByText('Traefik')).toBeVisible()
+    expect(within(catalogDialog).getByText('Zitadel')).toBeVisible()
+
+    await user.type(
+      within(catalogDialog).getByLabelText(/Search Service Catalog/i),
+      'edge'
+    )
+
+    expect(within(catalogDialog).getByText('Traefik')).toBeVisible()
+    expect(within(catalogDialog).queryByText('Zitadel')).toBeNull()
+
+    await user.clear(
+      within(catalogDialog).getByLabelText(/Search Service Catalog/i)
+    )
+    await user.click(
+      within(catalogDialog).getByRole('checkbox', { name: /Select Traefik/i })
+    )
+    await user.click(
+      within(catalogDialog).getByRole('checkbox', { name: /Select Zitadel/i })
+    )
+    await user.selectOptions(
+      within(catalogDialog).getByLabelText(/Traefik version/i),
+      'v3.6.0-rc.1'
+    )
+
+    await user.click(
+      within(catalogDialog).getByRole('button', {
+        name: /^Install selected$/i,
+      })
+    )
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/catalog/install',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            packages: [
+              { id: '@traefik', version: 'v3.6.0-rc.1' },
+              { id: '@zitadel', version: 'v2.71.0' },
+            ],
+          }),
+        })
+      )
+    })
+    expect(await within(catalogDialog).findByText('registered')).toBeVisible()
+    expect(
+      within(catalogDialog).getByText('Traefik was registered.')
+    ).toBeVisible()
+    expect(within(catalogDialog).getByText('conflict')).toBeVisible()
+    expect(
+      within(catalogDialog).getByText('Zitadel already exists.')
+    ).toBeVisible()
   })
 
   it('shows succeeded and skipped setup steps on service details', async () => {
@@ -293,8 +436,6 @@ describe('app screens', () => {
     )
 
     expect(screen.getByText(/paused before export/i)).toBeVisible()
-    expect(
-      screen.getByRole('link', { name: /Open Workflow/i })
-    ).toBeVisible()
+    expect(screen.getByRole('link', { name: /Open Workflow/i })).toBeVisible()
   })
 })
