@@ -37,11 +37,7 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
-type InboxFilter =
-  | 'all'
-  | 'unread'
-  | InboxMessageCategory
-  | 'hidden'
+type InboxFilter = 'all' | 'unread' | InboxMessageCategory | 'hidden'
 
 const filters: Array<{ id: InboxFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -133,12 +129,7 @@ function ActionButton({
     action.kind === 'view_audit'
   ) {
     return (
-      <Button
-        asChild
-        variant='outline'
-        size='sm'
-        disabled={action.disabled}
-      >
+      <Button asChild variant='outline' size='sm' disabled={action.disabled}>
         <a href={action.target ?? '#'}>{action.label}</a>
       </Button>
     )
@@ -306,7 +297,9 @@ export function Inbox() {
                       <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground'>
                         <CategoryBadge category={message.category} />
                         <SeverityBadge severity={message.severity} />
-                        <span>{new Date(message.createdAt).toLocaleString()}</span>
+                        <span>
+                          {new Date(message.createdAt).toLocaleString()}
+                        </span>
                       </div>
                     </button>
                   ))
@@ -391,10 +384,15 @@ export function Inbox() {
                           />
                         ))}
                       </div>
-                      {selectedMessage.actions.some((action) => action.reason) ? (
+                      {selectedMessage.actions.some(
+                        (action) => action.reason
+                      ) ? (
                         <p className='mt-3 text-xs text-muted-foreground'>
-                          {selectedMessage.actions.find((action) => action.reason)
-                            ?.reason}
+                          {
+                            selectedMessage.actions.find(
+                              (action) => action.reason
+                            )?.reason
+                          }
                         </p>
                       ) : null}
                     </div>

@@ -41,7 +41,10 @@ export function getServiceRecoveryDescription(
   if (!event) return 'No recovery, doctor, restart, or hook history yet.'
 
   if (event.kind === 'monitor') {
-    return event.message ?? `Monitor ${event.action ?? 'event'}: ${event.reason ?? 'unknown'}`
+    return (
+      event.message ??
+      `Monitor ${event.action ?? 'event'}: ${event.reason ?? 'unknown'}`
+    )
   }
 
   if (event.kind === 'doctor') {
@@ -56,7 +59,10 @@ export function getServiceRecoveryDescription(
     return `${event.phase ?? 'Hook'} ${event.blocked ? 'blocked' : 'completed'} with ${event.steps?.length ?? 0} step(s).`
   }
 
-  return event.message ?? (event.ok === false ? 'Restart failed.' : 'Restart completed.')
+  return (
+    event.message ??
+    (event.ok === false ? 'Restart failed.' : 'Restart completed.')
+  )
 }
 
 export function ServiceRecoveryBadge({
@@ -77,7 +83,9 @@ export function ServiceRecoveryBadge({
   }
 
   if (needsAttention) {
-    return <Badge variant='destructive'>{getServiceRecoveryLabel(recovery)}</Badge>
+    return (
+      <Badge variant='destructive'>{getServiceRecoveryLabel(recovery)}</Badge>
+    )
   }
 
   return (

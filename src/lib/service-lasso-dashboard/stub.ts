@@ -234,7 +234,8 @@ let inboxMessages: InboxMessage[] = [
         label: 'Retry',
         kind: 'retry',
         disabled: true,
-        reason: 'Runtime retry endpoint is pending service-lasso/service-lasso#833.',
+        reason:
+          'Runtime retry endpoint is pending service-lasso/service-lasso#833.',
       },
     ],
   },

@@ -35,12 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
   DataTableToolbar,
 } from '@/components/data-table'
-import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -63,7 +63,9 @@ function RuntimeLoading() {
 
 function StatusBadge({ status }: { status: DashboardService['status'] }) {
   if (status === 'running') {
-    return <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
+    )
   }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
@@ -82,7 +84,7 @@ const columns: ColumnDef<DashboardService>[] = [
       <DataTableColumnHeader column={column} title='Service' />
     ),
     cell: ({ row }) => (
-      <div className='flex min-w-0 max-w-[180px] flex-col'>
+      <div className='flex max-w-[180px] min-w-0 flex-col'>
         <Link
           to='/services/$serviceId'
           params={{ serviceId: row.original.id }}
@@ -91,7 +93,10 @@ const columns: ColumnDef<DashboardService>[] = [
         >
           {row.original.name}
         </Link>
-        <span className='truncate text-xs text-muted-foreground' title={row.original.id}>
+        <span
+          className='truncate text-xs text-muted-foreground'
+          title={row.original.id}
+        >
           {row.original.id}
         </span>
       </div>
@@ -130,9 +135,9 @@ const columns: ColumnDef<DashboardService>[] = [
       <DataTableColumnHeader column={column} title='Summary' />
     ),
     cell: ({ row }) => (
-      <div className='min-w-0 max-w-[320px]'>
+      <div className='max-w-[320px] min-w-0'>
         <div
-          className='overflow-hidden text-ellipsis whitespace-nowrap text-sm text-muted-foreground'
+          className='overflow-hidden text-sm text-ellipsis whitespace-nowrap text-muted-foreground'
           title={row.original.runtimeHealth.summary}
         >
           {row.original.runtimeHealth.summary}
@@ -223,7 +228,10 @@ export function Runtime() {
   )
 
   const runtimes = useMemo(
-    () => Array.from(new Set((servicesQuery.data ?? []).map((service) => service.role))).sort(),
+    () =>
+      Array.from(
+        new Set((servicesQuery.data ?? []).map((service) => service.role))
+      ).sort(),
     [servicesQuery.data]
   )
 
@@ -243,7 +251,8 @@ export function Runtime() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Runtime</h2>
             <p className='text-muted-foreground'>
-              Runtime state, health, and check history in the standard operator table.
+              Runtime state, health, and check history in the standard operator
+              table.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -265,7 +274,8 @@ export function Runtime() {
                 <Activity className='size-4' /> Runtime status
               </CardTitle>
               <CardDescription>
-                {table.getFilteredRowModel().rows.length} services shown, {unhealthyCount} with warning or critical health.
+                {table.getFilteredRowModel().rows.length} services shown,{' '}
+                {unhealthyCount} with warning or critical health.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
@@ -318,14 +328,20 @@ export function Runtime() {
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id} className='min-w-0'>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
                           No runtime rows match the current filters.
                         </TableCell>
                       </TableRow>

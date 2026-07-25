@@ -113,7 +113,9 @@ describe('service recovery notifications', () => {
     expect(summary.doctorBlockedCount).toBe(1)
     expect(summary.hookBlockedCount).toBe(1)
     expect(summary.restartFailureCount).toBe(1)
-    expect(summary.messages).toContain('1 service monitor event(s) need review.')
+    expect(summary.messages).toContain(
+      '1 service monitor event(s) need review.'
+    )
     expect(summary.messages).toContain(
       '1 doctor/preflight check(s) are blocked.'
     )
@@ -139,4 +141,3 @@ describe('service recovery notifications', () => {
     ).not.toThrow()
   })
 })
-

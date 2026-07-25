@@ -212,7 +212,7 @@ export type ServiceAction = {
     mode?: 'local-root' | 'signed-in' | 'remote-anonymous' | 'setup'
     reason?: string
     requiresConfirmation?: boolean
-      confirmationLabel?: string
+    confirmationLabel?: string
   }
 }
 
@@ -497,11 +497,7 @@ export type DashboardSummary = {
   }
 }
 
-export type InboxMessageCategory =
-  | 'update'
-  | 'system'
-  | 'workflow'
-  | 'error'
+export type InboxMessageCategory = 'update' | 'system' | 'workflow' | 'error'
 
 export type InboxMessageSeverity = 'info' | 'warning' | 'critical'
 
