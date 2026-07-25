@@ -9,6 +9,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { AddServiceSourceDialog } from './components/add-service-source-dialog'
 import { ServicesTable } from './components/services-table'
 
 const route = getRouteApi('/_authenticated/services/')
@@ -59,6 +60,7 @@ export function Services() {
               detail view from the table below.
             </p>
           </div>
+          <AddServiceSourceDialog />
         </div>
 
         {servicesQuery.isLoading ? (
