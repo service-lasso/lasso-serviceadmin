@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils'
 import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { FirstRunSetupGate } from '@/features/first-run-setup'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { SkipToMain } from '@/components/skip-to-main'
+import { FirstRunSetupGate } from '@/features/first-run-setup'
 
 type AuthenticatedLayoutProps = {
   children?: React.ReactNode

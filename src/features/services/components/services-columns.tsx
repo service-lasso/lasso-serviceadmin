@@ -12,13 +12,13 @@ import { Button } from '@/components/ui/button'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { LongText } from '@/components/long-text'
 import {
-  getServiceUpdateDescription,
-  ServiceUpdateBadge,
-} from '@/components/service-update-status'
-import {
   getServiceRecoveryDescription,
   ServiceRecoveryBadge,
 } from '@/components/service-recovery-status'
+import {
+  getServiceUpdateDescription,
+  ServiceUpdateBadge,
+} from '@/components/service-update-status'
 import { DataTableRowActions } from './data-table-row-actions'
 
 function renderStatusBadge(status: DashboardService['status']) {

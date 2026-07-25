@@ -36,12 +36,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
   DataTableToolbar,
 } from '@/components/data-table'
-import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -54,7 +54,7 @@ function PathCell({ icon, value }: { icon: ElementType; value?: string }) {
   return (
     <div className='flex items-start gap-2'>
       <Icon className='mt-1 size-4 shrink-0 text-muted-foreground' />
-      <span className='max-w-[280px] break-all text-sm text-muted-foreground'>
+      <span className='max-w-[280px] text-sm break-all text-muted-foreground'>
         {value ?? 'Not recorded'}
       </span>
       <Button
@@ -212,7 +212,9 @@ export function Installed() {
   const runtimes = useMemo(
     () =>
       Array.from(
-        new Set((servicesQuery.data ?? []).map((service) => service.metadata.runtime))
+        new Set(
+          (servicesQuery.data ?? []).map((service) => service.metadata.runtime)
+        )
       ).sort(),
     [servicesQuery.data]
   )
@@ -255,7 +257,8 @@ export function Installed() {
                 <PackageCheck className='size-4' /> Installed services
               </CardTitle>
               <CardDescription>
-                {table.getFilteredRowModel().rows.length} services shown with package, version, and path details.
+                {table.getFilteredRowModel().rows.length} services shown with
+                package, version, and path details.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
@@ -307,14 +310,20 @@ export function Installed() {
                         <TableRow key={row.id}>
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={columns.length} className='h-24 text-center'>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
                           No installed services match the current filters.
                         </TableCell>
                       </TableRow>

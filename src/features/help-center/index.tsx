@@ -270,7 +270,7 @@ export function HelpCenter() {
                           >
                             <div className='flex items-start justify-between gap-2'>
                               <div className='min-w-0'>
-                                <div className='truncate text-sm font-medium leading-5'>
+                                <div className='truncate text-sm leading-5 font-medium'>
                                   {doc.title}
                                 </div>
                                 <div className='truncate text-[11px] text-muted-foreground'>
