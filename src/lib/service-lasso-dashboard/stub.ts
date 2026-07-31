@@ -11,6 +11,7 @@ import type {
   InboxMessageActionResult,
   InboxSummary,
   ServiceSecurityState,
+  ServiceRecoveryEvent,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
   ServiceSetupRunResult,
@@ -654,6 +655,13 @@ export function applyRemoteRecoveryStates(
     ...service,
     recovery: recoveryById.get(service.id) ?? service.recovery,
   }))
+
+  for (const recoveryState of recoveryStates) {
+    upsertInboxMessageForServiceRecovery(
+      recoveryState.serviceId,
+      recoveryState.recovery
+    )
+  }
 }
 
 async function syncRemoteStateFromApi() {
@@ -2516,19 +2524,140 @@ function buildInboxMessageForServiceUpdate(
   return null
 }
 
-function upsertInboxMessageForServiceUpdate(
-  serviceId: string,
-  update: ServiceUpdateState,
-  options?: {
-    completed?: boolean
+function buildInboxMessageForServiceRecovery(
+  service: DashboardService,
+  recovery: ServiceRecoveryHistoryState
+): InboxMessage | null {
+  const event = recovery.events[recovery.events.length - 1]
+  if (!event || !recoveryEventNeedsInbox(event)) return null
+
+  const common = {
+    id: `recovery-${service.id}`,
+    createdAt: event.at,
+    target: {
+      label: service.name,
+      href: `/services/${service.id}`,
+      kind: 'service',
+    },
+    actions: [
+      {
+        id: `open-recovery-service-${service.id}`,
+        label: 'Open Service',
+        kind: 'open_service',
+        target: `/services/${service.id}`,
+      },
+      {
+        id: `open-recovery-logs-${service.id}`,
+        label: 'Open Logs',
+        kind: 'open_logs',
+        target: `/logs?service=${service.id}`,
+      },
+      {
+        id: `mark-recovery-read-${service.id}`,
+        label: 'Mark Read',
+        kind: 'mark_read',
+      },
+      {
+        id: `hide-recovery-${service.id}`,
+        label: 'Hide',
+        kind: 'hide',
+      },
+    ],
+  } satisfies Partial<InboxMessage>
+
+  if (event.kind === 'monitor') {
+    return {
+      ...common,
+      title: `${service.name} health needs review`,
+      summary:
+        event.message ??
+        event.reason ??
+        'The latest monitor event requires operator review.',
+      details: recoveryEventDetails(event),
+      category: 'system',
+      severity: 'warning',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
   }
-) {
-  const service = services.find((item) => item.id === serviceId)
-  if (!service) return
 
-  const notice = buildInboxMessageForServiceUpdate(service, update, options)
-  if (!notice) return
+  if (event.kind === 'doctor' && event.blocked === true) {
+    return {
+      ...common,
+      title: `${service.name} recovery check blocked`,
+      summary: 'Doctor/preflight checks are blocked.',
+      details: recoveryEventDetails(event),
+      category: 'workflow',
+      severity: 'critical',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
 
+  if (event.kind === 'hook' && event.blocked === true) {
+    return {
+      ...common,
+      title: `${service.name} lifecycle hook blocked`,
+      summary:
+        event.phase == null
+          ? 'A lifecycle hook run is blocked.'
+          : `${event.phase} lifecycle hook run is blocked.`,
+      details: recoveryEventDetails(event),
+      category: 'workflow',
+      severity: 'critical',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  if (event.kind === 'restart' && event.ok === false) {
+    return {
+      ...common,
+      title: `${service.name} restart failed readiness`,
+      summary: event.message ?? 'The latest restart did not reach readiness.',
+      details: recoveryEventDetails(event),
+      category: 'error',
+      severity: 'critical',
+      read: false,
+      hidden: false,
+    } satisfies InboxMessage
+  }
+
+  return null
+}
+
+function recoveryEventNeedsInbox(event: ServiceRecoveryEvent) {
+  if (
+    event.kind === 'monitor' &&
+    event.action !== 'healthy' &&
+    event.reason !== 'healthy'
+  ) {
+    return true
+  }
+
+  if (event.kind === 'doctor' || event.kind === 'hook') {
+    return event.blocked === true
+  }
+
+  return event.kind === 'restart' && event.ok === false
+}
+
+function recoveryEventDetails(event: ServiceRecoveryEvent) {
+  const failedSteps =
+    event.steps
+      ?.filter((step) => !step.ok)
+      .map((step) => `${step.name}: ${step.failurePolicy}`)
+      .join('; ') ?? null
+
+  return (
+    failedSteps ??
+    event.message ??
+    event.reason ??
+    'Service Lasso recovery history reported an event requiring review.'
+  )
+}
+
+function upsertInboxMessage(notice: InboxMessage) {
   const existing = inboxMessages.find((message) => message.id === notice.id)
   const changed =
     existing == null ||
@@ -2552,6 +2681,35 @@ function upsertInboxMessageForServiceUpdate(
     nextNotice,
     ...inboxMessages.filter((message) => message.id !== notice.id),
   ]
+}
+
+function upsertInboxMessageForServiceUpdate(
+  serviceId: string,
+  update: ServiceUpdateState,
+  options?: {
+    completed?: boolean
+  }
+) {
+  const service = services.find((item) => item.id === serviceId)
+  if (!service) return
+
+  const notice = buildInboxMessageForServiceUpdate(service, update, options)
+  if (!notice) return
+
+  upsertInboxMessage(notice)
+}
+
+function upsertInboxMessageForServiceRecovery(
+  serviceId: string,
+  recovery: ServiceRecoveryHistoryState
+) {
+  const service = services.find((item) => item.id === serviceId)
+  if (!service) return
+
+  const notice = buildInboxMessageForServiceRecovery(service, recovery)
+  if (!notice) return
+
+  upsertInboxMessage(notice)
 }
 
 export async function fetchInboxSummary() {

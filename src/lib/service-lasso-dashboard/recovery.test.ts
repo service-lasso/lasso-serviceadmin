@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { applyRemoteRecoveryStates, buildRecoveryNotifications } from './stub'
+import {
+  applyRemoteRecoveryStates,
+  buildRecoveryNotifications,
+  fetchInboxSummary,
+} from './stub'
 import type { DashboardService, ServiceRecoveryHistoryState } from './types'
 
 function recoveryState(
@@ -113,7 +117,9 @@ describe('service recovery notifications', () => {
     expect(summary.doctorBlockedCount).toBe(1)
     expect(summary.hookBlockedCount).toBe(1)
     expect(summary.restartFailureCount).toBe(1)
-    expect(summary.messages).toContain('1 service monitor event(s) need review.')
+    expect(summary.messages).toContain(
+      '1 service monitor event(s) need review.'
+    )
     expect(summary.messages).toContain(
       '1 doctor/preflight check(s) are blocked.'
     )
@@ -138,5 +144,53 @@ describe('service recovery notifications', () => {
       ])
     ).not.toThrow()
   })
-})
 
+  it('projects recovery events that need attention into Inbox messages', async () => {
+    applyRemoteRecoveryStates([
+      {
+        serviceId: 'service-admin',
+        recovery: recoveryState('service-admin', {
+          kind: 'restart',
+          serviceId: 'service-admin',
+          ok: false,
+          message: 'Readiness failed.',
+          at: '2026-04-27T00:00:00.000Z',
+        }),
+      },
+    ])
+
+    const inbox = await fetchInboxSummary()
+    const recoveryMessage = inbox.messages.find(
+      (message) => message.id === 'recovery-service-admin'
+    )
+
+    expect(recoveryMessage).toMatchObject({
+      title: 'Service Admin UI restart failed readiness',
+      summary: 'Readiness failed.',
+      category: 'error',
+      severity: 'critical',
+      read: false,
+      hidden: false,
+      target: {
+        label: 'Service Admin UI',
+        href: '/services/service-admin',
+        kind: 'service',
+      },
+    })
+    expect(recoveryMessage?.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'open_service',
+          target: '/services/service-admin',
+        }),
+        expect.objectContaining({
+          kind: 'open_logs',
+          target: '/logs?service=service-admin',
+        }),
+        expect.objectContaining({ kind: 'mark_read' }),
+        expect.objectContaining({ kind: 'hide' }),
+      ])
+    )
+    expect(inbox.counts.errors).toBeGreaterThan(0)
+  })
+})
