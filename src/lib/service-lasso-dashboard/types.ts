@@ -533,6 +533,67 @@ export type ServiceRecoveryDoctorActionResult = {
   recovery: ServiceRecoveryHistoryState
 }
 
+export type ServiceSecretsLifecycleAction = {
+  id:
+    | 'create_backup'
+    | 'verify_backup'
+    | 'restore_dry_run'
+    | 'restore_apply'
+    | 'rotate_master_key'
+    | 'test_recovery_policy'
+  label: string
+  enabled: boolean
+  reason?: string
+  requiresConfirmation: boolean
+  permissionKey:
+    | 'backup.read'
+    | 'backup.create'
+    | 'backup.restore'
+    | 'broker.keys.rotate'
+    | 'broker.recovery.test'
+}
+
+export type ServiceSecretsLifecycleState = {
+  serviceId: string
+  updatedAt: string
+  masterKey: {
+    state: 'ready' | 'missing' | 'rotation_due' | 'unknown'
+    source: 'generated' | 'secret_file' | 'os_keychain' | 'manual' | 'unknown'
+    fingerprint: string | null
+    version: string | null
+    lastRotatedAt: string | null
+    nextRotationDueAt: string | null
+  }
+  wrapper: {
+    state: 'ready' | 'unavailable' | 'unknown'
+    algorithm: string | null
+    version: string | null
+  }
+  backup: {
+    state: 'ready' | 'not_configured' | 'attention' | 'unknown'
+    destinationPolicy: string | null
+    latestBackupId: string | null
+    lastBackupAt: string | null
+    lastVerifiedAt: string | null
+    verificationStatus: 'verified' | 'stale' | 'failed' | 'unknown'
+  }
+  restore: {
+    state: 'ready' | 'dry_run_required' | 'blocked' | 'unknown'
+    dryRunRequired: boolean
+    lastDryRunAt: string | null
+    lastRestoreAt: string | null
+  }
+  recoveryPolicy: {
+    state: 'ready' | 'not_configured' | 'attention' | 'unknown'
+    shareCount: number | null
+    threshold: number | null
+    materialExported: boolean
+    lastTestedAt: string | null
+  }
+  warnings: string[]
+  actions: ServiceSecretsLifecycleAction[]
+}
+
 export type DashboardService = {
   id: string
   name: string
@@ -554,6 +615,7 @@ export type DashboardService = {
   recovery?: ServiceRecoveryHistoryState
   setup?: ServiceSetupState
   access?: ServiceAccessState
+  secretsLifecycle?: ServiceSecretsLifecycleState
 }
 
 export type DashboardRuntime = {

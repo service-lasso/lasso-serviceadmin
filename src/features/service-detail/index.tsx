@@ -15,6 +15,7 @@ import {
   Copy,
   ExternalLink,
   HeartPulse,
+  KeyRound,
   Link2,
   PackageCheck,
   Play,
@@ -51,6 +52,7 @@ import type {
   ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
   ServicePermissionGrant,
+  ServiceSecretsLifecycleState,
   ServiceSetupState,
   ServiceSetupStep,
   ServiceStatus,
@@ -1283,6 +1285,168 @@ function ServiceAccessPanel({ service }: { service: DashboardService }) {
   )
 }
 
+function formatOptionalTimestamp(value: string | null) {
+  return value ?? 'Not recorded'
+}
+
+function LifecycleBadge({
+  state,
+}: {
+  state: ServiceSecretsLifecycleState['masterKey']['state'] | string
+}) {
+  if (state === 'ready' || state === 'verified') {
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>{state}</Badge>
+    )
+  }
+
+  if (
+    state === 'attention' ||
+    state === 'dry_run_required' ||
+    state === 'rotation_due' ||
+    state === 'stale'
+  ) {
+    return <Badge variant='secondary'>{state}</Badge>
+  }
+
+  if (state === 'failed' || state === 'blocked' || state === 'missing') {
+    return <Badge variant='destructive'>{state}</Badge>
+  }
+
+  return <Badge variant='outline'>{state}</Badge>
+}
+
+function SecretsLifecyclePanel({
+  lifecycle,
+}: {
+  lifecycle: ServiceSecretsLifecycleState
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <KeyRound className='size-4' /> Broker lifecycle
+        </CardTitle>
+        <CardDescription>
+          Backup, key, wrapper, restore, and recovery metadata from the broker.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+          <div className='rounded-lg border p-3'>
+            <div className='mb-2 flex items-center justify-between gap-2'>
+              <div className='font-medium'>Master key</div>
+              <LifecycleBadge state={lifecycle.masterKey.state} />
+            </div>
+            <div className='space-y-1 text-sm text-muted-foreground'>
+              <div>Source: {lifecycle.masterKey.source}</div>
+              <div>
+                Fingerprint: {lifecycle.masterKey.fingerprint ?? 'Hidden'}
+              </div>
+              <div>
+                Version: {lifecycle.masterKey.version ?? 'Not recorded'}
+              </div>
+              <div>
+                Last rotated:{' '}
+                {formatOptionalTimestamp(lifecycle.masterKey.lastRotatedAt)}
+              </div>
+            </div>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='mb-2 flex items-center justify-between gap-2'>
+              <div className='font-medium'>Backup</div>
+              <LifecycleBadge state={lifecycle.backup.state} />
+            </div>
+            <div className='space-y-1 text-sm text-muted-foreground'>
+              <div>ID: {lifecycle.backup.latestBackupId ?? 'Not recorded'}</div>
+              <div>
+                Policy: {lifecycle.backup.destinationPolicy ?? 'Not recorded'}
+              </div>
+              <div>
+                Verified:{' '}
+                <LifecycleBadge state={lifecycle.backup.verificationStatus} />
+              </div>
+              <div>
+                Last backup:{' '}
+                {formatOptionalTimestamp(lifecycle.backup.lastBackupAt)}
+              </div>
+            </div>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='mb-2 flex items-center justify-between gap-2'>
+              <div className='font-medium'>Restore</div>
+              <LifecycleBadge state={lifecycle.restore.state} />
+            </div>
+            <div className='space-y-1 text-sm text-muted-foreground'>
+              <div>
+                Dry run:{' '}
+                {lifecycle.restore.dryRunRequired ? 'Required' : 'Optional'}
+              </div>
+              <div>
+                Last dry run:{' '}
+                {formatOptionalTimestamp(lifecycle.restore.lastDryRunAt)}
+              </div>
+              <div>
+                Last restore:{' '}
+                {formatOptionalTimestamp(lifecycle.restore.lastRestoreAt)}
+              </div>
+            </div>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='mb-2 flex items-center justify-between gap-2'>
+              <div className='font-medium'>Recovery policy</div>
+              <LifecycleBadge state={lifecycle.recoveryPolicy.state} />
+            </div>
+            <div className='space-y-1 text-sm text-muted-foreground'>
+              <div>
+                Shares: {lifecycle.recoveryPolicy.threshold ?? '?'} of{' '}
+                {lifecycle.recoveryPolicy.shareCount ?? '?'}
+              </div>
+              <div>
+                Material exported:{' '}
+                {lifecycle.recoveryPolicy.materialExported ? 'Yes' : 'No'}
+              </div>
+              <div>
+                Last tested:{' '}
+                {formatOptionalTimestamp(lifecycle.recoveryPolicy.lastTestedAt)}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className='grid gap-3 lg:grid-cols-[1fr_auto]'>
+          <div className='space-y-2'>
+            <div className='font-medium'>Lifecycle guardrails</div>
+            <div className='grid gap-2 text-sm text-muted-foreground md:grid-cols-2'>
+              {lifecycle.warnings.map((warning) => (
+                <div
+                  key={warning}
+                  className='rounded-md border border-dashed p-2'
+                >
+                  {warning}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className='flex flex-wrap items-start gap-2 lg:justify-end'>
+            {lifecycle.actions.map((action) => (
+              <Button
+                key={action.id}
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={!action.enabled}
+                title={action.reason}
+              >
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 type ServiceDetailTab =
   | 'overview'
   | 'dependencies'
@@ -1502,7 +1666,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value='overview' className='mt-0'>
+                  <TabsContent value='overview' className='mt-0 space-y-4'>
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
                       <Card>
                         <CardHeader className='pb-2'>
@@ -1615,6 +1779,11 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                         </CardContent>
                       </Card>
                     </div>
+                    {service.secretsLifecycle ? (
+                      <SecretsLifecyclePanel
+                        lifecycle={service.secretsLifecycle}
+                      />
+                    ) : null}
                   </TabsContent>
 
                   <TabsContent value='dependencies' className='mt-0 space-y-4'>

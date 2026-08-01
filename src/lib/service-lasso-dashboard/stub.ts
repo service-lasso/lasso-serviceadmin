@@ -14,6 +14,7 @@ import type {
   ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
+  ServiceSecretsLifecycleState,
   ServiceSetupRunResult,
   ServiceSetupState,
   ServiceSetupStep,
@@ -109,6 +110,7 @@ type RemoteServiceMeta = {
   name?: string
   favorite?: boolean
   imageUrl?: string
+  secretsLifecycle?: ServiceSecretsLifecycleState
 }
 
 type RemoteServiceUpdate = {
@@ -722,7 +724,7 @@ async function fetchRemoteRecoveryStates(): Promise<
   }
 }
 
-function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
+export function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
   if (serviceMeta.length === 0) return
 
   const remoteMetaById = new Map(
@@ -743,6 +745,7 @@ function applyRemoteServiceMeta(serviceMeta: RemoteServiceMeta[]) {
         ...service.metadata,
         imageUrl: remoteMeta.imageUrl ?? service.metadata.imageUrl,
       },
+      secretsLifecycle: remoteMeta.secretsLifecycle ?? service.secretsLifecycle,
     }
   })
 }
@@ -1538,6 +1541,74 @@ let services: DashboardService[] = [
         },
       },
     ],
+    secretsLifecycle: {
+      serviceId: 'secrets-broker',
+      updatedAt: new Date('2026-04-11T10:18:00+10:00').toISOString(),
+      masterKey: {
+        state: 'ready',
+        source: 'os_keychain',
+        fingerprint: 'sha256:3f1e...9ac2',
+        version: 'mk-2026-04',
+        lastRotatedAt: new Date('2026-03-15T02:00:00+10:00').toISOString(),
+        nextRotationDueAt: new Date('2026-06-15T02:00:00+10:00').toISOString(),
+      },
+      wrapper: {
+        state: 'ready',
+        algorithm: 'xchacha20-poly1305',
+        version: 'v2',
+      },
+      backup: {
+        state: 'attention',
+        destinationPolicy: 'local encrypted archive, operator approved export',
+        latestBackupId: 'backup-20260411-001',
+        lastBackupAt: new Date('2026-04-11T02:05:00+10:00').toISOString(),
+        lastVerifiedAt: new Date('2026-04-11T02:07:00+10:00').toISOString(),
+        verificationStatus: 'verified',
+      },
+      restore: {
+        state: 'dry_run_required',
+        dryRunRequired: true,
+        lastDryRunAt: new Date('2026-04-10T03:12:00+10:00').toISOString(),
+        lastRestoreAt: null,
+      },
+      recoveryPolicy: {
+        state: 'ready',
+        shareCount: 5,
+        threshold: 3,
+        materialExported: false,
+        lastTestedAt: new Date('2026-04-01T09:00:00+10:00').toISOString(),
+      },
+      warnings: [
+        'Restore requires a passing dry run before apply.',
+        'Backup export requires explicit destination approval.',
+      ],
+      actions: [
+        {
+          id: 'create_backup',
+          label: 'Create encrypted backup',
+          enabled: false,
+          reason: 'Waiting for live broker backup endpoint wiring.',
+          requiresConfirmation: true,
+          permissionKey: 'backup.create',
+        },
+        {
+          id: 'restore_dry_run',
+          label: 'Run restore dry run',
+          enabled: false,
+          reason: 'Waiting for live broker restore dry-run endpoint wiring.',
+          requiresConfirmation: true,
+          permissionKey: 'backup.restore',
+        },
+        {
+          id: 'rotate_master_key',
+          label: 'Rotate master key',
+          enabled: false,
+          reason: 'Waiting for live broker key rotation endpoint wiring.',
+          requiresConfirmation: true,
+          permissionKey: 'broker.keys.rotate',
+        },
+      ],
+    },
     updates: {
       ...createEmptyUpdateState('secrets-broker'),
       state: 'installDeferred',

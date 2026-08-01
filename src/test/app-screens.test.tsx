@@ -504,6 +504,23 @@ describe('app screens', () => {
     expect(screen.getByText(/final removal/i)).toBeVisible()
   })
 
+  it('shows safe Secrets Broker lifecycle metadata on service details', async () => {
+    await renderRoute('/services/secrets-broker')
+
+    expect(await screen.findByText('Broker lifecycle')).toBeVisible()
+    expect(screen.getByText('Master key')).toBeVisible()
+    expect(screen.getByText('sha256:3f1e...9ac2')).toBeVisible()
+    expect(screen.getByText('backup-20260411-001')).toBeVisible()
+    expect(screen.getByText('Restore')).toBeVisible()
+    expect(screen.getByText('Recovery policy')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Create encrypted backup/i })
+    ).toBeDisabled()
+    expect(screen.queryByText(/passphrase/i)).toBeNull()
+    expect(screen.queryByText(/decrypted secret/i)).toBeNull()
+    expect(screen.queryByText(/recovery material/i)).toBeNull()
+  })
+
   it('filters, searches, and opens runtime inbox messages', async () => {
     const user = userEvent.setup()
     await renderRoute('/inbox')
