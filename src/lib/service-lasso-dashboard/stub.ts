@@ -14,6 +14,9 @@ import type {
   ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
+  SecretRevealRequest,
+  SecretRevealResult,
+  SecretsManagementState,
   ServiceSetupRunResult,
   ServiceSetupState,
   ServiceSetupStep,
@@ -310,6 +313,46 @@ function createDefaultFirstRunSetupState(): FirstRunSetupState {
 }
 
 let firstRunSetupFixture = createDefaultFirstRunSetupState()
+
+const secretsBrokerServiceId = '@secretsbroker'
+
+const secretsManagementFixture: SecretsManagementState = {
+  serviceId: secretsBrokerServiceId,
+  apiVersion: 'secretsbroker.local/v1',
+  query: '',
+  valueSearch: false,
+  outcome: 'ready',
+  results: [
+    {
+      ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+      name: 'SESSION_SIGNING_KEY',
+      sourceId: 'local',
+      providerKind: 'local-encrypted-store',
+      ownerServiceId: '@serviceadmin',
+      workspaceId: 'local',
+      state: 'present',
+      outcome: 'ready',
+      capabilities: ['metadata', 'reveal', 'edit', 'reset', 'policy'],
+      policy: 'local-writeback-policy',
+      auditStatus: 'audit_available',
+      valueSearch: 'supported',
+    },
+    {
+      ref: 'zitadel/traefik-oidc-auth/client-secret',
+      name: 'client-secret',
+      sourceId: 'vault-auth',
+      providerKind: 'vault',
+      ownerServiceId: '@traefik',
+      workspaceId: 'local',
+      state: 'auth_required',
+      outcome: 'source_auth_required',
+      capabilities: ['metadata'],
+      policy: 'provider-policy',
+      auditStatus: 'audit_unavailable',
+      valueSearch: 'unsupported',
+    },
+  ],
+}
 
 function createEmptyUpdateState(serviceId: string): ServiceUpdateState {
   return {
@@ -2692,6 +2735,99 @@ export async function fetchServiceSetup(serviceId: string) {
     services.find((service) => service.id === serviceId)?.setup ??
       createDemoSetupState(serviceId)
   )
+}
+
+function buildSecretsManagementApiPath(section: string, search?: string) {
+  const path = `/api/services/${encodeURIComponent(secretsBrokerServiceId)}/secrets/${section}`
+  if (!search?.trim()) return path
+  return `${path}?search=${encodeURIComponent(search.trim())}`
+}
+
+export async function fetchSecretsManagementState(search = '') {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<SecretsManagementState>(
+      buildSecretsManagementApiPath('management', search)
+    )
+    return structuredClone(payload)
+  }
+
+  const query = search.trim().toLowerCase()
+  const results = query
+    ? secretsManagementFixture.results.filter((record) =>
+        [
+          record.ref,
+          record.name,
+          record.sourceId,
+          record.providerKind,
+          record.ownerServiceId,
+          record.outcome,
+        ].some((value) => value?.toLowerCase().includes(query))
+      )
+    : secretsManagementFixture.results
+
+  return structuredClone({
+    ...secretsManagementFixture,
+    query: search,
+    results,
+  })
+}
+
+export async function revealManagedSecret(request: SecretRevealRequest) {
+  await wait(120)
+
+  const reason = request.reason.trim()
+  if (!reason) {
+    throw new Error('Audit reason is required before reveal.')
+  }
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<SecretRevealResult>(
+      buildSecretsManagementApiPath('reveal'),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: `service-admin-${Date.now()}`,
+          serviceId: '@serviceadmin',
+          ref: request.ref,
+          reason,
+        }),
+      }
+    )
+    return structuredClone(payload)
+  }
+
+  const record = secretsManagementFixture.results.find(
+    (item) => item.ref === request.ref
+  )
+  if (
+    !record ||
+    record.outcome !== 'ready' ||
+    !record.capabilities.includes('reveal') ||
+    record.auditStatus !== 'audit_available'
+  ) {
+    throw new Error('Secret reveal is not available for this record.')
+  }
+
+  return structuredClone({
+    serviceId: secretsBrokerServiceId,
+    apiVersion: secretsManagementFixture.apiVersion,
+    requestId: `stub-reveal-${Date.now()}`,
+    ref: request.ref,
+    operation: 'reveal',
+    outcome: 'ready',
+    value: 'fixture-revealed-value-425',
+    metadata: {
+      sourceId: record.sourceId,
+      providerKind: record.providerKind,
+    },
+    ttlSeconds: 60,
+    auditStatus: 'audit_recorded',
+  } satisfies SecretRevealResult)
 }
 
 function applyServiceSetupState(serviceId: string, setup: ServiceSetupState) {

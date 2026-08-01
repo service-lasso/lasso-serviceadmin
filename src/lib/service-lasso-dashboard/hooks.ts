@@ -9,8 +9,10 @@ import {
   fetchFirstRunSetupState,
   fetchInboxSummary,
   fetchMcpState,
+  fetchSecretsManagementState,
   fetchServiceSetup,
   fetchServices,
+  revealManagedSecret,
   runDashboardAction,
   runInboxMessageAction,
   runServiceRecoveryDoctorAction,
@@ -22,6 +24,7 @@ import type {
   DashboardService,
   InboxMessageActionKind,
   McpState,
+  SecretRevealRequest,
   ServiceSecurityState,
   ServiceSetupRunResult,
   ServiceUpdateAction,
@@ -110,6 +113,19 @@ export function useMcpState() {
   return useQuery<McpState>({
     queryKey: [...dashboardQueryKey, 'mcp'],
     queryFn: fetchMcpState,
+  })
+}
+
+export function useSecretsManagement(search = '') {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, 'secrets-management', search],
+    queryFn: () => fetchSecretsManagementState(search),
+  })
+}
+
+export function useSecretReveal() {
+  return useMutation({
+    mutationFn: (request: SecretRevealRequest) => revealManagedSecret(request),
   })
 }
 

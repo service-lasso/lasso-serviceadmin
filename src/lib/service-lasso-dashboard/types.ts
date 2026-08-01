@@ -53,6 +53,48 @@ export type ServiceEnvironmentVariable = {
   source?: string
 }
 
+export type SecretManagementRecord = {
+  ref: string
+  name: string
+  sourceId: string
+  providerKind: string
+  ownerServiceId?: string
+  workspaceId?: string
+  state: string
+  outcome: string
+  capabilities: string[]
+  policy?: string
+  auditStatus?: string
+  valueSearch?: string
+}
+
+export type SecretsManagementState = {
+  serviceId: string
+  apiVersion: string
+  query?: string
+  valueSearch: boolean
+  outcome: string
+  results: SecretManagementRecord[]
+}
+
+export type SecretRevealRequest = {
+  ref: string
+  reason: string
+}
+
+export type SecretRevealResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  ref: string
+  operation: 'reveal'
+  outcome: string
+  value: string
+  metadata?: Record<string, string>
+  ttlSeconds: number
+  auditStatus: string
+}
+
 export type ServiceMetadata = {
   serviceType: string
   runtime: string
