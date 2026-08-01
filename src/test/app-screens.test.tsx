@@ -171,6 +171,24 @@ describe('app screens', () => {
     ).toBeVisible()
   })
 
+  it('does not label default operator surfaces as stub data', async () => {
+    const dashboard = await renderRoute('/')
+
+    expect(
+      await screen.findByRole('heading', { name: /^Dashboard$/i })
+    ).toBeVisible()
+    expect(screen.queryByText(/tracked by the stub/i)).toBeNull()
+    expect(screen.queryByText(/dashboard stub/i)).toBeNull()
+    dashboard.unmount()
+
+    await renderRoute('/services/service-admin')
+
+    expect(
+      await screen.findByRole('heading', { name: /^Service Admin UI$/i })
+    ).toBeVisible()
+    expect(screen.queryByText(/current stub/i)).toBeNull()
+  })
+
   it('opens the Add Service source chooser from services', async () => {
     const user = userEvent.setup()
     await renderRoute('/services')

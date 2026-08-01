@@ -451,7 +451,7 @@ export function Dashboard() {
           <SummaryCard
             title='Installed'
             value={String(summary.installedCount)}
-            description='Installed services tracked by the stub'
+            description='Installed services tracked by runtime data'
             icon={PackageOpen}
           />
           <SummaryCard
@@ -497,7 +497,8 @@ export function Dashboard() {
                 Warnings and problem services
               </CardTitle>
               <CardDescription>
-                Current runtime warnings surfaced from the dashboard stub.
+                Current runtime warnings surfaced from Service Lasso runtime
+                data.
               </CardDescription>
             </CardHeader>
             <CardContent>
