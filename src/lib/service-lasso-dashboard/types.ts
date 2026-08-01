@@ -296,6 +296,105 @@ export type ServiceSecurityState = {
   }
 }
 
+export type BrokerProviderReference = {
+  handle: string
+  label: string
+  kind: 'secret' | 'environment' | 'certificate' | 'token' | string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export type BrokerProviderCapability = {
+  key:
+    | 'configure'
+    | 'validate'
+    | 'migration_dry_run'
+    | 'migration_apply'
+    | 'rollback'
+    | string
+  executable: boolean
+  reason?: string | null
+}
+
+export type BrokerProviderConfigStatus =
+  | 'not_configured'
+  | 'configured'
+  | 'valid'
+  | 'invalid'
+  | 'unknown'
+  | string
+
+export type BrokerProviderOption = {
+  id: string
+  name: string
+  status: BrokerProviderConfigStatus
+  lastValidatedAt: string | null
+  capabilities: BrokerProviderCapability[]
+  references: BrokerProviderReference[]
+  recoveryGuidance: string[]
+  warnings: string[]
+}
+
+export type BrokerProviderConfigurationState = {
+  updatedAt: string
+  activeProviderId: string | null
+  providers: BrokerProviderOption[]
+}
+
+export type BrokerProviderValidationRequest = {
+  providerId: string
+  referenceHandles: string[]
+  auditReason: string
+}
+
+export type BrokerProviderValidationResult = {
+  ok: boolean
+  providerId: string
+  validatedAt: string
+  staleAfter: string | null
+  deniedReason: string | null
+  warnings: string[]
+}
+
+export type BrokerMigrationDryRunRequest = {
+  sourceProviderId: string
+  targetProviderId: string
+  referenceHandles: string[]
+  auditReason: string
+}
+
+export type BrokerMigrationRefOutcome = {
+  handle: string
+  status: 'success' | 'skipped' | 'denied' | 'unsupported' | 'failed' | string
+  reason: string | null
+  targetMetadata?: Record<string, string | number | boolean | null>
+}
+
+export type BrokerMigrationPlan = {
+  planId: string
+  sourceProviderId: string
+  targetProviderId: string
+  createdAt: string
+  validationRequiredAt: string | null
+  executable: boolean
+  disabledReason: string | null
+  outcomes: BrokerMigrationRefOutcome[]
+  rollbackGuidance: string[]
+}
+
+export type BrokerMigrationApplyRequest = {
+  planId: string
+  confirmation: true
+  auditReason: string
+}
+
+export type BrokerMigrationApplyResult = {
+  ok: boolean
+  planId: string
+  appliedAt: string
+  outcomes: BrokerMigrationRefOutcome[]
+  rollbackGuidance: string[]
+}
+
 export type McpRole =
   | 'Observer'
   | 'Operator'

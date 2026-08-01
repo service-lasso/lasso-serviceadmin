@@ -1,4 +1,11 @@
 import type {
+  BrokerMigrationApplyRequest,
+  BrokerMigrationApplyResult,
+  BrokerMigrationDryRunRequest,
+  BrokerMigrationPlan,
+  BrokerProviderConfigurationState,
+  BrokerProviderValidationRequest,
+  BrokerProviderValidationResult,
   DashboardAction,
   DashboardService,
   DashboardSummary,
@@ -548,6 +555,70 @@ const securityState: ServiceSecurityState = {
   auditLinks: [
     { label: 'Security changes', url: '/logs?source=security', count: 18 },
     { label: 'Denied actions', url: '/logs?source=denied', count: 4 },
+  ],
+}
+
+const brokerProviderConfigurationState: BrokerProviderConfigurationState = {
+  updatedAt: new Date('2026-04-11T10:32:00+10:00').toISOString(),
+  activeProviderId: 'local-vault',
+  providers: [
+    {
+      id: 'local-vault',
+      name: 'Local vault',
+      status: 'valid',
+      lastValidatedAt: new Date('2026-04-11T10:31:00+10:00').toISOString(),
+      capabilities: [
+        { key: 'configure', executable: true },
+        { key: 'validate', executable: true },
+        { key: 'migration_dry_run', executable: true },
+        { key: 'migration_apply', executable: true },
+        { key: 'rollback', executable: true },
+      ],
+      references: [
+        {
+          handle: 'ref://local/service-admin/session-key',
+          label: 'Service Admin session key',
+          kind: 'secret',
+          metadata: {
+            namespace: 'service-admin',
+            rotates: true,
+          },
+        },
+        {
+          handle: 'ref://local/traefik/tls-cert',
+          label: 'Traefik TLS certificate',
+          kind: 'certificate',
+          metadata: {
+            namespace: 'traefik',
+            expiresSoon: false,
+          },
+        },
+      ],
+      recoveryGuidance: ['Re-run validation before applying migration plans.'],
+      warnings: [],
+    },
+    {
+      id: 'remote-readonly',
+      name: 'Remote read-only provider',
+      status: 'configured',
+      lastValidatedAt: null,
+      capabilities: [
+        { key: 'configure', executable: true },
+        { key: 'validate', executable: true },
+        { key: 'migration_dry_run', executable: true },
+        {
+          key: 'migration_apply',
+          executable: false,
+          reason: 'Remote writes are disabled for this provider.',
+        },
+        { key: 'rollback', executable: false },
+      ],
+      references: [],
+      recoveryGuidance: [
+        'Enable broker-side write capability before applying migrations.',
+      ],
+      warnings: ['Remote writes are disabled.'],
+    },
   ],
 }
 
@@ -2628,6 +2699,164 @@ export async function fetchSecurityState() {
   }
 
   return structuredClone(securityState)
+}
+
+export async function fetchBrokerProviderConfiguration() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{
+      configuration?: BrokerProviderConfigurationState
+    }>('/api/broker/providers/configuration')
+
+    if (!payload.configuration) {
+      throw new RuntimeApiUnavailableError({
+        mode: resolveRuntimeApiMode(),
+        path: '/api/broker/providers/configuration',
+        endpoint:
+          serviceLassoApiBaseUrl == null
+            ? null
+            : buildRuntimeEndpoint(
+                '/api/broker/providers/configuration',
+                serviceLassoApiBaseUrl
+              ),
+        status: 200,
+        contentType: 'application/json',
+        packagedProxyConfigured:
+          resolveRuntimeApiMode() === 'packaged-runtime' &&
+          serviceLassoApiBaseUrl === '',
+        reason: 'non_json',
+      })
+    }
+
+    return structuredClone(payload.configuration)
+  }
+
+  return structuredClone(brokerProviderConfigurationState)
+}
+
+export async function runBrokerProviderValidation(
+  request: BrokerProviderValidationRequest
+) {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    return fetchRuntimeJson<BrokerProviderValidationResult>(
+      `/api/broker/providers/${encodeURIComponent(request.providerId)}/validate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          referenceHandles: request.referenceHandles,
+          auditReason: request.auditReason,
+        }),
+      }
+    )
+  }
+
+  return structuredClone({
+    ok: true,
+    providerId: request.providerId,
+    validatedAt: new Date().toISOString(),
+    staleAfter: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    deniedReason: null,
+    warnings: [],
+  } satisfies BrokerProviderValidationResult)
+}
+
+export async function runBrokerMigrationDryRun(
+  request: BrokerMigrationDryRunRequest
+) {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    return fetchRuntimeJson<BrokerMigrationPlan>(
+      '/api/broker/migrations/dry-run',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      }
+    )
+  }
+
+  const targetProvider = brokerProviderConfigurationState.providers.find(
+    (provider) => provider.id === request.targetProviderId
+  )
+  const applyCapability = targetProvider?.capabilities.find(
+    (capability) => capability.key === 'migration_apply'
+  )
+  const executable = applyCapability?.executable === true
+
+  return structuredClone({
+    planId: `plan-${Date.now()}`,
+    sourceProviderId: request.sourceProviderId,
+    targetProviderId: request.targetProviderId,
+    createdAt: new Date().toISOString(),
+    validationRequiredAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    executable,
+    disabledReason: executable
+      ? null
+      : (applyCapability?.reason ?? 'Target provider cannot apply migrations.'),
+    outcomes: request.referenceHandles.map((handle) => ({
+      handle,
+      status: executable ? 'success' : 'unsupported',
+      reason: executable ? null : 'Target provider does not support writes.',
+      targetMetadata: {
+        providerId: request.targetProviderId,
+      },
+    })),
+    rollbackGuidance: targetProvider?.recoveryGuidance ?? [],
+  } satisfies BrokerMigrationPlan)
+}
+
+export function canApplyBrokerMigrationPlan(
+  plan: BrokerMigrationPlan,
+  validation: BrokerProviderValidationResult | null,
+  now = new Date()
+) {
+  if (!plan.executable || plan.disabledReason) return false
+  if (!validation?.ok || validation.providerId !== plan.targetProviderId) {
+    return false
+  }
+  if (!validation.staleAfter) return false
+  return Date.parse(validation.staleAfter) > now.getTime()
+}
+
+export async function runBrokerMigrationApply(
+  request: BrokerMigrationApplyRequest
+) {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    return fetchRuntimeJson<BrokerMigrationApplyResult>(
+      `/api/broker/migrations/${encodeURIComponent(request.planId)}/apply`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          confirmation: request.confirmation,
+          auditReason: request.auditReason,
+        }),
+      }
+    )
+  }
+
+  return structuredClone({
+    ok: true,
+    planId: request.planId,
+    appliedAt: new Date().toISOString(),
+    outcomes: [],
+    rollbackGuidance: [
+      'Use broker audit metadata to restore the previous reference mapping.',
+    ],
+  } satisfies BrokerMigrationApplyResult)
 }
 
 export async function fetchMcpState() {

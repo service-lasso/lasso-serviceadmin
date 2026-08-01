@@ -3,14 +3,18 @@ import {
   acknowledgeFirstRunVaultKey,
   buildStubServiceLogUrl,
   favoritesMutationEnabled,
+  fetchBrokerProviderConfiguration,
   fetchDashboardService,
   fetchDashboardSummary,
-  fetchSecurityState,
   fetchFirstRunSetupState,
   fetchInboxSummary,
   fetchMcpState,
+  fetchSecurityState,
   fetchServiceSetup,
   fetchServices,
+  runBrokerMigrationApply,
+  runBrokerMigrationDryRun,
+  runBrokerProviderValidation,
   runDashboardAction,
   runInboxMessageAction,
   runServiceRecoveryDoctorAction,
@@ -18,6 +22,9 @@ import {
   runServiceUpdateAction,
 } from './stub'
 import type {
+  BrokerMigrationApplyRequest,
+  BrokerMigrationDryRunRequest,
+  BrokerProviderValidationRequest,
   DashboardAction,
   DashboardService,
   InboxMessageActionKind,
@@ -30,6 +37,9 @@ import type {
 const dashboardQueryKey = ['service-lasso-dashboard']
 const inboxQueryKey = ['service-lasso-inbox']
 const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
+const brokerProviderConfigurationQueryKey = [
+  'service-lasso-broker-provider-configuration',
+]
 
 export function useDashboardSummary() {
   return useQuery({
@@ -103,6 +113,56 @@ export function useSecurityState() {
   return useQuery<ServiceSecurityState>({
     queryKey: [...dashboardQueryKey, 'security'],
     queryFn: fetchSecurityState,
+  })
+}
+
+export function useBrokerProviderConfiguration() {
+  return useQuery({
+    queryKey: brokerProviderConfigurationQueryKey,
+    queryFn: fetchBrokerProviderConfiguration,
+  })
+}
+
+export function useBrokerProviderValidation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: BrokerProviderValidationRequest) =>
+      runBrokerProviderValidation(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: brokerProviderConfigurationQueryKey,
+      })
+    },
+  })
+}
+
+export function useBrokerMigrationDryRun() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: BrokerMigrationDryRunRequest) =>
+      runBrokerMigrationDryRun(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: brokerProviderConfigurationQueryKey,
+      })
+    },
+  })
+}
+
+export function useBrokerMigrationApply() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: BrokerMigrationApplyRequest) =>
+      runBrokerMigrationApply(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: brokerProviderConfigurationQueryKey,
+      })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    },
   })
 }
 
