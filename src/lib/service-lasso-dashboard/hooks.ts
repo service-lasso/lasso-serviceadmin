@@ -8,6 +8,7 @@ import {
   fetchSecurityState,
   fetchFirstRunSetupState,
   fetchInboxSummary,
+  fetchMcpState,
   fetchServiceSetup,
   fetchServices,
   runDashboardAction,
@@ -20,6 +21,7 @@ import type {
   DashboardAction,
   DashboardService,
   InboxMessageActionKind,
+  McpState,
   ServiceSecurityState,
   ServiceSetupRunResult,
   ServiceUpdateAction,
@@ -101,6 +103,13 @@ export function useSecurityState() {
   return useQuery<ServiceSecurityState>({
     queryKey: [...dashboardQueryKey, 'security'],
     queryFn: fetchSecurityState,
+  })
+}
+
+export function useMcpState() {
+  return useQuery<McpState>({
+    queryKey: [...dashboardQueryKey, 'mcp'],
+    queryFn: fetchMcpState,
   })
 }
 

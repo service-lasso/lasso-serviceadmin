@@ -33,6 +33,7 @@ import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
 import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authenticated/runtime/index'
 import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
+import { Route as AuthenticatedMcpIndexRouteImport } from './routes/_authenticated/mcp/index'
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
 import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authenticated/installed/index'
 import { Route as AuthenticatedInboxIndexRouteImport } from './routes/_authenticated/inbox/index'
@@ -174,6 +175,11 @@ const AuthenticatedNetworkIndexRoute =
     path: '/network/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMcpIndexRoute = AuthenticatedMcpIndexRouteImport.update({
+  id: '/mcp/',
+  path: '/mcp/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedLogsIndexRoute = AuthenticatedLogsIndexRouteImport.update({
   id: '/logs/',
   path: '/logs/',
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/inbox/': typeof AuthenticatedInboxIndexRoute
   '/installed/': typeof AuthenticatedInstalledIndexRoute
   '/logs/': typeof AuthenticatedLogsIndexRoute
+  '/mcp/': typeof AuthenticatedMcpIndexRoute
   '/network/': typeof AuthenticatedNetworkIndexRoute
   '/runtime/': typeof AuthenticatedRuntimeIndexRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
@@ -333,6 +340,7 @@ export interface FileRoutesByTo {
   '/inbox': typeof AuthenticatedInboxIndexRoute
   '/installed': typeof AuthenticatedInstalledIndexRoute
   '/logs': typeof AuthenticatedLogsIndexRoute
+  '/mcp': typeof AuthenticatedMcpIndexRoute
   '/network': typeof AuthenticatedNetworkIndexRoute
   '/runtime': typeof AuthenticatedRuntimeIndexRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
@@ -376,6 +384,7 @@ export interface FileRoutesById {
   '/_authenticated/inbox/': typeof AuthenticatedInboxIndexRoute
   '/_authenticated/installed/': typeof AuthenticatedInstalledIndexRoute
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
+  '/_authenticated/mcp/': typeof AuthenticatedMcpIndexRoute
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
   '/_authenticated/runtime/': typeof AuthenticatedRuntimeIndexRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
@@ -417,6 +426,7 @@ export interface FileRouteTypes {
     | '/inbox/'
     | '/installed/'
     | '/logs/'
+    | '/mcp/'
     | '/network/'
     | '/runtime/'
     | '/security/'
@@ -455,6 +465,7 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/installed'
     | '/logs'
+    | '/mcp'
     | '/network'
     | '/runtime'
     | '/security'
@@ -497,6 +508,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inbox/'
     | '/_authenticated/installed/'
     | '/_authenticated/logs/'
+    | '/_authenticated/mcp/'
     | '/_authenticated/network/'
     | '/_authenticated/runtime/'
     | '/_authenticated/security/'
@@ -692,6 +704,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNetworkIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/mcp/': {
+      id: '/_authenticated/mcp/'
+      path: '/mcp'
+      fullPath: '/mcp/'
+      preLoaderRoute: typeof AuthenticatedMcpIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/logs/': {
       id: '/_authenticated/logs/'
       path: '/logs'
@@ -842,6 +861,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedInboxIndexRoute: typeof AuthenticatedInboxIndexRoute
   AuthenticatedInstalledIndexRoute: typeof AuthenticatedInstalledIndexRoute
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
+  AuthenticatedMcpIndexRoute: typeof AuthenticatedMcpIndexRoute
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
   AuthenticatedRuntimeIndexRoute: typeof AuthenticatedRuntimeIndexRoute
   AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
@@ -863,6 +883,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedInboxIndexRoute: AuthenticatedInboxIndexRoute,
   AuthenticatedInstalledIndexRoute: AuthenticatedInstalledIndexRoute,
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
+  AuthenticatedMcpIndexRoute: AuthenticatedMcpIndexRoute,
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,
   AuthenticatedRuntimeIndexRoute: AuthenticatedRuntimeIndexRoute,
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
