@@ -10,6 +10,7 @@ import type {
   InboxMessageActionKind,
   InboxMessageActionResult,
   InboxSummary,
+  McpState,
   ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
@@ -547,6 +548,131 @@ const securityState: ServiceSecurityState = {
   auditLinks: [
     { label: 'Security changes', url: '/logs?source=security', count: 18 },
     { label: 'Denied actions', url: '/logs?source=denied', count: 4 },
+  ],
+}
+
+const mcpState: McpState = {
+  updatedAt: new Date('2026-04-11T10:28:00+10:00').toISOString(),
+  enabled: true,
+  health: 'warning',
+  protocolVersion: '2025-06-18',
+  sdkVersion: 'service-lasso-mcp 0.4.0',
+  transports: ['stdio', 'streamable-http'],
+  operatingMode: 'guarded',
+  canonicalEndpoint: 'http://127.0.0.1:17883/mcp',
+  stdioCommand: 'service-lasso mcp serve --transport stdio',
+  lastSelfCheckAt: new Date('2026-04-11T10:27:40+10:00').toISOString(),
+  lastError: 'Remote transport requires explicit operator enablement.',
+  exposure: {
+    loopback: true,
+    lan: false,
+    remote: false,
+  },
+  identityProvider: {
+    name: 'Zitadel',
+    discoveryStatus: 'available',
+    issuer: 'https://identity.service-lasso.local',
+  },
+  allowedOrigins: ['http://127.0.0.1:17700', 'http://localhost:17700'],
+  rateLimit: {
+    limit: 120,
+    windowSeconds: 60,
+    remaining: 84,
+  },
+  permissions: [
+    {
+      role: 'Observer',
+      mode: 'read-only',
+      scopes: ['mcp.read', 'audit.read'],
+    },
+    {
+      role: 'Operator',
+      mode: 'guarded',
+      scopes: ['mcp.read', 'mcp.actions.request', 'audit.read'],
+    },
+    {
+      role: 'Maintainer',
+      mode: 'guarded',
+      scopes: [
+        'mcp.read',
+        'mcp.actions.request',
+        'mcp.confirmations.resolve',
+        'audit.read',
+      ],
+    },
+    {
+      role: 'Administrator',
+      mode: 'administrator',
+      scopes: [
+        'mcp.read',
+        'mcp.configure',
+        'mcp.confirmations.resolve',
+        'security.manage',
+        'audit.read',
+      ],
+    },
+  ],
+  clients: [
+    {
+      id: 'client-inspector-local',
+      name: 'MCP Inspector',
+      transport: 'streamable-http',
+      actor: 'local-root',
+      lastSeenAt: new Date('2026-04-11T10:26:12+10:00').toISOString(),
+      remoteAddress: '127.0.0.1',
+    },
+    {
+      id: 'client-cli-stdio',
+      name: 'Service Lasso CLI',
+      transport: 'stdio',
+      actor: 'service-account:mcp-cli',
+      lastSeenAt: new Date('2026-04-11T10:18:35+10:00').toISOString(),
+      remoteAddress: null,
+    },
+  ],
+  operations: [
+    {
+      id: 'op-health-sweep',
+      tool: 'service.health.list',
+      actor: 'local-root',
+      clientId: 'client-inspector-local',
+      status: 'succeeded',
+      startedAt: new Date('2026-04-11T10:24:02+10:00').toISOString(),
+      correlationId: 'corr-mcp-health-sweep',
+    },
+    {
+      id: 'op-service-restart',
+      tool: 'service.restart',
+      actor: 'service-account:mcp-cli',
+      clientId: 'client-cli-stdio',
+      status: 'running',
+      startedAt: new Date('2026-04-11T10:27:15+10:00').toISOString(),
+      correlationId: 'corr-mcp-restart-review',
+    },
+  ],
+  confirmations: [
+    {
+      id: 'confirm-router-restart',
+      actor: 'service-account:mcp-cli',
+      tool: 'service.restart',
+      target: 'traefik',
+      parameterSummary: 'Restart request for the Traefik service only.',
+      risk: 'high',
+      status: 'pending',
+      expiresAt: new Date('2026-04-11T10:37:15+10:00').toISOString(),
+      correlationId: 'corr-mcp-restart-review',
+      canApprove: true,
+      canDeny: true,
+    },
+  ],
+  auditLinks: [
+    { label: 'MCP tool calls', url: '/logs?source=mcp', count: 21 },
+    { label: 'MCP denials', url: '/logs?source=mcp&outcome=denied', count: 3 },
+    {
+      label: 'MCP confirmations',
+      url: '/logs?source=mcp&event=confirmation',
+      count: 5,
+    },
   ],
 }
 
@@ -2502,6 +2628,36 @@ export async function fetchSecurityState() {
   }
 
   return structuredClone(securityState)
+}
+
+export async function fetchMcpState() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    const payload = await fetchRuntimeJson<{
+      mcp?: McpState
+    }>('/api/mcp')
+    if (!payload.mcp) {
+      throw new RuntimeApiUnavailableError({
+        mode: resolveRuntimeApiMode(),
+        path: '/api/mcp',
+        endpoint:
+          serviceLassoApiBaseUrl == null
+            ? null
+            : buildRuntimeEndpoint('/api/mcp', serviceLassoApiBaseUrl),
+        status: 200,
+        contentType: 'application/json',
+        packagedProxyConfigured:
+          resolveRuntimeApiMode() === 'packaged-runtime' &&
+          serviceLassoApiBaseUrl === '',
+        reason: 'non_json',
+      })
+    }
+
+    return structuredClone(payload.mcp)
+  }
+
+  return structuredClone(mcpState)
 }
 
 export async function fetchDashboardService(serviceId: string) {

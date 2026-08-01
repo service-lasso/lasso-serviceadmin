@@ -64,6 +64,11 @@ export const sidebarData: SidebarData = {
           icon: TimerReset,
         },
         {
+          title: 'MCP',
+          url: '/mcp',
+          icon: Command,
+        },
+        {
           title: 'Installed',
           url: '/installed',
           icon: HardDrive,

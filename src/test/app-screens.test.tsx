@@ -45,6 +45,11 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Runtime',
   },
   {
+    path: '/mcp',
+    heading: /^MCP$/i,
+    title: 'Service Admin - MCP',
+  },
+  {
     path: '/installed',
     heading: /^Installed$/i,
     title: 'Service Admin - Installed',
@@ -460,6 +465,27 @@ describe('app screens', () => {
 
     expect(screen.getAllByText('Critical').length).toBeGreaterThan(0)
     expect(screen.getByText('Zitadel, Generic OIDC')).toBeVisible()
+  })
+
+  it('shows MCP settings, permissions, approvals, and safe diagnostics', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/mcp')
+
+    expect(await screen.findByText(/streamable-http/i)).toBeVisible()
+    expect(screen.getByText('service-lasso-mcp 0.4.0')).toBeVisible()
+    expect(screen.getByText('Administrator')).toBeVisible()
+    expect(
+      screen.getAllByText('mcp.confirmations.resolve').length
+    ).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('tab', { name: /Approvals/i }))
+
+    expect(screen.getByText('service.restart · traefik')).toBeVisible()
+    expect(
+      screen.getByText(/Restart request for the Traefik service/i)
+    ).toBeVisible()
+    expect(screen.queryByText(/bearer/i)).toBeNull()
+    expect(screen.queryByText(/client secret/i)).toBeNull()
   })
 
   it('shows scoped service access grants on service details', async () => {

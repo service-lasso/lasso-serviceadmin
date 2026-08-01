@@ -296,6 +296,100 @@ export type ServiceSecurityState = {
   }
 }
 
+export type McpRole =
+  | 'Observer'
+  | 'Operator'
+  | 'Maintainer'
+  | 'Administrator'
+  | string
+
+export type McpTransport = 'stdio' | 'streamable-http' | 'sse' | string
+
+export type McpExposureState = {
+  loopback: boolean
+  lan: boolean
+  remote: boolean
+}
+
+export type McpIdentityProvider = {
+  name: string
+  discoveryStatus: 'available' | 'unavailable' | 'not_configured' | string
+  issuer?: string | null
+}
+
+export type McpRolePermission = {
+  role: McpRole
+  mode: 'read-only' | 'guarded' | 'administrator' | 'denied' | string
+  scopes: string[]
+  deniedReason?: string | null
+}
+
+export type McpClient = {
+  id: string
+  name: string
+  transport: McpTransport
+  actor: string
+  lastSeenAt: string
+  remoteAddress?: string | null
+}
+
+export type McpOperation = {
+  id: string
+  tool: string
+  actor: string
+  clientId: string
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | string
+  startedAt: string
+  correlationId: string
+}
+
+export type McpConfirmation = {
+  id: string
+  actor: string
+  tool: string
+  target: string
+  parameterSummary: string
+  risk: SecurityPermissionRisk
+  status: 'pending' | 'approved' | 'denied' | 'expired' | string
+  expiresAt: string
+  correlationId: string
+  canApprove: boolean
+  canDeny: boolean
+}
+
+export type McpAuditLink = {
+  label: string
+  url: string
+  count: number
+}
+
+export type McpState = {
+  updatedAt: string
+  enabled: boolean
+  health: 'healthy' | 'warning' | 'critical' | 'unknown' | string
+  protocolVersion: string
+  sdkVersion: string
+  transports: McpTransport[]
+  operatingMode: 'read-only' | 'guarded' | 'administrator' | string
+  canonicalEndpoint: string
+  stdioCommand: string
+  lastSelfCheckAt: string | null
+  lastError: string | null
+  exposure: McpExposureState
+  identityProvider: McpIdentityProvider
+  allowedOrigins: string[]
+  rateLimit: {
+    limit: number
+    windowSeconds: number
+    remaining: number
+  } | null
+  permissions: McpRolePermission[]
+  clients: McpClient[]
+  operations: McpOperation[]
+  confirmations: McpConfirmation[]
+  auditLinks: McpAuditLink[]
+}
+
 export type ServicePermissionScope = {
   kind:
     | 'runtime'
