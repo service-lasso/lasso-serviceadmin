@@ -147,7 +147,7 @@ Go to the project directory
 Install dependencies
 
 ```bash
-  pnpm install
+  pnpm install --frozen-lockfile
 ```
 
 Start the server
