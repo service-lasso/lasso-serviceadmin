@@ -282,6 +282,93 @@ export type SecurityAuditLink = {
   count: number
 }
 
+export type SecretRotationImpactServiceAction =
+  | 'restart'
+  | 'reload'
+  | 'action'
+  | 'manual'
+  | 'none'
+
+export type SecretRotationReadinessState =
+  | 'ready'
+  | 'blocked'
+  | 'unsupported'
+  | 'requires_auth'
+  | 'denied'
+  | 'unavailable'
+
+export type SecretRotationServiceImpact = {
+  serviceId: string
+  serviceName: string
+  relation: 'direct' | 'dependent'
+  action: SecretRotationImpactServiceAction
+  actionLabel: string
+  order: number
+  rematerializeConfig: boolean
+  expectedHealthChecks: string[]
+  manualBlockers: string[]
+  estimatedDisruption: string
+  serviceHref: string
+  logsHref: string
+}
+
+export type SecretRotationImpactPlan = {
+  id: string
+  ref: string
+  planRevision: string
+  provider: string
+  store: string
+  capabilityStatus: SecretRotationReadinessState
+  authStatus: SecretRotationReadinessState
+  policyStatus: SecretRotationReadinessState
+  auditStatus: SecretRotationReadinessState
+  contractVersion: string
+  contractCompatible: boolean
+  applySupported: boolean
+  currentVersion: {
+    id: string
+    createdAt: string
+    activatedAt: string
+  }
+  candidateVersion: {
+    id: string
+    createdAt: string
+    stagedBy: string
+  }
+  services: SecretRotationServiceImpact[]
+  rollbackAvailable: boolean
+  rollbackReason: string
+  blockedReasons: string[]
+}
+
+export type SecretRotationOperationPhase =
+  | 'preflight'
+  | 'staged'
+  | 'activated'
+  | 'rematerialising'
+  | 'restarting'
+  | 'reloading'
+  | 'verifying'
+  | 'committed'
+  | 'rolling_back'
+  | 'rolled_back'
+  | 'failed'
+
+export type SecretRotationOperation = {
+  id: string
+  planId: string
+  phase: SecretRotationOperationPhase
+  phaseLabel: string
+  updatedAt: string
+  safeNextAction: string
+  rollbackAllowed: boolean
+}
+
+export type SecretRotationState = {
+  plans: SecretRotationImpactPlan[]
+  operations: SecretRotationOperation[]
+}
+
 export type ServiceSecurityState = {
   updatedAt: string
   currentActor: string
@@ -290,6 +377,7 @@ export type ServiceSecurityState = {
   actorAssignments: SecurityActorAssignment[]
   providerMappings: SecurityProviderMapping[]
   auditLinks: SecurityAuditLink[]
+  secretRotation?: SecretRotationState
   safety: {
     lastOwnerProtected: boolean
     selfSecurityAccessProtected: boolean
