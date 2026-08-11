@@ -28,9 +28,26 @@
       "description": "Stop the Secrets Broker gracefully."
     }
   },
+  "endpoints": [
+    {
+      "id": "api",
+      "kind": "network",
+      "label": "Broker API",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 8083,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    }
+  ],
   "execconfig": {
     "serviceorder": 35,
-    "serviceport": 8083,
     "execcwd": ".",
     "executable": "secrets-broker",
     "env": {
