@@ -38,7 +38,7 @@ Simple values are strings, and path-list values such as `PATH` can be arrays:
 ```json
 "env": {
   "APP_MODE": "local",
-  "SERVICE_URL": "http://127.0.0.1:${SERVICE_PORT}/",
+  "SERVICE_URL": "http://127.0.0.1:${endpoint.web.port}/",
   "PATH": [
     "${SERVICE_ROOT}/bin",
     "${NODE_HOME}"
@@ -49,6 +49,10 @@ Simple values are strings, and path-list values such as `PATH` can be arrays:
 Array entries are resolved, then joined with the runtime platform path
 delimiter before the process starts. Use provider-exported variables such as
 `NODE_HOME` only after declaring the provider dependency that supplies them.
+
+Declare concrete service interfaces in `endpoints[]` and refer to them by name
+from `env`, health checks, and generated config. Keep variables outside
+endpoint entries.
 
 ## 4) Add health checks
 

@@ -31,9 +31,26 @@
       "description": "Restart Traefik after config changes."
     }
   },
+  "endpoints": [
+    {
+      "id": "web",
+      "kind": "network",
+      "label": "HTTP ingress",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 80,
+        "strategy": "preferred"
+      },
+      "exposure": "lan",
+      "required": true,
+      "primary": true
+    }
+  ],
   "execconfig": {
     "serviceorder": 10,
-    "serviceport": 80,
     "execcwd": ".",
     "executable": "traefik",
     "args": [

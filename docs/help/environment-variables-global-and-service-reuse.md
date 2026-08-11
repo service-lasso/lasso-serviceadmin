@@ -9,7 +9,7 @@ always a string map.
 
 - `env`: service-local values for one service or one action
 - `globalenv`: compatibility values shared with other services
-- derived: runtime-created values such as `SERVICE_ROOT` and `SERVICE_PORT`
+- derived: runtime-created values such as `SERVICE_ROOT`
 - broker: explicit dotted selectors such as `${database.PASSWORD}`
 
 ## Value shapes
@@ -19,7 +19,7 @@ Use strings for ordinary variables:
 ```json
 "env": {
   "APP_MODE": "local",
-  "SERVICE_URL": "http://127.0.0.1:${SERVICE_PORT}/"
+  "SERVICE_URL": "http://127.0.0.1:${endpoint.web.port}/"
 }
 ```
 
@@ -44,14 +44,16 @@ on macOS/Linux.
 
 Selectors use `${...}` inside string values and string-array entries.
 
-- `${SERVICE_PORT}` resolves from the service's resolved port. The canonical
-  service port is emitted as `SERVICE_PORT`.
 - `${SERVICE_ROOT}` resolves to the service package root.
 - `${SERVICE_PATH}` is a compatibility alias for `SERVICE_ROOT`.
 - `${SERVICE_STATE_ROOT}` resolves to the service runtime state root.
 - `${SERVICE_DATA_PATH}` resolves to the service-local `data` directory.
 - `${endpoint.<id>.<field>}` resolves from canonical endpoint metadata.
 - `${namespace.KEY}` resolves only through declared Secrets Broker policy.
+
+`${SERVICE_PORT}` remains a compatibility alias for legacy single-port
+manifests. New authoring should reference the named endpoint directly, for
+example `${endpoint.web.port}`.
 
 Bare selectors such as `${API_KEY}` are local selectors only. They do not fall
 back into broker namespaces. Broker references must stay dotted so access is

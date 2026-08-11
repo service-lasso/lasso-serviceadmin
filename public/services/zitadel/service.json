@@ -28,9 +28,26 @@
       "description": "Stop the ZITADEL identity service gracefully."
     }
   },
+  "endpoints": [
+    {
+      "id": "web",
+      "kind": "network",
+      "label": "Identity UI",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 8081,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    }
+  ],
   "execconfig": {
     "serviceorder": 30,
-    "serviceport": 8081,
     "execcwd": ".",
     "executable": "zitadel",
     "env": {

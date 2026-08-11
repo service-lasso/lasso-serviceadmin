@@ -28,9 +28,26 @@
       "description": "Stop the Service Admin UI gracefully."
     }
   },
+  "endpoints": [
+    {
+      "id": "web",
+      "kind": "network",
+      "label": "Web UI",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 17700,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    }
+  ],
   "execconfig": {
     "serviceorder": 100,
-    "serviceport": 17700,
     "execcwd": ".",
     "executable": "service-admin",
     "env": {

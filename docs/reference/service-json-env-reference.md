@@ -11,7 +11,7 @@ non-empty strings.
 ```json
 "env": {
   "SIMPLE_VALUE": "hello",
-  "SERVICE_URL": "http://127.0.0.1:${SERVICE_PORT}/",
+  "SERVICE_URL": "http://127.0.0.1:${endpoint.web.port}/",
   "PATH": [
     "${PYTHON_HOME}",
     "${NODE_HOME}",
@@ -35,7 +35,6 @@ Common local selectors:
 | Selector | Meaning |
 | --- | --- |
 | `SERVICE_ID` | Service manifest id |
-| `SERVICE_PORT` | Resolved canonical service port |
 | `SERVICE_ROOT` | Canonical service package root |
 | `SERVICE_PATH` | Compatibility alias for `SERVICE_ROOT` |
 | `SERVICE_STATE_ROOT` | Runtime state root for the service |
@@ -46,6 +45,10 @@ Common local selectors:
 
 Endpoint selectors use `endpoint.<id>.<field>`, for example
 `${endpoint.web.port}`.
+
+`SERVICE_PORT` remains a compatibility alias for older single-port manifests.
+New service authoring should prefer `${endpoint.<id>.port}` so the referenced
+interface stays explicit when a service grows beyond one listener.
 
 Secrets Broker selectors must be dotted, for example `${database.PASSWORD}`.
 Bare selectors such as `${PASSWORD}` are local selectors only. They never fall
@@ -133,6 +136,8 @@ every service. The provider that owns the runtime must export them.
 - Keep ordinary service values in `env`.
 - Keep shared tool paths in provider-owned `globalenv`.
 - Use `SERVICE_ROOT` in new examples; keep `SERVICE_PATH` only for compatibility.
+- Use endpoint selectors such as `${endpoint.web.port}` instead of
+  `${SERVICE_PORT}` in new examples.
 - Use `/` in manifest examples unless a Windows-only command requires `\\`.
 - Use arrays for path-list values instead of hard-coding `;` or `:`.
 - Do not rely on uncontrolled host environment leakage.
