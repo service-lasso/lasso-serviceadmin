@@ -32,6 +32,24 @@ In `service.json`, define the service identity and runtime basics:
 
 Provide start/stop/restart-compatible execution details so the manager can control lifecycle.
 
+Add service-local `env` values when the process needs runtime configuration.
+Simple values are strings, and path-list values such as `PATH` can be arrays:
+
+```json
+"env": {
+  "APP_MODE": "local",
+  "SERVICE_URL": "http://127.0.0.1:${SERVICE_PORT}/",
+  "PATH": [
+    "${SERVICE_ROOT}/bin",
+    "${NODE_HOME}"
+  ]
+}
+```
+
+Array entries are resolved, then joined with the runtime platform path
+delimiter before the process starts. Use provider-exported variables such as
+`NODE_HOME` only after declaring the provider dependency that supplies them.
+
 ## 4) Add health checks
 
 Use one or more health checks so the service can report healthy/warning/critical status.
