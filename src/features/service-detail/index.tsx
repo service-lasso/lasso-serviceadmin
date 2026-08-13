@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Copy,
+  Eye,
+  EyeOff,
   ExternalLink,
   HeartPulse,
   Link2,
@@ -38,6 +40,8 @@ import {
 } from '@/lib/service-graph'
 import {
   useDashboardService,
+  useSecretReveal,
+  useSecretsManagement,
   useServiceSetup,
   useServiceSetupAction,
   useServiceUpdateAction,
@@ -51,6 +55,8 @@ import type {
   ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
   ServicePermissionGrant,
+  SecretManagementRecord,
+  SecretRevealResult,
   ServiceSetupState,
   ServiceSetupStep,
   ServiceStatus,
@@ -65,6 +71,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -76,6 +91,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
@@ -772,6 +788,305 @@ function EnvironmentTable({
   )
 }
 
+function isSecretsBrokerService(serviceId: string) {
+  return serviceId === 'secrets-broker' || serviceId === '@secretsbroker'
+}
+
+function canRevealSecret(record: SecretManagementRecord) {
+  return (
+    record.outcome === 'ready' &&
+    record.capabilities.includes('reveal') &&
+    record.auditStatus === 'audit_available'
+  )
+}
+
+function SecretOutcomeBadge({ outcome }: { outcome: string }) {
+  if (outcome === 'ready') {
+    return <Badge className='bg-emerald-600 hover:bg-emerald-600'>ready</Badge>
+  }
+
+  if (
+    outcome === 'policy_denied' ||
+    outcome === 'source_auth_required' ||
+    outcome === 'locked' ||
+    outcome === 'audit_unavailable'
+  ) {
+    return <Badge variant='destructive'>{outcome}</Badge>
+  }
+
+  return <Badge variant='secondary'>{outcome}</Badge>
+}
+
+function SecretsBrokerSecretsPanel() {
+  const secretsQuery = useSecretsManagement()
+  const revealSecret = useSecretReveal()
+  const [selectedSecret, setSelectedSecret] =
+    useState<SecretManagementRecord | null>(null)
+  const [auditReason, setAuditReason] = useState('')
+  const [revealedSecret, setRevealedSecret] = useState<{
+    result: SecretRevealResult
+    expiresAt: number
+  } | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!revealedSecret) return
+
+    const timeout = window.setTimeout(
+      () => {
+        setRevealedSecret(null)
+      },
+      Math.max(1, revealedSecret.result.ttlSeconds) * 1000
+    )
+
+    return () => window.clearTimeout(timeout)
+  }, [revealedSecret])
+
+  const openReveal = (record: SecretManagementRecord) => {
+    setSelectedSecret(record)
+    setAuditReason('')
+    setRevealedSecret(null)
+    setLocalError(null)
+  }
+
+  const closeReveal = (open: boolean) => {
+    if (open) return
+    setSelectedSecret(null)
+    setAuditReason('')
+    setRevealedSecret(null)
+    setLocalError(null)
+  }
+
+  const runReveal = async () => {
+    if (!selectedSecret) return
+
+    const reason = auditReason.trim()
+    if (!reason) {
+      setLocalError('Audit reason is required before reveal.')
+      setRevealedSecret(null)
+      return
+    }
+
+    setLocalError(null)
+    try {
+      const result = await revealSecret.mutateAsync({
+        ref: selectedSecret.ref,
+        reason,
+      })
+      setRevealedSecret({
+        result,
+        expiresAt: Date.now() + Math.max(1, result.ttlSeconds) * 1000,
+      })
+    } catch (error) {
+      setRevealedSecret(null)
+      setLocalError(
+        error instanceof Error ? error.message : 'Secret reveal failed.'
+      )
+    }
+  }
+
+  if (secretsQuery.isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Managed secrets</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className='h-32 w-full' />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (secretsQuery.isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Managed secrets</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className='rounded-md border border-dashed p-4 text-sm text-muted-foreground'>
+            Secrets Broker management is unavailable.
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const records = secretsQuery.data?.results ?? []
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Managed secrets</CardTitle>
+          <CardDescription>
+            Metadata, capability state, and explicit reveal actions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className='overflow-x-auto rounded-md border'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ref</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>State</TableHead>
+                  <TableHead>Capabilities</TableHead>
+                  <TableHead>Policy</TableHead>
+                  <TableHead>Audit</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records.length ? (
+                  records.map((record) => (
+                    <TableRow key={record.ref}>
+                      <TableCell className='max-w-[320px] font-mono text-xs break-all'>
+                        {record.ref}
+                      </TableCell>
+                      <TableCell>
+                        <div className='font-medium'>{record.sourceId}</div>
+                        <div className='text-xs text-muted-foreground'>
+                          {record.providerKind}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <SecretOutcomeBadge outcome={record.outcome} />
+                      </TableCell>
+                      <TableCell className='max-w-[260px]'>
+                        <div className='flex flex-wrap gap-1'>
+                          {record.capabilities.map((capability) => (
+                            <Badge key={capability} variant='outline'>
+                              {capability}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>{record.policy ?? 'Not recorded'}</TableCell>
+                      <TableCell>{record.auditStatus ?? 'unknown'}</TableCell>
+                      <TableCell>
+                        <div className='flex flex-wrap gap-2'>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={!canRevealSecret(record)}
+                            title={
+                              canRevealSecret(record)
+                                ? 'Reveal secret'
+                                : 'Reveal is unavailable for this record'
+                            }
+                            onClick={() => openReveal(record)}
+                          >
+                            <Eye className='mr-2 size-4' />
+                            Reveal {record.name}
+                          </Button>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled
+                            title='Delete is disabled until the broker delete contract is executable'
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className='h-20 text-center'>
+                      No managed secrets match this view.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={selectedSecret !== null} onOpenChange={closeReveal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reveal secret</DialogTitle>
+            <DialogDescription>{selectedSecret?.ref}</DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-reveal-reason'>Audit reason</Label>
+              <Textarea
+                id='secret-reveal-reason'
+                value={auditReason}
+                onChange={(event) => setAuditReason(event.target.value)}
+                placeholder='Operator troubleshooting'
+              />
+            </div>
+
+            {localError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {localError}
+              </div>
+            ) : null}
+
+            {revealedSecret ? (
+              <div className='space-y-2 rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-3'>
+                  <div className='text-sm font-medium'>Value</div>
+                  <Badge variant='secondary'>
+                    Expires in {revealedSecret.result.ttlSeconds}s
+                  </Badge>
+                </div>
+                <code
+                  data-testid='secret-reveal-value'
+                  className='block rounded bg-muted p-2 text-sm break-all'
+                >
+                  {revealedSecret.result.value}
+                </code>
+                <div className='flex flex-wrap gap-2'>
+                  <CopyValueButton
+                    value={revealedSecret.result.value}
+                    label='Copy revealed value'
+                  />
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    onClick={() => setRevealedSecret(null)}
+                  >
+                    <EyeOff className='mr-2 size-4' />
+                    Clear reveal
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeReveal(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type='button'
+              disabled={revealSecret.isPending}
+              onClick={() => void runReveal()}
+            >
+              Reveal value
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 function SetupStatusBadge({ status }: { status: ServiceSetupStep['status'] }) {
   if (status === 'succeeded') {
     return (
@@ -1291,6 +1606,7 @@ type ServiceDetailTab =
   | 'metadata'
   | 'endpoints'
   | 'variables'
+  | 'secrets'
   | 'logs'
 
 export function ServiceDetail({ serviceId }: { serviceId: string }) {
@@ -1401,6 +1717,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
         ) : (
           (() => {
             const service = serviceQuery.data
+            const showSecretsManagement = isSecretsBrokerService(service.id)
 
             return (
               <>
@@ -1494,11 +1811,23 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       Variables{' '}
                       <span className='ml-1 italic opacity-80'>(7)</span>
                     </TabsTrigger>
+                    {showSecretsManagement ? (
+                      <TabsTrigger
+                        value='secrets'
+                        className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
+                      >
+                        Secrets{' '}
+                        <span className='ml-1 italic opacity-80'>(8)</span>
+                      </TabsTrigger>
+                    ) : null}
                     <TabsTrigger
                       value='logs'
                       className='h-11 rounded-xl border-transparent px-5 text-base font-semibold text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:text-slate-400 dark:data-[state=active]:border-slate-600 dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-white dark:data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_2px_rgba(0,0,0,0.45)]'
                     >
-                      Logs <span className='ml-1 italic opacity-80'>(8)</span>
+                      Logs{' '}
+                      <span className='ml-1 italic opacity-80'>
+                        ({showSecretsManagement ? 9 : 8})
+                      </span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -1745,6 +2074,12 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                       </CardContent>
                     </Card>
                   </TabsContent>
+
+                  {showSecretsManagement ? (
+                    <TabsContent value='secrets' className='mt-0'>
+                      <SecretsBrokerSecretsPanel />
+                    </TabsContent>
+                  ) : null}
 
                   <TabsContent value='logs' className='mt-0'>
                     <Card>

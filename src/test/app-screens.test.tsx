@@ -504,6 +504,52 @@ describe('app screens', () => {
     expect(screen.getByText(/final removal/i)).toBeVisible()
   })
 
+  it('reveals managed secret values only inside the explicit reveal boundary', async () => {
+    const user = userEvent.setup()
+    const revealFixture = 'fixture-revealed-value-425'
+
+    await renderRoute('/services/secrets-broker')
+
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+
+    expect(
+      await screen.findByText(
+        'services/@serviceadmin/runtime/SESSION_SIGNING_KEY'
+      )
+    ).toBeVisible()
+    expect(screen.queryByText(revealFixture)).toBeNull()
+    for (const deleteButton of screen.getAllByRole('button', {
+      name: /Delete/i,
+    })) {
+      expect(deleteButton).toBeDisabled()
+    }
+
+    await user.click(
+      screen.getByRole('button', { name: /Reveal SESSION_SIGNING_KEY/i })
+    )
+    await user.click(screen.getByRole('button', { name: /^Reveal value$/i }))
+
+    expect(
+      await screen.findByText(/Audit reason is required before reveal/i)
+    ).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Audit reason/i),
+      'Operator troubleshooting'
+    )
+    await user.click(screen.getByRole('button', { name: /^Reveal value$/i }))
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /Reveal secret/i,
+    })
+    expect(await within(dialog).findByText(revealFixture)).toBeVisible()
+
+    await user.click(
+      within(dialog).getByRole('button', { name: /Clear reveal/i })
+    )
+    expect(screen.queryByText(revealFixture)).toBeNull()
+  })
+
   it('filters, searches, and opens runtime inbox messages', async () => {
     const user = userEvent.setup()
     await renderRoute('/inbox')
