@@ -1,12 +1,17 @@
 import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
+  ArrowUpDown,
+  CheckCircle2,
   History,
   KeyRound,
   Link2,
+  LockKeyhole,
+  RotateCcw,
   ShieldCheck,
   UserRoundCheck,
   UsersRound,
+  XCircle,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useSecurityState } from '@/lib/service-lasso-dashboard/hooks'
@@ -14,6 +19,9 @@ import { getRuntimeApiUnavailableCopy } from '@/lib/service-lasso-dashboard/stub
 import type {
   SecurityGroup,
   SecurityPermission,
+  SecretRotationImpactPlan,
+  SecretRotationImpactServiceAction,
+  SecretRotationOperation,
   ServiceSecurityState,
 } from '@/lib/service-lasso-dashboard/types'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -64,6 +72,39 @@ function GroupBadges({ group }: { group: SecurityGroup }) {
       {group.elevated ? <Badge className='bg-amber-600'>Elevated</Badge> : null}
     </div>
   )
+}
+
+function ReadinessBadge({
+  state,
+}: {
+  state: SecretRotationImpactPlan['capabilityStatus']
+}) {
+  if (state === 'ready') {
+    return <Badge className='bg-emerald-600'>Ready</Badge>
+  }
+  if (state === 'unsupported')
+    return <Badge variant='outline'>Unsupported</Badge>
+  if (state === 'requires_auth') {
+    return <Badge className='bg-amber-600'>Auth required</Badge>
+  }
+  if (state === 'denied') return <Badge variant='destructive'>Denied</Badge>
+  if (state === 'unavailable') {
+    return <Badge variant='destructive'>Unavailable</Badge>
+  }
+  return <Badge variant='destructive'>Blocked</Badge>
+}
+
+function ActionBadge({
+  action,
+}: {
+  action: SecretRotationImpactServiceAction
+}) {
+  if (action === 'restart')
+    return <Badge className='bg-amber-600'>Restart</Badge>
+  if (action === 'reload') return <Badge className='bg-sky-600'>Reload</Badge>
+  if (action === 'action') return <Badge variant='secondary'>Action</Badge>
+  if (action === 'manual') return <Badge variant='destructive'>Manual</Badge>
+  return <Badge variant='outline'>None</Badge>
 }
 
 function SecurityLoading() {
@@ -446,6 +487,253 @@ function ActorsTable({ state }: { state: ServiceSecurityState }) {
   )
 }
 
+function RotationOperationBadge({
+  operation,
+}: {
+  operation?: SecretRotationOperation
+}) {
+  if (!operation) return <Badge variant='outline'>Dry run only</Badge>
+  if (operation.phase === 'failed' || operation.phase === 'rolled_back') {
+    return <Badge variant='destructive'>{operation.phaseLabel}</Badge>
+  }
+  if (operation.phase === 'committed') {
+    return <Badge className='bg-emerald-600'>{operation.phaseLabel}</Badge>
+  }
+  return <Badge className='bg-sky-600'>{operation.phaseLabel}</Badge>
+}
+
+function RotationPlanCard({
+  plan,
+  operation,
+}: {
+  plan: SecretRotationImpactPlan
+  operation?: SecretRotationOperation
+}) {
+  const impacted = [...plan.services].sort((a, b) => a.order - b.order)
+  const auditReasonCaptured = false
+  const applyDisabled =
+    !auditReasonCaptured ||
+    !plan.applySupported ||
+    !plan.contractCompatible ||
+    plan.blockedReasons.length > 0
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <CardTitle className='break-words'>{plan.ref}</CardTitle>
+            <CardDescription>
+              {plan.provider} / {plan.store} / {plan.planRevision}
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <ReadinessBadge state={plan.capabilityStatus} />
+            <RotationOperationBadge operation={operation} />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-3 md:grid-cols-4'>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Auth</div>
+            <ReadinessBadge state={plan.authStatus} />
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Policy</div>
+            <ReadinessBadge state={plan.policyStatus} />
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Audit</div>
+            <ReadinessBadge state={plan.auditStatus} />
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Contract</div>
+            {plan.contractCompatible ? (
+              <Badge className='bg-emerald-600'>{plan.contractVersion}</Badge>
+            ) : (
+              <Badge variant='destructive'>{plan.contractVersion}</Badge>
+            )}
+          </div>
+        </div>
+
+        <div className='grid gap-3 md:grid-cols-2'>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Current version</div>
+            <div className='font-mono text-sm'>{plan.currentVersion.id}</div>
+            <div className='text-xs text-muted-foreground'>
+              Activated{' '}
+              {new Date(plan.currentVersion.activatedAt).toLocaleString()}
+            </div>
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>
+              Candidate version
+            </div>
+            <div className='font-mono text-sm'>{plan.candidateVersion.id}</div>
+            <div className='text-xs text-muted-foreground'>
+              Staged by {plan.candidateVersion.stagedBy}
+            </div>
+          </div>
+        </div>
+
+        <div className='overflow-hidden rounded-md border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Relation</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Rematerialise</TableHead>
+                <TableHead>Health checks</TableHead>
+                <TableHead>Links</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {impacted.map((service) => (
+                <TableRow key={`${plan.id}-${service.serviceId}`}>
+                  <TableCell className='font-mono'>{service.order}</TableCell>
+                  <TableCell className='min-w-[180px]'>
+                    <div className='font-medium'>{service.serviceName}</div>
+                    <div className='text-xs text-muted-foreground'>
+                      {service.estimatedDisruption}
+                    </div>
+                    {service.manualBlockers.map((blocker) => (
+                      <div
+                        className='mt-1 text-xs text-destructive'
+                        key={blocker}
+                      >
+                        {blocker}
+                      </div>
+                    ))}
+                  </TableCell>
+                  <TableCell className='capitalize'>
+                    {service.relation}
+                  </TableCell>
+                  <TableCell>
+                    <div className='space-y-1'>
+                      <ActionBadge action={service.action} />
+                      <div className='text-xs text-muted-foreground'>
+                        {service.actionLabel}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {service.rematerializeConfig ? (
+                      <CheckCircle2 className='size-4 text-emerald-600' />
+                    ) : (
+                      <XCircle className='size-4 text-muted-foreground' />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex max-w-[240px] flex-wrap gap-1'>
+                      {service.expectedHealthChecks.map((check) => (
+                        <Badge key={check} variant='outline'>
+                          {check}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex flex-wrap gap-2'>
+                      <Button size='sm' variant='outline' asChild>
+                        <Link to={service.serviceHref}>Details</Link>
+                      </Button>
+                      <Button size='sm' variant='outline' asChild>
+                        <Link to={service.logsHref}>Logs</Link>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {plan.blockedReasons.length > 0 ? (
+          <Alert variant='destructive'>
+            <AlertTriangle className='size-4' />
+            <AlertTitle>Apply disabled</AlertTitle>
+            <AlertDescription>{plan.blockedReasons.join(' ')}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+            <RotateCcw className='size-4' />
+            {plan.rollbackAvailable
+              ? plan.rollbackReason
+              : `Rollback unavailable: ${plan.rollbackReason}`}
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Button variant='outline' disabled>
+              <ArrowUpDown className='size-4' />
+              Refresh plan
+            </Button>
+            <Button disabled={applyDisabled}>
+              <LockKeyhole className='size-4' />
+              Apply selected revision
+            </Button>
+          </div>
+        </div>
+
+        {operation ? (
+          <div className='rounded-md border p-3 text-sm'>
+            <div className='font-medium'>Durable operation status</div>
+            <div className='mt-1 text-muted-foreground'>
+              {operation.safeNextAction} Updated{' '}
+              {new Date(operation.updatedAt).toLocaleString()}.
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+function RotationImpactPlans({ state }: { state: ServiceSecurityState }) {
+  const rotation = state.secretRotation
+  const operationsByPlan = new Map(
+    rotation?.operations.map((operation) => [operation.planId, operation]) ?? []
+  )
+
+  return (
+    <div className='space-y-4'>
+      <div className='flex flex-wrap items-end justify-between gap-2'>
+        <div>
+          <h3 className='text-lg font-semibold'>Rotation Impact Plans</h3>
+          <p className='text-sm text-muted-foreground'>
+            Metadata-only dry runs from core rotation planning.
+          </p>
+        </div>
+        <Button variant='outline' size='sm' disabled>
+          <LockKeyhole className='size-4' />
+          Audit reason required
+        </Button>
+      </div>
+      {rotation?.plans.length ? (
+        rotation.plans.map((plan) => (
+          <RotationPlanCard
+            key={plan.id}
+            operation={operationsByPlan.get(plan.id)}
+            plan={plan}
+          />
+        ))
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>No rotation plans</CardTitle>
+            <CardDescription>
+              Core has not returned a linked service impact plan.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 export function Security() {
   usePageMetadata({
     title: 'Service Admin - Security',
@@ -508,11 +796,12 @@ export function Security() {
             <SecuritySummary state={securityQuery.data} />
 
             <Tabs defaultValue='groups' className='space-y-4'>
-              <TabsList className='grid w-full grid-cols-2 sm:w-auto sm:grid-cols-4'>
+              <TabsList className='grid w-full grid-cols-2 sm:w-auto sm:grid-cols-5'>
                 <TabsTrigger value='groups'>Groups</TabsTrigger>
                 <TabsTrigger value='permissions'>Permissions</TabsTrigger>
                 <TabsTrigger value='mappings'>Mappings</TabsTrigger>
                 <TabsTrigger value='actors'>Actors</TabsTrigger>
+                <TabsTrigger value='rotations'>Rotations</TabsTrigger>
               </TabsList>
               <TabsContent value='groups'>
                 <GroupsTable state={securityQuery.data} />
@@ -527,6 +816,9 @@ export function Security() {
               </TabsContent>
               <TabsContent value='actors'>
                 <ActorsTable state={securityQuery.data} />
+              </TabsContent>
+              <TabsContent value='rotations'>
+                <RotationImpactPlans state={securityQuery.data} />
               </TabsContent>
             </Tabs>
           </>

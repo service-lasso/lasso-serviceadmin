@@ -485,6 +485,28 @@ describe('app screens', () => {
     expect(screen.getByText('Zitadel, Generic OIDC')).toBeVisible()
   })
 
+  it('shows metadata-only secret rotation impact plans', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/security')
+
+    await user.click(await screen.findByRole('tab', { name: /Rotations/i }))
+
+    expect(await screen.findByText('Rotation Impact Plans')).toBeVisible()
+    expect(screen.getByText('secrets/router/tls-cert')).toBeVisible()
+    expect(screen.getByText('rev-2026-04-11T10-18Z')).toBeVisible()
+    expect(screen.getByText('Restart edge router')).toBeVisible()
+    expect(screen.getByText('Reload runtime metadata')).toBeVisible()
+    expect(screen.getByText('Remote provider')).toBeVisible()
+    expect(screen.getByText('Manual provider rotation')).toBeVisible()
+    for (const button of screen.getAllByRole('button', {
+      name: /Apply selected revision/i,
+    })) {
+      expect(button).toBeDisabled()
+    }
+    expect(screen.queryByText(/client secret/i)).toBeNull()
+    expect(screen.queryByText(/secret value/i)).toBeNull()
+  })
+
   it('shows MCP settings, permissions, approvals, and safe diagnostics', async () => {
     const user = userEvent.setup()
     await renderRoute('/mcp')
