@@ -1062,7 +1062,7 @@ let services: DashboardService[] = [
       lastCheckAt: '2026-04-11T10:19:00+10:00',
       lastRestartAt: '2026-04-11T08:03:00+10:00',
       summary:
-        'UI responds on the required port and current stub actions are available.',
+        'UI responds on the required port and current operator actions are available.',
     },
     endpoints: [
       {

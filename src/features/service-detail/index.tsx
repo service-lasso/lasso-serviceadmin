@@ -359,7 +359,7 @@ function RelationshipList({
         ))
       ) : (
         <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-          None recorded in the current stub.
+          None recorded for this service.
         </div>
       )}
     </div>
@@ -1702,7 +1702,8 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
             <CardHeader>
               <CardTitle>Service not found</CardTitle>
               <CardDescription>
-                The requested service is not present in the current stub.
+                The requested service is not present in the current service
+                inventory.
               </CardDescription>
             </CardHeader>
             <CardContent>
