@@ -19,6 +19,7 @@ import { getRuntimeApiUnavailableCopy } from '@/lib/service-lasso-dashboard/stub
 import type {
   SecurityGroup,
   SecurityPermission,
+  SecretBulkCampaignPlan,
   SecretRotationImpactPlan,
   SecretRotationImpactServiceAction,
   SecretRotationOperation,
@@ -734,6 +735,167 @@ function RotationImpactPlans({ state }: { state: ServiceSecurityState }) {
   )
 }
 
+function BulkCampaignRiskBadge({
+  risk,
+}: {
+  risk: SecretBulkCampaignPlan['items'][number]['riskLevel']
+}) {
+  if (risk === 'critical') return <Badge variant='destructive'>Critical</Badge>
+  if (risk === 'high') return <Badge className='bg-amber-600'>High</Badge>
+  if (risk === 'medium') return <Badge variant='secondary'>Medium</Badge>
+  return <Badge variant='outline'>Low</Badge>
+}
+
+function BulkCampaignCard({ plan }: { plan: SecretBulkCampaignPlan }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <CardTitle className='break-words'>{plan.operationLabel}</CardTitle>
+            <CardDescription>
+              {plan.planRevision} / expires{' '}
+              {new Date(plan.expiresAt).toLocaleString()}
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <Badge variant='secondary'>Dry run only</Badge>
+            {plan.highRiskConfirmationRequired ? (
+              <Badge className='bg-amber-600'>Confirmation required</Badge>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Selected</div>
+            <div className='text-xl font-semibold'>{plan.selectedCount}</div>
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Applicable</div>
+            <div className='text-xl font-semibold'>{plan.applicableCount}</div>
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Denied</div>
+            <div className='text-xl font-semibold'>{plan.deniedCount}</div>
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>Unsupported</div>
+            <div className='text-xl font-semibold'>{plan.unsupportedCount}</div>
+          </div>
+          <div className='rounded-md border p-3'>
+            <div className='text-xs text-muted-foreground'>High risk</div>
+            <div className='text-xl font-semibold'>{plan.highRiskCount}</div>
+          </div>
+        </div>
+
+        <div className='overflow-hidden rounded-md border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ref</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Capability</TableHead>
+                <TableHead>Policy</TableHead>
+                <TableHead>Audit</TableHead>
+                <TableHead>Risk</TableHead>
+                <TableHead>Expected action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {plan.items.map((item) => (
+                <TableRow key={`${plan.id}-${item.ref}`}>
+                  <TableCell className='min-w-[260px] align-top'>
+                    <div className='font-mono text-sm'>{item.ref}</div>
+                    <div className='text-xs text-muted-foreground'>
+                      {item.ownerServiceId ?? 'workspace'}
+                    </div>
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <div>{item.sourceProvider}</div>
+                    <div className='text-xs text-muted-foreground'>
+                      {item.targetProvider ??
+                        item.targetPolicy ??
+                        'same target'}
+                    </div>
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <ReadinessBadge state={item.capabilityStatus} />
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <ReadinessBadge state={item.policyStatus} />
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <ReadinessBadge state={item.auditStatus} />
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <BulkCampaignRiskBadge risk={item.riskLevel} />
+                  </TableCell>
+                  <TableCell className='min-w-[280px] align-top'>
+                    <div className='text-sm'>{item.expectedAction}</div>
+                    {item.blockers.map((blocker) => (
+                      <div
+                        className='mt-1 text-xs text-destructive'
+                        key={blocker}
+                      >
+                        {blocker}
+                      </div>
+                    ))}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <div className='max-w-2xl text-sm text-muted-foreground'>
+            {plan.safeNextAction}
+          </div>
+          <Button disabled>
+            <LockKeyhole className='size-4' />
+            Apply campaign
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function BulkCampaignPlans({ state }: { state: ServiceSecurityState }) {
+  const campaigns = state.secretRotation?.bulkCampaigns ?? []
+
+  return (
+    <div className='space-y-4'>
+      <div className='flex flex-wrap items-end justify-between gap-2'>
+        <div>
+          <h3 className='text-lg font-semibold'>Bulk Campaign Planner</h3>
+          <p className='text-sm text-muted-foreground'>
+            Broker-backed campaign dry runs for selected refs.
+          </p>
+        </div>
+        <Button variant='outline' size='sm' disabled>
+          <LockKeyhole className='size-4' />
+          Audit reason required
+        </Button>
+      </div>
+      {campaigns.length ? (
+        campaigns.map((plan) => <BulkCampaignCard key={plan.id} plan={plan} />)
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>No bulk campaign plans</CardTitle>
+            <CardDescription>
+              Core has not returned a broker-backed dry run.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 export function Security() {
   usePageMetadata({
     title: 'Service Admin - Security',
@@ -818,7 +980,10 @@ export function Security() {
                 <ActorsTable state={securityQuery.data} />
               </TabsContent>
               <TabsContent value='rotations'>
-                <RotationImpactPlans state={securityQuery.data} />
+                <div className='space-y-6'>
+                  <RotationImpactPlans state={securityQuery.data} />
+                  <BulkCampaignPlans state={securityQuery.data} />
+                </div>
               </TabsContent>
             </Tabs>
           </>

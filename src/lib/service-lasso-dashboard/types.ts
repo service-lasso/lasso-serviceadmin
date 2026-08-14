@@ -406,9 +406,53 @@ export type SecretRotationOperation = {
   rollbackAllowed: boolean
 }
 
+export type SecretBulkCampaignOperation =
+  | 'rotate_reset'
+  | 'update_edit'
+  | 'apply_policy'
+  | 'migrate_provider'
+  | 'mark_action_required'
+
+export type SecretBulkCampaignRisk = 'low' | 'medium' | 'high' | 'critical'
+
+export type SecretBulkCampaignItem = {
+  ref: string
+  ownerServiceId?: string
+  sourceProvider: string
+  targetProvider?: string
+  targetPolicy?: string
+  capabilityStatus: SecretRotationReadinessState
+  policyStatus: SecretRotationReadinessState
+  auditStatus: SecretRotationReadinessState
+  riskLevel: SecretBulkCampaignRisk
+  expectedAction: string
+  blockers: string[]
+}
+
+export type SecretBulkCampaignPlan = {
+  id: string
+  planRevision: string
+  operation: SecretBulkCampaignOperation
+  operationLabel: string
+  generatedAt: string
+  expiresAt: string
+  dryRunOnly: boolean
+  applySupported: boolean
+  auditReasonRequired: boolean
+  highRiskConfirmationRequired: boolean
+  selectedCount: number
+  applicableCount: number
+  deniedCount: number
+  unsupportedCount: number
+  highRiskCount: number
+  items: SecretBulkCampaignItem[]
+  safeNextAction: string
+}
+
 export type SecretRotationState = {
   plans: SecretRotationImpactPlan[]
   operations: SecretRotationOperation[]
+  bulkCampaigns?: SecretBulkCampaignPlan[]
 }
 
 export type ServiceSecurityState = {
