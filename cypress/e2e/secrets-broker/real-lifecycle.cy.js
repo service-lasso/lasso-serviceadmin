@@ -527,10 +527,36 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     cy.env(['qualificationPlatform']).then(({ qualificationPlatform }) => {
       if (qualificationPlatform === 'win32') {
+        cy.intercept('POST', '**/lifecycle/key/rotate').as('rotateMasterKey')
         cy.contains('button', 'Rotate master key').click()
         dialog('Rotate Broker master key').within(() => {
           cy.get('[aria-label="Confirm Broker master key rotation"]').click()
           cy.contains('button', 'Rotate and rewrap').click()
+        })
+        cy.wait('@rotateMasterKey', { timeout: 60_000 }).then(({ response }) => {
+          const safeRotationResult = {
+            status: response?.statusCode,
+            outcome: response?.body?.outcome,
+            applied: response?.body?.applied,
+            requiresConfirmation: response?.body?.requiresConfirmation,
+            auditStatus: response?.body?.auditStatus,
+            nextAction: response?.body?.nextAction,
+            error:
+              typeof response?.body?.error === 'string' &&
+              /^[a-z0-9_]{1,64}$/i.test(response.body.error)
+                ? response.body.error
+                : undefined,
+          }
+          expect(response?.statusCode, JSON.stringify(safeRotationResult)).to.equal(
+            200
+          )
+          expect(response?.body, JSON.stringify(safeRotationResult)).to.include({
+            outcome: 'ready',
+            applied: true,
+            requiresConfirmation: false,
+            auditStatus: 'audit_recorded',
+          })
+          expect(response?.body?.newKeyId).to.match(/^mk-[a-f0-9]{12,64}$/)
         })
         cy.contains(
           /Master key rotated to .*Create and verify a new backup now/i,
