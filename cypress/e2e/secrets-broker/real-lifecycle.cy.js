@@ -521,30 +521,32 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       timeout: 20_000,
     }).should('be.visible')
 
-    if (Cypress.env('qualificationPlatform') === 'win32') {
-      cy.contains('button', 'Rotate master key').click()
-      dialog('Rotate Broker master key').within(() => {
-        cy.get('[aria-label="Confirm Broker master key rotation"]').click()
-        cy.contains('button', 'Rotate and rewrap').click()
-      })
-      cy.contains(
-        /Master key rotated to .*Create and verify a new backup now/i,
-        { timeout: 20_000 }
-      ).should('be.visible')
-      cy.get('#broker-lifecycle-reason')
-        .clear()
-        .type('Post-rotation qualification')
-      cy.contains('button', 'Create encrypted backup').click()
-      cy.contains(/created and verified/i, {
-        timeout: 20_000,
-      }).should('be.visible')
-    } else {
-      cy.contains('button', 'Rotate master key').should('be.disabled')
-      cy.contains(
-        'Master-key rotation requires a ready OS-backed local wrapper.'
-      ).should('be.visible')
-      cy.contains('portable key injection').should('be.visible')
-    }
+    cy.env(['qualificationPlatform']).then(({ qualificationPlatform }) => {
+      if (qualificationPlatform === 'win32') {
+        cy.contains('button', 'Rotate master key').click()
+        dialog('Rotate Broker master key').within(() => {
+          cy.get('[aria-label="Confirm Broker master key rotation"]').click()
+          cy.contains('button', 'Rotate and rewrap').click()
+        })
+        cy.contains(
+          /Master key rotated to .*Create and verify a new backup now/i,
+          { timeout: 20_000 }
+        ).should('be.visible')
+        cy.get('#broker-lifecycle-reason')
+          .clear()
+          .type('Post-rotation qualification')
+        cy.contains('button', 'Create encrypted backup').click()
+        cy.contains(/created and verified/i, {
+          timeout: 20_000,
+        }).should('be.visible')
+      } else {
+        cy.contains('button', 'Rotate master key').should('be.disabled')
+        cy.contains(
+          'Master-key rotation requires a ready OS-backed local wrapper.'
+        ).should('be.visible')
+        cy.contains('portable key injection').should('be.visible')
+      }
+    })
 
     cy.contains('button', 'Validate configuration').first().click()
     dialog('Validate provider configuration').within(() => {
