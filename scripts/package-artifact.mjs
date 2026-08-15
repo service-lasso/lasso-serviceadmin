@@ -62,8 +62,14 @@ await auditAndNormalize(stageRoot)
 await mkdir(releaseRoot, { recursive: true })
 await rm(assetPath, { force: true })
 const archive = requestedPlatform === 'win32'
-  ? spawnSync('tar.exe', ['-a', '-cf', assetPath, '-C', stageRoot, '.'], { encoding: 'utf8' })
-  : spawnSync('tar', ['-czf', assetPath, '-C', stageRoot, '.'], { encoding: 'utf8' })
+  ? spawnSync('tar.exe', ['-a', '-cf', assetName, '-C', stageRoot, '.'], {
+      cwd: releaseRoot,
+      encoding: 'utf8',
+    })
+  : spawnSync('tar', ['-czf', assetName, '-C', stageRoot, '.'], {
+      cwd: releaseRoot,
+      encoding: 'utf8',
+    })
 if (archive.status !== 0) {
   throw new Error(`Archive creation failed: ${(archive.stderr || archive.stdout).trim()}`)
 }

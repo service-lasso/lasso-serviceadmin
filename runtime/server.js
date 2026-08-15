@@ -305,7 +305,16 @@ export async function startServiceAdminServer(options = {}) {
   return server
 }
 
-if (path.resolve(process.argv[1] ?? '') === modulePath) {
+function isMainModule() {
+  if (!process.argv[1]) return false
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(modulePath)
+  } catch {
+    return false
+  }
+}
+
+if (isMainModule()) {
   startServiceAdminServer()
     .then((server) => {
       const address = server.address()

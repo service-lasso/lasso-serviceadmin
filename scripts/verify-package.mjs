@@ -59,7 +59,10 @@ let child
 let upstream
 try {
   const tarCommand = platform === 'win32' ? 'tar.exe' : 'tar'
-  const listing = spawnSync(tarCommand, ['-tf', assetPath], { encoding: 'utf8' })
+  const listing = spawnSync(tarCommand, ['-tf', assetName], {
+    cwd: path.dirname(assetPath),
+    encoding: 'utf8',
+  })
   assert.equal(listing.status, 0, listing.stderr)
   const entries = listing.stdout.split(/\r?\n/).filter(Boolean).map((entry) => entry.replace(/^\.\//, ''))
   for (const required of ['dist/index.html', 'runtime/server.js', 'service.json']) {
@@ -72,7 +75,10 @@ try {
     assert.equal(path.basename(entry).startsWith('.env'), false, `environment file leaked: ${entry}`)
   }
 
-  const extraction = spawnSync(tarCommand, ['-xf', assetPath, '-C', extractionRoot], { encoding: 'utf8' })
+  const extraction = spawnSync(tarCommand, ['-xf', assetName, '-C', extractionRoot], {
+    cwd: path.dirname(assetPath),
+    encoding: 'utf8',
+  })
   assert.equal(extraction.status, 0, extraction.stderr)
   await auditExtracted(extractionRoot)
   const manifest = JSON.parse(await readFile(path.join(extractionRoot, 'service.json'), 'utf8'))
