@@ -85,6 +85,13 @@ try {
   assert.equal(manifest.id, '@serviceadmin')
   assert.equal(manifest.env.SERVICE_HOST, '127.0.0.1')
   assert.deepEqual(manifest.execconfig.args, ['runtime/server.js'])
+  for (const target of ['win32', 'linux', 'darwin']) {
+    assert.deepEqual(manifest.artifact.platforms[target].checksum, {
+      algorithm: 'sha256',
+      assetName: 'SHA256SUMS.txt',
+    })
+  }
+  assert.equal(manifest.artifact.checksum, undefined, 'checksum policy must be platform-scoped for Core consumption')
 
   let observedRequest = null
   upstream = http.createServer((request, response) => {
