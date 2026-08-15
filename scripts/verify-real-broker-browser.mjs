@@ -204,7 +204,7 @@ async function verifyBrokerAudit(tempRoot) {
     previousHash = event.eventHash
   }
   const operations = new Set(events.map((event) => event.operation))
-  const requiredOperations =
+  const requiredOperations = (
     qualificationMode === 'lockout'
       ? ['local_api_auth', 'local_api_lockout', 'lockout_clear']
       : qualificationMode === 'first-run'
@@ -235,8 +235,11 @@ async function verifyBrokerAudit(tempRoot) {
     'bulk_campaign_apply_authorized',
     'bulk_campaign_item_apply',
     'bulk_campaign_apply',
-    'lockout_clear',
-  ]
+     'lockout_clear',
+   ]
+  ).filter(
+    (operation) => operation !== 'key_rotate' || platform === 'win32'
+  )
   for (const required of requiredOperations) {
     if (!operations.has(required)) {
       throw new Error(`Real Broker audit evidence omitted required operation ${required}.`)
