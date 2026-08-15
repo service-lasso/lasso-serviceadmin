@@ -16,7 +16,13 @@ describe('packaged Service Admin first-run Secrets Broker enrollment', () => {
     cy.intercept('POST', '**/api/setup/bootstrap').as('bootstrapBroker')
     cy.contains('button', 'Initialize Secrets Broker').click()
     cy.wait('@bootstrapBroker', { timeout: 180_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(201)
+      const responseCode = [response?.body?.error?.code, response?.body?.code].find(
+        (code) => typeof code === 'string' && /^[a-z0-9_]+$/u.test(code)
+      )
+      expect(
+        response?.statusCode,
+        `bootstrap HTTP status (code=${responseCode ?? 'unclassified_error'})`
+      ).to.equal(201)
       expect(response?.body?.bootstrap).to.include({
         ok: true,
         state: 'setup_complete',
