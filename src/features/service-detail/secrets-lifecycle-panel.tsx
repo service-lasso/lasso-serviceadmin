@@ -77,6 +77,11 @@ export function SecretsBrokerLifecyclePanel() {
   const canRestore = permitted('backup:restore')
   const canManageKeys = permitted('security:manage')
   const status = useBrokerLifecycleStatus(canManageKeys)
+  const canRotateManagedKey =
+    canManageKeys &&
+    status.data?.wrapper.supported === true &&
+    status.data.wrapper.available === true &&
+    status.data.wrapper.state === 'ready'
   const backups = useBrokerLifecycleBackups(canReadBackups)
   const createBackup = useBrokerLifecycleBackupCreate()
   const verifyBackup = useBrokerLifecycleBackupVerify()
@@ -323,7 +328,7 @@ export function SecretsBrokerLifecyclePanel() {
           <Button
             type='button'
             variant='outline'
-            disabled={!canManageKeys || !status.data?.key.keyId}
+            disabled={!canRotateManagedKey || !status.data?.key.keyId}
             onClick={() => {
               setRotateOpen(true)
               setRotateConfirmed(false)
@@ -333,6 +338,14 @@ export function SecretsBrokerLifecyclePanel() {
             <KeyRound className='mr-2 size-4' /> Rotate master key
           </Button>
         </div>
+
+        {canManageKeys && status.data && !canRotateManagedKey ? (
+          <p className='text-sm text-muted-foreground'>
+            Master-key rotation requires a ready OS-backed local wrapper. This
+            runtime is using portable key injection, so rotation is unavailable
+            until a supported wrapper is configured.
+          </p>
+        ) : null}
 
         {message ? (
           <p className='text-sm text-emerald-700 dark:text-emerald-300'>

@@ -35,6 +35,8 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
         secretCount: 2,
       },
       wrapper: {
+        available: true,
+        supported: true,
         state: 'ready',
         wrapperKind: 'dpapi-user-scope',
         os: 'windows',
