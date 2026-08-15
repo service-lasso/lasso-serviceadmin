@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const supportedPlatforms = new Set(['win32', 'linux', 'darwin'])
-const requestedPlatform = process.argv[2] ?? process.platform
+const requestedPlatform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
 
 if (!supportedPlatforms.has(requestedPlatform)) {
   throw new Error(`Unsupported release platform: ${requestedPlatform}`)

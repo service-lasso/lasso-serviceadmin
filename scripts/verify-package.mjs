@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const platform = process.argv[2] ?? process.platform
+const platform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
 const assetName = platform === 'win32'
   ? '@serviceadmin-win32.zip'
   : `@serviceadmin-${platform}.tar.gz`
