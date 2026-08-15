@@ -119,7 +119,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             outcome: response?.body?.operation?.outcome,
             phase: response?.body?.operation?.phase,
             failureCode: response?.body?.operation?.failureCode,
-            code: response?.body?.code,
+            code:
+              typeof response?.body?.error === 'string' &&
+              /^[a-z0-9_]{1,64}$/i.test(response.body.error)
+                ? response.body.error
+                : response?.body?.code,
           }
           expect(
             response?.statusCode,
