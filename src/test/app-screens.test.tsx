@@ -507,6 +507,33 @@ describe('app screens', () => {
     expect(screen.queryByText(/secret value/i)).toBeNull()
   })
 
+  it('shows bulk campaign dry-run plans without enabling apply or leaking values', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/security')
+
+    await user.click(await screen.findByRole('tab', { name: /Rotations/i }))
+
+    expect(await screen.findByText('Bulk Campaign Planner')).toBeVisible()
+    expect(screen.getByText('bulk-dry-run-2026-04-11T10-24Z')).toBeVisible()
+    expect(
+      screen.getByText('services/@serviceadmin/runtime/SESSION_SIGNING_KEY')
+    ).toBeVisible()
+    expect(
+      screen.getByText('services/echo-service/env/API_TOKEN')
+    ).toBeVisible()
+    expect(screen.getAllByText('Dry run only').length).toBeGreaterThan(0)
+    expect(
+      screen.getByRole('button', { name: /Apply campaign/i })
+    ).toBeDisabled()
+    expect(screen.getByText('Provider authentication required.')).toBeVisible()
+    expect(
+      screen.getByText('Provider does not advertise bulk reset support.')
+    ).toBeVisible()
+    expect(screen.queryByText(/fixture-revealed-value/i)).toBeNull()
+    expect(screen.queryByText(/secret value/i)).toBeNull()
+    expect(screen.queryByText(/provider token/i)).toBeNull()
+  })
+
   it('shows MCP settings, permissions, approvals, and safe diagnostics', async () => {
     const user = userEvent.setup()
     await renderRoute('/mcp')
