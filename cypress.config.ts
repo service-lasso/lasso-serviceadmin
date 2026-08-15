@@ -1,6 +1,7 @@
 import { defineConfig } from 'cypress'
 
 export default defineConfig({
+  allowCypressEnv: false,
   video: false,
   screenshotOnRunFailure: true,
   e2e: {

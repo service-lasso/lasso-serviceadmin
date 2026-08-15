@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ChevronsUpDown, LogOut, Settings } from 'lucide-react'
+import { ChevronsUpDown, Settings, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -13,14 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SidebarMenuButton } from '@/components/ui/sidebar'
-import { SignOutDialog } from '@/components/sign-out-dialog'
 
 export function ProfileDropdown() {
-  const [open, setOpen] = useState(false)
   const authUser = useAuthStore((state) => state.auth.user)
   const user = {
-    name: authUser?.accountNo || 'Max Barrass',
-    email: authUser?.email || 'max@example.com',
+    name: authUser?.actorId || 'Runtime identity unavailable',
+    email: authUser
+      ? `${authUser.actorKind}${authUser.workspaceId ? ` / ${authUser.workspaceId}` : ''}`
+      : 'Protected actions blocked',
     avatar: '',
   }
 
@@ -83,13 +82,12 @@ export function ProfileDropdown() {
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setOpen(true)}>
-            <LogOut />
-            Sign out
+          <DropdownMenuItem disabled>
+            <ShieldCheck />
+            Session managed by trusted ingress
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <SignOutDialog open={!!open} onOpenChange={setOpen} />
     </>
   )
 }

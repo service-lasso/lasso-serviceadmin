@@ -1,42 +1,34 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as dashboardStub from '@/lib/service-lasso-dashboard/stub'
 import { setFirstRunSetupFixtureForTests } from '@/lib/service-lasso-dashboard/stub'
 import { renderRoute } from './render-route'
 
 afterEach(() => {
+  vi.restoreAllMocks()
   setFirstRunSetupFixtureForTests(null)
 })
 
 describe('first-run setup gate', () => {
-  it('requires generated vault key save confirmation before showing the app shell', async () => {
+  it('bootstraps the protected local broker without rendering key material', async () => {
     const user = userEvent.setup()
     setFirstRunSetupFixtureForTests({
-      status: 'generated_key_pending_ack',
-      required: true,
-      vault: {
-        id: 'vault-local',
-        name: 'Local operator vault',
-        keySource: 'generated',
-        keyFingerprint: 'sha256:demo-generated',
-        keyReveal: {
-          value: 'slv_demo_generated_key_material',
-          generatedAt: '2026-07-24T05:30:00+10:00',
-          acknowledged: false,
-        },
+      state: 'setup_required',
+      setupMode: true,
+      vault: { required: true, ready: false },
+      operator: {
+        osUsername: 'local-operator',
+        identitySource: 'vault',
       },
-      rootOwner: {
-        id: 'root-local',
-        displayName: 'Local root owner',
-        createdAt: null,
+      trustBoundary: {
+        bindHost: '127.0.0.1',
+        localOnly: true,
+        localhostBootstrapAllowed: true,
+        remoteBootstrapAllowed: false,
+        setupTokenConfigured: false,
+        blockers: [],
       },
-      machine: {
-        hostname: 'admin-workstation',
-        osUser: 'local-operator',
-        platform: 'win32',
-      },
-      warnings: [],
-      nextActions: ['Save the generated vault key.'],
     })
 
     await renderRoute('/')
@@ -46,17 +38,24 @@ describe('first-run setup gate', () => {
         name: /Service Lasso first-run setup/i,
       })
     ).toBeVisible()
-    expect(screen.getByText('slv_demo_generated_key_material')).toBeVisible()
+    expect(screen.getByText(/No master key is shown/i)).toBeVisible()
+    expect(screen.queryByText(/recovery key/i)).not.toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: /Confirm saved/i })
-    ).toBeDisabled()
+      screen.queryByRole('button', { name: /copy/i })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /download/i })
+    ).not.toBeInTheDocument()
 
-    await user.click(screen.getByLabelText(/Confirm vault key saved/i))
-    await user.click(screen.getByRole('button', { name: /Confirm saved/i }))
+    await user.click(
+      screen.getByRole('button', { name: /Initialize Secrets Broker/i })
+    )
 
     await waitFor(() => {
       expect(
-        screen.queryByText('slv_demo_generated_key_material')
+        screen.queryByRole('heading', {
+          name: /Service Lasso first-run setup/i,
+        })
       ).not.toBeInTheDocument()
     })
     expect(
@@ -64,45 +63,94 @@ describe('first-run setup gate', () => {
     ).toBeVisible()
   })
 
-  it('shows supplied vault key source metadata without revealing raw key material', async () => {
+  it('requires a transient token for an authorized remote bootstrap', async () => {
+    const user = userEvent.setup()
     setFirstRunSetupFixtureForTests({
-      status: 'required',
-      required: true,
-      vault: {
-        id: 'vault-headless',
-        name: 'Headless vault',
-        keySource: 'secret_file',
-        keyFingerprint: 'sha256:external-key',
-        keyReveal: null,
+      state: 'setup_required',
+      setupMode: true,
+      vault: { required: true, ready: false },
+      trustBoundary: {
+        bindHost: '0.0.0.0',
+        localOnly: false,
+        localhostBootstrapAllowed: false,
+        remoteBootstrapAllowed: true,
+        setupTokenConfigured: true,
+        blockers: [],
       },
-      rootOwner: {
-        id: 'root-headless',
-        displayName: 'Headless root owner',
-        createdAt: null,
-      },
-      machine: {
-        hostname: 'container-host',
-        osUser: 'svc-lasso',
-        platform: 'linux',
-      },
-      warnings: [],
-      nextActions: ['Complete setup with the supplied key source.'],
     })
 
     await renderRoute('/')
 
-    expect(
-      await screen.findByRole('heading', {
-        name: /Service Lasso first-run setup/i,
+    const submit = await screen.findByRole('button', {
+      name: /Initialize Secrets Broker/i,
+    })
+    const token = screen.getByLabelText(/One-time setup token/i)
+    expect(submit).toBeDisabled()
+    await user.type(token, 'fixture-setup-token')
+    expect(submit).toBeEnabled()
+    await user.click(submit)
+
+    await waitFor(() => {
+      expect(
+        screen.queryByDisplayValue('fixture-setup-token')
+      ).not.toBeInTheDocument()
+    })
+    expect(document.body.textContent).not.toContain('fixture-setup-token')
+  })
+
+  it('renders a retryable error when protected bootstrap fails', async () => {
+    const user = userEvent.setup()
+    setFirstRunSetupFixtureForTests({
+      state: 'setup_required',
+      setupMode: true,
+      vault: { required: true, ready: false },
+      trustBoundary: {
+        bindHost: '127.0.0.1',
+        localOnly: true,
+        localhostBootstrapAllowed: true,
+        remoteBootstrapAllowed: false,
+        setupTokenConfigured: false,
+        blockers: [],
+      },
+    })
+    vi.spyOn(dashboardStub, 'bootstrapFirstRunSetup').mockRejectedValueOnce(
+      new Error('safe fixture failure')
+    )
+
+    await renderRoute('/')
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Initialize Secrets Broker/i,
       })
+    )
+
+    expect(await screen.findByText(/Bootstrap did not complete/i)).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: /Service Lasso first-run setup/i })
     ).toBeVisible()
-    expect(screen.getByText(/Externally supplied key/i)).toBeVisible()
-    expect(screen.getByText('sha256:external-key')).toBeVisible()
+    expect(document.body.textContent).not.toContain('safe fixture failure')
+  })
+
+  it('fails closed when remote bootstrap has no configured token policy', async () => {
+    setFirstRunSetupFixtureForTests({
+      state: 'setup_required',
+      setupMode: true,
+      vault: { required: true, ready: false },
+      trustBoundary: {
+        bindHost: '0.0.0.0',
+        localOnly: false,
+        localhostBootstrapAllowed: false,
+        remoteBootstrapAllowed: false,
+        setupTokenConfigured: false,
+        blockers: ['setup_token_required_for_remote_bind'],
+      },
+    })
+
+    await renderRoute('/')
+
+    expect(await screen.findByText(/Bootstrap blocked/i)).toBeVisible()
     expect(
-      screen.queryByText(/slv_demo_generated_key_material/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /Confirm saved/i })
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: /Initialize Secrets Broker/i })
+    ).toBeDisabled()
   })
 })

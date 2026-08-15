@@ -2,42 +2,37 @@ import { useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
-  Clipboard,
-  Download,
   KeyRound,
   Loader2,
-  Printer,
   Server,
-  ShieldAlert,
+  ShieldCheck,
   UserRound,
 } from 'lucide-react'
-import { toast } from 'sonner'
-import { copyText } from '@/lib/copy-text'
 import {
-  useFirstRunSetupKeyAcknowledgement,
+  useFirstRunSetupBootstrap,
   useFirstRunSetupState,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type { FirstRunSetupState } from '@/lib/service-lasso-dashboard/types'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 
 function StatusBadge({ setup }: { setup: FirstRunSetupState }) {
-  if (setup.status === 'failed') {
+  if (setup.state === 'setup_failed') {
     return <Badge variant='destructive'>Setup failed</Badge>
   }
-
-  if (setup.status === 'generated_key_pending_ack') {
-    return <Badge className='bg-amber-600 hover:bg-amber-600'>Key reveal</Badge>
-  }
-
-  if (setup.status === 'in_progress') {
+  if (setup.state === 'setup_in_progress') {
     return <Badge variant='secondary'>In progress</Badge>
   }
-
-  return <Badge>Setup required</Badge>
+  if (setup.vault.ready) {
+    return <Badge>Broker ready</Badge>
+  }
+  return (
+    <Badge className='bg-amber-600 hover:bg-amber-600'>Setup required</Badge>
+  )
 }
 
 function MetadataItem({
@@ -47,7 +42,7 @@ function MetadataItem({
 }: {
   icon: React.ElementType
   label: string
-  value: string | null
+  value: string
 }) {
   return (
     <div className='min-w-0 rounded-md border bg-background p-3'>
@@ -55,128 +50,119 @@ function MetadataItem({
         <Icon className='size-3.5' />
         <span>{label}</span>
       </div>
-      <div className='mt-1 text-sm font-medium break-words'>
-        {value ?? 'Pending'}
-      </div>
+      <div className='mt-1 text-sm font-medium break-words'>{value}</div>
     </div>
   )
 }
 
-function downloadKey(value: string) {
-  const blob = new Blob([value], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'service-lasso-vault-key.txt'
-  anchor.click()
-  URL.revokeObjectURL(url)
+function blockerCopy(blocker: string) {
+  if (blocker === 'setup_token_required_for_remote_bind') {
+    return 'Remote setup requires an operator-configured one-time setup token.'
+  }
+  return 'The runtime trust policy is not ready for setup.'
 }
 
-function GeneratedKeyReveal({ setup }: { setup: FirstRunSetupState }) {
-  const [saved, setSaved] = useState(false)
-  const acknowledge = useFirstRunSetupKeyAcknowledgement()
-  const reveal = setup.vault.keyReveal
+function BootstrapControl({ setup }: { setup: FirstRunSetupState }) {
+  const [setupToken, setSetupToken] = useState('')
+  const bootstrap = useFirstRunSetupBootstrap()
+  const remoteTokenRequired = !setup.trustBoundary.localOnly
+  const allowed =
+    setup.trustBoundary.localhostBootstrapAllowed ||
+    setup.trustBoundary.remoteBootstrapAllowed
+  const tokenMissing = remoteTokenRequired && setupToken.trim().length === 0
 
-  if (!reveal) return null
+  async function runBootstrap() {
+    try {
+      await bootstrap.mutateAsync(
+        remoteTokenRequired ? setupToken.trim() : undefined
+      )
+    } catch {
+      // The mutation owns the safe, retryable error state rendered below.
+    } finally {
+      setSetupToken('')
+    }
+  }
 
   return (
     <section className='space-y-4 border-t pt-5'>
-      <Alert className='border-amber-500/40 bg-amber-500/5'>
-        <ShieldAlert className='size-4 text-amber-600' />
-        <AlertTitle>Generated vault key</AlertTitle>
+      <Alert>
+        <ShieldCheck className='size-4' />
+        <AlertTitle>Protected broker bootstrap</AlertTitle>
         <AlertDescription>
-          This key is shown once. If it is lost without managed recovery, the
-          vault must be recreated and existing encrypted secrets cannot be
-          recovered.
+          Service Lasso will create the encrypted broker store, protect its
+          credentials with the operating system, start authenticated IPC, and
+          provision declared generated secrets. No master key is shown to the
+          browser.
         </AlertDescription>
       </Alert>
 
-      <div>
-        <div className='mb-2 text-sm font-medium'>Recovery key</div>
-        <pre className='max-h-40 overflow-auto rounded-md border bg-muted p-3 text-sm break-all whitespace-pre-wrap'>
-          {reveal.value}
-        </pre>
-      </div>
+      {remoteTokenRequired && setup.trustBoundary.setupTokenConfigured ? (
+        <div className='space-y-2'>
+          <Label htmlFor='service-lasso-setup-token'>
+            One-time setup token
+          </Label>
+          <Input
+            id='service-lasso-setup-token'
+            type='password'
+            value={setupToken}
+            autoComplete='off'
+            spellCheck={false}
+            onChange={(event) => setSetupToken(event.target.value)}
+          />
+          <p className='text-xs text-muted-foreground'>
+            The token is sent only for this request and is cleared after every
+            attempt.
+          </p>
+        </div>
+      ) : null}
 
-      <div className='flex flex-wrap gap-2'>
-        <Button
-          type='button'
-          variant='outline'
-          onClick={async () => {
-            const copied = await copyText(reveal.value)
-            toast[copied ? 'success' : 'error'](
-              copied ? 'Vault key copied.' : 'Vault key copy failed.'
-            )
-          }}
-        >
-          <Clipboard className='size-4' />
-          Copy
-        </Button>
-        <Button
-          type='button'
-          variant='outline'
-          onClick={() => downloadKey(reveal.value)}
-        >
-          <Download className='size-4' />
-          Download
-        </Button>
-        <Button type='button' variant='outline' onClick={() => window.print()}>
-          <Printer className='size-4' />
-          Print
-        </Button>
-      </div>
+      {!allowed ? (
+        <Alert variant='destructive'>
+          <AlertTriangle className='size-4' />
+          <AlertTitle>Bootstrap blocked</AlertTitle>
+          <AlertDescription>
+            {setup.trustBoundary.blockers.length > 0
+              ? setup.trustBoundary.blockers.map(blockerCopy).join(' ')
+              : 'The runtime has not authorized this setup boundary.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-      <label className='flex items-start gap-3 rounded-md border bg-background p-3 text-sm'>
-        <Checkbox
-          checked={saved}
-          onCheckedChange={(checked) => setSaved(checked === true)}
-          aria-label='Confirm vault key saved'
-        />
-        <span>
-          I saved the generated vault key and understand it will not be shown
-          again.
-        </span>
-      </label>
+      {bootstrap.isError ? (
+        <Alert variant='destructive'>
+          <AlertTriangle className='size-4' />
+          <AlertTitle>Bootstrap did not complete</AlertTitle>
+          <AlertDescription>
+            Service Lasso rejected or could not complete the protected setup.
+            Check the runtime audit log and retry after resolving the reported
+            broker state.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {bootstrap.data ? (
+        <Alert className='border-emerald-500/40 bg-emerald-500/5'>
+          <CheckCircle2 className='size-4 text-emerald-600' />
+          <AlertTitle>Bootstrap complete</AlertTitle>
+          <AlertDescription>
+            {bootstrap.data.bootstrap.provisionedSecretCount} declared secrets
+            were provisioned without exposing their values.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Button
         type='button'
-        disabled={!saved || acknowledge.isPending}
-        onClick={() => acknowledge.mutate()}
+        disabled={!allowed || tokenMissing || bootstrap.isPending}
+        onClick={() => void runBootstrap()}
       >
-        {acknowledge.isPending ? (
+        {bootstrap.isPending ? (
           <Loader2 className='size-4 animate-spin' />
         ) : (
-          <CheckCircle2 className='size-4' />
+          <KeyRound className='size-4' />
         )}
-        Confirm saved
+        Initialize Secrets Broker
       </Button>
-    </section>
-  )
-}
-
-function SuppliedKeySummary({ setup }: { setup: FirstRunSetupState }) {
-  if (setup.vault.keySource === 'generated') return null
-
-  return (
-    <section className='space-y-3 border-t pt-5'>
-      <Alert className='border-emerald-500/40 bg-emerald-500/5'>
-        <KeyRound className='size-4 text-emerald-600' />
-        <AlertTitle>Externally supplied key</AlertTitle>
-        <AlertDescription>
-          The raw vault key is not displayed. Confirm the source with the safe
-          fingerprint shown here.
-        </AlertDescription>
-      </Alert>
-      <MetadataItem
-        icon={KeyRound}
-        label='Key source'
-        value={setup.vault.keySource.replace(/_/g, ' ')}
-      />
-      <MetadataItem
-        icon={ShieldAlert}
-        label='Fingerprint'
-        value={setup.vault.keyFingerprint}
-      />
     </section>
   )
 }
@@ -192,49 +178,39 @@ function FirstRunSetupContent({ setup }: { setup: FirstRunSetupState }) {
               Service Lasso first-run setup
             </h1>
             <p className='max-w-3xl text-muted-foreground'>
-              Bootstrap the local vault and root owner before the Service Admin
-              shell opens.
+              Initialize the protected Secrets Broker before Service Admin
+              opens. Secret keys and broker credentials never enter this UI.
             </p>
           </div>
         </div>
 
-        {setup.status === 'failed' && setup.failure ? (
+        {setup.state === 'setup_failed' ? (
           <Alert variant='destructive'>
             <AlertTriangle className='size-4' />
-            <AlertTitle>Setup failed</AlertTitle>
-            <AlertDescription>{setup.failure.message}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {!setup.localOnly || setup.remoteAllowed ? null : (
-          <Alert>
-            <ShieldAlert className='size-4' />
-            <AlertTitle>Local setup boundary</AlertTitle>
+            <AlertTitle>Setup requires recovery</AlertTitle>
             <AlertDescription>
-              Localhost can claim the root owner. Remote access needs Zitadel or
-              an explicit setup token before root access is granted.
+              The runtime reported a failed setup state. Review the runtime
+              audit trail and broker health before retrying.
             </AlertDescription>
           </Alert>
-        )}
+        ) : null}
 
         <section className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
           <MetadataItem
             icon={KeyRound}
-            label='Vault'
-            value={setup.vault.name}
+            label='Secrets Broker'
+            value={setup.vault.ready ? 'Ready' : 'Not initialized'}
           />
           <MetadataItem
             icon={UserRound}
-            label='Root owner'
-            value={setup.rootOwner.displayName}
+            label='Local operator'
+            value={setup.operator.osUsername}
           />
           <MetadataItem
             icon={Server}
-            label='Machine'
+            label='Setup boundary'
             value={
-              [setup.machine.hostname, setup.machine.osUser]
-                .filter(Boolean)
-                .join(' / ') || null
+              setup.trustBoundary.localOnly ? 'Local only' : 'Remote token'
             }
           />
         </section>
@@ -242,26 +218,14 @@ function FirstRunSetupContent({ setup }: { setup: FirstRunSetupState }) {
         <div className='rounded-md border bg-background p-4'>
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <div>
-              <div className='text-sm font-medium'>Setup mode</div>
+              <div className='text-sm font-medium'>Runtime setup state</div>
               <div className='text-sm text-muted-foreground'>
-                {setup.localOnly ? 'Local-only' : 'Remote-enabled'}
+                {setup.state.replace(/_/g, ' ')}
               </div>
             </div>
             <StatusBadge setup={setup} />
           </div>
-
-          {setup.nextActions.length > 0 ? (
-            <div className='mt-4 grid gap-2 text-sm sm:grid-cols-2'>
-              {setup.nextActions.map((action) => (
-                <div key={action} className='rounded-md border p-3'>
-                  {action}
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <GeneratedKeyReveal setup={setup} />
-          <SuppliedKeySummary setup={setup} />
+          <BootstrapControl setup={setup} />
         </div>
       </main>
     </div>
@@ -282,16 +246,15 @@ function FirstRunSetupLoading() {
   )
 }
 
-function FirstRunSetupUnavailable({ error }: { error: unknown }) {
+function FirstRunSetupUnavailable() {
   return (
     <div className='mx-auto flex min-h-svh w-full max-w-5xl flex-col justify-center px-4 py-6 sm:px-6 lg:px-8'>
       <Alert variant='destructive'>
         <AlertTriangle className='size-4' />
         <AlertTitle>First-run setup status unavailable</AlertTitle>
         <AlertDescription>
-          {error instanceof Error
-            ? error.message
-            : 'Service Admin could not read the setup status.'}
+          Service Admin could not verify the setup contract. The application
+          remains locked until the Service Lasso runtime is reachable.
         </AlertDescription>
       </Alert>
     </div>
@@ -306,16 +269,16 @@ export function FirstRunSetupGate({ children }: { children: React.ReactNode }) {
   }
 
   if (setupQuery.isError) {
-    return <FirstRunSetupUnavailable error={setupQuery.error} />
+    return <FirstRunSetupUnavailable />
   }
 
   const setup = setupQuery.data
-  const setupBlocksShell =
-    setup.required &&
-    setup.status !== 'not_required' &&
-    setup.status !== 'complete'
+  const setupComplete =
+    setup.vault.ready &&
+    !setup.setupMode &&
+    (setup.state === 'not_required' || setup.state === 'setup_complete')
 
-  if (setupBlocksShell) {
+  if (!setupComplete) {
     return <FirstRunSetupContent setup={setup} />
   }
 

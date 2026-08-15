@@ -493,10 +493,10 @@ describe('app screens', () => {
 
     expect(await screen.findByText('Rotation Impact Plans')).toBeVisible()
     expect(screen.getByText('secrets/router/tls-cert')).toBeVisible()
-    expect(screen.getByText('rev-2026-04-11T10-18Z')).toBeVisible()
+    expect(screen.getByText(/rev-2026-04-11T10-18Z/)).toBeVisible()
     expect(screen.getByText('Restart edge router')).toBeVisible()
     expect(screen.getByText('Reload runtime metadata')).toBeVisible()
-    expect(screen.getByText('Remote provider')).toBeVisible()
+    expect(screen.getAllByText(/Remote provider/).length).toBeGreaterThan(0)
     expect(screen.getByText('Manual provider rotation')).toBeVisible()
     for (const button of screen.getAllByRole('button', {
       name: /Apply selected revision/i,
@@ -514,7 +514,9 @@ describe('app screens', () => {
     await user.click(await screen.findByRole('tab', { name: /Rotations/i }))
 
     expect(await screen.findByText('Bulk Campaign Planner')).toBeVisible()
-    expect(screen.getByText('bulk-dry-run-2026-04-11T10-24Z')).toBeVisible()
+    expect(
+      await screen.findByText(/bulk-dry-run-2026-04-11T10-24Z/)
+    ).toBeVisible()
     expect(
       screen.getByText('services/@serviceadmin/runtime/SESSION_SIGNING_KEY')
     ).toBeVisible()
@@ -585,36 +587,333 @@ describe('app screens', () => {
       )
     ).toBeVisible()
     expect(screen.queryByText(revealFixture)).toBeNull()
-    for (const deleteButton of screen.getAllByRole('button', {
-      name: /Delete/i,
-    })) {
-      expect(deleteButton).toBeDisabled()
-    }
+    expect(
+      screen.getByRole('button', {
+        name: /Decommission SESSION_SIGNING_KEY/i,
+      })
+    ).toBeEnabled()
 
     await user.click(
       screen.getByRole('button', { name: /Reveal SESSION_SIGNING_KEY/i })
     )
-    await user.click(screen.getByRole('button', { name: /^Reveal value$/i }))
+    const revealDialog = await screen.findByRole('dialog', {
+      name: /Reveal secret/i,
+    })
+    await user.click(
+      within(revealDialog).getByLabelText(/Confirm secret reveal/i)
+    )
+    await user.click(
+      within(revealDialog).getByRole('button', { name: /^Reveal value$/i })
+    )
 
     expect(
       await screen.findByText(/Audit reason is required before reveal/i)
     ).toBeVisible()
 
     await user.type(
-      screen.getByLabelText(/Audit reason/i),
+      within(revealDialog).getByLabelText(/Audit reason/i),
       'Operator troubleshooting'
     )
-    await user.click(screen.getByRole('button', { name: /^Reveal value$/i }))
+    await user.click(
+      within(revealDialog).getByRole('button', { name: /^Reveal value$/i })
+    )
 
-    const dialog = await screen.findByRole('dialog', {
-      name: /Reveal secret/i,
-    })
-    expect(await within(dialog).findByText(revealFixture)).toBeVisible()
+    expect(await within(revealDialog).findByText(revealFixture)).toBeVisible()
 
     await user.click(
-      within(dialog).getByRole('button', { name: /Clear reveal/i })
+      within(revealDialog).getByRole('button', { name: /Clear reveal/i })
     )
     expect(screen.queryByText(revealFixture)).toBeNull()
+  })
+
+  it('creates a broker-generated secret through a signed no-overwrite plan', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    await user.click(
+      await screen.findByRole('button', { name: /^Create secret$/i })
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /Create local secret/i,
+    })
+    await user.type(
+      within(dialog).getByLabelText(/Secret reference/i),
+      'services/sample/runtime/NEW_BROKER_TOKEN'
+    )
+    await user.type(
+      within(dialog).getByLabelText(/Audit reason/i),
+      'Approved initial provision'
+    )
+    expect(within(dialog).queryByLabelText(/Secret value/i)).toBeNull()
+    await user.click(
+      within(dialog).getByRole('button', { name: /Preview create/i })
+    )
+    expect(await within(dialog).findByText(/Signed plan ready/i)).toBeVisible()
+    expect(within(dialog).getByText(/no overwrite/i)).toBeVisible()
+    expect(within(dialog).queryByLabelText(/Secret value/i)).toBeNull()
+
+    await user.click(within(dialog).getByLabelText(/Confirm secret create/i))
+    await user.click(
+      within(dialog).getByRole('button', { name: /^Create secret$/i })
+    )
+    expect(
+      await within(dialog).findByText(/Secret created and audit recorded/i)
+    ).toBeVisible()
+    expect(within(dialog).queryByText(/fixture-revealed-value/i)).toBeNull()
+  })
+
+  it('decommissions and restores a local secret only through a signed dependency-clear plan', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Decommission SESSION_SIGNING_KEY/i,
+      })
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /Decommission secret/i,
+    })
+    await user.click(
+      within(dialog).getByRole('button', { name: /Check dependencies/i })
+    )
+    expect(await within(dialog).findByText(/Signed plan ready/i)).toBeVisible()
+    expect(within(dialog).getByText(/no dependencies/i)).toBeVisible()
+
+    await user.type(
+      within(dialog).getByLabelText(/Audit reason/i),
+      'Approved secret retirement'
+    )
+    await user.click(
+      within(dialog).getByLabelText(/Confirm secret decommission/i)
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: /^Decommission secret$/i })
+    )
+
+    expect(
+      await within(dialog).findByText(/encrypted tombstone is recoverable/i)
+    ).toBeVisible()
+    await user.click(within(dialog).getByLabelText(/Confirm secret restore/i))
+    await user.click(
+      within(dialog).getByRole('button', { name: /^Restore secret$/i })
+    )
+    expect(
+      await within(dialog).findByText(/Secret restored and audit recorded/i)
+    ).toBeVisible()
+  })
+
+  it('restores a persisted encrypted tombstone after inventory reload', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    expect(
+      await screen.findByText('services/archive/runtime/RECOVERABLE_TOKEN')
+    ).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: /Restore RECOVERABLE_TOKEN/i })
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /^Restore secret$/i,
+    })
+    await user.type(
+      within(dialog).getByLabelText(/Audit reason/i),
+      'Approved recovery after reload'
+    )
+    await user.click(within(dialog).getByLabelText(/Confirm secret restore/i))
+    await user.click(
+      within(dialog).getByRole('button', { name: /^Restore secret$/i })
+    )
+    expect(
+      await within(dialog).findByText(/Secret restored and audit recorded/i)
+    ).toBeVisible()
+  })
+
+  it('shows policy capability truthfully without enabling a fake apply', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Policy SESSION_SIGNING_KEY/i,
+      })
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /Secret policy status/i,
+    })
+    expect(
+      await within(dialog).findByText(/Policy apply unavailable/i)
+    ).toBeVisible()
+    expect(within(dialog).getByText(/Current binding:/i)).toBeVisible()
+    expect(
+      within(dialog).getByRole('button', { name: /Apply policy/i })
+    ).toBeDisabled()
+  })
+
+  it('migrates a secret only after live capability preview and confirmation', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Migrate SESSION_SIGNING_KEY/i,
+      })
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /Migrate secret provider/i,
+    })
+    await user.type(
+      within(dialog).getByLabelText(/Audit reason/i),
+      'Approved provider migration'
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: /Preview migration/i })
+    )
+    expect(
+      await within(dialog).findByText(/Migration dry run ready/i)
+    ).toBeVisible()
+    const apply = within(dialog).getByRole('button', {
+      name: /Apply migration/i,
+    })
+    expect(apply).toBeDisabled()
+    await user.click(
+      within(dialog).getByLabelText(/Confirm provider migration/i)
+    )
+    expect(apply).toBeEnabled()
+    await user.click(apply)
+    expect(
+      await within(dialog).findByText(/Migration outcome: applied/i)
+    ).toBeVisible()
+  })
+
+  it('rotates a local secret through preview, stage, activation, and rollback without rendering the value', async () => {
+    const user = userEvent.setup()
+    const replacement = 'rotation-value-must-never-render'
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Rotate SESSION_SIGNING_KEY/i,
+      })
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /Rotate secret/i,
+    })
+    await user.type(
+      within(dialog).getByLabelText(/Audit reason/i),
+      'Approved versioned rotation'
+    )
+    await user.type(
+      within(dialog).getByLabelText(/Replacement value/i),
+      replacement
+    )
+    expect(within(dialog).queryByText(replacement)).toBeNull()
+
+    await user.click(
+      within(dialog).getByRole('button', { name: /Preview rotation/i })
+    )
+    expect(await within(dialog).findByText(/Rotation ready/i)).toBeVisible()
+    await user.click(
+      within(dialog).getByLabelText(/Confirm secret rotation transition/i)
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: /Stage candidate/i })
+    )
+    expect(await within(dialog).findByText(/is staged/i)).toBeVisible()
+    expect(within(dialog).queryByText(replacement)).toBeNull()
+
+    await user.click(
+      within(dialog).getByLabelText(/Confirm secret rotation transition/i)
+    )
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: /Activate staged version/i,
+      })
+    )
+    expect(await within(dialog).findByText(/is active/i)).toBeVisible()
+
+    await user.click(
+      within(dialog).getByLabelText(/Confirm secret rotation transition/i)
+    )
+    await user.click(within(dialog).getByRole('button', { name: /Roll back/i }))
+    expect(
+      await within(dialog).findByText(/Previous version restored/i)
+    ).toBeVisible()
+    expect(within(dialog).queryByText(replacement)).toBeNull()
+  })
+
+  it('edits a local managed secret only after dry-run and explicit confirmation', async () => {
+    const user = userEvent.setup()
+    const replacement = 'fixture-replacement-must-not-render'
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Edit SESSION_SIGNING_KEY/i,
+      })
+    )
+
+    const dialog = await screen.findByRole('dialog', { name: /Edit secret/i })
+    await user.click(
+      within(dialog).getByRole('button', { name: /Preview mutation/i })
+    )
+    expect(
+      await within(dialog).findByText(/Audit reason is required/i)
+    ).toBeVisible()
+
+    await user.type(
+      within(dialog).getByLabelText(/Audit reason/i),
+      'Approved credential replacement'
+    )
+    await user.type(
+      within(dialog).getByLabelText(/Replacement value/i),
+      replacement
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: /Preview mutation/i })
+    )
+
+    expect(await within(dialog).findByText(/Dry run ready/i)).toBeVisible()
+    const apply = within(dialog).getByRole('button', {
+      name: /Apply mutation/i,
+    })
+    expect(apply).toBeDisabled()
+    await user.click(within(dialog).getByLabelText(/Confirm secret mutation/i))
+    expect(apply).toBeEnabled()
+    await user.click(apply)
+
+    expect(
+      await within(dialog).findByText(/Mutation applied and audit recorded/i)
+    ).toBeVisible()
+    expect(within(dialog).queryByDisplayValue(replacement)).toBeNull()
+    expect(document.body.textContent).not.toContain(replacement)
+  })
+
+  it('keeps remote and metadata-only secret mutation controls disabled', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/secrets-broker')
+    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
+
+    expect(
+      await screen.findByRole('button', { name: /Edit client-secret/i })
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /Reset client-secret/i })
+    ).toBeDisabled()
   })
 
   it('filters, searches, and opens runtime inbox messages', async () => {

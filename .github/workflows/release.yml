@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - master
+  push:
+    branches:
+      - develop
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Run unit tests
+        run: pnpm test:unit
+      - name: Build UI
+        run: pnpm build
+
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            artifact: output/release/@serviceadmin-win32.zip
+          - os: ubuntu-latest
+            platform: linux
+            artifact: output/release/@serviceadmin-linux.tar.gz
+          - os: macos-14
+            platform: darwin
+            artifact: output/release/@serviceadmin-darwin.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test runtime
+        run: pnpm test:runtime
+      - name: Build UI
+        run: pnpm build
+      - name: Package artifact
+        run: pnpm package:artifact -- ${{ matrix.platform }}
+      - name: Verify extracted artifact
+        run: pnpm package:verify -- ${{ matrix.platform }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: serviceadmin-${{ matrix.platform }}
+          path: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs:
+      - quality
+      - package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release-assets
+          pattern: serviceadmin-*
+          merge-multiple: true
+      - name: Prepare release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp service.json release-assets/service.json
+          (
+            cd release-assets
+            sha256sum @serviceadmin-win32.zip @serviceadmin-linux.tar.gz @serviceadmin-darwin.tar.gz service.json > SHA256SUMS.txt
+          )
+          short_sha="${GITHUB_SHA::7}"
+          version="$(date -u +%Y.%-m.%-d)-${short_sha}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.version }}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes "Release-grade Service Admin UI artifacts."
+          gh release upload "$tag" \
+            release-assets/@serviceadmin-win32.zip \
+            release-assets/@serviceadmin-linux.tar.gz \
+            release-assets/@serviceadmin-darwin.tar.gz \
+            release-assets/service.json \
+            release-assets/SHA256SUMS.txt \
+            --clobber
