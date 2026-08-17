@@ -15,7 +15,11 @@ describe('Secrets Broker pinned consumer contract', () => {
         'src/lib/secrets-broker/fixtures/contract-states.json'
       )
     )
-    const digest = createHash('sha256').update(bytes).digest('hex')
+    // Hash LF-normalized bytes so Windows CRLF checkout still matches the
+    // upstream Unix pin. .gitattributes also forces LF for this fixture.
+    const digest = createHash('sha256')
+      .update(bytes.toString('utf8').replaceAll('\r\n', '\n'))
+      .digest('hex')
 
     expect(digest).toBe(pinnedFixtureSha256)
   })
