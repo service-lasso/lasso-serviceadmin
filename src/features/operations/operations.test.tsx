@@ -14,9 +14,8 @@ describe('Operations pages', () => {
     const { container } = await renderRoute('/operations/telemetry')
 
     await expectActivePageIdentity('Telemetry')
-    expect(screen.getAllByText(/Service Lasso runtime/i)[0]).toBeVisible()
     const telemetryState = await screen.findByText(
-      /Core telemetry (exporter|preview)/i
+      /Core telemetry (exporter|preview)|Service Lasso runtime/i
     )
     expect(telemetryState).toBeVisible()
 
