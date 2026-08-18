@@ -45,8 +45,8 @@ import {
   runDashboardAction,
 } from './client'
 import {
-  fetchRuntimeIdentity,
   runtimeIdentityAuditContext,
+  useRuntimeIdentity,
 } from './runtime-auth'
 import { favoritesMutationEnabled } from './stub'
 import type {
@@ -221,16 +221,7 @@ const brokerOperationsQueryKey = [
   ...dashboardQueryKey,
   'secrets-broker-operations',
 ]
-export const runtimeIdentityQueryKey = ['service-lasso-runtime-identity']
-
-export function useRuntimeIdentity() {
-  return useQuery({
-    queryKey: runtimeIdentityQueryKey,
-    queryFn: fetchRuntimeIdentity,
-    retry: false,
-    staleTime: 5_000,
-  })
-}
+export { runtimeIdentityQueryKey, useRuntimeIdentity } from './runtime-auth'
 
 export function useSecretsManagement(search = '') {
   return useQuery({

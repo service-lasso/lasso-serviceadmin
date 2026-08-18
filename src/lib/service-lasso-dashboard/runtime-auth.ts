@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import {
   fetchRuntimeJson,
   serviceLassoStubDataEnabled,
@@ -148,4 +149,20 @@ export function runtimeIdentityAuditContext(identity: RuntimeIdentity) {
     actorKind: identity.actorKind,
     ...(identity.workspaceId ? { workspaceId: identity.workspaceId } : {}),
   }
+}
+
+export const runtimeIdentityQueryKey = ['service-lasso-runtime-identity']
+
+/**
+ * Loads the trusted Service Lasso runtime identity for gated UI.
+ * Lives outside the dashboard hooks barrel so tests can mock that barrel
+ * without disabling the identity gate.
+ */
+export function useRuntimeIdentity() {
+  return useQuery({
+    queryKey: runtimeIdentityQueryKey,
+    queryFn: fetchRuntimeIdentity,
+    retry: false,
+    staleTime: 5_000,
+  })
 }
