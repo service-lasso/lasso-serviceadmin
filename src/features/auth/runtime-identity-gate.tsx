@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
-import { useRuntimeIdentity } from '@/lib/service-lasso-dashboard/hooks'
+import { useRuntimeIdentity } from '@/lib/service-lasso-dashboard/runtime-auth'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 

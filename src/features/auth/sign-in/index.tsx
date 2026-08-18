@@ -1,6 +1,6 @@
 import { Link, useSearch } from '@tanstack/react-router'
 import { Loader2, ShieldCheck, ShieldX } from 'lucide-react'
-import { useRuntimeIdentity } from '@/lib/service-lasso-dashboard/hooks'
+import { useRuntimeIdentity } from '@/lib/service-lasso-dashboard/runtime-auth'
 import { Button } from '@/components/ui/button'
 import {
   Card,
