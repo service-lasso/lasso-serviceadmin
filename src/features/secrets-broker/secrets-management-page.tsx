@@ -69,6 +69,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { KvSecretsEditor } from '@/features/secrets-broker/kv-secrets-editor'
 import {
   buildBulkSecretCampaignPlan,
   buildBulkSecretCampaignApplyGate,
@@ -1763,6 +1764,8 @@ export function SecretsManagementPage({
             loading={liveOverviewLoading}
             error={liveOverviewError}
           />
+
+          <KvSecretsEditor overview={liveOverview} />
 
           <LiveManagedSecretsTable
             managedSecrets={liveManagedSecrets}
