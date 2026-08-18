@@ -84,7 +84,6 @@ export function usePageToolbar(config: PageToolbarConfig) {
   }
 
   const { setConfig, configRef } = context
-  configRef.current = config
 
   const actionKey = JSON.stringify(
     (config.actions ?? []).map((action) => [
@@ -103,11 +102,16 @@ export function usePageToolbar(config: PageToolbarConfig) {
   )
 
   useLayoutEffect(() => {
-    setConfig(configRef.current)
+    configRef.current = config
+  })
+
+  useLayoutEffect(() => {
+    setConfig(config)
     return () => {
       setConfig({})
     }
-  }, [actionKey, navKey, setConfig, configRef])
+    // onClick identity is ignored so the toolbar does not loop setState.
+  }, [actionKey, navKey, setConfig])
 }
 
 function actionButtonClass(tone: PageActionTone | undefined) {
