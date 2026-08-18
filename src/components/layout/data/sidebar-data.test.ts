@@ -71,6 +71,7 @@ describe('sidebar optional page classification', () => {
       '/secrets-broker/secrets',
       '/secrets-broker/sources',
       '/secrets-broker/topology',
+      '/secrets-broker/review',
     ])
     expect(
       secretsBrokerGroup?.items.every((item) => !item.url?.includes('#'))
@@ -106,6 +107,9 @@ describe('Help Center navigation coverage', () => {
       safetyGuide
     )
     expect(coverageByRoute.get('/secrets-broker/topology')?.articleId).toBe(
+      safetyGuide
+    )
+    expect(coverageByRoute.get('/secrets-broker/review')?.articleId).toBe(
       safetyGuide
     )
   })

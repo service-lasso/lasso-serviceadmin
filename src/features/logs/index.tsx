@@ -43,6 +43,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -855,6 +856,12 @@ export function Logs() {
     description:
       'Service Admin log viewing surface for Service Lasso services.',
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'runtime', label: 'Runtime', to: '/runtime' },
+    ],
+  })
 
   const searchState = route.useSearch()
   const navigate = route.useNavigate()
@@ -921,21 +928,6 @@ export function Logs() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap justify-end gap-2'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services' search={{}}>
-                Services
-              </Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/runtime' search={{}}>
-                Runtime
-              </Link>
-            </Button>
-          </div>
-        </div>
-
         {servicesQuery.isLoading ? (
           <LogsLoading />
         ) : (

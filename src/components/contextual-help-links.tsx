@@ -98,6 +98,12 @@ const helpLinksByRoute: Record<string, HelpLink[]> = {
       doc: 'help/variables-and-secrets-broker-safety-guide.md',
     },
   ],
+  '/secrets-broker/review': [
+    {
+      label: 'SecretRef guide',
+      doc: 'help/variables-and-secrets-broker-safety-guide.md',
+    },
+  ],
 }
 
 function normalizePathname(pathname: string) {

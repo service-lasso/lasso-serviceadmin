@@ -429,7 +429,6 @@ describe('Secrets Broker overview dashboard', () => {
       screen.getByText(/Explicit Service Admin stub mode is enabled/i)
     ).toBeVisible()
     expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
-    expect(screen.getAllByText(/Metadata only/i)[0]).toBeVisible()
     expect(
       screen.getByRole('button', { name: /^Add provider$/i })
     ).toBeVisible()
@@ -1104,21 +1103,42 @@ describe('Secrets Broker overview dashboard', () => {
     ).toBe(true)
   })
 
-  it('renders Secrets Broker topology graph and variable mapping table', async () => {
+  it('renders Secrets Broker topology graph as the primary panel', async () => {
     const user = userEvent.setup()
     await renderRoute('/secrets-broker/topology')
 
     await expectActivePageIdentity('Topology')
+    expect(await screen.findByText(/Mapping graph/i)).toBeVisible()
     expect(
-      await screen.findByText(/Live topology source status/i)
+      screen.queryByText(/Live topology source status/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('columnheader', { name: /SecretRef/i })
+    ).not.toBeInTheDocument()
+
+    const graphSearch = screen.getByLabelText(/Search topology/i)
+    expect(graphSearch).toBeVisible()
+    expect(
+      screen.getByText(/Showing \d+ of \d+ nodes and \d+ of \d+ relationships/i)
     ).toBeVisible()
-    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
-    expect(screen.getByText(/Live source matched refs/i)).toBeVisible()
-    expect(screen.getByText(/Source proof pending/i)).toBeVisible()
-    expect(screen.getByText(/Local encrypted store/i)).toBeVisible()
-    expect(await screen.findByText(/Runtime inventory source/i)).toBeVisible()
-    expect(screen.getByText(/Derived from table rows/i)).toBeVisible()
-    expect(screen.getByRole('columnheader', { name: /service/i })).toBeVisible()
+
+    await user.type(graphSearch, 'zz-no-match')
+    expect(
+      screen.getByText(/No topology nodes or relationships match/i)
+    ).toBeVisible()
+
+    await user.keyboard('{Escape}')
+    expect(graphSearch).toHaveValue('')
+  })
+
+  it('renders the Secrets Broker Review mapping table', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/secrets-broker/review')
+
+    await expectActivePageIdentity('Review')
+    expect(
+      await screen.findByRole('columnheader', { name: /service/i })
+    ).toBeVisible()
     expect(
       screen.getByRole('columnheader', { name: /variable/i })
     ).toBeVisible()
@@ -1134,37 +1154,6 @@ describe('Secrets Broker overview dashboard', () => {
     expect(
       screen.getAllByRole('link', { name: /^Provider status$/i })[0]
     ).toBeVisible()
-
-    const graphSearch = screen.getByLabelText(/Search topology/i)
-    expect(graphSearch).toBeVisible()
-    expect(
-      screen.getByText(/Showing \d+ of \d+ nodes and \d+ of \d+ relationships/i)
-    ).toBeVisible()
-
-    await user.type(graphSearch, 'telegram')
-    expect(graphSearch).toHaveValue('telegram')
-    expect(screen.getByText('TELEGRAM_BOT_TOKEN')).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /Clear topology search/i })
-    ).toBeVisible()
-
-    await user.click(
-      screen.getByRole('button', { name: /Clear topology search/i })
-    )
-    expect(graphSearch).toHaveValue('')
-    expect(screen.getByText('SESSION_SECRET')).toBeVisible()
-
-    await user.type(graphSearch, 'zz-no-match')
-    expect(
-      screen.getByText(/No topology nodes or relationships match/i)
-    ).toBeVisible()
-    expect(
-      screen.getByText(/No secret variable mappings match the current filters/i)
-    ).toBeVisible()
-
-    await user.keyboard('{Escape}')
-    expect(graphSearch).toHaveValue('')
-    expect(screen.getByText('SESSION_SECRET')).toBeVisible()
 
     const tableSearch = screen.getByPlaceholderText(
       /Search services, variables, refs, sources, and status/i

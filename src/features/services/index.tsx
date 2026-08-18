@@ -1,17 +1,16 @@
 import { getRouteApi } from '@tanstack/react-router'
 import { Play, RotateCcw, Square } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
-import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import {
   useDashboardAction,
   useServices,
 } from '@/lib/service-lasso-dashboard/hooks'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -47,6 +46,35 @@ export function Services() {
   const services = servicesQuery.data ?? []
   const actionsDisabled = actionMutation.isPending || services.length === 0
 
+  usePageToolbar({
+    actions: [
+      {
+        id: 'start-all',
+        label: 'Start all',
+        icon: Play,
+        tone: 'start',
+        disabled: actionsDisabled,
+        onClick: () => actionMutation.mutate('start-services'),
+      },
+      {
+        id: 'stop-all',
+        label: 'Stop all',
+        icon: Square,
+        tone: 'stop',
+        disabled: actionsDisabled,
+        onClick: () => actionMutation.mutate('stop-services'),
+      },
+      {
+        id: 'restart-all',
+        label: 'Restart all',
+        icon: RotateCcw,
+        tone: 'restart',
+        disabled: actionsDisabled,
+        onClick: () => actionMutation.mutate('restart-services'),
+      },
+    ],
+  })
+
   return (
     <>
       <Header fixed>
@@ -59,44 +87,6 @@ export function Services() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-center justify-end gap-2'>
-          <div className='flex flex-wrap items-center gap-2'>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              className={lifecycleActionButtonClass('start')}
-              disabled={actionsDisabled}
-              onClick={() => actionMutation.mutate('start-services')}
-            >
-              <Play className='size-3.5' />
-              Start all
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              className={lifecycleActionButtonClass('stop')}
-              disabled={actionsDisabled}
-              onClick={() => actionMutation.mutate('stop-services')}
-            >
-              <Square className='size-3.5' />
-              Stop all
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              className={lifecycleActionButtonClass('restart')}
-              disabled={actionsDisabled}
-              onClick={() => actionMutation.mutate('restart-services')}
-            >
-              <RotateCcw className='size-3.5' />
-              Restart all
-            </Button>
-          </div>
-        </div>
-
         {servicesQuery.isLoading ? (
           <ServicesLoading />
         ) : (

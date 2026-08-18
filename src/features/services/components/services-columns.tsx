@@ -85,12 +85,35 @@ export function hasLifecycleAction(
   )
 }
 
+/**
+ * Start is available only while stopped; stop and restart only while running.
+ */
+export function isLifecycleActionEnabled(
+  service: DashboardService,
+  action: 'start' | 'stop' | 'restart'
+) {
+  if (!hasLifecycleAction(service, action)) {
+    return false
+  }
+
+  const running =
+    service.status === 'running' || service.status === 'degraded'
+  if (action === 'start') {
+    return !running
+  }
+
+  return running
+}
+
 function ServiceLifecycleControls({ service }: { service: DashboardService }) {
   const actionMutation = useDashboardAction()
-  const disabled = actionMutation.isPending
+  const pending = actionMutation.isPending
   const canStart = hasLifecycleAction(service, 'start')
   const canStop = hasLifecycleAction(service, 'stop')
   const canRestart = hasLifecycleAction(service, 'restart')
+  const startEnabled = isLifecycleActionEnabled(service, 'start')
+  const stopEnabled = isLifecycleActionEnabled(service, 'stop')
+  const restartEnabled = isLifecycleActionEnabled(service, 'restart')
 
   const runAction = (action: 'start' | 'stop' | 'restart') => {
     actionMutation.mutate({
@@ -117,11 +140,11 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         <Button
           type='button'
           size='icon'
-          variant='outline'
+          variant='default'
           className={lifecycleActionButtonClass('start', 'size-8')}
           aria-label={`Start ${service.name}`}
           title={`Start ${service.name}`}
-          disabled={disabled}
+          disabled={pending || !startEnabled}
           onClick={(event) => {
             event.stopPropagation()
             runAction('start')
@@ -134,11 +157,11 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         <Button
           type='button'
           size='icon'
-          variant='outline'
+          variant='default'
           className={lifecycleActionButtonClass('stop', 'size-8')}
           aria-label={`Stop ${service.name}`}
           title={`Stop ${service.name}`}
-          disabled={disabled}
+          disabled={pending || !stopEnabled}
           onClick={(event) => {
             event.stopPropagation()
             runAction('stop')
@@ -151,11 +174,11 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         <Button
           type='button'
           size='icon'
-          variant='outline'
+          variant='default'
           className={lifecycleActionButtonClass('restart', 'size-8')}
           aria-label={`Restart ${service.name}`}
           title={`Restart ${service.name}`}
-          disabled={disabled}
+          disabled={pending || !restartEnabled}
           onClick={(event) => {
             event.stopPropagation()
             runAction('restart')

@@ -106,6 +106,7 @@ test.describe('Secrets Broker browser coverage', () => {
       ['Secrets', /\/secrets-broker\/secrets$/],
       ['Providers', /\/secrets-broker\/sources$/],
       ['Topology', /\/secrets-broker\/topology$/],
+      ['Review', /\/secrets-broker\/review$/],
     ] as const
 
     await expect(
@@ -1181,6 +1182,10 @@ test.describe('Secrets Broker browser coverage', () => {
       {
         path: '/secrets-broker/topology',
         identity: 'Topology',
+      },
+      {
+        path: '/secrets-broker/review',
+        identity: 'Review',
       },
       {
         path: '/operations/audit-logging',

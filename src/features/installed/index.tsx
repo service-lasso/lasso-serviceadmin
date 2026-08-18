@@ -36,6 +36,7 @@ import {
   DataTableToolbar,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -179,6 +180,12 @@ export function Installed() {
     title: 'Service Admin - Installed',
     description: 'Service Admin installed services and paths view.',
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'network', label: 'Network', to: '/network' },
+    ],
+  })
 
   const servicesQuery = useServices()
   const [sorting, setSorting] = useState<SortingState>([
@@ -227,16 +234,6 @@ export function Installed() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-end gap-2'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/network'>Network</Link>
-            </Button>
-          </div>
-        </div>
 
         {servicesQuery.isLoading ? (
           <InstalledLoading />

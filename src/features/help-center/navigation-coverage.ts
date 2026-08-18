@@ -79,6 +79,10 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
     articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
   {
+    route: '/secrets-broker/review',
+    articleId: 'help/variables-and-secrets-broker-safety-guide.md',
+  },
+  {
     route: '/settings/appearance',
     articleId: 'help/service-admin-overview-and-navigation.md',
   },

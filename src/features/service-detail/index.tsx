@@ -1571,9 +1571,11 @@ function ServiceLifecycleHeaderControls({
       data-testid='service-detail-lifecycle-controls'
     >
       {lifecycleHeaderActions.map((action) => {
+        const running =
+          service.status === 'running' || service.status === 'degraded'
         const isBlockedByState =
-          (action.kind === 'start' && service.status === 'running') ||
-          (action.kind !== 'start' && service.status === 'stopped')
+          (action.kind === 'start' && running) ||
+          (action.kind !== 'start' && !running)
         const isAvailable =
           availableActions.has(action.kind) &&
           !isProvider &&
@@ -1593,7 +1595,7 @@ function ServiceLifecycleHeaderControls({
                 <Button
                   type='button'
                   size='icon'
-                  variant='outline'
+                  variant='default'
                   className={lifecycleActionButtonClass(
                     action.kind,
                     'size-10 shrink-0'
@@ -1787,13 +1789,17 @@ function ServiceActionButton({
     }
 
     const lifecycleAction = action.kind
+    const running =
+      service.status === 'running' || service.status === 'degraded'
+    const enabled =
+      lifecycleAction === 'start' ? !running : running
 
     return (
       <Button
         key={key}
-        variant='outline'
+        variant='default'
         size='sm'
-        disabled={actionMutation.isPending}
+        disabled={actionMutation.isPending || !enabled}
         className={lifecycleActionButtonClass(lifecycleAction)}
         onClick={() =>
           actionMutation.mutate({

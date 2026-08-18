@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
-import { hasLifecycleAction } from './services-columns'
+import {
+  hasLifecycleAction,
+  isLifecycleActionEnabled,
+} from './services-columns'
 
 function service(overrides: Partial<DashboardService> = {}): DashboardService {
   return {
@@ -65,5 +68,17 @@ describe('services table lifecycle controls', () => {
     expect(hasLifecycleAction(provider, 'start')).toBe(false)
     expect(hasLifecycleAction(provider, 'stop')).toBe(false)
     expect(hasLifecycleAction(provider, 'restart')).toBe(false)
+  })
+
+  it('enables start only when stopped and stop/restart only when running', () => {
+    const running = service({ status: 'running' })
+    const stopped = service({ status: 'stopped' })
+
+    expect(isLifecycleActionEnabled(running, 'start')).toBe(false)
+    expect(isLifecycleActionEnabled(running, 'stop')).toBe(true)
+    expect(isLifecycleActionEnabled(running, 'restart')).toBe(true)
+    expect(isLifecycleActionEnabled(stopped, 'start')).toBe(true)
+    expect(isLifecycleActionEnabled(stopped, 'stop')).toBe(false)
+    expect(isLifecycleActionEnabled(stopped, 'restart')).toBe(false)
   })
 })

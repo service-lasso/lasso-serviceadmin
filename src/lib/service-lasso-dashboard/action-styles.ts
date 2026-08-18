@@ -6,17 +6,24 @@ type LifecycleActionKind = Extract<
   'start' | 'stop' | 'restart'
 >
 
-export function getLifecycleActionHoverClass(kind: LifecycleActionKind) {
+/**
+ * Filled lifecycle colors: start is green, stop and restart are red.
+ */
+export function getLifecycleActionFillClass(kind: LifecycleActionKind) {
   if (kind === 'start') {
-    return 'hover:border-emerald-600 hover:bg-emerald-600 hover:text-white focus-visible:border-emerald-600 focus-visible:ring-emerald-600/30'
+    return 'border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white focus-visible:border-emerald-700 focus-visible:ring-emerald-600/30 disabled:border-emerald-600/40 disabled:bg-emerald-600/40 disabled:text-white'
   }
 
-  return 'hover:border-red-600 hover:bg-red-600 hover:text-white focus-visible:border-red-600 focus-visible:ring-red-600/30'
+  return 'border-red-600 bg-red-600 text-white hover:border-red-700 hover:bg-red-700 hover:text-white focus-visible:border-red-700 focus-visible:ring-red-600/30 disabled:border-red-600/40 disabled:bg-red-600/40 disabled:text-white'
+}
+
+export function getLifecycleActionHoverClass(kind: LifecycleActionKind) {
+  return getLifecycleActionFillClass(kind)
 }
 
 export function lifecycleActionButtonClass(
   kind: LifecycleActionKind,
   className?: string
 ) {
-  return cn(getLifecycleActionHoverClass(kind), className)
+  return cn(getLifecycleActionFillClass(kind), className)
 }

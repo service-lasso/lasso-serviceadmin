@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { ContextualHelpLinks } from '@/components/contextual-help-links'
+import { PageToolbar } from '@/components/page-toolbar'
 
 type MainProps = React.HTMLAttributes<HTMLElement> & {
   constrained?: boolean
@@ -34,7 +34,7 @@ export function Main({
       )}
       {...props}
     >
-      <ContextualHelpLinks />
+      <PageToolbar />
       {children}
     </main>
   )

@@ -2,8 +2,8 @@ import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Main } from './main'
 
-vi.mock('@/components/contextual-help-links', () => ({
-  ContextualHelpLinks: () => null,
+vi.mock('@/components/page-toolbar', () => ({
+  PageToolbar: () => null,
 }))
 
 describe('Main layout container', () => {
