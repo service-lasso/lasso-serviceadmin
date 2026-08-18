@@ -15,6 +15,7 @@ playwright-report/
 test-results/
 verify/service-harness.ci.json
 dist-ssr
+/output/
 *.local
 
 .env

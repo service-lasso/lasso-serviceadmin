@@ -113,6 +113,8 @@ import {
   type ServiceTerminalStdinCapability,
 } from '@/features/logs/provider'
 import { buildMetadataTableRows } from './metadata-table'
+import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
+import { SecretsBrokerOperationsPanel } from './secrets-operations-panel'
 import { ServiceConfigEditor } from './service-config-editor'
 import {
   defaultServiceDetailTab,
@@ -2200,6 +2202,12 @@ export function ServiceDetail({
                     <ServiceTerminalPanel service={service} />
                   </TabsContent>
                 </Tabs>
+                {service.id === '@secretsbroker' ? (
+                  <div className='space-y-4'>
+                    <SecretsBrokerOperationsPanel />
+                    <SecretsBrokerLifecyclePanel />
+                  </div>
+                ) : null}
               </>
             )
           })()

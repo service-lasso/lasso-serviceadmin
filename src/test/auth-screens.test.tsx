@@ -8,7 +8,7 @@ type ScreenCase = {
 }
 
 const authScreens: ScreenCase[] = [
-  { path: '/sign-in', marker: /^Sign in$/i },
+  { path: '/sign-in', marker: /^Trusted Service Lasso access$/i },
   { path: '/sign-up', marker: /^Create an account$/i },
   { path: '/forgot-password', marker: /^Forgot Password$/i },
   { path: '/otp', marker: /^Two-factor Authentication$/i },
@@ -24,5 +24,20 @@ describe('auth screens', () => {
     await waitFor(() => {
       expect(document.title).not.toContain('404')
     })
+  })
+})
+
+describe('trusted Service Lasso sign-in boundary', () => {
+  it('does not collect a password or create a browser-owned access token', async () => {
+    await renderRoute('/sign-in')
+
+    expect(
+      await screen.findByText(/^Trusted Service Lasso access$/i)
+    ).toBeVisible()
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
+    expect(document.cookie).not.toContain('thisisjustarandomstring')
+    expect(window.localStorage.length).toBe(0)
+    expect(window.sessionStorage.length).toBe(0)
   })
 })
