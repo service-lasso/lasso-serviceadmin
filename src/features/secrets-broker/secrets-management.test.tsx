@@ -258,6 +258,12 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
         )
       }
 
+      if (url.includes('/proxy/v1/kv/')) {
+        return new Response(JSON.stringify({ errors: ['not mocked'] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -371,6 +377,12 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
         )
       }
 
+      if (url.includes('/proxy/v1/kv/')) {
+        return new Response(JSON.stringify({ errors: ['not mocked'] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -438,6 +450,12 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
         )
       }
 
+      if (url.includes('/proxy/v1/kv/')) {
+        return new Response(JSON.stringify({ errors: ['not mocked'] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -577,6 +595,12 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
         )
       }
 
+      if (url.includes('/proxy/v1/kv/')) {
+        return new Response(JSON.stringify({ errors: ['not mocked'] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -726,6 +750,12 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
         )
       }
 
+      if (url.includes('/proxy/v1/kv/')) {
+        return new Response(JSON.stringify({ errors: ['not mocked'] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
 
@@ -817,6 +847,12 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
         )
       }
 
+      if (url.includes('/proxy/v1/kv/')) {
+        return new Response(JSON.stringify({ errors: ['not mocked'] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
 
