@@ -25,6 +25,10 @@ export const stubDashboardDataEnabled =
   import.meta.env.DEV &&
   import.meta.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA === 'true'
 
+/**
+ * Reads stub-dashboard mode at call time so Vitest `vi.stubEnv` takes effect.
+ * The module-load `stubDashboardDataEnabled` const is too early for route tests.
+ */
 export function isServiceAdminStubModeEnabled() {
   return (
     import.meta.env.DEV &&

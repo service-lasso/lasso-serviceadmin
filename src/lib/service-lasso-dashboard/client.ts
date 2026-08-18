@@ -10,7 +10,7 @@ import {
   runDashboardAction as runStubDashboardAction,
   saveServiceConfigDocument as saveStubServiceConfigDocument,
   serviceLassoApiBaseUrl,
-  stubDashboardDataEnabled,
+  isServiceAdminStubModeEnabled,
 } from './stub'
 import type {
   AuditEventsFilters,
@@ -269,7 +269,7 @@ async function runRuntimeDashboardAction(action: DashboardAction) {
 }
 
 export async function fetchDashboardSummary() {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubDashboardSummary()
   }
 
@@ -277,7 +277,7 @@ export async function fetchDashboardSummary() {
 }
 
 export async function fetchServices() {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubServices()
   }
 
@@ -285,7 +285,7 @@ export async function fetchServices() {
 }
 
 export async function fetchDashboardService(serviceId: string) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubDashboardService(serviceId)
   }
 
@@ -293,7 +293,7 @@ export async function fetchDashboardService(serviceId: string) {
 }
 
 export async function fetchTelemetryPreview() {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubTelemetryPreview()
   }
 
@@ -301,7 +301,7 @@ export async function fetchTelemetryPreview() {
 }
 
 export async function fetchServiceTelemetryPreview(serviceId: string) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubServiceTelemetryPreview(serviceId)
   }
 
@@ -309,7 +309,7 @@ export async function fetchServiceTelemetryPreview(serviceId: string) {
 }
 
 export async function fetchAuditEvents(filters: AuditEventsFilters = {}) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubAuditEvents(filters)
   }
 
@@ -317,7 +317,7 @@ export async function fetchAuditEvents(filters: AuditEventsFilters = {}) {
 }
 
 export async function fetchServiceConfigDocument(serviceId: string) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return fetchStubServiceConfigDocument(serviceId)
   }
 
@@ -335,7 +335,7 @@ export async function saveServiceConfigDocument({
   content: string
   reason?: string | null
 }) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return saveStubServiceConfigDocument({ serviceId, content, reason })
   }
 
@@ -361,7 +361,7 @@ export function buildServiceLogUrl(
     type?: ServiceLogType
   }
 ) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return buildStubServiceLogUrl(serviceId, options)
   }
 
@@ -374,7 +374,7 @@ export function buildServiceLogUrl(
 }
 
 export async function runDashboardAction(action: DashboardAction) {
-  if (stubDashboardDataEnabled) {
+  if (isServiceAdminStubModeEnabled()) {
     return runStubDashboardAction(action)
   }
 
