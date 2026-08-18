@@ -75,7 +75,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('Secrets Broker secrets management page', () => {
+/** Windows Release CI ran this suite at ~16s–30s per long interaction test. */
+describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
   it('hides stub previews and fixture rows when stub mode is disabled', async () => {
     await renderRoute('/secrets-broker/secrets', { stubData: false })
 
