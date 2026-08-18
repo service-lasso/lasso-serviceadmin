@@ -1791,8 +1791,7 @@ function ServiceActionButton({
     const lifecycleAction = action.kind
     const running =
       service.status === 'running' || service.status === 'degraded'
-    const enabled =
-      lifecycleAction === 'start' ? !running : running
+    const enabled = lifecycleAction === 'start' ? !running : running
 
     return (
       <Button

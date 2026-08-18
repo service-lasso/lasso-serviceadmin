@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
@@ -10,7 +11,8 @@ import {
 } from 'react'
 import { Link, useRouterState, type LinkProps } from '@tanstack/react-router'
 import { Compass, type LucideIcon } from 'lucide-react'
-import { getContextualHelpLinks } from '@/components/contextual-help-links'
+import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -20,8 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
-import { cn } from '@/lib/utils'
+import { getContextualHelpLinks } from '@/components/contextual-help-links'
 
 export type PageActionTone = 'default' | 'start' | 'stop' | 'restart'
 
@@ -60,10 +61,7 @@ const PageToolbarContext = createContext<PageToolbarContextValue | null>(null)
 export function PageToolbarProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<PageToolbarConfig>({})
   const configRef = useRef<PageToolbarConfig>({})
-  const value = useMemo(
-    () => ({ config, configRef, setConfig }),
-    [config]
-  )
+  const value = useMemo(() => ({ config, configRef, setConfig }), [config])
 
   return (
     <PageToolbarContext.Provider value={value}>
@@ -82,7 +80,7 @@ export function usePageToolbar(config: PageToolbarConfig) {
     throw new Error('usePageToolbar must be used inside PageToolbarProvider.')
   }
 
-  context.configRef.current = config
+  const { setConfig, configRef } = context
 
   const actionKey = JSON.stringify(
     (config.actions ?? []).map((action) => [
@@ -99,14 +97,18 @@ export function usePageToolbar(config: PageToolbarConfig) {
       String(item.to ?? ''),
     ])
   )
-  const { setConfig } = context
 
   useLayoutEffect(() => {
-    setConfig(context.configRef.current)
+    configRef.current = config
+  })
+
+  useLayoutEffect(() => {
+    setConfig(config)
     return () => {
       setConfig({})
     }
-  }, [actionKey, navKey, setConfig, context.configRef])
+    // onClick identity is ignored so the toolbar does not loop setState.
+  }, [actionKey, navKey, setConfig])
 }
 
 function actionButtonClass(tone: PageActionTone | undefined) {
