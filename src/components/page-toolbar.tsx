@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
@@ -82,7 +83,8 @@ export function usePageToolbar(config: PageToolbarConfig) {
     throw new Error('usePageToolbar must be used inside PageToolbarProvider.')
   }
 
-  context.configRef.current = config
+  const { setConfig, configRef } = context
+  configRef.current = config
 
   const actionKey = JSON.stringify(
     (config.actions ?? []).map((action) => [
@@ -99,14 +101,13 @@ export function usePageToolbar(config: PageToolbarConfig) {
       String(item.to ?? ''),
     ])
   )
-  const { setConfig } = context
 
   useLayoutEffect(() => {
-    setConfig(context.configRef.current)
+    setConfig(configRef.current)
     return () => {
       setConfig({})
     }
-  }, [actionKey, navKey, setConfig, context.configRef])
+  }, [actionKey, navKey, setConfig, configRef])
 }
 
 function actionButtonClass(tone: PageActionTone | undefined) {
