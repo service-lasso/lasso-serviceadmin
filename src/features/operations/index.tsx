@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -29,7 +28,6 @@ import type {
   TelemetryPreview,
 } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,

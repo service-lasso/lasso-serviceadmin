@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Link, getRouteApi } from '@tanstack/react-router'
+import { getRouteApi } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
   Activity,
