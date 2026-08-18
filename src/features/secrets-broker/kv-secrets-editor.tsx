@@ -108,7 +108,7 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
 
   const listQuery = useQuery({
     queryKey: ['secrets-broker', 'kv', 'list', source.id, prefix],
-    queryFn: () => listKvKeys(prefix, query),
+    queryFn: () => listKvKeys(prefix, { source: source.id }),
   })
 
   const metadataReady = selectedPath.length > 0
