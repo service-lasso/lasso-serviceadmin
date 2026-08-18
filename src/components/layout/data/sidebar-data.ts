@@ -1,7 +1,9 @@
 import {
+  Blocks,
+  BookKey,
   Boxes,
+  ClipboardList,
   Command,
-  DatabaseZap,
   FileChartColumn,
   GitBranch,
   Globe,
@@ -109,17 +111,22 @@ export const sidebarData: SidebarData = {
         {
           title: 'Secrets',
           url: '/secrets-broker/secrets',
-          icon: DatabaseZap,
+          icon: BookKey,
         },
         {
           title: 'Providers',
           url: '/secrets-broker/sources',
-          icon: DatabaseZap,
+          icon: Blocks,
         },
         {
           title: 'Topology',
           url: '/secrets-broker/topology',
           icon: Network,
+        },
+        {
+          title: 'Review',
+          url: '/secrets-broker/review',
+          icon: ClipboardList,
         },
       ],
     },

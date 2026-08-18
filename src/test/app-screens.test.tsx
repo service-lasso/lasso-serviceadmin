@@ -76,6 +76,10 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Secrets Broker Topology',
   },
   {
+    path: '/secrets-broker/review',
+    title: 'Service Admin - Secrets Broker Review',
+  },
+  {
     path: '/operations/telemetry',
     title: 'Service Admin - Operations Telemetry',
   },
@@ -179,6 +183,11 @@ const headerIdentityRoutes: HeaderIdentityCase[] = [
     identity: 'Topology',
     removedHeading: /^Secrets Broker topology$/i,
     removedCopy: /Service variables, SecretRef mappings/i,
+  },
+  {
+    path: '/secrets-broker/review',
+    identity: 'Review',
+    removedHeading: /^Secrets Broker review$/i,
   },
   {
     path: '/secrets-broker',
@@ -400,7 +409,7 @@ describe('app screens', () => {
 
       expect(
         screen.getByRole('navigation', {
-          name: /^Contextual Help Center links$/i,
+          name: /^Quick Nav$/i,
         })
       ).toBeVisible()
 

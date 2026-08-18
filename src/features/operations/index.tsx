@@ -47,6 +47,7 @@ import {
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -874,12 +875,6 @@ function OperationsHeader() {
           <ProfileDropdown />
         </div>
       </Header>
-
-      <div className='flex flex-wrap items-end justify-end gap-2'>
-        <Button variant='outline' size='sm' asChild>
-          <Link to='/runtime'>Runtime</Link>
-        </Button>
-      </div>
     </>
   )
 }
@@ -889,6 +884,9 @@ export function OperationsTelemetry() {
     title: 'Service Admin - Operations Telemetry',
     description:
       'Operations telemetry across Service Lasso and Secrets Broker sources.',
+  })
+  usePageToolbar({
+    quickNav: [{ id: 'runtime', label: 'Runtime', to: '/runtime' }],
   })
 
   const servicesQuery = useServices()
@@ -1003,6 +1001,9 @@ export function OperationsAuditLogging() {
     title: 'Service Admin - Operations Audit',
     description:
       'Operations audit events across Service Lasso and Secrets Broker sources.',
+  })
+  usePageToolbar({
+    quickNav: [{ id: 'runtime', label: 'Runtime', to: '/runtime' }],
   })
 
   const auditEventsQuery = useAuditEvents({ limit: 100 })

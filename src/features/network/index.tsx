@@ -37,6 +37,7 @@ import {
   DataTableToolbar,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -233,6 +234,12 @@ export function Network() {
     title: 'Service Admin - Network',
     description: 'Service Admin network endpoints and exposure view.',
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'runtime', label: 'Runtime', to: '/runtime' },
+    ],
+  })
 
   const servicesQuery = useServices()
   const [sorting, setSorting] = useState<SortingState>([
@@ -289,16 +296,6 @@ export function Network() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-end gap-2'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/runtime'>Runtime</Link>
-            </Button>
-          </div>
-        </div>
 
         {servicesQuery.isLoading ? (
           <NetworkLoading />

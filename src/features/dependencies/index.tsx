@@ -50,6 +50,7 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search as GlobalSearch } from '@/components/search'
@@ -130,6 +131,12 @@ export function Dependencies() {
   usePageMetadata({
     title: 'Service Admin - Dependencies',
     description: 'Service Admin dependency graph and relationship table.',
+  })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'logs', label: 'Logs', to: '/logs' },
+    ],
   })
 
   const searchState = route.useSearch()
@@ -479,17 +486,6 @@ export function Dependencies() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-end gap-2'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/logs'>Logs</Link>
-            </Button>
-          </div>
-        </div>
-
         {servicesQuery.isLoading ? (
           <DependenciesLoading />
         ) : (

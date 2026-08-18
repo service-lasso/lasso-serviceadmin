@@ -36,6 +36,7 @@ import {
   DataTableToolbar,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -225,6 +226,12 @@ export function Variables({ service, search, navigate }: VariablesProps) {
     title: 'Service Admin - Variables',
     description: 'Service Admin environment variables and config values view.',
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'installed', label: 'Installed', to: '/installed' },
+    ],
+  })
 
   const servicesQuery = useServices()
   const focusedRowRef = useRef<HTMLTableRowElement | null>(null)
@@ -386,17 +393,6 @@ export function Variables({ service, search, navigate }: VariablesProps) {
       </Header>
 
       <Main fixed className='min-h-0 gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-end gap-2'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/installed'>Installed</Link>
-            </Button>
-          </div>
-        </div>
-
         {servicesQuery.isLoading ? (
           <VariablesLoading />
         ) : (

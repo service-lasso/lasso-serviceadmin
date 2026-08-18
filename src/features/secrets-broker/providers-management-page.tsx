@@ -59,6 +59,7 @@ import {
   DataTableToolbar,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -729,6 +730,16 @@ export function ProvidersManagementPage() {
   const [addProviderOpen, setAddProviderOpen] = useState(false)
   const [selectedAction, setSelectedAction] =
     useState<SelectedProviderAction | null>(null)
+  usePageToolbar({
+    actions: [
+      {
+        id: 'add-provider',
+        label: 'Add provider',
+        icon: CirclePlus,
+        onClick: () => setAddProviderOpen(true),
+      },
+    ],
+  })
   const columns = useMemo(
     () =>
       providerColumns((provider, action) =>
@@ -767,19 +778,6 @@ export function ProvidersManagementPage() {
       </Header>
 
       <Main id='content' className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap justify-end gap-3'>
-          <div className='flex flex-wrap gap-2'>
-            <Badge variant='secondary'>Metadata only</Badge>
-            <Button
-              type='button'
-              size='sm'
-              onClick={() => setAddProviderOpen(true)}
-            >
-              <CirclePlus className='size-4' /> Add provider
-            </Button>
-          </div>
-        </div>
-
         <div className='flex flex-1 flex-col gap-4'>
           <LiveSourceMetadata
             overview={liveBrokerOverviewQuery.data}

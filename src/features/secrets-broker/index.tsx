@@ -37,6 +37,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { Header } from '@/components/layout/header'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -2775,6 +2776,16 @@ export function SecretsBrokerSetupWizard({
     title: pageMetadata.title,
     description: pageMetadata.description,
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'variables', label: 'View variables', to: '/variables' },
+      {
+        id: 'dependencies',
+        label: 'Dependency impact',
+        to: '/dependencies',
+      },
+    ],
+  })
 
   const [auditTypeFilter, setAuditTypeFilter] = useState<
     SecretsBrokerAuditEventType | 'all'
@@ -2915,17 +2926,6 @@ export function SecretsBrokerSetupWizard({
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap justify-end gap-3'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/variables'>View variables</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/dependencies'>Dependency impact</Link>
-            </Button>
-          </div>
-        </div>
-
         {focusSection === 'overview' ? (
           <>
             <Card>
