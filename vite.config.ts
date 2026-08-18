@@ -29,7 +29,7 @@ type StubServiceDefinition = {
 
 async function loadStubServiceDefinition(serviceId: string) {
   const serviceJsonPath = path.resolve(
-    __dirname,
+    import.meta.dirname,
     'public',
     'services',
     serviceId,
@@ -363,14 +363,14 @@ export default defineConfig({
       : []),
     tanstackRouter({
       target: 'react',
-      autoCodeSplitting: true,
+      autoCodeSplitting: process.env.VITEST !== 'true',
     }),
     react(),
     tailwindcss(),
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
 })
