@@ -11,7 +11,8 @@ import {
 } from 'react'
 import { Link, useRouterState, type LinkProps } from '@tanstack/react-router'
 import { Compass, type LucideIcon } from 'lucide-react'
-import { getContextualHelpLinks } from '@/components/contextual-help-links'
+import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -21,8 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
-import { cn } from '@/lib/utils'
+import { getContextualHelpLinks } from '@/components/contextual-help-links'
 
 export type PageActionTone = 'default' | 'start' | 'stop' | 'restart'
 
@@ -61,10 +61,7 @@ const PageToolbarContext = createContext<PageToolbarContextValue | null>(null)
 export function PageToolbarProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<PageToolbarConfig>({})
   const configRef = useRef<PageToolbarConfig>({})
-  const value = useMemo(
-    () => ({ config, configRef, setConfig }),
-    [config]
-  )
+  const value = useMemo(() => ({ config, configRef, setConfig }), [config])
 
   return (
     <PageToolbarContext.Provider value={value}>

@@ -96,8 +96,7 @@ export function isLifecycleActionEnabled(
     return false
   }
 
-  const running =
-    service.status === 'running' || service.status === 'degraded'
+  const running = service.status === 'running' || service.status === 'degraded'
   if (action === 'start') {
     return !running
   }

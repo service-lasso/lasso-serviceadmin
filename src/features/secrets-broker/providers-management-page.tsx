@@ -59,8 +59,8 @@ import {
   DataTableToolbar,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
-import { usePageToolbar } from '@/components/page-toolbar'
 import { Main } from '@/components/layout/main'
+import { usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'

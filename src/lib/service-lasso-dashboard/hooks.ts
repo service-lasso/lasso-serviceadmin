@@ -44,10 +44,7 @@ import {
   fetchTelemetryPreview,
   runDashboardAction,
 } from './client'
-import {
-  runtimeIdentityAuditContext,
-  useRuntimeIdentity,
-} from './runtime-auth'
+import { runtimeIdentityAuditContext, useRuntimeIdentity } from './runtime-auth'
 import { favoritesMutationEnabled } from './stub'
 import type {
   AuditEventsFilters,
