@@ -1,0 +1,72 @@
+{
+  "id": "@serviceadmin",
+  "name": "Core Service Admin",
+  "description": "Authenticated operator UI for Service Lasso and its Secrets Broker.",
+  "version": "0.1.0",
+  "enabled": true,
+  "depend_on": ["@node"],
+  "ports": { "ui": 17700 },
+  "env": {
+    "SERVICE_HOST": "127.0.0.1",
+    "SERVICE_PORT": "${UI_PORT}",
+    "SERVICE_LASSO_API_BASE_URL": "http://127.0.0.1:17883",
+    "SERVICE_LASSO_RUNTIME_API_BASE_URL": "http://127.0.0.1:17883"
+  },
+  "urls": [
+    { "label": "ui", "url": "http://127.0.0.1:${UI_PORT}/", "kind": "local" }
+  ],
+  "artifact": {
+    "kind": "archive",
+    "source": {
+      "type": "github-release",
+      "repo": "service-lasso/lasso-serviceadmin",
+      "channel": "latest"
+    },
+    "platforms": {
+      "win32": {
+        "assetName": "@serviceadmin-win32.zip",
+        "archiveType": "zip",
+        "command": "node",
+        "args": ["runtime/server.js"],
+        "checksum": {
+          "algorithm": "sha256",
+          "assetName": "SHA256SUMS.txt"
+        }
+      },
+      "linux": {
+        "assetName": "@serviceadmin-linux.tar.gz",
+        "archiveType": "tar.gz",
+        "command": "node",
+        "args": ["runtime/server.js"],
+        "checksum": {
+          "algorithm": "sha256",
+          "assetName": "SHA256SUMS.txt"
+        }
+      },
+      "darwin": {
+        "assetName": "@serviceadmin-darwin.tar.gz",
+        "archiveType": "tar.gz",
+        "command": "node",
+        "args": ["runtime/server.js"],
+        "checksum": {
+          "algorithm": "sha256",
+          "assetName": "SHA256SUMS.txt"
+        }
+      }
+    }
+  },
+  "healthchecks": [
+    { "id": "process-ready", "type": "process" }
+  ],
+  "execconfig": {
+    "serviceorder": 100,
+    "execcwd": ".",
+    "executable": "node",
+    "args": ["runtime/server.js"],
+    "depend_on": ["@node"],
+    "healthchecks": [
+      { "id": "process-ready", "type": "process" }
+    ],
+    "execservice": "@node"
+  }
+}

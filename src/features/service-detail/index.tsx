@@ -20,6 +20,7 @@ import {
   Link2,
   PackageCheck,
   Play,
+  Plus,
   RefreshCw,
   Save,
   ScanSearch,
@@ -39,28 +40,68 @@ import {
   getServiceNodeImage,
 } from '@/lib/service-graph'
 import {
+  useBrokerBulkCampaignApply,
+  useBrokerBulkCampaignCreate,
+  useBrokerBulkCampaignRevalidate,
+  useBrokerMigrationApply,
+  useBrokerMigrationPreview,
+  useBrokerProviderStatus,
+  useBrokerProviderValidation,
   useDashboardService,
+  useSecretDecommissionApply,
+  useSecretDecommissionPreview,
+  useSecretDecommissionRestore,
+  useSecretCreateApply,
+  useSecretCreatePreview,
+  useSecretMutationApply,
+  useSecretMutationPreview,
+  useSecretPolicyPreview,
   useSecretReveal,
+  useSecretRotationPreview,
+  useSecretRotationVersionAction,
+  useCoreSecretRotationPlan,
+  useCoreSecretRotationExecution,
   useSecretsManagement,
+  useRuntimeIdentity,
   useServiceSetup,
   useServiceSetupAction,
+  useServiceLifecycleAction,
   useServiceUpdateAction,
 } from '@/lib/service-lasso-dashboard/hooks'
-import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
+import {
+  providerSupportsMigrationApply,
+  serviceLassoApiBaseUrl,
+} from '@/lib/service-lasso-dashboard/stub'
 import type {
+  BrokerBulkCampaignResult,
+  BrokerMigrationResult,
+  BrokerProviderStatus,
+  BrokerProviderValidationResult,
   DashboardService,
   ServiceAction,
+  ServiceLifecycleActionKind,
   ServiceDependency,
   ServiceEndpoint,
   ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
   ServicePermissionGrant,
   SecretManagementRecord,
+  SecretCreateGenerationMode,
+  SecretCreateResult,
+  SecretDecommissionResult,
+  SecretMutationOperation,
+  SecretMutationResult,
+  SecretPolicyPreviewResult,
   SecretRevealResult,
+  SecretRotationPreviewResult,
+  SecretRotationVersionResult,
+  CoreSecretRotationImpactPlan,
+  CoreSecretRotationExecutionState,
   ServiceSetupState,
   ServiceSetupStep,
   ServiceStatus,
 } from '@/lib/service-lasso-dashboard/types'
+import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/theme-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -71,6 +112,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -79,6 +121,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -111,6 +154,8 @@ import {
   ServiceUpdateBadge,
 } from '@/components/service-update-status'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
+import { SecretsBrokerOperationsPanel } from './secrets-operations-panel'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
@@ -792,12 +837,92 @@ function isSecretsBrokerService(serviceId: string) {
   return serviceId === 'secrets-broker' || serviceId === '@secretsbroker'
 }
 
-function canRevealSecret(record: SecretManagementRecord) {
+function canRevealSecret(
+  record: SecretManagementRecord,
+  permissionGranted = true
+) {
   return (
+    permissionGranted &&
     record.outcome === 'ready' &&
     record.capabilities.includes('reveal') &&
     record.auditStatus === 'audit_available'
   )
+}
+
+function canMutateSecret(
+  record: SecretManagementRecord,
+  operation: SecretMutationOperation,
+  permissionGranted = true
+) {
+  return (
+    permissionGranted &&
+    record.outcome === 'ready' &&
+    record.providerKind === 'local-encrypted-store' &&
+    record.capabilities.includes(operation) &&
+    record.auditStatus === 'audit_available'
+  )
+}
+
+function canDecommissionSecret(
+  record: SecretManagementRecord,
+  permissionGranted = true
+) {
+  return (
+    permissionGranted &&
+    record.outcome === 'ready' &&
+    record.providerKind === 'local-encrypted-store' &&
+    record.capabilities.includes('decommission') &&
+    record.auditStatus === 'audit_available'
+  )
+}
+
+function canRotateSecret(
+  record: SecretManagementRecord,
+  permissionGranted = true
+) {
+  return (
+    permissionGranted &&
+    record.outcome === 'ready' &&
+    record.providerKind === 'local-encrypted-store' &&
+    record.capabilities.includes('rotation') &&
+    record.auditStatus === 'audit_available'
+  )
+}
+
+function canInspectSecretPolicy(
+  record: SecretManagementRecord,
+  permissionGranted = true
+) {
+  return (
+    permissionGranted &&
+    record.outcome === 'ready' &&
+    record.capabilities.includes('policy') &&
+    record.auditStatus === 'audit_available'
+  )
+}
+
+function migrationSourceProviderId(record: SecretManagementRecord) {
+  return record.providerKind === 'local-encrypted-store'
+    ? 'local'
+    : record.sourceId
+}
+
+function createSecretOperationId(
+  kind:
+    | 'decommission'
+    | 'restore'
+    | 'rotate'
+    | 'rollback'
+    | 'retire'
+    | 'migration'
+    | 'bulk-migration'
+    | 'create'
+) {
+  const randomPart =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `serviceadmin-${kind}-${randomPart}`
 }
 
 function SecretOutcomeBadge({ outcome }: { outcome: string }) {
@@ -818,16 +943,209 @@ function SecretOutcomeBadge({ outcome }: { outcome: string }) {
 }
 
 function SecretsBrokerSecretsPanel() {
-  const secretsQuery = useSecretsManagement()
+  const identity = useRuntimeIdentity()
+  const [inventorySearch, setInventorySearch] = useState('')
+  const [inventoryProvider, setInventoryProvider] = useState('all')
+  const [inventoryOutcome, setInventoryOutcome] = useState('all')
+  const [inventoryPage, setInventoryPage] = useState(1)
+  const [inventoryPageSize, setInventoryPageSize] = useState(5)
+  const secretsQuery = useSecretsManagement(inventorySearch.trim())
+  const providerQuery = useBrokerProviderStatus()
+  const validateProvider = useBrokerProviderValidation()
+  const previewMigration = useBrokerMigrationPreview()
+  const applyMigration = useBrokerMigrationApply()
+  const createBulkCampaign = useBrokerBulkCampaignCreate()
+  const revalidateBulkCampaign = useBrokerBulkCampaignRevalidate()
+  const applyBulkCampaign = useBrokerBulkCampaignApply()
   const revealSecret = useSecretReveal()
+  const previewCreate = useSecretCreatePreview()
+  const applyCreate = useSecretCreateApply()
+  const previewMutation = useSecretMutationPreview()
+  const applyMutation = useSecretMutationApply()
+  const previewDecommission = useSecretDecommissionPreview()
+  const applyDecommission = useSecretDecommissionApply()
+  const restoreDecommission = useSecretDecommissionRestore()
+  const previewRotation = useSecretRotationPreview()
+  const runRotationAction = useSecretRotationVersionAction()
+  const coreRotationPlan = useCoreSecretRotationPlan()
+  const coreRotationExecution = useCoreSecretRotationExecution()
+  const previewPolicy = useSecretPolicyPreview()
   const [selectedSecret, setSelectedSecret] =
     useState<SecretManagementRecord | null>(null)
   const [auditReason, setAuditReason] = useState('')
+  const [revealConfirmed, setRevealConfirmed] = useState(false)
   const [revealedSecret, setRevealedSecret] = useState<{
     result: SecretRevealResult
     expiresAt: number
   } | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createRef, setCreateRef] = useState('')
+  const [createOperationId, setCreateOperationId] = useState('')
+  const [createGenerationMode, setCreateGenerationMode] =
+    useState<SecretCreateGenerationMode>('broker_generated')
+  const [createReason, setCreateReason] = useState('')
+  const [createValue, setCreateValue] = useState('')
+  const [createConfirmed, setCreateConfirmed] = useState(false)
+  const [createPlan, setCreatePlan] = useState<SecretCreateResult | null>(null)
+  const [createReceipt, setCreateReceipt] = useState<SecretCreateResult | null>(
+    null
+  )
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [mutationTarget, setMutationTarget] = useState<{
+    record: SecretManagementRecord
+    operation: SecretMutationOperation
+  } | null>(null)
+  const [mutationReason, setMutationReason] = useState('')
+  const [replacementValue, setReplacementValue] = useState('')
+  const [mutationConfirmed, setMutationConfirmed] = useState(false)
+  const [mutationPlan, setMutationPlan] = useState<SecretMutationResult | null>(
+    null
+  )
+  const [mutationReceipt, setMutationReceipt] =
+    useState<SecretMutationResult | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  const [decommissionTarget, setDecommissionTarget] =
+    useState<SecretManagementRecord | null>(null)
+  const [decommissionOperationId, setDecommissionOperationId] = useState('')
+  const [decommissionReason, setDecommissionReason] = useState('')
+  const [decommissionConfirmed, setDecommissionConfirmed] = useState(false)
+  const [restoreConfirmed, setRestoreConfirmed] = useState(false)
+  const [decommissionPlan, setDecommissionPlan] =
+    useState<SecretDecommissionResult | null>(null)
+  const [decommissionReceipt, setDecommissionReceipt] =
+    useState<SecretDecommissionResult | null>(null)
+  const [decommissionError, setDecommissionError] = useState<string | null>(
+    null
+  )
+  const [rotationTarget, setRotationTarget] =
+    useState<SecretManagementRecord | null>(null)
+  const [rotationOperationId, setRotationOperationId] = useState('')
+  const [rotationReason, setRotationReason] = useState('')
+  const [rotationValue, setRotationValue] = useState('')
+  const [rotationConfirmed, setRotationConfirmed] = useState(false)
+  const [rotationPreview, setRotationPreview] =
+    useState<SecretRotationPreviewResult | null>(null)
+  const [rotationStatus, setRotationStatus] =
+    useState<SecretRotationVersionResult | null>(null)
+  const [rotationReceipt, setRotationReceipt] =
+    useState<SecretRotationVersionResult | null>(null)
+  const [rotationImpactPlan, setRotationImpactPlan] =
+    useState<CoreSecretRotationImpactPlan | null>(null)
+  const [rotationExecution, setRotationExecution] =
+    useState<CoreSecretRotationExecutionState | null>(null)
+  const [rotationError, setRotationError] = useState<string | null>(null)
+  const [policyTarget, setPolicyTarget] =
+    useState<SecretManagementRecord | null>(null)
+  const [policyPreview, setPolicyPreview] =
+    useState<SecretPolicyPreviewResult | null>(null)
+  const [policyError, setPolicyError] = useState<string | null>(null)
+  const [migrationTarget, setMigrationTarget] =
+    useState<SecretManagementRecord | null>(null)
+  const [migrationTargetProviderId, setMigrationTargetProviderId] = useState('')
+  const [migrationOperationId, setMigrationOperationId] = useState('')
+  const [migrationReason, setMigrationReason] = useState('')
+  const [migrationConfirmed, setMigrationConfirmed] = useState(false)
+  const [migrationPreview, setMigrationPreview] =
+    useState<BrokerMigrationResult | null>(null)
+  const [migrationReceipt, setMigrationReceipt] =
+    useState<BrokerMigrationResult | null>(null)
+  const [migrationError, setMigrationError] = useState<string | null>(null)
+  const [bulkCampaignOpen, setBulkCampaignOpen] = useState(false)
+  const [bulkCampaignRefs, setBulkCampaignRefs] = useState<string[]>([])
+  const [bulkCampaignTargetProviderId, setBulkCampaignTargetProviderId] =
+    useState('')
+  const [bulkCampaignOperationId, setBulkCampaignOperationId] = useState('')
+  const [bulkCampaignReason, setBulkCampaignReason] = useState('')
+  const [bulkCampaignConfirmed, setBulkCampaignConfirmed] = useState(false)
+  const [bulkCampaignPlan, setBulkCampaignPlan] =
+    useState<BrokerBulkCampaignResult | null>(null)
+  const [bulkCampaignReceipt, setBulkCampaignReceipt] =
+    useState<BrokerBulkCampaignResult | null>(null)
+  const [bulkCampaignError, setBulkCampaignError] = useState<string | null>(
+    null
+  )
+  const [providerValidationTarget, setProviderValidationTarget] =
+    useState<BrokerProviderStatus | null>(null)
+  const [providerAddress, setProviderAddress] = useState('')
+  const [providerCredentialRef, setProviderCredentialRef] = useState('')
+  const [providerNamespaces, setProviderNamespaces] = useState('')
+  const [providerValidationReason, setProviderValidationReason] = useState('')
+  const [providerValidationResult, setProviderValidationResult] =
+    useState<BrokerProviderValidationResult | null>(null)
+  const [providerValidationError, setProviderValidationError] = useState<
+    string | null
+  >(null)
+  const canManageSecrets = Boolean(
+    identity.data?.permissions.includes('*') ||
+    identity.data?.permissions.includes('security:manage')
+  )
+  const records = useMemo(
+    () => secretsQuery.data?.results ?? [],
+    [secretsQuery.data?.results]
+  )
+  const inventoryProviders = useMemo(
+    () => [...new Set(records.map((record) => record.sourceId))].sort(),
+    [records]
+  )
+  const inventoryOutcomes = useMemo(
+    () => [...new Set(records.map((record) => record.outcome))].sort(),
+    [records]
+  )
+  const bulkCampaignCandidates = useMemo(
+    () =>
+      records.filter(
+        (record) =>
+          record.outcome === 'ready' &&
+          record.providerKind === 'local-encrypted-store'
+      ),
+    [records]
+  )
+  const executableMigrationProviders = useMemo(
+    () =>
+      (providerQuery.data?.providers ?? []).filter(
+        providerSupportsMigrationApply
+      ),
+    [providerQuery.data?.providers]
+  )
+  const filteredRecords = useMemo(() => {
+    const query = inventorySearch.trim().toLowerCase()
+    return records.filter((record) => {
+      const matchesSearch =
+        query.length === 0 ||
+        [
+          record.ref,
+          record.name,
+          record.sourceId,
+          record.providerKind,
+          record.ownerServiceId,
+          record.outcome,
+          record.state,
+        ].some((value) => value?.toLowerCase().includes(query))
+      return (
+        matchesSearch &&
+        (inventoryProvider === 'all' ||
+          record.sourceId === inventoryProvider) &&
+        (inventoryOutcome === 'all' || record.outcome === inventoryOutcome)
+      )
+    })
+  }, [records, inventoryOutcome, inventoryProvider, inventorySearch])
+  const inventoryPageCount = Math.max(
+    1,
+    Math.ceil(filteredRecords.length / inventoryPageSize)
+  )
+  const visibleRecords = filteredRecords.slice(
+    (inventoryPage - 1) * inventoryPageSize,
+    inventoryPage * inventoryPageSize
+  )
+
+  useEffect(() => {
+    setInventoryPage(1)
+  }, [inventoryOutcome, inventoryPageSize, inventoryProvider, inventorySearch])
+
+  useEffect(() => {
+    setInventoryPage((current) => Math.min(current, inventoryPageCount))
+  }, [inventoryPageCount])
 
   useEffect(() => {
     if (!revealedSecret) return
@@ -842,17 +1160,476 @@ function SecretsBrokerSecretsPanel() {
     return () => window.clearTimeout(timeout)
   }, [revealedSecret])
 
+  const clearCreateState = () => {
+    setCreateOpen(false)
+    setCreateRef('')
+    setCreateOperationId('')
+    setCreateGenerationMode('broker_generated')
+    setCreateReason('')
+    setCreateValue('')
+    setCreateConfirmed(false)
+    setCreatePlan(null)
+    setCreateReceipt(null)
+    setCreateError(null)
+    previewCreate.reset()
+    applyCreate.reset()
+  }
+
+  const openCreate = () => {
+    clearCreateState()
+    setCreateOperationId(createSecretOperationId('create'))
+    setCreateOpen(true)
+  }
+
+  const closeCreate = (open: boolean) => {
+    if (!open) clearCreateState()
+  }
+
+  const runCreatePreview = async () => {
+    const ref = createRef.trim()
+    if (!/^[A-Za-z0-9@._-]+(?:\/[A-Za-z0-9@._-]+)*$/.test(ref)) {
+      setCreateError('Enter a canonical, relative secret reference.')
+      return
+    }
+    if (!createReason.trim()) {
+      setCreateError('Audit reason is required before create preview.')
+      return
+    }
+    setCreateError(null)
+    setCreateReceipt(null)
+    setCreateConfirmed(false)
+    setCreateValue('')
+    try {
+      const result = await previewCreate.mutateAsync({
+        ref,
+        operationId: createOperationId,
+        generationMode: createGenerationMode,
+        reason: createReason.trim(),
+      })
+      if (
+        result.outcome !== 'dry_run_ready' ||
+        result.applied ||
+        !result.requiresConfirmation ||
+        result.auditStatus !== 'audit_recorded' ||
+        result.policyResult !== 'allowed' ||
+        !result.plan
+      ) {
+        throw new Error('Create plan was not safely executable.')
+      }
+      setCreatePlan(result)
+    } catch {
+      setCreatePlan(null)
+      setCreateError(
+        'The Broker did not return a fresh signed no-overwrite create plan.'
+      )
+    }
+  }
+
+  const runCreateApply = async () => {
+    if (!createPlan?.plan || !createConfirmed) return
+    if (createGenerationMode === 'operator_supplied' && !createValue.trim()) {
+      setCreateError('Enter the secret value for operator-supplied create.')
+      return
+    }
+    setCreateError(null)
+    try {
+      const result = await applyCreate.mutateAsync({
+        ref: createPlan.ref,
+        operationId: createOperationId,
+        generationMode: createGenerationMode,
+        reason: createReason.trim(),
+        value:
+          createGenerationMode === 'operator_supplied'
+            ? createValue
+            : undefined,
+        plan: createPlan.plan,
+      })
+      if (
+        !['applied', 'already_applied'].includes(result.outcome) ||
+        result.auditStatus !== 'audit_recorded' ||
+        result.policyResult !== 'allowed'
+      ) {
+        throw new Error('Create did not return an accepted receipt.')
+      }
+      setCreateReceipt(result)
+      setCreatePlan(null)
+      setCreateConfirmed(false)
+    } catch {
+      setCreatePlan(null)
+      setCreateConfirmed(false)
+      setCreateError(
+        'The Broker did not create the secret. No-overwrite and audit controls failed closed; refresh inventory before retrying.'
+      )
+    } finally {
+      setCreateValue('')
+    }
+  }
+
   const openReveal = (record: SecretManagementRecord) => {
     setSelectedSecret(record)
     setAuditReason('')
+    setRevealConfirmed(false)
     setRevealedSecret(null)
     setLocalError(null)
+  }
+
+  const openPolicy = async (record: SecretManagementRecord) => {
+    setPolicyTarget(record)
+    setPolicyPreview(null)
+    setPolicyError(null)
+    previewPolicy.reset()
+    try {
+      const result = await previewPolicy.mutateAsync({ ref: record.ref })
+      if (
+        result.outcome !== 'unsupported' ||
+        result.applied ||
+        result.unsupportedCapability !== 'policy_binding_persistence'
+      ) {
+        throw new Error('Policy capability was reported inconsistently.')
+      }
+      setPolicyPreview(result)
+    } catch {
+      setPolicyPreview(null)
+      setPolicyError(
+        'The broker could not provide a safe policy capability preview.'
+      )
+    }
+  }
+
+  const closePolicy = (open: boolean) => {
+    if (open) return
+    setPolicyTarget(null)
+    setPolicyPreview(null)
+    setPolicyError(null)
+    previewPolicy.reset()
+  }
+
+  const closeMigration = (open: boolean) => {
+    if (open) return
+    setMigrationTarget(null)
+    setMigrationTargetProviderId('')
+    setMigrationOperationId('')
+    setMigrationReason('')
+    setMigrationConfirmed(false)
+    setMigrationPreview(null)
+    setMigrationReceipt(null)
+    setMigrationError(null)
+    previewMigration.reset()
+    applyMigration.reset()
+  }
+
+  const openMigration = (record: SecretManagementRecord) => {
+    closeMigration(false)
+    const sourceProviderId = migrationSourceProviderId(record)
+    const target = providerQuery.data?.providers.find(
+      (provider) =>
+        provider.providerId !== sourceProviderId && provider.outcome === 'ready'
+    )
+    setMigrationTarget(record)
+    setMigrationTargetProviderId(target?.providerId ?? '')
+    setMigrationOperationId(createSecretOperationId('migration'))
+  }
+
+  const selectedMigrationProvider = providerQuery.data?.providers.find(
+    (provider) => provider.providerId === migrationTargetProviderId
+  )
+  const migrationApplyExecutable = Boolean(
+    selectedMigrationProvider &&
+    providerSupportsMigrationApply(selectedMigrationProvider)
+  )
+
+  const clearBulkCampaign = () => {
+    setBulkCampaignOpen(false)
+    setBulkCampaignRefs([])
+    setBulkCampaignTargetProviderId('')
+    setBulkCampaignOperationId('')
+    setBulkCampaignReason('')
+    setBulkCampaignConfirmed(false)
+    setBulkCampaignPlan(null)
+    setBulkCampaignReceipt(null)
+    setBulkCampaignError(null)
+    createBulkCampaign.reset()
+    revalidateBulkCampaign.reset()
+    applyBulkCampaign.reset()
+  }
+
+  const openBulkCampaign = () => {
+    clearBulkCampaign()
+    setBulkCampaignOperationId(createSecretOperationId('bulk-migration'))
+    setBulkCampaignTargetProviderId(
+      executableMigrationProviders[0]?.providerId ?? ''
+    )
+    setBulkCampaignOpen(true)
+  }
+
+  const closeBulkCampaign = (open: boolean) => {
+    if (!open) clearBulkCampaign()
+  }
+
+  const toggleBulkCampaignRef = (ref: string, selected: boolean) => {
+    setBulkCampaignRefs((current) =>
+      selected
+        ? [...new Set([...current, ref])].sort()
+        : current.filter((candidate) => candidate !== ref)
+    )
+    setBulkCampaignPlan(null)
+    setBulkCampaignReceipt(null)
+    setBulkCampaignConfirmed(false)
+    setBulkCampaignError(null)
+  }
+
+  const buildBulkCampaignRequest = (
+    result?: BrokerBulkCampaignResult,
+    confirm = false
+  ) => ({
+    campaignId: result?.campaignId,
+    planToken: result?.planToken,
+    operationId: bulkCampaignOperationId,
+    operation: 'migrate_remap_provider' as const,
+    refs: bulkCampaignRefs,
+    targetProviderId: bulkCampaignTargetProviderId,
+    reason: bulkCampaignReason.trim(),
+    confirm,
+    highRiskConfirm: confirm ? result?.campaignId : undefined,
+  })
+
+  const runBulkCampaignPreview = async () => {
+    if (
+      !bulkCampaignRefs.length ||
+      !bulkCampaignTargetProviderId ||
+      !bulkCampaignReason.trim()
+    ) {
+      setBulkCampaignError(
+        'Select at least one local secret, an executable target, and an audit reason.'
+      )
+      return
+    }
+    setBulkCampaignError(null)
+    setBulkCampaignReceipt(null)
+    setBulkCampaignConfirmed(false)
+    try {
+      const created = await createBulkCampaign.mutateAsync(
+        buildBulkCampaignRequest()
+      )
+      if (
+        !['dry_run_ready', 'partial_failure'].includes(created.outcome) ||
+        created.applied ||
+        !created.requiresRevalidation ||
+        created.auditStatus !== 'audit_recorded' ||
+        !created.durable ||
+        created.maxConcurrency !== 1
+      ) {
+        throw new Error('Campaign creation did not return a durable plan.')
+      }
+      const revalidated = await revalidateBulkCampaign.mutateAsync(
+        buildBulkCampaignRequest(created)
+      )
+      if (
+        !['dry_run_ready', 'partial_failure'].includes(revalidated.outcome) ||
+        revalidated.applied ||
+        revalidated.requiresRevalidation ||
+        revalidated.auditStatus !== 'audit_recorded' ||
+        revalidated.planToken !== created.planToken ||
+        revalidated.campaignId !== created.campaignId
+      ) {
+        throw new Error('Campaign revalidation did not converge.')
+      }
+      setBulkCampaignPlan(revalidated)
+    } catch {
+      setBulkCampaignPlan(null)
+      setBulkCampaignError(
+        'The Broker did not return a fresh durable campaign. No provider write was attempted.'
+      )
+    }
+  }
+
+  const runBulkCampaignRevalidate = async () => {
+    if (!bulkCampaignPlan) return
+    setBulkCampaignError(null)
+    setBulkCampaignConfirmed(false)
+    try {
+      const result = await revalidateBulkCampaign.mutateAsync(
+        buildBulkCampaignRequest(bulkCampaignPlan)
+      )
+      if (
+        !['dry_run_ready', 'partial_failure'].includes(result.outcome) ||
+        result.requiresRevalidation ||
+        result.auditStatus !== 'audit_recorded'
+      ) {
+        throw new Error('Campaign revalidation failed.')
+      }
+      setBulkCampaignPlan(result)
+    } catch {
+      setBulkCampaignError(
+        'Campaign revalidation failed closed. Create a new plan if provider readiness changed.'
+      )
+    }
+  }
+
+  const runBulkCampaignApply = async () => {
+    if (!bulkCampaignPlan || !bulkCampaignConfirmed) return
+    setBulkCampaignError(null)
+    try {
+      const result = await applyBulkCampaign.mutateAsync(
+        buildBulkCampaignRequest(bulkCampaignPlan, true)
+      )
+      if (
+        !['applied', 'partial_failure'].includes(result.outcome) ||
+        result.auditStatus !== 'audit_recorded' ||
+        result.requiresRevalidation ||
+        result.results.some((item) => item.applied && !item.verified)
+      ) {
+        throw new Error('Campaign apply did not return verified outcomes.')
+      }
+      setBulkCampaignReceipt(result)
+      setBulkCampaignPlan(null)
+      setBulkCampaignConfirmed(false)
+    } catch {
+      setBulkCampaignConfirmed(false)
+      setBulkCampaignError(
+        'Campaign apply failed closed or requires revalidation. Source secrets remain authoritative; inspect each metadata-only result before retrying.'
+      )
+    }
+  }
+
+  const openProviderValidation = (provider: BrokerProviderStatus) => {
+    setProviderValidationTarget(provider)
+    setProviderAddress(provider.address ?? '')
+    setProviderCredentialRef(provider.credentialHandle ?? '')
+    setProviderNamespaces(provider.namespaces.join(', '))
+    setProviderValidationReason('')
+    setProviderValidationResult(null)
+    setProviderValidationError(null)
+    validateProvider.reset()
+  }
+
+  const closeProviderValidation = (open: boolean) => {
+    if (open) return
+    setProviderValidationTarget(null)
+    setProviderAddress('')
+    setProviderCredentialRef('')
+    setProviderNamespaces('')
+    setProviderValidationReason('')
+    setProviderValidationResult(null)
+    setProviderValidationError(null)
+    validateProvider.reset()
+  }
+
+  const runProviderValidation = async () => {
+    if (!providerValidationTarget) return
+    if (!providerValidationReason.trim()) {
+      setProviderValidationError(
+        'Audit reason is required before provider validation.'
+      )
+      return
+    }
+    setProviderValidationError(null)
+    setProviderValidationResult(null)
+    try {
+      const result = await validateProvider.mutateAsync({
+        providerId: providerValidationTarget.providerId,
+        providerKind: providerValidationTarget.providerKind,
+        displayName: providerValidationTarget.displayName,
+        address: providerAddress.trim() || undefined,
+        credentialRef: providerCredentialRef.trim() || undefined,
+        namespaces: providerNamespaces
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean),
+        reason: providerValidationReason.trim(),
+      })
+      if (
+        !['ready', 'degraded', 'source_auth_required', 'unsupported'].includes(
+          result.outcome
+        ) ||
+        result.applied ||
+        result.auditStatus !== 'audit_recorded'
+      ) {
+        throw new Error('Provider validation returned an invalid contract.')
+      }
+      setProviderValidationResult(result)
+    } catch {
+      setProviderValidationError(
+        'Provider validation failed closed. Verify the safe origin, credential reference, Broker readiness, and audit sink.'
+      )
+    }
+  }
+
+  const runMigrationPreview = async () => {
+    if (!migrationTarget || !migrationTargetProviderId) return
+    if (!migrationReason.trim()) {
+      setMigrationError('Audit reason is required before migration preview.')
+      return
+    }
+    setMigrationError(null)
+    setMigrationReceipt(null)
+    setMigrationConfirmed(false)
+    try {
+      const result = await previewMigration.mutateAsync({
+        operationId: migrationOperationId,
+        sourceProviderId: migrationSourceProviderId(migrationTarget),
+        targetProviderId: migrationTargetProviderId,
+        refs: [migrationTarget.ref],
+        reason: migrationReason,
+      })
+      if (
+        result.outcome !== 'dry_run_ready' ||
+        result.applied ||
+        !result.requiresConfirmation ||
+        result.auditStatus !== 'audit_recorded' ||
+        result.results.length !== 1 ||
+        result.results[0]?.outcome !== 'dry_run_ready'
+      ) {
+        throw new Error('Migration preview was not safely executable.')
+      }
+      setMigrationPreview(result)
+    } catch {
+      setMigrationPreview(null)
+      setMigrationError(
+        'The broker did not return a safe migration plan. Revalidate provider readiness and audit state.'
+      )
+    }
+  }
+
+  const runMigrationApply = async () => {
+    if (
+      !migrationTarget ||
+      !migrationPreview ||
+      !migrationApplyExecutable ||
+      !migrationConfirmed
+    )
+      return
+    setMigrationError(null)
+    try {
+      const result = await applyMigration.mutateAsync({
+        operationId: migrationOperationId,
+        sourceProviderId: migrationSourceProviderId(migrationTarget),
+        targetProviderId: migrationTargetProviderId,
+        refs: [migrationTarget.ref],
+        reason: migrationReason,
+      })
+      if (
+        !['applied', 'partial_failure'].includes(result.outcome) ||
+        result.auditStatus !== 'audit_recorded'
+      ) {
+        throw new Error('Migration apply did not return a terminal outcome.')
+      }
+      setMigrationReceipt(result)
+      setMigrationPreview(null)
+      setMigrationConfirmed(false)
+    } catch {
+      setMigrationConfirmed(false)
+      setMigrationError(
+        'The broker did not complete the migration. Source data remains authoritative; follow the metadata-only recovery guidance.'
+      )
+    }
   }
 
   const closeReveal = (open: boolean) => {
     if (open) return
     setSelectedSecret(null)
     setAuditReason('')
+    setRevealConfirmed(false)
     setRevealedSecret(null)
     setLocalError(null)
   }
@@ -866,12 +1643,18 @@ function SecretsBrokerSecretsPanel() {
       setRevealedSecret(null)
       return
     }
+    if (!revealConfirmed) {
+      setLocalError('Explicit confirmation is required before reveal.')
+      setRevealedSecret(null)
+      return
+    }
 
     setLocalError(null)
     try {
       const result = await revealSecret.mutateAsync({
         ref: selectedSecret.ref,
         reason,
+        confirm: true,
       })
       setRevealedSecret({
         result,
@@ -881,6 +1664,484 @@ function SecretsBrokerSecretsPanel() {
       setRevealedSecret(null)
       setLocalError(
         error instanceof Error ? error.message : 'Secret reveal failed.'
+      )
+    }
+  }
+
+  const clearMutationState = () => {
+    setMutationTarget(null)
+    setMutationReason('')
+    setReplacementValue('')
+    setMutationConfirmed(false)
+    setMutationPlan(null)
+    setMutationReceipt(null)
+    setMutationError(null)
+    previewMutation.reset()
+    applyMutation.reset()
+  }
+
+  const openMutation = (
+    record: SecretManagementRecord,
+    operation: SecretMutationOperation
+  ) => {
+    clearMutationState()
+    setMutationTarget({ record, operation })
+  }
+
+  const closeMutation = (open: boolean) => {
+    if (!open) clearMutationState()
+  }
+
+  const runMutationPreview = async () => {
+    if (!mutationTarget) return
+    if (!mutationReason.trim()) {
+      setMutationError('Audit reason is required before mutation.')
+      return
+    }
+
+    setMutationError(null)
+    setMutationReceipt(null)
+    setMutationConfirmed(false)
+    try {
+      const result = await previewMutation.mutateAsync({
+        operation: mutationTarget.operation,
+        ref: mutationTarget.record.ref,
+        reason: mutationReason,
+      })
+      if (
+        result.outcome !== 'dry_run_ready' ||
+        !result.requiresConfirmation ||
+        result.auditStatus !== 'audit_ready'
+      ) {
+        throw new Error('Mutation plan was not ready.')
+      }
+      setMutationPlan(result)
+    } catch {
+      setMutationPlan(null)
+      setMutationError(
+        'The broker did not return a confirmable metadata-only mutation plan.'
+      )
+    }
+  }
+
+  const runMutationApply = async () => {
+    if (!mutationTarget || !mutationPlan) return
+    if (!mutationConfirmed) {
+      setMutationError('Explicit confirmation is required before apply.')
+      return
+    }
+    if (!replacementValue.trim()) {
+      setMutationError('A replacement value is required before apply.')
+      return
+    }
+
+    setMutationError(null)
+    setMutationReceipt(null)
+    try {
+      const result = await applyMutation.mutateAsync({
+        operation: mutationTarget.operation,
+        ref: mutationTarget.record.ref,
+        reason: mutationReason,
+        value: replacementValue,
+      })
+      if (
+        result.outcome !== 'applied' ||
+        !result.applied ||
+        result.auditStatus !== 'audit_recorded'
+      ) {
+        throw new Error('Mutation was not applied.')
+      }
+      setMutationReceipt(result)
+      setMutationPlan(null)
+      setMutationConfirmed(false)
+    } catch {
+      setMutationPlan(null)
+      setMutationConfirmed(false)
+      setMutationError(
+        'The broker did not apply the mutation. Review broker audit and readiness state.'
+      )
+    } finally {
+      setReplacementValue('')
+    }
+  }
+
+  const clearDecommissionState = () => {
+    setDecommissionTarget(null)
+    setDecommissionOperationId('')
+    setDecommissionReason('')
+    setDecommissionConfirmed(false)
+    setRestoreConfirmed(false)
+    setDecommissionPlan(null)
+    setDecommissionReceipt(null)
+    setDecommissionError(null)
+    previewDecommission.reset()
+    applyDecommission.reset()
+    restoreDecommission.reset()
+  }
+
+  const openDecommission = (record: SecretManagementRecord) => {
+    clearDecommissionState()
+    setDecommissionTarget(record)
+    setDecommissionOperationId(createSecretOperationId('decommission'))
+  }
+
+  const openTombstoneRestore = (record: SecretManagementRecord) => {
+    if (!record.tombstone) return
+    clearDecommissionState()
+    setDecommissionTarget(record)
+    setDecommissionOperationId(createSecretOperationId('restore'))
+    setDecommissionReceipt({
+      serviceId: '@secretsbroker',
+      apiVersion: secretsQuery.data?.apiVersion ?? 'secretsbroker.local/v1',
+      requestId: 'inventory-tombstone',
+      operationId: record.tombstone.decommissionOperationId,
+      ref: record.ref,
+      operation: 'decommission',
+      mode: 'apply',
+      outcome: 'applied',
+      applied: true,
+      requiresConfirmation: false,
+      auditStatus: record.auditStatus ?? 'audit_available',
+      policyResult: 'allowed',
+      dependencyStatus: 'clear',
+      dependencies: [],
+      recoverable: true,
+      tombstone: record.tombstone,
+      affectedRefs: [record.ref],
+      affectedServices: record.ownerServiceId ? [record.ownerServiceId] : [],
+    })
+  }
+
+  const closeDecommission = (open: boolean) => {
+    if (!open) clearDecommissionState()
+  }
+
+  const runDecommissionPreview = async () => {
+    if (!decommissionTarget) return
+    setDecommissionError(null)
+    setDecommissionReceipt(null)
+    setDecommissionConfirmed(false)
+    try {
+      const result = await previewDecommission.mutateAsync({
+        ref: decommissionTarget.ref,
+        operationId: decommissionOperationId,
+      })
+      if (
+        result.outcome !== 'dry_run_ready' ||
+        result.dependencyStatus !== 'clear' ||
+        result.dependencies.length !== 0 ||
+        !result.requiresConfirmation ||
+        result.policyResult !== 'allowed' ||
+        result.auditStatus !== 'audit_recorded' ||
+        !result.plan
+      ) {
+        throw new Error('Decommission plan is not safely executable.')
+      }
+      setDecommissionPlan(result)
+    } catch {
+      setDecommissionPlan(null)
+      setDecommissionError(
+        'The broker did not return a dependency-clear, signed decommission plan. Resolve consumers, audit availability, and broker readiness before retrying.'
+      )
+    }
+  }
+
+  const runDecommissionApply = async () => {
+    if (!decommissionTarget || !decommissionPlan?.plan) return
+    if (!decommissionReason.trim()) {
+      setDecommissionError('Audit reason is required before decommission.')
+      return
+    }
+    if (!decommissionConfirmed) {
+      setDecommissionError(
+        'Explicit confirmation is required before decommission.'
+      )
+      return
+    }
+
+    setDecommissionError(null)
+    try {
+      const result = await applyDecommission.mutateAsync({
+        ref: decommissionTarget.ref,
+        operationId: decommissionOperationId,
+        reason: decommissionReason,
+        plan: decommissionPlan.plan,
+      })
+      if (
+        result.outcome !== 'applied' ||
+        !result.applied ||
+        result.auditStatus !== 'audit_recorded' ||
+        result.tombstone?.state !== 'decommissioned' ||
+        !result.recoverable
+      ) {
+        throw new Error('Decommission was not applied.')
+      }
+      setDecommissionReceipt(result)
+      setDecommissionPlan(null)
+      setDecommissionConfirmed(false)
+      setRestoreConfirmed(false)
+    } catch {
+      setDecommissionPlan(null)
+      setDecommissionConfirmed(false)
+      setDecommissionError(
+        'The broker did not decommission this secret. Refresh metadata and inspect the safe broker audit outcome before retrying.'
+      )
+    }
+  }
+
+  const runDecommissionRestore = async () => {
+    if (!decommissionTarget || !decommissionReceipt?.tombstone) return
+    if (!decommissionReason.trim()) {
+      setDecommissionError('Audit reason is required before restore.')
+      return
+    }
+    if (!restoreConfirmed) {
+      setDecommissionError('Explicit confirmation is required before restore.')
+      return
+    }
+
+    setDecommissionError(null)
+    try {
+      const result = await restoreDecommission.mutateAsync({
+        ref: decommissionTarget.ref,
+        operationId: createSecretOperationId('restore'),
+        reason: decommissionReason,
+        expectedVersion: decommissionReceipt.tombstone.version,
+      })
+      if (
+        result.outcome !== 'applied' ||
+        !result.applied ||
+        result.auditStatus !== 'audit_recorded' ||
+        result.tombstone?.state !== 'restored'
+      ) {
+        throw new Error('Restore was not applied.')
+      }
+      setDecommissionReceipt(result)
+      setRestoreConfirmed(false)
+    } catch {
+      setRestoreConfirmed(false)
+      setDecommissionError(
+        'The broker did not restore this secret from its encrypted tombstone.'
+      )
+    }
+  }
+
+  const clearRotationState = () => {
+    setRotationTarget(null)
+    setRotationOperationId('')
+    setRotationReason('')
+    setRotationValue('')
+    setRotationConfirmed(false)
+    setRotationPreview(null)
+    setRotationStatus(null)
+    setRotationReceipt(null)
+    setRotationImpactPlan(null)
+    setRotationExecution(null)
+    setRotationError(null)
+    previewRotation.reset()
+    runRotationAction.reset()
+    coreRotationPlan.reset()
+    coreRotationExecution.reset()
+  }
+
+  const openRotation = (record: SecretManagementRecord) => {
+    clearRotationState()
+    setRotationTarget(record)
+    setRotationOperationId(createSecretOperationId('rotate'))
+  }
+
+  const closeRotation = (open: boolean) => {
+    if (!open) clearRotationState()
+  }
+
+  const runRotationPreview = async () => {
+    if (!rotationTarget) return
+    if (!rotationReason.trim()) {
+      setRotationError('Audit reason is required before rotation preview.')
+      return
+    }
+
+    setRotationError(null)
+    setRotationReceipt(null)
+    setRotationExecution(null)
+    setRotationConfirmed(false)
+    try {
+      const impactPlan = await coreRotationPlan.mutateAsync(rotationTarget.ref)
+      if (impactPlan.status !== 'ready' || impactPlan.blockers.length > 0) {
+        throw new Error('Core rotation impact plan is blocked.')
+      }
+      const preview = await previewRotation.mutateAsync({
+        ref: rotationTarget.ref,
+        operationId: rotationOperationId,
+        reason: rotationReason,
+      })
+      const item = preview.results.find(
+        (candidate) => candidate.ref === rotationTarget.ref
+      )
+      if (
+        preview.outcome !== 'dry_run_ready' ||
+        !preview.requiresConfirmation ||
+        preview.auditStatus !== 'audit_ready' ||
+        item?.outcome !== 'dry_run_ready' ||
+        item.capabilityResult !== 'supported' ||
+        item.policyResult !== 'allowed'
+      ) {
+        throw new Error('Rotation preview is not executable.')
+      }
+      const status = await runRotationAction.mutateAsync({
+        action: 'status',
+        ref: rotationTarget.ref,
+      })
+      if (status.outcome !== 'ready' || !status.currentVersion?.versionId) {
+        throw new Error('Rotation version status is unavailable.')
+      }
+      setRotationPreview(preview)
+      setRotationStatus(status)
+      setRotationImpactPlan(impactPlan)
+    } catch {
+      setRotationPreview(null)
+      setRotationStatus(null)
+      setRotationImpactPlan(null)
+      setRotationError(
+        'Core and the Broker did not return an executable, version-bound consumer impact plan. Resolve manual actions, provider policy, and readiness before retrying.'
+      )
+    }
+  }
+
+  const runRotationStage = async () => {
+    if (!rotationTarget || !rotationPreview || !rotationStatus?.currentVersion)
+      return
+    if (!rotationValue.trim()) {
+      setRotationError('A replacement value is required before stage.')
+      return
+    }
+    if (!rotationConfirmed) {
+      setRotationError('Explicit confirmation is required before stage.')
+      return
+    }
+
+    setRotationError(null)
+    try {
+      if (rotationImpactPlan?.services.length) {
+        const operation = await coreRotationExecution.mutateAsync({
+          operationId: rotationOperationId,
+          ref: rotationTarget.ref,
+          planFingerprint: rotationImpactPlan.planFingerprint,
+          reason: rotationReason,
+          confirm: true,
+          value: rotationValue,
+        })
+        setRotationValue('')
+        setRotationConfirmed(false)
+        setRotationExecution(operation)
+        if (operation.outcome !== 'committed') {
+          setRotationError(
+            operation.outcome === 'rolled_back'
+              ? 'Consumer convergence failed; Core restored the previous Broker version and service state.'
+              : 'Rotation is blocked and requires operator recovery from the durable Core operation.'
+          )
+        }
+        return
+      }
+      const result = await runRotationAction.mutateAsync({
+        action: 'stage',
+        ref: rotationTarget.ref,
+        operationId: rotationOperationId,
+        expectedCurrentVersion: rotationStatus.currentVersion.versionId,
+        reason: rotationReason,
+        value: rotationValue,
+      })
+      if (
+        result.outcome !== 'staged' ||
+        result.auditStatus !== 'audit_recorded' ||
+        !result.stagedVersion?.versionId
+      ) {
+        throw new Error('Rotation candidate was not staged.')
+      }
+      setRotationReceipt(result)
+      setRotationValue('')
+      setRotationConfirmed(false)
+    } catch {
+      setRotationValue('')
+      setRotationConfirmed(false)
+      setRotationError(
+        'The broker did not stage the candidate. Refresh status before retrying.'
+      )
+    }
+  }
+
+  const runRotationActivate = async () => {
+    if (
+      !rotationTarget ||
+      !rotationStatus?.currentVersion ||
+      !rotationReceipt?.stagedVersion
+    )
+      return
+    if (!rotationConfirmed) {
+      setRotationError('Explicit confirmation is required before activation.')
+      return
+    }
+
+    setRotationError(null)
+    try {
+      const result = await runRotationAction.mutateAsync({
+        action: 'activate',
+        ref: rotationTarget.ref,
+        operationId: rotationOperationId,
+        versionId: rotationReceipt.stagedVersion.versionId,
+        expectedCurrentVersion: rotationStatus.currentVersion.versionId,
+        reason: rotationReason,
+      })
+      if (
+        result.outcome !== 'applied' ||
+        !result.applied ||
+        result.auditStatus !== 'audit_recorded' ||
+        !result.previousVersion?.versionId
+      ) {
+        throw new Error('Rotation candidate was not activated.')
+      }
+      setRotationReceipt(result)
+      setRotationStatus(result)
+      setRotationConfirmed(false)
+    } catch {
+      setRotationConfirmed(false)
+      setRotationError(
+        'The broker did not activate the staged version. Inspect current version status before retrying.'
+      )
+    }
+  }
+
+  const runRotationPostAction = async (action: 'rollback' | 'retire') => {
+    if (!rotationTarget || !rotationReceipt?.previousVersion?.versionId) return
+    if (!rotationConfirmed) {
+      setRotationError(`Explicit confirmation is required before ${action}.`)
+      return
+    }
+
+    setRotationError(null)
+    try {
+      const result = await runRotationAction.mutateAsync({
+        action,
+        ref: rotationTarget.ref,
+        operationId: createSecretOperationId(action),
+        versionId: rotationReceipt.previousVersion.versionId,
+        reason: rotationReason,
+      })
+      const expectedOutcome = action === 'rollback' ? 'rolled_back' : 'retired'
+      if (
+        result.outcome !== expectedOutcome ||
+        !result.applied ||
+        result.auditStatus !== 'audit_recorded'
+      ) {
+        throw new Error(`Rotation ${action} was not applied.`)
+      }
+      setRotationReceipt(result)
+      setRotationStatus(result)
+      setRotationConfirmed(false)
+    } catch {
+      setRotationConfirmed(false)
+      setRotationError(
+        `The broker did not ${action} the selected version. Refresh status before retrying.`
       )
     }
   }
@@ -905,26 +2166,299 @@ function SecretsBrokerSecretsPanel() {
           <CardTitle>Managed secrets</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className='rounded-md border border-dashed p-4 text-sm text-muted-foreground'>
-            Secrets Broker management is unavailable.
+          <div className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground'>
+            <span>Secrets Broker management is unavailable.</span>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              disabled={secretsQuery.isFetching}
+              onClick={() => void secretsQuery.refetch()}
+            >
+              <RefreshCw
+                className={`mr-2 size-4 ${secretsQuery.isFetching ? 'animate-spin' : ''}`}
+              />
+              Retry inventory
+            </Button>
           </div>
         </CardContent>
       </Card>
     )
   }
 
-  const records = secretsQuery.data?.results ?? []
-
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Managed secrets</CardTitle>
+          <CardTitle>Secret providers</CardTitle>
           <CardDescription>
-            Metadata, capability state, and explicit reveal actions.
+            Live Broker connection and executable-operation metadata. Browser
+            code never receives provider credentials.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {providerQuery.isLoading ? (
+            <Skeleton className='h-24 w-full' />
+          ) : null}
+          {providerQuery.isError ? (
+            <div className='rounded-md border border-destructive/40 p-3 text-sm text-destructive'>
+              Provider status is unavailable; migration remains disabled.
+            </div>
+          ) : null}
+          {providerQuery.data ? (
+            <div className='overflow-x-auto rounded-md border'>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>Credential</TableHead>
+                    <TableHead>Migration apply</TableHead>
+                    <TableHead>Audit</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {providerQuery.data.providers.map((provider) => (
+                    <TableRow key={provider.providerId}>
+                      <TableCell>
+                        <div className='font-medium'>
+                          {provider.displayName}
+                        </div>
+                        <div className='font-mono text-xs text-muted-foreground'>
+                          {provider.providerId} · {provider.providerKind}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <SecretOutcomeBadge outcome={provider.outcome} />
+                      </TableCell>
+                      <TableCell>
+                        {provider.credentialHandle ?? 'not configured'}
+                      </TableCell>
+                      <TableCell>
+                        {providerSupportsMigrationApply(provider)
+                          ? 'validated'
+                          : 'unavailable'}
+                      </TableCell>
+                      <TableCell>{provider.auditStatus}</TableCell>
+                      <TableCell>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='outline'
+                          disabled={!canManageSecrets}
+                          onClick={() => openProviderValidation(provider)}
+                        >
+                          Validate configuration
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={providerValidationTarget !== null}
+        onOpenChange={closeProviderValidation}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Validate provider configuration</DialogTitle>
+            <DialogDescription>
+              Test Broker connectivity and capabilities using reference handles
+              only. Credentials never enter this form.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='provider-validation-address'>Safe origin</Label>
+              <Input
+                id='provider-validation-address'
+                value={providerAddress}
+                placeholder='https://vault.example.com'
+                onChange={(event) => setProviderAddress(event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='provider-validation-credential-ref'>
+                Credential reference
+              </Label>
+              <Input
+                id='provider-validation-credential-ref'
+                value={providerCredentialRef}
+                placeholder='providers/vault/credential'
+                autoComplete='off'
+                onChange={(event) =>
+                  setProviderCredentialRef(event.target.value)
+                }
+              />
+              <p className='text-xs text-muted-foreground'>
+                Enter a Broker-managed reference or environment-handle name,
+                never a token or password.
+              </p>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='provider-validation-namespaces'>Namespaces</Label>
+              <Input
+                id='provider-validation-namespaces'
+                value={providerNamespaces}
+                placeholder='services, providers'
+                onChange={(event) => setProviderNamespaces(event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='provider-validation-reason'>Audit reason</Label>
+              <Textarea
+                id='provider-validation-reason'
+                value={providerValidationReason}
+                placeholder='Approved provider connectivity check'
+                onChange={(event) =>
+                  setProviderValidationReason(event.target.value)
+                }
+              />
+            </div>
+            {providerValidationResult ? (
+              <div className='rounded-md border p-3 text-sm'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='font-medium'>
+                    Validation outcome: {providerValidationResult.outcome}
+                  </span>
+                  <Badge variant='outline'>
+                    {providerValidationResult.provider.state}
+                  </Badge>
+                </div>
+                <p className='mt-2 text-xs text-muted-foreground'>
+                  {providerValidationResult.nextAction ??
+                    providerValidationResult.provider.nextAction ??
+                    'Review provider capability metadata.'}
+                </p>
+                <p className='mt-2 text-xs text-muted-foreground'>
+                  This validates configuration only. Provider persistence
+                  remains unavailable until the Broker advertises it as
+                  executable.
+                </p>
+              </div>
+            ) : null}
+            {providerValidationError ? (
+              <div className='rounded-md border border-destructive/40 p-3 text-sm text-destructive'>
+                {providerValidationError}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeProviderValidation(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type='button'
+              disabled={
+                validateProvider.isPending || !providerValidationReason.trim()
+              }
+              onClick={() => void runProviderValidation()}
+            >
+              Validate through Broker
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader className='flex flex-row items-start justify-between gap-4'>
+          <div>
+            <CardTitle>Managed secrets</CardTitle>
+            <CardDescription>
+              Metadata, capability state, and explicit audited actions.
+            </CardDescription>
+          </div>
+          <div className='flex flex-wrap justify-end gap-2'>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              disabled={
+                !canManageSecrets ||
+                !bulkCampaignCandidates.length ||
+                !executableMigrationProviders.length
+              }
+              title={
+                canManageSecrets
+                  ? 'Build a durable, audited provider migration campaign'
+                  : 'Security management permission is required'
+              }
+              onClick={openBulkCampaign}
+            >
+              Bulk provider migration
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              disabled={!canManageSecrets}
+              title={
+                canManageSecrets
+                  ? 'Create a new local encrypted secret'
+                  : 'Security management permission is required'
+              }
+              onClick={openCreate}
+            >
+              <Plus className='mr-2 size-4' />
+              Create secret
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className='mb-4 grid gap-3 md:grid-cols-4'>
+            <div className='space-y-1.5 md:col-span-2'>
+              <Label htmlFor='secret-inventory-search'>Search inventory</Label>
+              <Input
+                id='secret-inventory-search'
+                value={inventorySearch}
+                placeholder='Search refs, owners, providers, or state'
+                onChange={(event) => setInventorySearch(event.target.value)}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label htmlFor='secret-inventory-provider'>Provider</Label>
+              <select
+                id='secret-inventory-provider'
+                aria-label='Filter secrets by provider'
+                className='h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs'
+                value={inventoryProvider}
+                onChange={(event) => setInventoryProvider(event.target.value)}
+              >
+                <option value='all'>All providers</option>
+                {inventoryProviders.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {provider}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label htmlFor='secret-inventory-outcome'>Outcome</Label>
+              <select
+                id='secret-inventory-outcome'
+                aria-label='Filter secrets by outcome'
+                className='h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs'
+                value={inventoryOutcome}
+                onChange={(event) => setInventoryOutcome(event.target.value)}
+              >
+                <option value='all'>All outcomes</option>
+                {inventoryOutcomes.map((outcome) => (
+                  <option key={outcome} value={outcome}>
+                    {outcome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className='overflow-x-auto rounded-md border'>
             <Table>
               <TableHeader>
@@ -939,8 +2473,8 @@ function SecretsBrokerSecretsPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {records.length ? (
-                  records.map((record) => (
+                {visibleRecords.length ? (
+                  visibleRecords.map((record) => (
                     <TableRow key={record.ref}>
                       <TableCell className='max-w-[320px] font-mono text-xs break-all'>
                         {record.ref}
@@ -971,11 +2505,74 @@ function SecretsBrokerSecretsPanel() {
                             type='button'
                             size='sm'
                             variant='outline'
-                            disabled={!canRevealSecret(record)}
+                            disabled={
+                              !canManageSecrets ||
+                              record.outcome !== 'ready' ||
+                              providerQuery.isError ||
+                              !providerQuery.data?.providers.some(
+                                (provider) =>
+                                  provider.providerId !== record.sourceId &&
+                                  provider.outcome === 'ready'
+                              )
+                            }
                             title={
-                              canRevealSecret(record)
+                              canManageSecrets
+                                ? 'Build a Broker migration dry run'
+                                : 'Security management permission is required'
+                            }
+                            onClick={() => openMigration(record)}
+                          >
+                            Migrate {record.name}
+                          </Button>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={
+                              !canInspectSecretPolicy(record, canManageSecrets)
+                            }
+                            title={
+                              canInspectSecretPolicy(record, canManageSecrets)
+                                ? 'Inspect policy capability and current binding'
+                                : canManageSecrets
+                                  ? 'Policy inspection is unavailable for this provider'
+                                  : 'Security management permission is required'
+                            }
+                            onClick={() => void openPolicy(record)}
+                          >
+                            Policy {record.name}
+                          </Button>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={
+                              !canRotateSecret(record, canManageSecrets)
+                            }
+                            title={
+                              canRotateSecret(record, canManageSecrets)
+                                ? 'Rotate through preview, stage, and activation'
+                                : canManageSecrets
+                                  ? 'Versioned rotation is unavailable for this provider'
+                                  : 'Security management permission is required'
+                            }
+                            onClick={() => openRotation(record)}
+                          >
+                            Rotate {record.name}
+                          </Button>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={
+                              !canRevealSecret(record, canManageSecrets)
+                            }
+                            title={
+                              canRevealSecret(record, canManageSecrets)
                                 ? 'Reveal secret'
-                                : 'Reveal is unavailable for this record'
+                                : canManageSecrets
+                                  ? 'Reveal is unavailable for this record'
+                                  : 'Security management permission is required'
                             }
                             onClick={() => openReveal(record)}
                           >
@@ -986,11 +2583,74 @@ function SecretsBrokerSecretsPanel() {
                             type='button'
                             size='sm'
                             variant='outline'
-                            disabled
-                            title='Delete is disabled until the broker delete contract is executable'
+                            disabled={
+                              !canMutateSecret(record, 'edit', canManageSecrets)
+                            }
+                            title={
+                              canMutateSecret(record, 'edit', canManageSecrets)
+                                ? 'Edit secret with dry-run and confirmation'
+                                : canManageSecrets
+                                  ? 'Edit apply is unavailable for this provider'
+                                  : 'Security management permission is required'
+                            }
+                            onClick={() => openMutation(record, 'edit')}
                           >
-                            Delete
+                            Edit {record.name}
                           </Button>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={
+                              !canMutateSecret(
+                                record,
+                                'reset',
+                                canManageSecrets
+                              )
+                            }
+                            title={
+                              canMutateSecret(record, 'reset', canManageSecrets)
+                                ? 'Reset secret with dry-run and confirmation'
+                                : canManageSecrets
+                                  ? 'Reset apply is unavailable for this provider'
+                                  : 'Security management permission is required'
+                            }
+                            onClick={() => openMutation(record, 'reset')}
+                          >
+                            Reset {record.name}
+                          </Button>
+                          {record.tombstone?.state === 'decommissioned' ? (
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='outline'
+                              disabled={!canManageSecrets}
+                              title='Restore from the persisted encrypted tombstone'
+                              onClick={() => openTombstoneRestore(record)}
+                            >
+                              <Undo2 className='mr-2 size-4' />
+                              Restore {record.name}
+                            </Button>
+                          ) : (
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='outline'
+                              disabled={
+                                !canDecommissionSecret(record, canManageSecrets)
+                              }
+                              title={
+                                canDecommissionSecret(record, canManageSecrets)
+                                  ? 'Decommission with dependency preflight and recoverable tombstone'
+                                  : canManageSecrets
+                                    ? 'Decommission is unavailable for this provider'
+                                    : 'Security management permission is required'
+                              }
+                              onClick={() => openDecommission(record)}
+                            >
+                              Decommission {record.name}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1005,8 +2665,649 @@ function SecretsBrokerSecretsPanel() {
               </TableBody>
             </Table>
           </div>
+          <div className='mt-4 flex flex-wrap items-center justify-between gap-3 text-sm'>
+            <span className='text-muted-foreground'>
+              {filteredRecords.length} result
+              {filteredRecords.length === 1 ? '' : 's'} · page {inventoryPage}{' '}
+              of {inventoryPageCount}
+            </span>
+            <div className='flex items-center gap-2'>
+              <Label htmlFor='secret-inventory-page-size' className='sr-only'>
+                Results per page
+              </Label>
+              <select
+                id='secret-inventory-page-size'
+                aria-label='Results per page'
+                className='h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs'
+                value={inventoryPageSize}
+                onChange={(event) =>
+                  setInventoryPageSize(Number(event.target.value))
+                }
+              >
+                {[1, 5, 10, 25].map((size) => (
+                  <option key={size} value={size}>
+                    {size} per page
+                  </option>
+                ))}
+              </select>
+              <Button
+                type='button'
+                size='sm'
+                variant='outline'
+                aria-label='Previous secrets page'
+                disabled={inventoryPage <= 1}
+                onClick={() =>
+                  setInventoryPage((page) => Math.max(1, page - 1))
+                }
+              >
+                Previous
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                variant='outline'
+                aria-label='Next secrets page'
+                disabled={inventoryPage >= inventoryPageCount}
+                onClick={() =>
+                  setInventoryPage((page) =>
+                    Math.min(inventoryPageCount, page + 1)
+                  )
+                }
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      <Dialog open={migrationTarget !== null} onOpenChange={closeMigration}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Migrate secret provider</DialogTitle>
+            <DialogDescription>{migrationTarget?.ref}</DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='migration-target-provider'>Target provider</Label>
+              <select
+                id='migration-target-provider'
+                className='h-9 w-full rounded-md border border-input bg-background px-3 text-sm'
+                value={migrationTargetProviderId}
+                disabled={
+                  migrationPreview !== null || migrationReceipt !== null
+                }
+                onChange={(event) => {
+                  setMigrationTargetProviderId(event.target.value)
+                  setMigrationPreview(null)
+                  setMigrationConfirmed(false)
+                  setMigrationError(null)
+                }}
+              >
+                <option value=''>Select a target</option>
+                {providerQuery.data?.providers
+                  .filter(
+                    (provider) =>
+                      provider.providerId !== migrationTarget?.sourceId
+                  )
+                  .map((provider) => (
+                    <option
+                      key={provider.providerId}
+                      value={provider.providerId}
+                    >
+                      {provider.displayName} ({provider.outcome})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='migration-audit-reason'>Audit reason</Label>
+              <Textarea
+                id='migration-audit-reason'
+                value={migrationReason}
+                disabled={
+                  migrationPreview !== null || migrationReceipt !== null
+                }
+                onChange={(event) => {
+                  setMigrationReason(event.target.value)
+                  setMigrationPreview(null)
+                  setMigrationConfirmed(false)
+                }}
+                placeholder='Approved provider migration'
+              />
+            </div>
+
+            {migrationPreview ? (
+              <div className='space-y-3 rounded-md border p-3 text-sm'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='font-medium'>Migration dry run ready</span>
+                  <Badge variant='secondary'>audit recorded</Badge>
+                </div>
+                <p>
+                  {migrationPreview.results[0]?.expectedAction}. Risk:{' '}
+                  {migrationPreview.results[0]?.risk}.
+                </p>
+                <p className='text-xs text-muted-foreground'>
+                  Recovery: {migrationPreview.rollback}
+                </p>
+                {!migrationApplyExecutable ? (
+                  <div className='rounded-md border border-amber-500/40 bg-amber-500/5 p-2'>
+                    This target does not advertise a validated migration apply
+                    operation. Apply remains disabled.
+                  </div>
+                ) : (
+                  <label className='flex items-start gap-3'>
+                    <Checkbox
+                      checked={migrationConfirmed}
+                      onCheckedChange={(checked) =>
+                        setMigrationConfirmed(checked === true)
+                      }
+                      aria-label='Confirm provider migration'
+                    />
+                    <span>
+                      I confirm this exact provider, reference, operation ID,
+                      and audit reason.
+                    </span>
+                  </label>
+                )}
+              </div>
+            ) : null}
+
+            {migrationReceipt ? (
+              <div
+                data-testid='migration-terminal-outcome'
+                data-outcome={migrationReceipt.outcome}
+                className={cn(
+                  'space-y-2 rounded-md border p-3 text-sm',
+                  migrationReceipt.outcome === 'applied'
+                    ? 'border-emerald-500/40 bg-emerald-500/5'
+                    : 'border-destructive/40 bg-destructive/5 text-destructive'
+                )}
+              >
+                <p className='font-medium'>
+                  Migration outcome: {migrationReceipt.outcome}
+                </p>
+                {migrationReceipt.results.map((result) => (
+                  <p key={result.ref} className='text-xs'>
+                    {result.ref}: {result.outcome} · {result.recovery}
+                  </p>
+                ))}
+                {migrationReceipt.outcome !== 'applied' ? (
+                  <p className='text-xs'>
+                    The source remains authoritative. Follow the safe recovery
+                    action before retrying this exact operation.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {migrationError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {migrationError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeMigration(false)}
+            >
+              Close
+            </Button>
+            {!migrationPreview && !migrationReceipt ? (
+              <Button
+                type='button'
+                disabled={
+                  previewMigration.isPending ||
+                  !migrationTargetProviderId ||
+                  !migrationReason.trim()
+                }
+                onClick={() => void runMigrationPreview()}
+              >
+                Preview migration
+              </Button>
+            ) : null}
+            {migrationPreview ? (
+              <Button
+                type='button'
+                disabled={
+                  !migrationApplyExecutable ||
+                  !migrationConfirmed ||
+                  applyMigration.isPending
+                }
+                onClick={() => void runMigrationApply()}
+              >
+                Apply migration
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkCampaignOpen} onOpenChange={closeBulkCampaign}>
+        <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-3xl'>
+          <DialogHeader>
+            <DialogTitle>Bulk provider migration</DialogTitle>
+            <DialogDescription>
+              Build, revalidate, and confirm one durable Broker campaign. The
+              browser sends secret references only; secret values remain inside
+              the Broker.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='bulk-migration-target-provider'>
+                Executable target provider
+              </Label>
+              <select
+                id='bulk-migration-target-provider'
+                className='h-9 w-full rounded-md border border-input bg-background px-3 text-sm'
+                value={bulkCampaignTargetProviderId}
+                disabled={
+                  bulkCampaignPlan !== null || bulkCampaignReceipt !== null
+                }
+                onChange={(event) => {
+                  setBulkCampaignTargetProviderId(event.target.value)
+                  setBulkCampaignPlan(null)
+                  setBulkCampaignConfirmed(false)
+                  setBulkCampaignError(null)
+                }}
+              >
+                <option value=''>Select a validated target</option>
+                {executableMigrationProviders.map((provider) => (
+                  <option key={provider.providerId} value={provider.providerId}>
+                    {provider.displayName} ({provider.providerKind})
+                  </option>
+                ))}
+              </select>
+              <p className='text-xs text-muted-foreground'>
+                Only connections advertising a registered write-and-verify
+                executor are selectable.
+              </p>
+            </div>
+
+            <fieldset
+              className='space-y-2 rounded-md border p-3'
+              disabled={
+                bulkCampaignPlan !== null || bulkCampaignReceipt !== null
+              }
+            >
+              <legend className='px-1 text-sm font-medium'>
+                Local secrets
+              </legend>
+              {bulkCampaignCandidates.length ? (
+                <div className='max-h-48 space-y-2 overflow-y-auto'>
+                  {bulkCampaignCandidates.map((record) => (
+                    <label
+                      key={record.ref}
+                      className='flex items-start gap-3 rounded border p-2 text-sm'
+                    >
+                      <Checkbox
+                        checked={bulkCampaignRefs.includes(record.ref)}
+                        onCheckedChange={(checked) =>
+                          toggleBulkCampaignRef(record.ref, checked === true)
+                        }
+                        aria-label={`Select ${record.ref} for bulk migration`}
+                      />
+                      <span className='min-w-0'>
+                        <span className='block font-mono text-xs break-all'>
+                          {record.ref}
+                        </span>
+                        <span className='text-xs text-muted-foreground'>
+                          {record.ownerServiceId ?? 'unowned'} ·{' '}
+                          {record.sourceId}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className='text-sm text-muted-foreground'>
+                  No ready local encrypted-store records are eligible.
+                </p>
+              )}
+            </fieldset>
+
+            <div className='space-y-2'>
+              <Label htmlFor='bulk-migration-audit-reason'>Audit reason</Label>
+              <Textarea
+                id='bulk-migration-audit-reason'
+                value={bulkCampaignReason}
+                disabled={
+                  bulkCampaignPlan !== null || bulkCampaignReceipt !== null
+                }
+                onChange={(event) => {
+                  setBulkCampaignReason(event.target.value)
+                  setBulkCampaignPlan(null)
+                  setBulkCampaignConfirmed(false)
+                }}
+                placeholder='Approved bulk provider migration'
+              />
+            </div>
+
+            {bulkCampaignPlan ? (
+              <div className='space-y-3 rounded-md border p-3 text-sm'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <span className='font-medium'>Durable campaign ready</span>
+                  <div className='flex gap-2'>
+                    <Badge variant='secondary'>audit recorded</Badge>
+                    <Badge variant='outline'>concurrency 1</Badge>
+                  </div>
+                </div>
+                <p>
+                  {bulkCampaignPlan.summary.applicableCount} of{' '}
+                  {bulkCampaignPlan.summary.selectedCount} selected refs are
+                  applicable. High risk:{' '}
+                  {bulkCampaignPlan.summary.highRiskCount}.
+                </p>
+                <p className='font-mono text-xs break-all'>
+                  Campaign {bulkCampaignPlan.campaignId}
+                </p>
+                <p className='text-xs text-muted-foreground'>
+                  Valid for {bulkCampaignPlan.staleAfterSeconds}s after
+                  revalidation. Backpressure policy:{' '}
+                  {bulkCampaignPlan.backpressurePolicy}.
+                </p>
+                <div className='max-h-44 space-y-2 overflow-y-auto'>
+                  {bulkCampaignPlan.results.map((item) => (
+                    <div
+                      key={item.operationItemId}
+                      className='rounded border p-2'
+                    >
+                      <div className='font-mono text-xs break-all'>
+                        {item.ref}
+                      </div>
+                      <div className='text-xs text-muted-foreground'>
+                        {item.outcome} · {item.expectedAction} · {item.risk}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <label className='flex items-start gap-3'>
+                  <Checkbox
+                    checked={bulkCampaignConfirmed}
+                    onCheckedChange={(checked) =>
+                      setBulkCampaignConfirmed(checked === true)
+                    }
+                    aria-label='Confirm exact bulk migration campaign'
+                  />
+                  <span>
+                    I confirm this exact campaign ID, selected references,
+                    target provider, and audit reason. The Broker must verify
+                    every reported write.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
+            {bulkCampaignReceipt ? (
+              <div className='space-y-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='font-medium'>
+                    Campaign outcome: {bulkCampaignReceipt.outcome}
+                  </span>
+                  <Badge variant='secondary'>durable</Badge>
+                </div>
+                <p>
+                  {bulkCampaignReceipt.summary.appliedCount} verified;{' '}
+                  {bulkCampaignReceipt.summary.failedCount} failed;{' '}
+                  {bulkCampaignReceipt.summary.skippedCount} deferred.
+                </p>
+                {bulkCampaignReceipt.results.map((item) => (
+                  <p key={item.operationItemId} className='text-xs'>
+                    <span className='font-mono'>{item.ref}</span>:{' '}
+                    {item.outcome}
+                    {item.verified ? ' · verified' : ''}
+                    {item.nextAction ? ` · ${item.nextAction}` : ''}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
+            {bulkCampaignError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {bulkCampaignError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeBulkCampaign(false)}
+            >
+              Close
+            </Button>
+            {!bulkCampaignPlan && !bulkCampaignReceipt ? (
+              <Button
+                type='button'
+                disabled={
+                  createBulkCampaign.isPending ||
+                  revalidateBulkCampaign.isPending ||
+                  !bulkCampaignRefs.length ||
+                  !bulkCampaignTargetProviderId ||
+                  !bulkCampaignReason.trim()
+                }
+                onClick={() => void runBulkCampaignPreview()}
+              >
+                Create and revalidate campaign
+              </Button>
+            ) : null}
+            {bulkCampaignPlan ? (
+              <>
+                <Button
+                  type='button'
+                  variant='outline'
+                  disabled={revalidateBulkCampaign.isPending}
+                  onClick={() => void runBulkCampaignRevalidate()}
+                >
+                  Revalidate plan
+                </Button>
+                <Button
+                  type='button'
+                  disabled={
+                    !bulkCampaignConfirmed || applyBulkCampaign.isPending
+                  }
+                  onClick={() => void runBulkCampaignApply()}
+                >
+                  Apply exact campaign
+                </Button>
+              </>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={policyTarget !== null} onOpenChange={closePolicy}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Secret policy status</DialogTitle>
+            <DialogDescription>{policyTarget?.ref}</DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-3'>
+            {previewPolicy.isPending ? (
+              <div className='rounded-md border p-3 text-sm'>
+                Checking Broker policy capability…
+              </div>
+            ) : null}
+            {policyPreview ? (
+              <div className='space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='font-medium'>Policy apply unavailable</span>
+                  <Badge variant='secondary'>planning only</Badge>
+                </div>
+                <p>
+                  Current binding:{' '}
+                  {policyPreview.currentPolicy ?? 'not recorded'}.
+                </p>
+                <p className='text-xs text-muted-foreground'>
+                  The Broker does not yet persist policy bindings. No policy was
+                  changed, and this UI will not claim enforcement until the
+                  apply capability is implemented and release-qualified.
+                </p>
+                <p className='text-xs text-muted-foreground'>
+                  Audit status: {policyPreview.auditStatus}. Next action:{' '}
+                  {policyPreview.nextAction}.
+                </p>
+              </div>
+            ) : null}
+            {policyError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {policyError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closePolicy(false)}
+            >
+              Close
+            </Button>
+            <Button type='button' disabled>
+              Apply policy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createOpen} onOpenChange={closeCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create local secret</DialogTitle>
+            <DialogDescription>
+              The Broker first signs a short-lived no-overwrite plan. The value
+              is accepted only during confirmed apply and is never returned.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-create-ref'>Secret reference</Label>
+              <Input
+                id='secret-create-ref'
+                value={createRef}
+                placeholder='services/my-service/runtime/API_TOKEN'
+                autoComplete='off'
+                spellCheck={false}
+                disabled={createPlan !== null || createReceipt !== null}
+                onChange={(event) => setCreateRef(event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-create-mode'>Value source</Label>
+              <select
+                id='secret-create-mode'
+                className='flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm'
+                value={createGenerationMode}
+                disabled={createPlan !== null || createReceipt !== null}
+                onChange={(event) => {
+                  setCreateGenerationMode(
+                    event.target.value as SecretCreateGenerationMode
+                  )
+                  setCreateValue('')
+                }}
+              >
+                <option value='broker_generated'>Broker generated</option>
+                <option value='operator_supplied'>Operator supplied</option>
+              </select>
+              <p className='text-xs text-muted-foreground'>
+                Broker-generated is recommended and never exposes the value to
+                the browser. Operator-supplied values exist only in this form
+                and the confirmed request body.
+              </p>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-create-reason'>Audit reason</Label>
+              <Textarea
+                id='secret-create-reason'
+                value={createReason}
+                placeholder='Approved initial credential provision'
+                disabled={createPlan !== null || createReceipt !== null}
+                onChange={(event) => setCreateReason(event.target.value)}
+              />
+            </div>
+            {createPlan && createGenerationMode === 'operator_supplied' ? (
+              <div className='space-y-2'>
+                <Label htmlFor='secret-create-value'>Secret value</Label>
+                <Input
+                  id='secret-create-value'
+                  type='password'
+                  value={createValue}
+                  autoComplete='new-password'
+                  spellCheck={false}
+                  onChange={(event) => setCreateValue(event.target.value)}
+                />
+              </div>
+            ) : null}
+            {createPlan ? (
+              <div className='space-y-3 rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='text-sm font-medium'>Signed plan ready</span>
+                  <Badge variant='secondary'>no overwrite</Badge>
+                </div>
+                <label className='flex items-start gap-3 text-sm'>
+                  <Checkbox
+                    checked={createConfirmed}
+                    onCheckedChange={(checked) =>
+                      setCreateConfirmed(checked === true)
+                    }
+                    aria-label='Confirm secret create'
+                  />
+                  <span>
+                    I confirm creation of this new local encrypted secret from
+                    the exact signed plan.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+            {createReceipt ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Secret created and audit recorded. No secret value was returned.
+              </div>
+            ) : null}
+            {createError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {createError}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={clearCreateState}>
+              Close
+            </Button>
+            {!createPlan ? (
+              <Button
+                type='button'
+                disabled={previewCreate.isPending || createReceipt !== null}
+                onClick={() => void runCreatePreview()}
+              >
+                Preview create
+              </Button>
+            ) : (
+              <Button
+                type='button'
+                disabled={
+                  applyCreate.isPending ||
+                  !createConfirmed ||
+                  (createGenerationMode === 'operator_supplied' &&
+                    !createValue.trim())
+                }
+                onClick={() => void runCreateApply()}
+              >
+                Create secret
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={selectedSecret !== null} onOpenChange={closeReveal}>
         <DialogContent>
@@ -1025,6 +3326,20 @@ function SecretsBrokerSecretsPanel() {
                 placeholder='Operator troubleshooting'
               />
             </div>
+
+            <label className='flex items-start gap-3 text-sm'>
+              <Checkbox
+                checked={revealConfirmed}
+                onCheckedChange={(checked) =>
+                  setRevealConfirmed(checked === true)
+                }
+                aria-label='Confirm secret reveal'
+              />
+              <span>
+                I confirm this time-limited reveal will be recorded in the
+                broker audit trail.
+              </span>
+            </label>
 
             {localError ? (
               <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
@@ -1075,11 +3390,485 @@ function SecretsBrokerSecretsPanel() {
             </Button>
             <Button
               type='button'
-              disabled={revealSecret.isPending}
+              disabled={revealSecret.isPending || !revealConfirmed}
               onClick={() => void runReveal()}
             >
               Reveal value
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mutationTarget !== null} onOpenChange={closeMutation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {mutationTarget?.operation === 'reset' ? 'Reset' : 'Edit'} secret
+            </DialogTitle>
+            <DialogDescription>{mutationTarget?.record.ref}</DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-mutation-reason'>Audit reason</Label>
+              <Textarea
+                id='secret-mutation-reason'
+                value={mutationReason}
+                onChange={(event) => {
+                  setMutationReason(event.target.value)
+                  setMutationPlan(null)
+                  setMutationConfirmed(false)
+                }}
+                placeholder='Approved credential replacement'
+              />
+            </div>
+
+            <div className='space-y-2'>
+              <Label htmlFor='secret-replacement-value'>
+                Replacement value
+              </Label>
+              <Input
+                id='secret-replacement-value'
+                type='password'
+                value={replacementValue}
+                autoComplete='new-password'
+                spellCheck={false}
+                onChange={(event) => setReplacementValue(event.target.value)}
+              />
+              <p className='text-xs text-muted-foreground'>
+                This value is sent only for the confirmed apply request. It is
+                never included in the broker response and is cleared after the
+                attempt.
+              </p>
+            </div>
+
+            {mutationPlan ? (
+              <div className='space-y-3 rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='text-sm font-medium'>Dry run ready</span>
+                  <Badge variant='secondary'>audit ready</Badge>
+                </div>
+                <label className='flex items-start gap-3 text-sm'>
+                  <Checkbox
+                    checked={mutationConfirmed}
+                    onCheckedChange={(checked) =>
+                      setMutationConfirmed(checked === true)
+                    }
+                    aria-label='Confirm secret mutation'
+                  />
+                  <span>
+                    I confirm this replacement for the selected local secret.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
+            {mutationReceipt ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Mutation applied and audit recorded. No secret value was
+                returned.
+              </div>
+            ) : null}
+
+            {mutationError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {mutationError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeMutation(false)}
+            >
+              Close
+            </Button>
+            {!mutationPlan ? (
+              <Button
+                type='button'
+                disabled={previewMutation.isPending || mutationReceipt !== null}
+                onClick={() => void runMutationPreview()}
+              >
+                Preview mutation
+              </Button>
+            ) : (
+              <Button
+                type='button'
+                disabled={
+                  !mutationConfirmed ||
+                  !replacementValue.trim() ||
+                  applyMutation.isPending
+                }
+                onClick={() => void runMutationApply()}
+              >
+                Apply mutation
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={decommissionTarget !== null}
+        onOpenChange={closeDecommission}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {decommissionTarget?.tombstone
+                ? 'Restore secret'
+                : 'Decommission secret'}
+            </DialogTitle>
+            <DialogDescription>
+              {decommissionTarget?.ref}.{' '}
+              {decommissionTarget?.tombstone
+                ? 'Restore uses the exact persisted tombstone version and requires a fresh audit reason.'
+                : 'Core derives dependency evidence from the current manifests; the browser cannot override it.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-decommission-reason'>Audit reason</Label>
+              <Textarea
+                id='secret-decommission-reason'
+                value={decommissionReason}
+                onChange={(event) => {
+                  setDecommissionReason(event.target.value)
+                  setDecommissionConfirmed(false)
+                }}
+                placeholder='Approved secret retirement'
+              />
+            </div>
+
+            {decommissionPlan?.plan ? (
+              <div className='space-y-3 rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='text-sm font-medium'>Signed plan ready</span>
+                  <Badge variant='secondary'>no dependencies</Badge>
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Version-bound plan expires{' '}
+                  {new Date(decommissionPlan.plan.expiresAt).toLocaleString()}.
+                  The signature is retained only in memory for this apply.
+                </p>
+                <label className='flex items-start gap-3 text-sm'>
+                  <Checkbox
+                    checked={decommissionConfirmed}
+                    onCheckedChange={(checked) =>
+                      setDecommissionConfirmed(checked === true)
+                    }
+                    aria-label='Confirm secret decommission'
+                  />
+                  <span>
+                    I confirm this secret will move into an encrypted,
+                    recoverable tombstone.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
+            {decommissionReceipt?.tombstone?.state === 'decommissioned' ? (
+              <div className='space-y-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                <p>
+                  Secret decommissioned and audit recorded. The encrypted
+                  tombstone is recoverable.
+                </p>
+                <label className='flex items-start gap-3'>
+                  <Checkbox
+                    checked={restoreConfirmed}
+                    onCheckedChange={(checked) =>
+                      setRestoreConfirmed(checked === true)
+                    }
+                    aria-label='Confirm secret restore'
+                  />
+                  <span>
+                    I confirm restore from this exact tombstone version.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
+            {decommissionReceipt?.tombstone?.state === 'restored' ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Secret restored and audit recorded. Refresh confirmed the
+                managed record is active again.
+              </div>
+            ) : null}
+
+            {decommissionError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {decommissionError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeDecommission(false)}
+            >
+              Close
+            </Button>
+            {!decommissionPlan && !decommissionReceipt ? (
+              <Button
+                type='button'
+                disabled={previewDecommission.isPending}
+                onClick={() => void runDecommissionPreview()}
+              >
+                Check dependencies
+              </Button>
+            ) : null}
+            {decommissionPlan ? (
+              <Button
+                type='button'
+                variant='destructive'
+                disabled={
+                  !decommissionReason.trim() ||
+                  !decommissionConfirmed ||
+                  applyDecommission.isPending
+                }
+                onClick={() => void runDecommissionApply()}
+              >
+                Decommission secret
+              </Button>
+            ) : null}
+            {decommissionReceipt?.tombstone?.state === 'decommissioned' ? (
+              <Button
+                type='button'
+                disabled={!restoreConfirmed || restoreDecommission.isPending}
+                onClick={() => void runDecommissionRestore()}
+              >
+                Restore secret
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rotationTarget !== null} onOpenChange={closeRotation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rotate secret</DialogTitle>
+            <DialogDescription>
+              {rotationTarget?.ref}. The replacement remains only in the
+              password field until a confirmed stage request and is then
+              cleared.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='secret-rotation-reason'>Audit reason</Label>
+              <Textarea
+                id='secret-rotation-reason'
+                value={rotationReason}
+                disabled={rotationReceipt !== null}
+                onChange={(event) => {
+                  setRotationReason(event.target.value)
+                  setRotationPreview(null)
+                  setRotationStatus(null)
+                  setRotationConfirmed(false)
+                }}
+                placeholder='Approved versioned secret rotation'
+              />
+            </div>
+
+            {!rotationReceipt && !rotationExecution ? (
+              <div className='space-y-2'>
+                <Label htmlFor='secret-rotation-value'>Replacement value</Label>
+                <Input
+                  id='secret-rotation-value'
+                  type='password'
+                  value={rotationValue}
+                  autoComplete='new-password'
+                  spellCheck={false}
+                  onChange={(event) => setRotationValue(event.target.value)}
+                />
+                <p className='text-xs text-muted-foreground'>
+                  Preview and status requests omit this value. It is sent only
+                  to the confirmed stage endpoint and cleared after that call.
+                </p>
+              </div>
+            ) : null}
+
+            {rotationPreview && rotationStatus?.currentVersion ? (
+              <div className='space-y-3 rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='text-sm font-medium'>Rotation ready</span>
+                  <Badge variant='secondary'>version bound</Badge>
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Current version {rotationStatus.currentVersion.versionId}.
+                  Preview expires in {rotationPreview.staleAfterSeconds}s.
+                </p>
+              </div>
+            ) : null}
+
+            {rotationImpactPlan?.services.length ? (
+              <div className='space-y-3 rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='text-sm font-medium'>Linked consumers</span>
+                  <Badge variant='outline'>Core orchestrated</Badge>
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Core will stop, rematerialize, restart or reload only the
+                  services in this dependency-ordered plan. A failed convergence
+                  automatically restores the previous version.
+                </p>
+                <div className='space-y-2'>
+                  {rotationImpactPlan.services.map((service) => (
+                    <div
+                      key={service.serviceId}
+                      className='flex items-start justify-between gap-3 text-sm'
+                    >
+                      <span className='font-mono'>{service.serviceId}</span>
+                      <span className='text-right text-muted-foreground'>
+                        {service.action}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {rotationExecution ? (
+              <div
+                className={
+                  rotationExecution.outcome === 'committed'
+                    ? 'rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'
+                    : 'rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm'
+                }
+              >
+                Core rotation {rotationExecution.outcome}. Phase{' '}
+                {rotationExecution.phase};{' '}
+                {rotationExecution.completedOperations.length} consumer actions
+                completed.
+              </div>
+            ) : null}
+
+            {rotationReceipt?.operation === 'rotation_stage' ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Candidate {rotationReceipt.stagedVersion?.versionId} is staged,
+                encrypted, and audited. Activation still requires confirmation.
+              </div>
+            ) : null}
+
+            {rotationReceipt?.operation === 'rotation_activate' ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Version {rotationReceipt.currentVersion?.versionId} is active.
+                The previous version remains retained for rollback or
+                retirement.
+              </div>
+            ) : null}
+
+            {rotationReceipt?.operation === 'rotation_rollback' ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Previous version restored and audit recorded.
+              </div>
+            ) : null}
+
+            {rotationReceipt?.operation === 'rotation_retire' ? (
+              <div className='rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm'>
+                Retained version retired and audit recorded.
+              </div>
+            ) : null}
+
+            {(rotationPreview || rotationReceipt) &&
+            !rotationExecution &&
+            rotationReceipt?.operation !== 'rotation_rollback' &&
+            rotationReceipt?.operation !== 'rotation_retire' ? (
+              <label className='flex items-start gap-3 text-sm'>
+                <Checkbox
+                  checked={rotationConfirmed}
+                  onCheckedChange={(checked) =>
+                    setRotationConfirmed(checked === true)
+                  }
+                  aria-label='Confirm secret rotation transition'
+                />
+                <span>
+                  I confirm the next version transition and its durable audit
+                  record.
+                </span>
+              </label>
+            ) : null}
+
+            {rotationError ? (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {rotationError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => closeRotation(false)}
+            >
+              Close
+            </Button>
+            {!rotationPreview && !rotationReceipt && !rotationExecution ? (
+              <Button
+                type='button'
+                disabled={
+                  previewRotation.isPending ||
+                  coreRotationPlan.isPending ||
+                  !rotationReason.trim()
+                }
+                onClick={() => void runRotationPreview()}
+              >
+                Preview rotation
+              </Button>
+            ) : null}
+            {rotationPreview && !rotationReceipt && !rotationExecution ? (
+              <Button
+                type='button'
+                disabled={
+                  !rotationConfirmed ||
+                  !rotationValue.trim() ||
+                  runRotationAction.isPending ||
+                  coreRotationExecution.isPending
+                }
+                onClick={() => void runRotationStage()}
+              >
+                {rotationImpactPlan?.services.length
+                  ? 'Rotate and converge consumers'
+                  : 'Stage candidate'}
+              </Button>
+            ) : null}
+            {rotationReceipt?.operation === 'rotation_stage' ? (
+              <Button
+                type='button'
+                disabled={!rotationConfirmed || runRotationAction.isPending}
+                onClick={() => void runRotationActivate()}
+              >
+                Activate staged version
+              </Button>
+            ) : null}
+            {rotationReceipt?.operation === 'rotation_activate' ? (
+              <>
+                <Button
+                  type='button'
+                  variant='outline'
+                  disabled={!rotationConfirmed || runRotationAction.isPending}
+                  onClick={() => void runRotationPostAction('rollback')}
+                >
+                  Roll back
+                </Button>
+                <Button
+                  type='button'
+                  variant='destructive'
+                  disabled={!rotationConfirmed || runRotationAction.isPending}
+                  onClick={() => void runRotationPostAction('retire')}
+                >
+                  Retire previous version
+                </Button>
+              </>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1328,9 +4117,42 @@ function ServiceActionButton({
 }) {
   const key = action.id
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const lifecycleAction = useServiceLifecycleAction()
   const permission = action.permission ?? {
     allowed: false,
     reason: 'Runtime action wiring is the next backend slice.',
+  }
+
+  const lifecycleKinds: ServiceLifecycleActionKind[] = [
+    'install',
+    'start',
+    'stop',
+    'restart',
+  ]
+  const isLifecycleAction = lifecycleKinds.includes(
+    action.kind as ServiceLifecycleActionKind
+  )
+
+  const runLifecycleAction = (confirm: boolean) => {
+    if (!isLifecycleAction) return
+    lifecycleAction.mutate(
+      {
+        serviceId: service.id,
+        action: action.kind as ServiceLifecycleActionKind,
+        confirm,
+      },
+      {
+        onSuccess: () => {
+          setConfirmOpen(false)
+          toast.success(`${action.label} completed.`)
+        },
+        onError: () => {
+          toast.error(
+            `${action.label} failed. The runtime made no UI-side assumptions.`
+          )
+        },
+      }
+    )
   }
 
   if (!permission.allowed) {
@@ -1388,6 +4210,14 @@ function ServiceActionButton({
     )
   }
 
+  if (!isLifecycleAction) {
+    return (
+      <Button key={key} variant='outline' size='sm' disabled>
+        {action.label}
+      </Button>
+    )
+  }
+
   if (permission.requiresConfirmation) {
     return (
       <>
@@ -1397,6 +4227,7 @@ function ServiceActionButton({
           size='sm'
           title={permission.reason}
           onClick={() => setConfirmOpen(true)}
+          disabled={lifecycleAction.isPending}
         >
           {action.label}
         </Button>
@@ -1422,8 +4253,7 @@ function ServiceActionButton({
             action.kind === 'uninstall'
           }
           handleConfirm={() => {
-            setConfirmOpen(false)
-            toast.info(`${action.label} is waiting for runtime action wiring.`)
+            runLifecycleAction(true)
           }}
         />
       </>
@@ -1436,10 +4266,12 @@ function ServiceActionButton({
       variant='outline'
       size='sm'
       title={permission.reason}
-      onClick={() =>
-        toast.info(`${action.label} is waiting for runtime action wiring.`)
-      }
+      disabled={lifecycleAction.isPending}
+      onClick={() => runLifecycleAction(false)}
     >
+      {lifecycleAction.isPending ? (
+        <RefreshCw className='mr-2 size-4 animate-spin' />
+      ) : null}
       {action.label}
     </Button>
   )
@@ -2077,7 +4909,9 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                   </TabsContent>
 
                   {showSecretsManagement ? (
-                    <TabsContent value='secrets' className='mt-0'>
+                    <TabsContent value='secrets' className='mt-0 space-y-4'>
+                      <SecretsBrokerOperationsPanel />
+                      <SecretsBrokerLifecyclePanel />
                       <SecretsBrokerSecretsPanel />
                     </TabsContent>
                   ) : null}

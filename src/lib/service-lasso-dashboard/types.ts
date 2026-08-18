@@ -66,6 +66,16 @@ export type SecretManagementRecord = {
   policy?: string
   auditStatus?: string
   valueSearch?: string
+  tombstone?: SecretTombstoneMetadata
+}
+
+export type SecretTombstoneMetadata = {
+  state: string
+  version: string
+  decommissionOperationId: string
+  restoreOperationId?: string
+  decommissionedAt: string
+  restoredAt?: string
 }
 
 export type SecretsManagementState = {
@@ -80,6 +90,7 @@ export type SecretsManagementState = {
 export type SecretRevealRequest = {
   ref: string
   reason: string
+  confirm: boolean
 }
 
 export type SecretRevealResult = {
@@ -93,6 +104,706 @@ export type SecretRevealResult = {
   metadata?: Record<string, string>
   ttlSeconds: number
   auditStatus: string
+}
+
+export type SecretMutationOperation = 'edit' | 'reset'
+
+export type SecretCreateGenerationMode =
+  | 'broker_generated'
+  | 'operator_supplied'
+
+export type SecretCreatePlan = {
+  ref: string
+  operationId: string
+  generationMode: SecretCreateGenerationMode
+  expectedState: 'missing'
+  expiresAt: string
+  signature: string
+}
+
+export type SecretCreateRequest = {
+  ref: string
+  operationId: string
+  generationMode: SecretCreateGenerationMode
+  reason: string
+  value?: string
+  plan?: SecretCreatePlan
+}
+
+export type SecretCreateResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operationId: string
+  ref: string
+  operation: 'create'
+  mode: 'dry-run' | 'apply'
+  generationMode: SecretCreateGenerationMode
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  policyResult: string
+  nextAction?: string
+  plan?: SecretCreatePlan
+  affectedRefs: string[]
+  affectedServices: string[]
+}
+
+export type SecretMutationRequest = {
+  operation: SecretMutationOperation
+  ref: string
+  reason: string
+  value?: string
+}
+
+export type SecretMutationResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  ref: string
+  operation: SecretMutationOperation
+  mode: 'dry-run' | 'apply'
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction?: string
+  affectedRefs: string[]
+  affectedServices: string[]
+}
+
+export type SecretPolicyPreviewRequest = {
+  ref: string
+}
+
+export type SecretPolicyPreviewResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  ref: string
+  operation: 'policy'
+  mode: 'preview'
+  outcome: 'unsupported'
+  applied: false
+  requiresConfirmation: false
+  auditStatus: string
+  nextAction: string
+  unsupportedCapability: 'policy_binding_persistence'
+  currentPolicy?: string
+  affectedRefs: string[]
+  affectedServices: string[]
+}
+
+export type BrokerOperationCapability = {
+  operationId: string
+  method: string
+  path: string
+  maturity:
+    | 'unavailable'
+    | 'planned'
+    | 'read-only'
+    | 'dry-run'
+    | 'executable'
+    | 'validated'
+    | string
+  classification: 'read' | 'mutation' | string
+  authenticationRequired: boolean
+  policyRequired: boolean
+  auditRequired: boolean
+  scope: string
+  completionMode: string
+  limitationCode: string
+  reasonCode: string
+  nextAction: string
+}
+
+export type BrokerProviderStatus = {
+  providerId: string
+  providerKind: string
+  displayName: string
+  state: string
+  outcome: string
+  credentialHandle?: string
+  address?: string
+  namespaces: string[]
+  capabilities: string[]
+  operations: BrokerOperationCapability[]
+  nextAction?: string
+  auditStatus: string
+}
+
+export type BrokerProviderStatusState = {
+  serviceId: string
+  apiVersion: string
+  contractVersion: string
+  manifestVersion: string
+  outcome: string
+  currentProvider: BrokerProviderStatus
+  providers: BrokerProviderStatus[]
+}
+
+export type BrokerProviderValidationRequest = {
+  providerId: string
+  providerKind: string
+  displayName: string
+  address?: string
+  credentialRef?: string
+  namespaces: string[]
+  reason: string
+}
+
+export type BrokerProviderValidationResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operation: 'validate'
+  outcome: string
+  applied: false
+  requiresConfirmation: false
+  auditStatus: string
+  nextAction?: string
+  provider: BrokerProviderStatus
+}
+
+export type BrokerMigrationRequest = {
+  operationId: string
+  sourceProviderId: string
+  targetProviderId: string
+  refs: string[]
+  reason: string
+}
+
+export type BrokerMigrationItem = {
+  ref: string
+  sourceProviderId: string
+  targetProviderId: string
+  ownerServiceId: string
+  state: string
+  outcome: string
+  risk: string
+  expectedAction: string
+  policyResult: string
+  auditRequirement: string
+  recovery: string
+}
+
+export type BrokerLifecycleBackup = {
+  schema: 'service-lasso.secretsbroker.backup-metadata.v1'
+  backupId: string
+  createdAt?: string
+  storeKeyId?: string
+  storeKeyVersion?: string
+  secretCount: number
+  sizeBytes: number
+  artifactHash?: string
+  verification: 'verified' | 'invalid'
+}
+
+export type BrokerRecoveryPolicyMetadata = {
+  policyId: string
+  keyId: string
+  keyVersion: string
+  threshold: number
+  shareCount: number
+  shareFingerprints: string[]
+  recipientFingerprints: string[]
+  createdAt: string
+  rotatedAt?: string
+  revokedAt?: string
+  status: string
+  nextAction: string
+}
+
+export type BrokerLifecycleStatus = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  outcome: string
+  key: {
+    available: boolean
+    keyId?: string
+    keyVersion?: string
+    secretCount: number
+  }
+  wrapper: {
+    available: boolean
+    supported: boolean
+    wrapperKind: string
+    os: string
+    keyId?: string
+    keyVersion?: string
+    state: string
+    nextAction: string
+    failureReason?: string
+  }
+  recovery: {
+    outcome: string
+    policy?: BrokerRecoveryPolicyMetadata
+    nextAction: string
+  }
+  backups: BrokerLifecycleBackup[]
+  auditStatus: string
+  nextAction: string
+}
+
+export type BrokerLifecycleOperationRequest = {
+  operationId: string
+  reason: string
+  backupId?: string
+  planToken?: string
+  expectedKeyId?: string
+  expectedStoreHash?: string
+  confirm?: boolean
+}
+
+export type BrokerLifecycleBackupResult = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  outcome: string
+  applied: boolean
+  backup?: BrokerLifecycleBackup
+  backups: BrokerLifecycleBackup[]
+  auditStatus: string
+  nextAction: string
+}
+
+export type BrokerLifecycleRestoreResult = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  outcome: string
+  applied: boolean
+  backup?: BrokerLifecycleBackup
+  planToken?: string
+  planExpiresAt?: string
+  expectedKeyId?: string
+  expectedStoreHash?: string
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction: string
+}
+
+export type BrokerLifecycleRotateResult = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  outcome: string
+  applied: boolean
+  rotatedAt?: string
+  oldKeyId?: string
+  newKeyId?: string
+  keyVersion?: string
+  secretCount: number
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction: string
+}
+
+export type BrokerMigrationResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operationId: string
+  operation: 'migration_dry_run' | 'migration_apply'
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction?: string
+  sourceProviderId: string
+  targetProviderId: string
+  results: BrokerMigrationItem[]
+  rollback: string
+}
+
+export type BrokerBulkCampaignRequest = {
+  campaignId?: string
+  planToken?: string
+  operationId: string
+  operation: 'migrate_remap_provider'
+  refs: string[]
+  targetProviderId: string
+  reason: string
+  confirm?: boolean
+  highRiskConfirm?: string
+}
+
+export type BrokerBulkCampaignItem = {
+  ref: string
+  sourceId: string
+  providerKind: string
+  ownerServiceId: string
+  operation: string
+  capabilityResult: string
+  policyResult: string
+  auditRequirement: string
+  risk: string
+  expectedAction: string
+  outcome: string
+  nextAction?: string
+  idempotencyKey: string
+  operationItemId: string
+  recovery?: string
+  targetProviderId?: string
+  providerAction?: string
+  applied: boolean
+  retrySafe: boolean
+  verified: boolean
+  attempts?: number
+}
+
+export type BrokerBulkCampaignSummary = {
+  selectedCount: number
+  applicableCount: number
+  deniedCount: number
+  unsupportedCount: number
+  authRequiredCount: number
+  skippedCount: number
+  appliedCount: number
+  failedCount: number
+  staleCount: number
+  highRiskCount: number
+}
+
+export type BrokerBulkCampaignResult = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  requestId: string
+  campaignId: string
+  planToken: string
+  operationId: string
+  operation: 'migrate_remap_provider'
+  mode: 'create' | 'revalidate' | 'apply' | 'status'
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  requiresAuditReason: boolean
+  requiresRevalidation: boolean
+  auditStatus: string
+  staleAfterSeconds: number
+  nextAction?: string
+  results: BrokerBulkCampaignItem[]
+  summary: BrokerBulkCampaignSummary
+  affectedRefs: string[]
+  affectedServices: string[]
+  unsupportedFamilies?: string[]
+  durable: boolean
+  maxConcurrency: number
+  backpressurePolicy: string
+  createdAt: string
+  revalidatedAt?: string
+  updatedAt: string
+}
+
+export type BrokerTelemetryOperationCounter = {
+  operation: string
+  outcome: string
+  count: number
+}
+
+export type BrokerTelemetryStateCounter = {
+  id: string
+  state: string
+  outcome: string
+  count: number
+}
+
+export type BrokerTelemetry = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  contractVersion: string
+  outcome: string
+  generatedAt: string
+  counters: {
+    operations: BrokerTelemetryOperationCounter[]
+    policyDecisions: Array<{ outcome: string; count: number }>
+    localApiAuthFailures: number
+    activeLockouts: number
+    providerStates: BrokerTelemetryStateCounter[]
+    sourceStates: BrokerTelemetryStateCounter[]
+    auditRecords: Array<{
+      auditStatus: string
+      outcome: string
+      count: number
+    }>
+  }
+  safety: {
+    lowCardinalityLabels: boolean
+    valueMaterialIncluded: false
+  }
+}
+
+export type BrokerOperationalEvent = {
+  id: string
+  ts: string
+  family: string
+  severity: string
+  operation: string
+  serviceId?: string
+  providerId?: string
+  sourceId?: string
+  policyId?: string
+  keyId?: string
+  refPrefix?: string
+  refHash?: string
+  outcome: string
+  requestId?: string
+}
+
+export type BrokerEventFilters = {
+  since?: string
+  until?: string
+  serviceId?: string
+  providerId?: string
+  sourceId?: string
+  operation?: string
+  outcome?: string
+  severity?: string
+  family?: string
+  refPrefix?: string
+  refHash?: string
+  limit?: number
+  cursor?: string
+}
+
+export type BrokerEventsResult = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  outcome: string
+  generatedAt: string
+  limit: number
+  nextCursor?: string
+  events: BrokerOperationalEvent[]
+  safety: {
+    metadataOnly: true
+    rawRefIncluded: false
+    valueMaterialIncluded: false
+  }
+}
+
+export type BrokerLockoutClearRequest = {
+  scope: string
+  reason: string
+}
+
+export type BrokerLockoutClearResult = {
+  serviceId: '@secretsbroker'
+  apiVersion: string
+  requestId?: string
+  operation: 'lockout_clear'
+  outcome: string
+  cleared: boolean
+  lockoutScope: string
+  auditStatus: string
+  nextAction?: string
+}
+
+export type SecretDecommissionPlan = {
+  ref: string
+  operationId: string
+  expectedVersion: string
+  dependencyStatus: 'clear'
+  dependencySnapshot: string
+  expiresAt: string
+  signature: string
+}
+
+export type SecretDecommissionRequest = {
+  ref: string
+  operationId: string
+  reason?: string
+  plan?: SecretDecommissionPlan
+  expectedVersion?: string
+}
+
+export type SecretDecommissionResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operationId: string
+  ref: string
+  operation: 'decommission' | 'decommission_restore'
+  mode: 'dry-run' | 'apply'
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  policyResult: string
+  nextAction?: string
+  expectedVersion?: string
+  dependencyStatus: string
+  dependencySnapshot?: string
+  dependencies: string[]
+  recoverable: boolean
+  plan?: SecretDecommissionPlan
+  tombstone?: SecretTombstoneMetadata
+  affectedRefs: string[]
+  affectedServices: string[]
+}
+
+export type SecretRotationVersionMetadata = {
+  versionId: string
+  sourceId: string
+  state: string
+  fingerprint: string
+  createdAt: string
+  updatedAt: string
+  stagedAt?: string
+  activatedAt?: string
+  retainedAt?: string
+  operationId?: string
+  auditStatus: string
+  policyResult: string
+}
+
+export type SecretRotationVersionAction =
+  | 'status'
+  | 'stage'
+  | 'activate'
+  | 'rollback'
+  | 'retire'
+
+export type SecretRotationVersionRequest = {
+  action: SecretRotationVersionAction
+  ref: string
+  operationId?: string
+  versionId?: string
+  expectedCurrentVersion?: string
+  reason?: string
+  value?: string
+  retentionLimit?: number
+}
+
+export type SecretRotationVersionResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  ref: string
+  operation:
+    | 'rotation_status'
+    | 'rotation_stage'
+    | 'rotation_activate'
+    | 'rotation_rollback'
+    | 'rotation_retire'
+  mode: SecretRotationVersionAction
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  policyResult: string
+  nextAction?: string
+  activeVersionId?: string
+  previousVersionId?: string
+  expectedCurrentVersion?: string
+  currentVersion?: SecretRotationVersionMetadata
+  stagedVersion?: SecretRotationVersionMetadata
+  previousVersion?: SecretRotationVersionMetadata
+  versions: SecretRotationVersionMetadata[]
+  affectedRefs: string[]
+  affectedServices: string[]
+}
+
+export type SecretRotationPreviewRequest = {
+  ref: string
+  operationId: string
+  reason: string
+}
+
+export type SecretRotationPreviewResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operationId: string
+  operation: 'credential_rotation'
+  mode: 'dry-run'
+  outcome: string
+  applied: false
+  requiresConfirmation: boolean
+  auditStatus: string
+  staleAfterSeconds: number
+  nextAction?: string
+  results: Array<{
+    ref: string
+    sourceId: string
+    providerKind: string
+    ownerServiceId: string
+    capability: string
+    capabilityResult: string
+    policyResult: string
+    auditRequirement: string
+    risk: string
+    expectedAction: string
+    outcome: string
+    nextAction?: string
+    operationId: string
+    idempotencyKey: string
+  }>
+  affectedRefs: string[]
+  affectedServices: string[]
+}
+
+export type CoreSecretRotationImpactPlan = {
+  ref: string
+  planFingerprint: string
+  status: 'ready' | 'blocked'
+  confirmationRequired: true
+  valuePolicy: 'metadata_only'
+  services: Array<{
+    serviceId: string
+    role: 'direct' | 'dependent'
+    action: SecretRotationImpactServiceAction
+    actionId?: string
+    reason: string
+    required: boolean
+    sources: string[]
+    locations: string[]
+    dependentsOf: string[]
+    blockers: string[]
+  }>
+  execution: {
+    stopOrder: string[]
+    startOrder: string[]
+    operations: Array<{
+      serviceId: string
+      action: 'restart' | 'reload' | 'action'
+      actionId?: string
+      reason: string
+    }>
+  }
+  blockers: string[]
+}
+
+export type CoreSecretRotationExecutionRequest = {
+  operationId: string
+  ref: string
+  planFingerprint: string
+  reason: string
+  confirm: true
+  value: string
+}
+
+export type CoreSecretRotationExecutionState = {
+  schema: 'service-lasso.secret-rotation-operation.v1'
+  operationId: string
+  ref: string
+  planFingerprint: string
+  phase:
+    | 'planned'
+    | 'staged'
+    | 'consumers_stopped'
+    | 'activated'
+    | 'converging'
+    | 'committed'
+    | 'rolling_back'
+    | 'rolled_back'
+    | 'blocked'
+  outcome: 'in_progress' | 'committed' | 'rolled_back' | 'blocked'
+  activeVersionId: string | null
+  previousVersionId: string | null
+  stagedVersionId: string | null
+  completedOperations: string[]
+  rollbackCompletedOperations: string[]
+  failureCode: string | null
+  updatedAt: string
+  plan: CoreSecretRotationImpactPlan
 }
 
 export type ServiceMetadata = {
@@ -180,59 +891,49 @@ export type ServiceSetupRunResult = {
 
 export type FirstRunSetupStatus =
   | 'not_required'
-  | 'required'
-  | 'in_progress'
-  | 'generated_key_pending_ack'
-  | 'complete'
-  | 'failed'
-
-export type FirstRunSetupKeySource =
-  | 'generated'
-  | 'supplied'
-  | 'os_keychain'
-  | 'secret_file'
-  | 'environment'
-  | 'cli'
-  | 'unknown'
+  | 'setup_required'
+  | 'setup_in_progress'
+  | 'setup_complete'
+  | 'setup_failed'
 
 export type FirstRunSetupState = {
-  status: FirstRunSetupStatus
-  required: boolean
-  localOnly: boolean
-  remoteAllowed: boolean
+  contractVersion: 'service-lasso.setup-status.v1'
+  state: FirstRunSetupStatus
+  setupMode: boolean
   vault: {
-    id: string | null
-    name: string | null
-    keySource: FirstRunSetupKeySource
-    keyFingerprint: string | null
-    keyReveal: {
-      value: string
-      generatedAt: string | null
-      acknowledged: boolean
-    } | null
+    required: boolean
+    ready: boolean
   }
-  rootOwner: {
-    id: string | null
-    displayName: string | null
-    createdAt: string | null
+  operator: {
+    osUsername: string
+    identitySource: 'vault'
   }
-  machine: {
-    hostname: string | null
-    osUser: string | null
-    platform: string | null
+  trustBoundary: {
+    bindHost: string
+    localOnly: boolean
+    localhostBootstrapAllowed: boolean
+    remoteBootstrapAllowed: boolean
+    setupTokenConfigured: boolean
+    blockers: string[]
   }
-  warnings: string[]
-  nextActions: string[]
-  failure: {
-    message: string
-    at: string | null
-  } | null
+  auth: {
+    actor: {
+      authenticated: boolean
+      kind: 'local-root' | 'zitadel' | 'local-token' | null
+      actorId: string | null
+    }
+    mode: 'local-root' | 'zitadel' | 'local-token' | 'blocked'
+    blockers: string[]
+  }
 }
 
 export type FirstRunSetupActionResult = {
-  ok: boolean
+  bootstrap: {
+    ok: true
+    state: 'setup_complete'
+    provisionedSecretCount: number
+  }
   setup: FirstRunSetupState
-  message: string
 }
 
 export type ServiceAction = {
@@ -249,6 +950,7 @@ export type ServiceAction = {
     | 'open_config'
     | 'open_admin'
   permission?: {
+    key?: string
     allowed: boolean
     actor?: string
     mode?: 'local-root' | 'signed-in' | 'remote-anonymous' | 'setup'
@@ -257,6 +959,12 @@ export type ServiceAction = {
     confirmationLabel?: string
   }
 }
+
+export type ServiceLifecycleActionKind =
+  | 'install'
+  | 'start'
+  | 'stop'
+  | 'restart'
 
 export type SecurityPermissionRisk = 'low' | 'medium' | 'high' | 'critical'
 

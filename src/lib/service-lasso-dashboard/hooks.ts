@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  acknowledgeFirstRunVaultKey,
+  fetchRuntimeIdentity,
+  runtimeIdentityAuditContext,
+  type RuntimeIdentity,
+} from './runtime-auth'
+import {
+  applyBrokerBulkCampaign,
+  applyManagedSecretMutation,
+  applyManagedSecretCreate,
+  applyBrokerMigration,
+  applyBrokerLifecycleRestore,
+  applySecretDecommission,
+  bootstrapFirstRunSetup,
   buildStubServiceLogUrl,
   favoritesMutationEnabled,
   fetchDashboardService,
@@ -9,30 +20,91 @@ import {
   fetchFirstRunSetupState,
   fetchInboxSummary,
   fetchMcpState,
+  fetchBrokerProviderStatus,
+  fetchBrokerLifecycleStatus,
+  fetchBrokerLifecycleBackups,
+  fetchBrokerTelemetry,
+  fetchBrokerEvents,
+  clearBrokerLockout,
   fetchSecretsManagementState,
   fetchServiceSetup,
   fetchServices,
   revealManagedSecret,
+  previewManagedSecretMutation,
+  previewManagedSecretCreate,
+  previewBrokerMigration,
+  previewBrokerLifecycleRestore,
+  previewManagedSecretPolicy,
+  previewSecretDecommission,
+  previewSecretRotation,
+  fetchCoreSecretRotationImpactPlan,
+  executeCoreSecretRotation,
+  restoreSecretDecommission,
+  createBrokerLifecycleBackup,
+  createBrokerBulkCampaign,
+  fetchBrokerBulkCampaignStatus,
+  rotateBrokerLifecycleKey,
+  revalidateBrokerBulkCampaign,
+  runSecretRotationVersionAction,
   runDashboardAction,
   runInboxMessageAction,
   runServiceRecoveryDoctorAction,
+  runServiceLifecycleAction,
   runServiceSetupAction,
   runServiceUpdateAction,
+  validateBrokerProviderConfiguration,
+  verifyBrokerLifecycleBackup,
 } from './stub'
 import type {
+  BrokerBulkCampaignRequest,
+  BrokerMigrationRequest,
+  BrokerLifecycleOperationRequest,
+  BrokerProviderValidationRequest,
+  BrokerEventFilters,
+  BrokerLockoutClearRequest,
   DashboardAction,
   DashboardService,
   InboxMessageActionKind,
   McpState,
   SecretRevealRequest,
+  SecretCreateRequest,
+  SecretMutationRequest,
+  SecretPolicyPreviewRequest,
+  SecretDecommissionRequest,
+  SecretRotationPreviewRequest,
+  SecretRotationVersionRequest,
+  CoreSecretRotationExecutionRequest,
   ServiceSecurityState,
   ServiceSetupRunResult,
   ServiceUpdateAction,
+  ServiceLifecycleActionKind,
 } from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
 const inboxQueryKey = ['service-lasso-inbox']
 const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
+const brokerProviderQueryKey = [
+  ...dashboardQueryKey,
+  'secrets-broker-providers',
+]
+const brokerLifecycleQueryKey = [
+  ...dashboardQueryKey,
+  'secrets-broker-lifecycle',
+]
+const brokerOperationsQueryKey = [
+  ...dashboardQueryKey,
+  'secrets-broker-operations',
+]
+export const runtimeIdentityQueryKey = ['service-lasso-runtime-identity']
+
+export function useRuntimeIdentity() {
+  return useQuery<RuntimeIdentity>({
+    queryKey: runtimeIdentityQueryKey,
+    queryFn: fetchRuntimeIdentity,
+    retry: false,
+    staleTime: 5_000,
+  })
+}
 
 export function useDashboardSummary() {
   return useQuery({
@@ -73,17 +145,22 @@ export function useFirstRunSetupState() {
   return useQuery({
     queryKey: firstRunSetupQueryKey,
     queryFn: fetchFirstRunSetupState,
+    refetchInterval: (query) =>
+      query.state.data?.state === 'setup_in_progress' ? 1_000 : false,
   })
 }
 
-export function useFirstRunSetupKeyAcknowledgement() {
+export function useFirstRunSetupBootstrap() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: acknowledgeFirstRunVaultKey,
+    mutationFn: (setupToken?: string) => bootstrapFirstRunSetup(setupToken),
     onSuccess: (result) => {
       queryClient.setQueryData(firstRunSetupQueryKey, result.setup)
       queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: firstRunSetupQueryKey })
     },
   })
 }
@@ -123,9 +200,311 @@ export function useSecretsManagement(search = '') {
   })
 }
 
-export function useSecretReveal() {
+export function useBrokerProviderStatus() {
+  return useQuery({
+    queryKey: brokerProviderQueryKey,
+    queryFn: fetchBrokerProviderStatus,
+  })
+}
+
+export function useBrokerLifecycleStatus(enabled = true) {
+  return useQuery({
+    queryKey: brokerLifecycleQueryKey,
+    queryFn: fetchBrokerLifecycleStatus,
+    enabled,
+  })
+}
+
+export function useBrokerLifecycleBackups(enabled = true) {
+  return useQuery({
+    queryKey: [...brokerLifecycleQueryKey, 'backups'],
+    queryFn: fetchBrokerLifecycleBackups,
+    enabled,
+  })
+}
+
+export function useBrokerLifecycleBackupCreate() {
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (request: SecretRevealRequest) => revealManagedSecret(request),
+    mutationFn: (request: BrokerLifecycleOperationRequest) =>
+      createBrokerLifecycleBackup(request),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: brokerLifecycleQueryKey }),
+  })
+}
+
+export function useBrokerLifecycleBackupVerify() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerLifecycleOperationRequest) =>
+      verifyBrokerLifecycleBackup(request),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: brokerLifecycleQueryKey }),
+  })
+}
+
+export function useBrokerLifecycleRestorePreview() {
+  return useMutation({
+    mutationFn: (request: BrokerLifecycleOperationRequest) =>
+      previewBrokerLifecycleRestore(request),
+  })
+}
+
+export function useBrokerLifecycleRestoreApply() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerLifecycleOperationRequest) =>
+      applyBrokerLifecycleRestore(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brokerLifecycleQueryKey })
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useBrokerLifecycleKeyRotate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerLifecycleOperationRequest) =>
+      rotateBrokerLifecycleKey(request),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: brokerLifecycleQueryKey }),
+  })
+}
+
+export function useBrokerTelemetry(enabled = true) {
+  return useQuery({
+    queryKey: [...brokerOperationsQueryKey, 'telemetry'],
+    queryFn: fetchBrokerTelemetry,
+    enabled,
+    refetchInterval: 30_000,
+  })
+}
+
+export function useBrokerEvents(
+  filters: BrokerEventFilters = {},
+  enabled = true
+) {
+  return useQuery({
+    queryKey: [...brokerOperationsQueryKey, 'events', filters],
+    queryFn: () => fetchBrokerEvents(filters),
+    enabled,
+  })
+}
+
+export function useBrokerLockoutClear() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerLockoutClearRequest) =>
+      clearBrokerLockout(request),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: brokerOperationsQueryKey }),
+  })
+}
+
+export function useBrokerProviderValidation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerProviderValidationRequest) =>
+      validateBrokerProviderConfiguration(request),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: brokerProviderQueryKey }),
+  })
+}
+
+export function useBrokerMigrationPreview() {
+  return useMutation({
+    mutationFn: (request: BrokerMigrationRequest) =>
+      previewBrokerMigration(request),
+  })
+}
+
+export function useBrokerMigrationApply() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerMigrationRequest) =>
+      applyBrokerMigration(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brokerProviderQueryKey })
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useBrokerBulkCampaignCreate() {
+  return useMutation({
+    mutationFn: (request: BrokerBulkCampaignRequest) =>
+      createBrokerBulkCampaign(request),
+  })
+}
+
+export function useBrokerBulkCampaignRevalidate() {
+  return useMutation({
+    mutationFn: (request: BrokerBulkCampaignRequest) =>
+      revalidateBrokerBulkCampaign(request),
+  })
+}
+
+export function useBrokerBulkCampaignStatus() {
+  return useMutation({
+    mutationFn: (request: BrokerBulkCampaignRequest) =>
+      fetchBrokerBulkCampaignStatus(request),
+  })
+}
+
+export function useBrokerBulkCampaignApply() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerBulkCampaignRequest) =>
+      applyBrokerBulkCampaign(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brokerProviderQueryKey })
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useSecretReveal() {
+  const identity = useRuntimeIdentity()
+
+  return useMutation({
+    mutationFn: (request: SecretRevealRequest) => {
+      if (!identity.data) {
+        throw new Error('A trusted runtime identity is required for reveal.')
+      }
+      return revealManagedSecret(
+        request,
+        runtimeIdentityAuditContext(identity.data)
+      )
+    },
+  })
+}
+
+export function useSecretMutationPreview() {
+  return useMutation({
+    mutationFn: (request: SecretMutationRequest) =>
+      previewManagedSecretMutation(request),
+  })
+}
+
+export function useSecretCreatePreview() {
+  return useMutation({
+    mutationFn: (request: SecretCreateRequest) =>
+      previewManagedSecretCreate(request),
+  })
+}
+
+export function useSecretCreateApply() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: SecretCreateRequest) =>
+      applyManagedSecretCreate(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useSecretMutationApply() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: SecretMutationRequest) =>
+      applyManagedSecretMutation(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useSecretPolicyPreview() {
+  return useMutation({
+    mutationFn: (request: SecretPolicyPreviewRequest) =>
+      previewManagedSecretPolicy(request),
+  })
+}
+
+export function useSecretDecommissionPreview() {
+  return useMutation({
+    mutationFn: (request: SecretDecommissionRequest) =>
+      previewSecretDecommission(request),
+  })
+}
+
+export function useSecretDecommissionApply() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: SecretDecommissionRequest) =>
+      applySecretDecommission(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useSecretDecommissionRestore() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: SecretDecommissionRequest) =>
+      restoreSecretDecommission(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useSecretRotationPreview() {
+  return useMutation({
+    mutationFn: (request: SecretRotationPreviewRequest) =>
+      previewSecretRotation(request),
+  })
+}
+
+export function useCoreSecretRotationPlan() {
+  return useMutation({
+    mutationFn: (ref: string) => fetchCoreSecretRotationImpactPlan(ref),
+  })
+}
+
+export function useCoreSecretRotationExecution() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: CoreSecretRotationExecutionRequest) =>
+      executeCoreSecretRotation(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    },
+  })
+}
+
+export function useSecretRotationVersionAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: SecretRotationVersionRequest) =>
+      runSecretRotationVersionAction(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
   })
 }
 
@@ -200,6 +579,29 @@ export function useServiceUpdateAction() {
       for (const service of allServices) {
         queryClient.setQueryData([...dashboardQueryKey, service.id], service)
       }
+    },
+  })
+}
+
+export function useServiceLifecycleAction() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (options: {
+      action: ServiceLifecycleActionKind
+      serviceId: string
+      confirm?: boolean
+    }) => runServiceLifecycleAction(options),
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
+        queryClient.invalidateQueries({
+          queryKey: [...dashboardQueryKey, 'services'],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [...dashboardQueryKey, result.serviceId],
+        }),
+      ])
     },
   })
 }
