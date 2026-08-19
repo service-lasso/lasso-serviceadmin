@@ -125,7 +125,9 @@ export function DependencyGraphCanvas({
     height: 0,
   })
 
-  onPaneSizeChangeRef.current = onPaneSizeChange
+  useEffect(() => {
+    onPaneSizeChangeRef.current = onPaneSizeChange
+  }, [onPaneSizeChange])
 
   useEffect(() => {
     const pane = paneRef.current
