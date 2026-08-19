@@ -16,9 +16,7 @@ export type BrokerReadyState = 'ready' | 'degraded' | 'unavailable'
  * receive from GET /api/dashboard. Problem services can duplicate favorites
  * or others, so the first match wins.
  */
-function listDashboardServices(
-  summary: DashboardSummary
-): DashboardService[] {
+function listDashboardServices(summary: DashboardSummary): DashboardService[] {
   const byId = new Map<string, DashboardService>()
 
   for (const service of [
