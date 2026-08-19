@@ -481,7 +481,9 @@ test.describe('KV-only Secrets page', () => {
       page.getByTestId('kv-path-pane').getByRole('textbox', { name: 'KV path' })
     ).toBeVisible()
     await expect(
-      page.getByTestId('kv-value-pane').getByRole('textbox', { name: 'KV path' })
+      page
+        .getByTestId('kv-value-pane')
+        .getByRole('textbox', { name: 'KV path' })
     ).toHaveCount(0)
     await expect(page.getByRole('table')).toBeVisible()
     await expect(page.getByText(/OpenBao-compatible secrets/i)).toHaveCount(0)
