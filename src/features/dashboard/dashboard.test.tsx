@@ -28,6 +28,38 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
   useToggleFavorite: hookMocks.useToggleFavorite,
 }))
 
+function echoService(): DashboardService {
+  return {
+    id: 'echo-service',
+    name: 'Echo Service',
+    status: 'running',
+    favorite: false,
+    role: 'sample',
+    note: 'ready',
+    installed: true,
+    links: [{ label: 'Local', url: 'http://127.0.0.1:8080', kind: 'local' }],
+    runtimeHealth: {
+      state: 'running',
+      health: 'healthy',
+      uptime: '1m',
+      lastCheckAt: '2026-06-20T00:00:00.000Z',
+      summary: 'ready',
+    },
+    endpoints: [],
+    metadata: {
+      serviceType: 'app',
+      runtime: 'direct',
+      version: '0.1.0',
+      build: 'test',
+    },
+    dependencies: [],
+    dependents: [],
+    environmentVariables: [],
+    recentLogs: [],
+    actions: [],
+  }
+}
+
 function summary(): DashboardSummary {
   return {
     runtime: {
@@ -134,6 +166,37 @@ describe('Dashboard runtime health action', () => {
     expect(
       screen.getByRole('button', { name: /Starting services/i })
     ).toBeDisabled()
+  })
+
+  it('lets the operator favorite a service from the dashboard card', async () => {
+    const mutateAsync = vi.fn()
+    const echo = echoService()
+    hookMocks.useToggleFavorite.mockReturnValue({ mutateAsync })
+    hookMocks.useDashboardAction.mockReturnValue({
+      isPending: false,
+      mutate: hookMocks.mutate,
+      variables: undefined,
+    })
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: {
+        ...summary(),
+        runtime: {
+          status: 'healthy',
+          lastReloadedAt: '2026-06-20T00:00:00.000Z',
+          warningCount: 0,
+        },
+        servicesTotal: 1,
+        servicesRunning: 1,
+        others: [echo],
+      },
+      isError: false,
+      isLoading: false,
+    })
+
+    await renderRoute('/')
+    await userEvent.click(screen.getByRole('button', { name: 'Add favorite' }))
+
+    expect(mutateAsync).toHaveBeenCalledWith('echo-service')
   })
 })
 

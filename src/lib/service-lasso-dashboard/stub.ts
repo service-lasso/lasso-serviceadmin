@@ -36,11 +36,13 @@ export function isServiceAdminStubModeEnabled() {
   )
 }
 
-export const favoritesFeatureEnabled =
-  import.meta.env.VITE_SERVICE_LASSO_FAVORITES_ENABLED === 'true'
-
-export const favoritesMutationEnabled =
-  favoritesFeatureEnabled && !stubDashboardDataEnabled
+/**
+ * Reads the favorites kill-switch at call time so Vitest `vi.stubEnv` takes effect.
+ * Packaged and live Admin enable favorite editing unless this env is exactly `false`.
+ */
+export function isFavoritesFeatureEnabled() {
+  return import.meta.env.VITE_SERVICE_LASSO_FAVORITES_ENABLED !== 'false'
+}
 
 type RemoteServiceMeta = {
   id: string
@@ -760,10 +762,6 @@ function buildWarnings(currentServices: DashboardService[]) {
     warnings.push('At least one managed service is currently stopped.')
   }
 
-  if (!currentServices.some((service) => service.favorite)) {
-    warnings.push('No favorite services are configured for quick access.')
-  }
-
   return warnings
 }
 
@@ -817,11 +815,12 @@ function syncFavoriteState(serviceId: string, favorite?: boolean) {
 }
 
 async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
-  if (!favoritesMutationEnabled || !serviceLassoApiBaseUrl) return false
+  if (!isFavoritesFeatureEnabled() || !serviceLassoApiBaseUrl) return false
+  if (isServiceAdminStubModeEnabled()) return false
 
   try {
     const response = await fetch(
-      `${serviceLassoApiBaseUrl}/api/services/${serviceId}/meta`,
+      `${serviceLassoApiBaseUrl}/api/services/${encodeURIComponent(serviceId)}/meta`,
       {
         method: 'PATCH',
         headers: {

@@ -13,7 +13,6 @@ import {
   GitBranch,
   Save,
   Search,
-  Star,
   Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,11 +26,7 @@ import {
   getGraphCategory,
   getServiceNodeImage,
 } from '@/lib/service-graph'
-import {
-  useFavoriteFeatureState,
-  useServices,
-  useToggleFavorite,
-} from '@/lib/service-lasso-dashboard/hooks'
+import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { useTheme } from '@/context/theme-provider'
 import { Badge } from '@/components/ui/badge'
@@ -55,6 +50,7 @@ import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search as GlobalSearch } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { FavoriteToggle } from '@/features/services/components/favorite-toggle'
 
 const route = getRouteApi('/_authenticated/dependencies/')
 
@@ -157,9 +153,6 @@ export function Dependencies() {
     'all'
   )
   const [hideUtility, setHideUtility] = useState(false)
-
-  const toggleFavorite = useToggleFavorite()
-  const favoriteFeature = useFavoriteFeatureState()
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
 
@@ -409,11 +402,6 @@ export function Dependencies() {
         service: serviceId,
       }),
     })
-  }
-
-  const onToggleFavorite = (serviceId: string) => {
-    if (!favoriteFeature.enabled) return
-    void toggleFavorite.mutateAsync(serviceId)
   }
 
   const onNodeDragStop = (_: unknown, node: Node) => {
@@ -703,28 +691,10 @@ export function Dependencies() {
                               {selectedService.id} · {selectedService.role}
                             </div>
                           </div>
-                          <button
-                            type='button'
-                            aria-label={
-                              selectedService.favorite
-                                ? `Remove ${selectedService.name} from favorites`
-                                : `Add ${selectedService.name} to favorites`
-                            }
-                            title={
-                              favoriteFeature.enabled
-                                ? selectedService.favorite
-                                  ? `Remove ${selectedService.name} from favorites`
-                                  : `Add ${selectedService.name} to favorites`
-                                : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-                            }
-                            disabled={!favoriteFeature.enabled}
+                          <FavoriteToggle
+                            service={selectedService}
                             className='rounded-sm text-muted-foreground transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50'
-                            onClick={() => onToggleFavorite(selectedService.id)}
-                          >
-                            <Star
-                              className={`size-4 ${selectedService.favorite ? 'fill-amber-400 text-amber-400' : ''}`}
-                            />
-                          </button>
+                          />
                         </div>
 
                         <div className='mt-3 flex flex-wrap gap-2'>

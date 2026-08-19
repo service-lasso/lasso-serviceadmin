@@ -610,4 +610,52 @@ describe('service lasso dashboard runtime client', () => {
     )
     expect(runtimeSummary.servicesRunning).toBe(3)
   })
+
+  it('patches encoded service meta when toggling a favorite', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const nginx = service('@nginx', 'NGINX', 'running')
+    nginx.favorite = false
+    const favoritedServices = [{ ...nginx, favorite: true }]
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === 'http://runtime.test/api/dashboard/services/%40nginx') {
+        return jsonResponse({ service: nginx })
+      }
+
+      if (
+        url === 'http://runtime.test/api/services/%40nginx/meta' &&
+        init?.method === 'PATCH'
+      ) {
+        return jsonResponse({
+          serviceId: '@nginx',
+          meta: { favorite: true },
+        })
+      }
+
+      if (url === 'http://runtime.test/api/dashboard') {
+        return jsonResponse({ summary: summary(favoritedServices) })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { runDashboardAction } = await import('./client')
+
+    const runtimeSummary = await runDashboardAction({
+      kind: 'toggle-favorite',
+      serviceId: '@nginx',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://runtime.test/api/services/%40nginx/meta',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ favorite: true }),
+      })
+    )
+    expect(runtimeSummary.favorites.map((item) => item.id)).toEqual(['@nginx'])
+  })
 })

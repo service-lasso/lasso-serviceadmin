@@ -154,6 +154,39 @@ describe('service lasso dashboard stub', () => {
     expect(summary.favorites.map((service) => service.id)).toContain('dagu')
   })
 
+  it('enables favorite editing by default when the Vite flag is unset', async () => {
+    const { isFavoritesFeatureEnabled } = await loadStub()
+
+    expect(isFavoritesFeatureEnabled()).toBe(true)
+  })
+
+  it('disables favorite editing only when the Vite flag is false', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_FAVORITES_ENABLED', 'false')
+    const { isFavoritesFeatureEnabled } = await loadStub()
+
+    expect(isFavoritesFeatureEnabled()).toBe(false)
+  })
+
+  it('does not treat an empty favorites list as a runtime health warning', async () => {
+    const { fetchDashboardSummary, runDashboardAction } = await loadStub()
+
+    await runDashboardAction({
+      kind: 'toggle-favorite',
+      serviceId: '@traefik',
+    })
+    await runDashboardAction({
+      kind: 'toggle-favorite',
+      serviceId: '@serviceadmin',
+    })
+
+    const summary = await fetchDashboardSummary()
+
+    expect(summary.favorites).toEqual([])
+    expect(summary.warnings).not.toContain(
+      'No favorite services are configured for quick access.'
+    )
+  })
+
   it('resolves stub log metadata for known services only', async () => {
     const { buildStubServiceLogUrl, resolveStubServiceLogInfo } =
       await loadStub()

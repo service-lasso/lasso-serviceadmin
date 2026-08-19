@@ -238,6 +238,20 @@ describe('service detail quick actions', () => {
     })
   })
 
+  it('exposes an enabled favorite toggle on the service heading', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(
+      screen.getByRole('button', { name: 'Remove favorite' })
+    ).toBeEnabled()
+  })
+
   it('keeps jump actions in the header and removes duplicate log-panel actions', async () => {
     const user = userEvent.setup()
 

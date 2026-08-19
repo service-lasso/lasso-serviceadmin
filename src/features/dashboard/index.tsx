@@ -9,15 +9,12 @@ import {
   RefreshCcw,
   ShieldAlert,
   ShieldCheck,
-  Star,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useBrokerTelemetry,
   useDashboardAction,
   useDashboardSummary,
-  useFavoriteFeatureState,
-  useToggleFavorite,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type {
   DashboardService,
@@ -40,6 +37,7 @@ import { HeaderActions } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { FavoriteToggle } from '@/features/services/components/favorite-toggle'
 import {
   brokerReadyLabel,
   deriveBrokerReadyState,
@@ -100,9 +98,6 @@ function SummaryCard({
 }
 
 function ServiceCard({ service }: { service: DashboardService }) {
-  const toggleFavorite = useToggleFavorite()
-  const favoriteFeature = useFavoriteFeatureState()
-
   const openDetail = () => {
     window.location.href = `/services/${service.id}`
   }
@@ -126,28 +121,7 @@ function ServiceCard({ service }: { service: DashboardService }) {
             <div className='truncate text-sm font-medium'>{service.name}</div>
           </div>
           <div className='flex items-center gap-2'>
-            <button
-              type='button'
-              aria-label={service.favorite ? 'Remove favorite' : 'Add favorite'}
-              title={
-                favoriteFeature.enabled
-                  ? service.favorite
-                    ? 'Remove favorite'
-                    : 'Add favorite'
-                  : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-              }
-              disabled={!favoriteFeature.enabled}
-              className='inline-flex items-center rounded-md border p-1.5 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
-              onClick={(event) => {
-                event.stopPropagation()
-                if (!favoriteFeature.enabled) return
-                void toggleFavorite.mutateAsync(service.id)
-              }}
-            >
-              <Star
-                className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
-              />
-            </button>
+            <FavoriteToggle service={service} />
             <StatusBadge status={service.status} />
           </div>
         </div>
@@ -411,9 +385,16 @@ export function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className='grid gap-4 sm:grid-cols-2 xl:grid-cols-3'>
-              {summary.favorites.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
+              {summary.favorites.length === 0 ? (
+                <p className='text-sm text-muted-foreground sm:col-span-2 xl:col-span-3'>
+                  Star a service here, in the services list, or on service
+                  details to pin it for quick access.
+                </p>
+              ) : (
+                summary.favorites.map((service) => (
+                  <ServiceCard key={service.id} service={service} />
+                ))
+              )}
             </CardContent>
           </Card>
           <Card className='col-span-1 lg:col-span-3'>

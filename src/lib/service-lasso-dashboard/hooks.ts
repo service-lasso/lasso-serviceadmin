@@ -45,7 +45,7 @@ import {
   runDashboardAction,
 } from './client'
 import { runtimeIdentityAuditContext, useRuntimeIdentity } from './runtime-auth'
-import { favoritesMutationEnabled } from './stub'
+import { isFavoritesFeatureEnabled } from './stub'
 import type {
   AuditEventsFilters,
   BrokerBulkCampaignRequest,
@@ -191,7 +191,7 @@ export function useToggleFavorite() {
 
   return useMutation({
     mutationFn: async (serviceId: string) => {
-      if (!favoritesMutationEnabled) {
+      if (!isFavoritesFeatureEnabled()) {
         return null
       }
 
@@ -202,7 +202,7 @@ export function useToggleFavorite() {
 
 export function useFavoriteFeatureState() {
   return {
-    enabled: favoritesMutationEnabled,
+    enabled: isFavoritesFeatureEnabled(),
   }
 }
 
