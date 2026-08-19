@@ -63,6 +63,11 @@ export type ServiceLogChunk = {
   nextCursor?: string | null
   limit: number
   lines: string[]
+  entries?: Array<{
+    stream?: 'stdout' | 'stderr' | 'unknown' | string
+    message: string
+    text?: string
+  }>
 }
 
 export type ServiceLogSource = {
@@ -128,6 +133,41 @@ export function redactLogLine(line: string) {
       '$1$2[redacted]'
     )
     .replace(/\b(Bearer)\s+([A-Za-z0-9._~+/-]+=*)/gi, '$1 [redacted]')
+}
+
+/**
+ * Decode Core combined/default NDJSON into display text for the Terminal I/O view.
+ */
+export function decodeCombinedTerminalLine(line: string) {
+  try {
+    const parsed: unknown = JSON.parse(line)
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      'message' in parsed &&
+      typeof parsed.message === 'string'
+    ) {
+      return parsed.message
+    }
+  } catch {
+    // Plain stdout/stderr lines are already display-ready.
+  }
+
+  return line
+}
+
+/**
+ * Build redacted Terminal scrollback from a combined log chunk.
+ */
+export function terminalLinesFromChunk(chunk: ServiceLogChunk) {
+  if (chunk.entries && chunk.entries.length > 0) {
+    return chunk.entries.map((entry) => redactLogLine(entry.message))
+  }
+
+  return chunk.lines.map((line) =>
+    redactLogLine(decodeCombinedTerminalLine(line))
+  )
 }
 
 export function debugLogs(message: string, details?: Record<string, unknown>) {
@@ -257,6 +297,11 @@ export async function fetchServiceLogChunk(
   const safeChunk = {
     ...chunk,
     lines: chunk.lines.map(redactLogLine),
+    entries: chunk.entries?.map((entry) => ({
+      ...entry,
+      message: redactLogLine(entry.message),
+      text: entry.text ? redactLogLine(entry.text) : entry.text,
+    })),
   }
 
   debugLogs('log chunk loaded', {
