@@ -140,7 +140,11 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
     expect(
       await screen.findByRole('button', { name: 'kv-sentinel-alpha' })
     ).toBeVisible()
-    expect(screen.getByText(/No values in the key list/i)).toBeVisible()
+    expect(
+      screen.queryByText('No values in the key list')
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('KV Path')).toBeVisible()
+    expect(screen.getByText('KV Value')).toBeVisible()
     expect(
       screen.queryByText(/Live managed secret rows/i)
     ).not.toBeInTheDocument()

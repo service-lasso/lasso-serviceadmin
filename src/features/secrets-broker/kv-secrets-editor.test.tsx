@@ -1,8 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { KvSecretsEditor } from './kv-secrets-editor'
+import {
+  fieldRowVisibleInKeyFilter,
+  filterKvPaths,
+  KvSecretsEditor,
+  matchesKvFilter,
+} from './kv-secrets-editor'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -104,6 +109,13 @@ describe('KV secrets editor', () => {
     renderEditor()
     expect(await screen.findByText('KV store')).toBeVisible()
     expect(await screen.findByRole('button', { name: 'db' })).toBeVisible()
+    expect(
+      screen.queryByText(/OpenBao-compatible secrets/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('No values in the key list')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/^local$/i)).not.toBeInTheDocument()
     expect(
       screen.queryByDisplayValue('kv-sentinel-alpha')
     ).not.toBeInTheDocument()
@@ -354,7 +366,7 @@ describe('KV secrets editor', () => {
     ).toBe(false)
   })
 
-  it('fills remaining height and scrolls the key list internally', async () => {
+  it('keeps Source outside the KV store card and splits Path/Value panes', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
         return jsonResponse({ data: { keys: [] } })
@@ -365,11 +377,26 @@ describe('KV secrets editor', () => {
 
     renderEditor()
     expect(await screen.findByText('KV store')).toBeVisible()
+    expect(screen.getByText('KV Path')).toBeVisible()
+    expect(screen.getByText('KV Value')).toBeVisible()
+    expect(
+      screen.queryByText(/OpenBao-compatible secrets/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('No values in the key list')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/^local$/i)).not.toBeInTheDocument()
 
+    const chrome = screen.getByTestId('kv-source-chrome')
     const card = screen.getByTestId('kv-store-card')
+    expect(within(chrome).getByLabelText('Source')).toBeVisible()
+    expect(within(card).queryByLabelText('Source')).not.toBeInTheDocument()
     expect(card).toHaveClass('flex-1')
     expect(card).toHaveClass('min-h-0')
     expect(card).toHaveClass('overflow-hidden')
+
+    const split = screen.getByTestId('kv-path-pane').parentElement
+    expect(split).toHaveClass('grid-cols-2')
 
     const keyList = screen.getByTestId('kv-store-key-list')
     expect(keyList).toHaveClass('flex-1')
@@ -377,7 +404,76 @@ describe('KV secrets editor', () => {
     expect(keyList).toHaveClass('overflow-auto')
 
     const fieldEditor = screen.getByTestId('kv-store-field-editor')
+    expect(fieldEditor).toHaveClass('flex-1')
+    expect(fieldEditor).toHaveClass('min-h-0')
     expect(fieldEditor).toHaveClass('overflow-auto')
-    expect(fieldEditor).toHaveClass('max-h-[55%]')
+    expect(fieldEditor).not.toHaveClass('max-h-[55%]')
+  })
+
+  it('filters listed paths in the KV Path pane', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: ['apps/', 'db', 'cache'] } })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    expect(await screen.findByRole('button', { name: 'db' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'apps/' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'cache' })).toBeVisible()
+
+    await user.type(screen.getByLabelText('Filter paths'), 'db')
+    expect(screen.getByRole('button', { name: 'db' })).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'apps/' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'cache' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('filters field keys in the KV Value table', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: ['db'] } })
+      }
+      if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+        return jsonResponse(metadataBody())
+      }
+      if (
+        url.includes('/kv/data/db') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse(secretBody())
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'db' }))
+    await user.click(screen.getByRole('button', { name: 'Load fields' }))
+    await confirmAuditedReveal(user, 'incident review for db credentials')
+    expect(await screen.findByDisplayValue('username')).toBeVisible()
+    expect(screen.getByDisplayValue('password')).toBeVisible()
+
+    await user.type(screen.getByLabelText('Search keys'), 'pass')
+    expect(screen.getByDisplayValue('password')).toBeVisible()
+    expect(screen.queryByDisplayValue('username')).not.toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeVisible()
+  })
+
+  it('matches path and key filters without exposing values', () => {
+    expect(matchesKvFilter('apps/', '')).toBe(true)
+    expect(matchesKvFilter('db', 'DB')).toBe(true)
+    expect(matchesKvFilter('apps/', 'db')).toBe(false)
+    expect(filterKvPaths(['apps/', 'db', 'cache'], 'db')).toEqual(['db'])
+    expect(fieldRowVisibleInKeyFilter('', 'pass')).toBe(true)
+    expect(fieldRowVisibleInKeyFilter('password', 'pass')).toBe(true)
+    expect(fieldRowVisibleInKeyFilter('username', 'pass')).toBe(false)
   })
 })
