@@ -107,6 +107,7 @@ import {
   fetchServiceLogInfo,
   fetchServiceLogsOverview,
   sendServiceTerminalInput,
+  terminalLinesFromChunk,
   type ServiceLogChunk,
   type ServiceLogInfo,
   type ServiceLogOverview,
@@ -1087,30 +1088,6 @@ function ServiceRunStreams({ service }: { service: DashboardService }) {
   )
 }
 
-function extractRuntimePid(service: DashboardService) {
-  const values = [service.note, service.runtimeHealth.summary]
-
-  for (const value of values) {
-    const match = value.match(/\bpid\s+(\d+)\b/i)
-    if (match?.[1]) return match[1]
-  }
-
-  return null
-}
-
-function resolveRunId(
-  info: ServiceLogInfo | null,
-  chunk: ServiceLogChunk | null
-) {
-  return (
-    chunk?.source?.runId ??
-    info?.source?.runId ??
-    info?.sources?.find((source) => source.stream === 'stdout')?.runId ??
-    info?.sources?.find((source) => source.kind === 'current')?.runId ??
-    null
-  )
-}
-
 function resolveStdinCapability(
   service: DashboardService,
   info: ServiceLogInfo | null
@@ -1146,15 +1123,15 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
 
-  const loadStdout = useCallback(async () => {
+  const loadCombinedOutput = useCallback(async () => {
     setError(null)
 
     try {
       const [nextInfo, nextChunk] = await Promise.all([
-        fetchServiceLogInfo(service, 'stdout'),
+        fetchServiceLogInfo(service, 'combined'),
         fetchServiceLogChunk(
           service,
-          'stdout',
+          'combined',
           undefined,
           SERVICE_DETAIL_TERMINAL_LIMIT
         ),
@@ -1166,7 +1143,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
       setError(
         nextError instanceof Error
           ? nextError.message
-          : 'The runtime did not return stdout history.'
+          : 'The runtime did not return combined terminal history.'
       )
     } finally {
       setLoading(false)
@@ -1181,7 +1158,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
     setChunk(null)
 
     void (async () => {
-      await loadStdout()
+      await loadCombinedOutput()
       if (cancelled) return
       setLoading(false)
     })()
@@ -1189,7 +1166,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
     return () => {
       cancelled = true
     }
-  }, [loadStdout])
+  }, [loadCombinedOutput])
 
   useEffect(() => {
     if (service.status !== 'running' || paused) return
@@ -1197,7 +1174,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
     const intervalId = window.setInterval(() => {
       void fetchServiceLogChunk(
         service,
-        'stdout',
+        'combined',
         undefined,
         SERVICE_DETAIL_TERMINAL_LIMIT
       )
@@ -1215,9 +1192,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
 
   const stdinCapability = resolveStdinCapability(service, info)
   const canSendInput = stdinCapability.available && input.trim().length > 0
-  const pid = extractRuntimePid(service)
-  const runId = resolveRunId(info, chunk)
-  const lines = chunk?.lines ?? []
+  const lines = chunk ? terminalLinesFromChunk(chunk) : []
   const logText = lines.join('\n')
 
   async function handleSubmitInput(event: FormEvent<HTMLFormElement>) {
@@ -1237,6 +1212,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
             : 'Runtime rejected the stdin write.')
       )
       setInput('')
+      await loadCombinedOutput()
     } catch (nextError) {
       setSubmitMessage(
         nextError instanceof Error
@@ -1249,7 +1225,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
   }
 
   return (
-    <Card data-service-detail-terminal>
+    <Card data-service-detail-terminal data-testid='service-detail-terminal'>
       <CardHeader>
         <div className='flex flex-wrap items-start justify-between gap-3'>
           <div>
@@ -1257,7 +1233,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
               <Terminal className='size-4' /> Terminal
             </CardTitle>
             <CardDescription>
-              Current-run stdout history and safe process input state.
+              Combined stdout and stderr with optional safe process input.
             </CardDescription>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -1278,7 +1254,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
               type='button'
               variant='outline'
               size='sm'
-              onClick={() => void loadStdout()}
+              onClick={() => void loadCombinedOutput()}
             >
               <RefreshCw className='mr-2 size-4' />
               Refresh
@@ -1287,24 +1263,9 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
         </div>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <div className='grid gap-3 md:grid-cols-4'>
-          <MetadataRow label='State' value={service.status} />
-          <MetadataRow
-            label='Started'
-            value={service.runtimeHealth.lastRestartAt}
-          />
-          <MetadataRow label='PID' value={pid ?? undefined} />
-          <MetadataRow label='Run' value={runId ?? undefined} />
-        </div>
-
-        <div className='rounded-md border'>
+        <div className='rounded-md border bg-muted/20'>
           <div className='flex flex-wrap items-center justify-between gap-2 border-b p-3'>
-            <div>
-              <div className='font-medium'>Stdout</div>
-              <div className='font-mono text-xs break-all text-muted-foreground'>
-                {chunk?.path ?? info?.path ?? 'No stdout source reported'}
-              </div>
-            </div>
+            <div className='font-medium'>Combined I/O</div>
             <Badge variant={paused ? 'outline' : 'secondary'}>
               {paused ? 'paused' : 'following'}
             </Badge>
@@ -1312,11 +1273,11 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
           <div className='p-3'>
             {loading ? (
               <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
-                Loading stdout history...
+                Loading combined terminal history...
               </div>
             ) : error ? (
               <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
-                Stdout history unavailable. {error}
+                Combined terminal history unavailable. {error}
               </div>
             ) : lines.length ? (
               <div>
@@ -1327,12 +1288,11 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
                   {logText}
                 </pre>
                 <div
-                  className='mb-3 max-h-72 overflow-auto rounded-md border bg-muted/20 p-3 font-mono text-xs leading-relaxed'
+                  className='max-h-[480px] overflow-auto rounded-md border bg-background p-3 font-mono text-xs leading-relaxed'
                   data-testid='service-detail-terminal-visible-lines'
                 >
                   {lines.map((line, index) => (
                     <div
-                      // Runtime log chunks are windowed and may contain repeated text.
                       key={`${index}-${line}`}
                       className='break-words whitespace-pre-wrap'
                     >
@@ -1340,28 +1300,10 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
                     </div>
                   ))}
                 </div>
-                <div className='h-[360px] overflow-hidden rounded-md border'>
-                  <ScrollFollow
-                    startFollowing={!paused}
-                    render={({ follow }) => (
-                      <LazyLog
-                        text={logText}
-                        follow={!paused && follow}
-                        enableSearch
-                        selectableLines
-                        style={{
-                          height: '360px',
-                          width: '100%',
-                          background: 'transparent',
-                        }}
-                      />
-                    )}
-                  />
-                </div>
               </div>
             ) : (
               <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
-                No stdout lines are available for this service run.
+                No combined output is available for this service run.
               </div>
             )}
           </div>

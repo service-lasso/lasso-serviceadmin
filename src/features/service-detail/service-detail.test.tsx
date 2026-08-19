@@ -596,27 +596,42 @@ describe('service detail quick actions', () => {
           return new Response(
             JSON.stringify({
               serviceId,
-              type: 'stdout',
-              path: `C:\\runtime\\${serviceId}\\stdout.log`,
+              type: 'default',
+              path: `C:\\runtime\\${serviceId}\\service.log`,
               available: true,
               source: {
                 kind: 'current',
-                stream: 'stdout',
+                stream: 'combined',
                 runId: 'run-2026-06-25T05-00-00Z',
-                path: `C:\\runtime\\${serviceId}\\stdout.log`,
+                path: `C:\\runtime\\${serviceId}\\service.log`,
                 available: true,
               },
-              totalLines: 2,
+              totalLines: 3,
               start: 0,
-              end: 2,
+              end: 3,
               hasMore: false,
               nextBefore: 0,
-              cursor: '2',
+              cursor: '3',
               nextCursor: null,
               limit: 240,
               lines: [
-                'service ready token=hidden-value',
-                'listening on http://127.0.0.1:17700',
+                '{"level":"stdout","message":"service ready token=hidden-value"}',
+                '{"level":"stdout","message":"listening on http://127.0.0.1:17700"}',
+                '{"level":"stderr","message":"startup warning token=hidden-value"}',
+              ],
+              entries: [
+                {
+                  stream: 'stdout',
+                  message: 'service ready token=hidden-value',
+                },
+                {
+                  stream: 'stdout',
+                  message: 'listening on http://127.0.0.1:17700',
+                },
+                {
+                  stream: 'stderr',
+                  message: 'startup warning token=hidden-value',
+                },
               ],
             }),
             {
@@ -652,11 +667,18 @@ describe('service detail quick actions', () => {
     expect(visibleTerminal).toBeVisible()
     expect(visibleTerminal).toHaveTextContent(/service ready/)
     expect(visibleTerminal).toHaveTextContent(/listening on/)
+    expect(visibleTerminal).toHaveTextContent(/startup warning/)
     expect(visibleTerminal).toHaveTextContent(/token=\[redacted\]/)
     expect(visibleTerminal).not.toHaveTextContent(/hidden-value/)
     expect(terminal).toHaveTextContent(/token=\[redacted\]/)
     expect(terminal).not.toHaveTextContent(/hidden-value/)
-    expect(screen.getByText('run-2026-06-25T05-00-00Z')).toBeVisible()
+    const terminalCard = screen.getByTestId('service-detail-terminal')
+    expect(within(terminalCard).queryByText(/^State$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^PID$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Run$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Stdout$/i)).toBeNull()
+    expect(screen.queryByPlaceholderText(/^Search$/i)).toBeNull()
+    expect(screen.queryByText('run-2026-06-25T05-00-00Z')).toBeNull()
     expect(
       screen.getByRole('textbox', { name: /terminal input/i })
     ).toBeDisabled()
@@ -674,6 +696,12 @@ describe('service detail quick actions', () => {
     ]
     const stderrLines = [
       'node-sample-service demo error message="canonical error"',
+    ]
+    const combinedEntries = [
+      { stream: 'stdout', message: stdoutLines[0] },
+      { stream: 'stdout', message: stdoutLines[1] },
+      { stream: 'stdout', message: stdoutLines[2] },
+      { stream: 'stderr', message: stderrLines[0] },
     ]
 
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
@@ -712,30 +740,93 @@ describe('service detail quick actions', () => {
       }
 
       if (parsed.pathname === '/api/logs/read') {
-        const lines = type === 'stderr' ? stderrLines : stdoutLines
+        if (type === 'stderr') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: 'C:\\runtime\\node-sample-service\\stderr.log',
+              available: true,
+              source: {
+                kind: 'current',
+                stream: 'stderr',
+                runId: 'node-sample-run-1',
+                path: 'C:\\runtime\\node-sample-service\\stderr.log',
+                available: true,
+              },
+              totalLines: stderrLines.length,
+              start: 0,
+              end: stderrLines.length,
+              hasMore: false,
+              nextBefore: 0,
+              cursor: String(stderrLines.length),
+              nextCursor: null,
+              limit: Number(parsed.searchParams.get('limit') ?? '240'),
+              lines: stderrLines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (type === 'stdout') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: 'C:\\runtime\\node-sample-service\\stdout.log',
+              available: true,
+              source: {
+                kind: 'current',
+                stream: 'stdout',
+                runId: 'node-sample-run-1',
+                path: 'C:\\runtime\\node-sample-service\\stdout.log',
+                available: true,
+              },
+              totalLines: stdoutLines.length,
+              start: 0,
+              end: stdoutLines.length,
+              hasMore: false,
+              nextBefore: 0,
+              cursor: String(stdoutLines.length),
+              nextCursor: null,
+              limit: Number(parsed.searchParams.get('limit') ?? '240'),
+              lines: stdoutLines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
 
         return new Response(
           JSON.stringify({
             serviceId,
-            type,
-            path: `C:\\runtime\\node-sample-service\\${type}.log`,
+            type: 'default',
+            path: 'C:\\runtime\\node-sample-service\\service.log',
             available: true,
             source: {
               kind: 'current',
-              stream: type,
+              stream: 'combined',
               runId: 'node-sample-run-1',
-              path: `C:\\runtime\\node-sample-service\\${type}.log`,
+              path: 'C:\\runtime\\node-sample-service\\service.log',
               available: true,
             },
-            totalLines: lines.length,
+            totalLines: combinedEntries.length,
             start: 0,
-            end: lines.length,
+            end: combinedEntries.length,
             hasMore: false,
             nextBefore: 0,
-            cursor: String(lines.length),
+            cursor: String(combinedEntries.length),
             nextCursor: null,
             limit: Number(parsed.searchParams.get('limit') ?? '240'),
-            lines,
+            lines: combinedEntries.map((entry) =>
+              JSON.stringify({ level: entry.stream, message: entry.message })
+            ),
+            entries: combinedEntries,
           }),
           {
             status: 200,
@@ -784,6 +875,10 @@ describe('service detail quick actions', () => {
           actor: 'service-admin-web',
         })
         stdoutLines.push('node-sample-service command pong')
+        combinedEntries.push({
+          stream: 'stdout',
+          message: 'node-sample-service command pong',
+        })
 
         return new Response(
           JSON.stringify({
@@ -815,11 +910,18 @@ describe('service detail quick actions', () => {
     const visibleTerminal = await screen.findByTestId(
       'service-detail-terminal-visible-lines'
     )
+    const terminalCard = screen.getByTestId('service-detail-terminal')
 
     expect(visibleTerminal).toHaveTextContent(/node-sample-service starting/)
     expect(visibleTerminal).toHaveTextContent(/listening on 127\.0\.0\.1:4020/)
     expect(visibleTerminal).toHaveTextContent(/heartbeat count=1/)
-    expect(screen.getByText('node-sample-run-1')).toBeVisible()
+    expect(visibleTerminal).toHaveTextContent(
+      /demo error message="canonical error"/
+    )
+    expect(within(terminalCard).queryByText('node-sample-run-1')).toBeNull()
+    expect(within(terminalCard).queryByText(/^State$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Stdout$/i)).toBeNull()
+    expect(screen.queryByPlaceholderText(/^Search$/i)).toBeNull()
 
     const terminalInput = screen.getByRole('textbox', {
       name: /terminal input/i,
