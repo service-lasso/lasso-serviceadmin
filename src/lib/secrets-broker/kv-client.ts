@@ -5,10 +5,7 @@
  * for the local encrypted store and for a configured Vault/OpenBao source.
  */
 import type { SecretsBrokerOverview } from '@/lib/secrets-broker/client'
-import {
-  isServiceAdminStubModeEnabled,
-  serviceLassoApiBaseUrl,
-} from '@/lib/service-lasso-dashboard/stub'
+import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 
 export type KvSourceOption = {
   id: string
@@ -66,6 +63,8 @@ type KvQuery = {
   mount?: string
   version?: number
   list?: boolean
+  /** Operator audit reason for a controlled KV read. Sent as a header, not a query param. */
+  reason?: string
 }
 
 /**
@@ -109,9 +108,6 @@ export async function listKvKeys(
   prefix: string,
   query: KvQuery = {}
 ): Promise<KvListResult> {
-  if (isServiceAdminStubModeEnabled()) {
-    return { keys: [], missing: false }
-  }
   try {
     const payload = await kvFetchJson(
       kvPath('metadata', prefix, { ...query, list: true })
@@ -135,7 +131,12 @@ export async function readKvData(
   path: string,
   query: KvQuery = {}
 ): Promise<KvSecretData> {
-  const payload = await kvFetchJson(kvPath('data', path, query))
+  const headers: Record<string, string> = {}
+  const reason = query.reason?.trim() ?? ''
+  if (reason) {
+    headers['X-Secretsbroker-Audit-Reason'] = reason
+  }
+  const payload = await kvFetchJson(kvPath('data', path, query), { headers })
   const data = readRecord(readRecord(payload).data)
   const metadata = readRecord(data.metadata)
   return {

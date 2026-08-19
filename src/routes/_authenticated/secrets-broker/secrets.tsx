@@ -25,10 +25,7 @@ const secretsManagementSearchSchema = z.object({
 })
 
 function SecretsManagementRoute() {
-  const search = Route.useSearch()
-  const navigate = Route.useNavigate()
-
-  return <SecretsManagementPage search={search} navigate={navigate} />
+  return <SecretsManagementPage />
 }
 
 export const Route = createFileRoute('/_authenticated/secrets-broker/secrets')({
