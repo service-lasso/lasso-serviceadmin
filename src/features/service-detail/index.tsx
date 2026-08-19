@@ -1888,7 +1888,7 @@ export function ServiceDetail({
                     value='overview'
                     className='mt-0 min-h-0 flex-1 space-y-4 overflow-auto'
                   >
-                    <ServiceRunStatusCards service={service} />
+                    <ServiceRunStatusCards key={service.id} service={service} />
                     <div className='grid gap-4 md:grid-cols-3'>
                       <Card>
                         <CardHeader className='pb-2'>

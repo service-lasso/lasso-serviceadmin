@@ -54,14 +54,17 @@ export function ServiceRunStatusCards({
 }: {
   service: DashboardService
 }) {
-  const [fields, setFields] = useState<ServiceRunStatusFields>(() =>
-    readStructuredRunStatus(service)
-  )
+  const structured = readStructuredRunStatus(service)
+  const [fieldsServiceId, setFieldsServiceId] = useState(service.id)
+  const [fields, setFields] = useState<ServiceRunStatusFields>(structured)
+
+  if (fieldsServiceId !== service.id) {
+    setFieldsServiceId(service.id)
+    setFields(structured)
+  }
 
   useEffect(() => {
     let cancelled = false
-
-    setFields(readStructuredRunStatus(service))
 
     void resolveServiceRunStatus(service).then((nextFields) => {
       if (!cancelled) {
