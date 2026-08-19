@@ -59,11 +59,16 @@ operator.
 Common log types are:
 
 - `default`: the primary service log advertised by the runtime or service
-  manifest
+  manifest. Combined/All in Service Admin maps to this type. Do not request
+  `type=combined`.
 - `stdout`: process standard output when the runtime captures it
 - `stderr`: process standard error when the runtime captures it
 - `access`: request or ingress access logs where a service exposes them
 - `error`: service or web server error logs where a service exposes them
+
+Service details Logs uses the same viewer as the Logs page for the current
+service only. Choose a log from the service's source list, or toggle STDOUT and
+STDERR. An empty resolved stderr file still uses the file editor.
 
 Not every service exposes every log type. Missing `access` or `error` logs can
 be normal for a service that does not have an HTTP server or separate web

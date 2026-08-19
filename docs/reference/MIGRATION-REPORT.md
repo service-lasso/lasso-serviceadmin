@@ -296,9 +296,9 @@ Goal: relationship data becomes visible and navigable.
 Logs should be treated as a dedicated flow, not just a paragraph on the detail page.
 
 Execution shape:
-- dedicated Logs page owns the live stream surface
+- dedicated Logs page owns the fleet-wide live stream surface
 - Services table and Service Details page should both be able to open the selected service log stream
-- Service Details may show a small recent-log preview, but not the full stream surface
+- Service Details Logs reuses the same LazyLog viewer, scoped to the current service
 - frontend log viewer design is now specified in `docs/reference/LOG-STREAMING-SPEC.md`
 
 Recommended first backend contract:
