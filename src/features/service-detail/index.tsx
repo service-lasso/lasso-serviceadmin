@@ -20,7 +20,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Copy,
-  Eye,
   ExternalLink,
   HeartPulse,
   KeyRound,
@@ -62,7 +61,6 @@ import type {
   ServiceAction,
   ServiceDependency,
   ServiceEndpoint,
-  ServiceEnvironmentVariable,
   ServiceLogPreviewEntry,
   ServiceLogType,
   ServiceStatus,
@@ -72,6 +70,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -113,6 +112,7 @@ import {
   type ServiceLogOverview,
   type ServiceTerminalStdinCapability,
 } from '@/features/logs/provider'
+import { EnvironmentTable } from './environment-table'
 import { buildMetadataTableRows } from './metadata-table'
 import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
 import { SecretsBrokerOperationsPanel } from './secrets-operations-panel'
@@ -1629,109 +1629,6 @@ function hasServiceSecretJourneyEntryPoint(service: DashboardService) {
   )
 }
 
-function EnvironmentTable({
-  serviceId,
-  variables,
-}: {
-  serviceId: string
-  variables: ServiceEnvironmentVariable[]
-}) {
-  return (
-    <div
-      className='overflow-x-auto rounded-md border'
-      data-testid='service-detail-variables-table'
-    >
-      <Table className='min-w-[860px] table-fixed'>
-        <colgroup>
-          <col className='w-[20%]' />
-          <col className='w-[34%]' />
-          <col className='w-[11%]' />
-          <col className='w-[19%]' />
-          <col className='w-[16%]' />
-        </colgroup>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Key</TableHead>
-            <TableHead>Value</TableHead>
-            <TableHead>Scope</TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {variables.length ? (
-            variables.map((variable) => (
-              <TableRow key={variable.key}>
-                <TableCell className='min-w-0 align-top font-medium whitespace-normal'>
-                  <div className='truncate' title={variable.key}>
-                    {variable.key}
-                  </div>
-                </TableCell>
-                <TableCell className='min-w-0 align-top text-sm whitespace-normal text-muted-foreground'>
-                  <div
-                    className='leading-relaxed break-all'
-                    data-testid='service-detail-variable-value'
-                    title={variable.secret ? undefined : variable.value}
-                  >
-                    {variable.secret ? '••••••••' : variable.value}
-                  </div>
-                </TableCell>
-                <TableCell className='align-top whitespace-normal'>
-                  <Badge
-                    variant={
-                      variable.scope === 'global' ? 'secondary' : 'outline'
-                    }
-                  >
-                    {variable.scope}
-                  </Badge>
-                </TableCell>
-                <TableCell className='min-w-0 align-top text-sm whitespace-normal text-muted-foreground'>
-                  <div
-                    className='truncate'
-                    title={variable.source ?? 'Not recorded'}
-                  >
-                    {variable.source ?? 'Not recorded'}
-                  </div>
-                </TableCell>
-                <TableCell className='align-top whitespace-normal'>
-                  <div
-                    className='flex min-w-[8.75rem] flex-wrap items-center gap-2'
-                    data-testid='service-detail-variable-actions'
-                  >
-                    <CopyValueButton value={variable.value} />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant='outline' size='icon' asChild>
-                          <Link
-                            to='/variables'
-                            search={{ service: serviceId, key: variable.key }}
-                            aria-label='View variable'
-                            title='View variable'
-                            className='size-7'
-                          >
-                            <Eye className='size-3.5' />
-                          </Link>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>View variable</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={5} className='h-20 text-center'>
-                No environment variables are recorded for this service yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  )
-}
-
 function ServiceActionButton({
   action,
   service,
@@ -1912,7 +1809,7 @@ export function ServiceDetail({
         </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {serviceQuery.isLoading ? (
           <ServiceDetailLoading />
         ) : !serviceQuery.data ? (
@@ -1941,8 +1838,8 @@ export function ServiceDetail({
             )
 
             return (
-              <>
-                <div className='grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'>
+              <div className='flex min-h-0 flex-1 flex-col gap-4 sm:gap-6'>
+                <div className='grid shrink-0 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'>
                   <div className='space-y-3'>
                     <div className='flex items-center gap-3'>
                       <Button asChild size='sm' variant='outline'>
@@ -2027,9 +1924,9 @@ export function ServiceDetail({
                   onValueChange={(value) =>
                     setSelectedTab(normalizeServiceDetailTab(value))
                   }
-                  className='space-y-4'
+                  className='flex min-h-0 flex-1 flex-col gap-4'
                 >
-                  <TabsList className='flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-border bg-muted/70 p-1 text-muted-foreground shadow-sm dark:border-slate-700/70 dark:bg-slate-900/90 dark:text-slate-400 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
+                  <TabsList className='flex h-auto w-full shrink-0 flex-wrap justify-start gap-1 rounded-2xl border border-border bg-muted/70 p-1 text-muted-foreground shadow-sm dark:border-slate-700/70 dark:bg-slate-900/90 dark:text-slate-400 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
                     {serviceDetailTabs.map((tab) => (
                       <TabsTrigger
                         key={tab.id}
@@ -2044,7 +1941,10 @@ export function ServiceDetail({
                     ))}
                   </TabsList>
 
-                  <TabsContent value='overview' className='mt-0 space-y-4'>
+                  <TabsContent
+                    value='overview'
+                    className='mt-0 min-h-0 flex-1 space-y-4 overflow-auto'
+                  >
                     <div className='grid gap-4 md:grid-cols-3'>
                       <Card>
                         <CardHeader className='pb-2'>
@@ -2114,7 +2014,10 @@ export function ServiceDetail({
                     <ServiceMetadataTable service={service} />
                   </TabsContent>
 
-                  <TabsContent value='dependencies' className='mt-0 space-y-4'>
+                  <TabsContent
+                    value='dependencies'
+                    className='mt-0 min-h-0 flex-1 space-y-4 overflow-auto'
+                  >
                     <LocalDependencyGraph service={service} />
 
                     <Card>
@@ -2137,7 +2040,10 @@ export function ServiceDetail({
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value='endpoints' className='mt-0'>
+                  <TabsContent
+                    value='endpoints'
+                    className='mt-0 min-h-0 flex-1 overflow-auto'
+                  >
                     <Card>
                       <CardHeader>
                         <CardTitle className='flex items-center gap-2'>
@@ -2153,21 +2059,18 @@ export function ServiceDetail({
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value='variables' className='mt-0'>
-                    <Card>
-                      <CardHeader>
+                  <TabsContent
+                    value='variables'
+                    className='mt-0 flex min-h-0 flex-1 flex-col overflow-hidden'
+                  >
+                    <Card className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+                      <CardHeader className='shrink-0'>
                         <CardTitle>Environment variables</CardTitle>
                         <CardDescription>
                           Service-local and shared environment values surfaced
                           in a searchable top-level Variables page as well.
                         </CardDescription>
-                      </CardHeader>
-                      <CardContent className='space-y-4'>
-                        <EnvironmentTable
-                          serviceId={service.id}
-                          variables={service.environmentVariables}
-                        />
-                        <div className='flex justify-end'>
+                        <CardAction>
                           <Button variant='outline' size='sm' asChild>
                             <Link
                               to='/variables'
@@ -2176,16 +2079,28 @@ export function ServiceDetail({
                               Open all variables
                             </Link>
                           </Button>
-                        </div>
+                        </CardAction>
+                      </CardHeader>
+                      <CardContent className='flex min-h-0 flex-1 flex-col'>
+                        <EnvironmentTable
+                          serviceId={service.id}
+                          variables={service.environmentVariables}
+                        />
                       </CardContent>
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value='config' className='mt-0'>
+                  <TabsContent
+                    value='config'
+                    className='mt-0 min-h-0 flex-1 overflow-auto'
+                  >
                     <ServiceConfigEditor service={service} />
                   </TabsContent>
 
-                  <TabsContent value='logs' className='mt-0'>
+                  <TabsContent
+                    value='logs'
+                    className='mt-0 min-h-0 flex-1 overflow-auto'
+                  >
                     <Card>
                       <CardHeader>
                         <CardTitle>Diagnostics + recent logs</CardTitle>
@@ -2204,17 +2119,20 @@ export function ServiceDetail({
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value='terminal' className='mt-0'>
+                  <TabsContent
+                    value='terminal'
+                    className='mt-0 min-h-0 flex-1 overflow-auto'
+                  >
                     <ServiceTerminalPanel service={service} />
                   </TabsContent>
                 </Tabs>
                 {service.id === '@secretsbroker' ? (
-                  <div className='space-y-4'>
+                  <div className='shrink-0 space-y-4'>
                     <SecretsBrokerOperationsPanel />
                     <SecretsBrokerLifecyclePanel />
                   </div>
                 ) : null}
-              </>
+              </div>
             )
           })()
         )}

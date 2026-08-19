@@ -230,9 +230,15 @@ test('service detail variables table keeps long values inside their columns', as
   expect(cellBoxes[2].right).toBeLessThanOrEqual(cellBoxes[3].left + 1)
   expect(cellBoxes[3].right).toBeLessThanOrEqual(cellBoxes[4].left + 1)
 
-  const valueFitsColumn = await row
-    .getByTestId('service-detail-variable-value')
-    .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+  const valueElement = row.getByTestId('service-detail-variable-value')
+  const valueFitsColumn = await valueElement.evaluate((element) => {
+    const styles = window.getComputedStyle(element)
+    return (
+      styles.textOverflow === 'ellipsis' &&
+      (styles.whiteSpace === 'nowrap' ||
+        element.scrollHeight <= element.clientHeight + 1)
+    )
+  })
   expect(valueFitsColumn).toBe(true)
 
   await expect(row.getByTestId('service-detail-variable-actions')).toBeVisible()
@@ -242,6 +248,50 @@ test('service detail variables table keeps long values inside their columns', as
     'href',
     /\/variables\?service=%40serviceadmin&key=/
   )
+})
+
+test('service detail variables table can search, filter by scope, and paginate', async ({
+  page,
+}) => {
+  await page.goto('/services/@serviceadmin?tab=variables')
+
+  const table = page.getByTestId('service-detail-variables-table')
+  await expect(table).toBeVisible()
+  await expect(
+    page.getByPlaceholder('Search keys, visible values, scope, or sources...')
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /^Scope$/i }).first()
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /^Source$/i }).first()
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: /next page/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /next page/i })).toBeDisabled()
+  await expect(page.getByText('Rows per page')).toBeVisible()
+
+  await page
+    .getByPlaceholder('Search keys, visible values, scope, or sources...')
+    .fill('RUNTIME_CONFIG')
+  await expect(
+    table
+      .locator('tbody tr')
+      .filter({ hasText: 'SERVICE_LASSO_RUNTIME_CONFIG_PATH' })
+  ).toBeVisible()
+  await expect(page.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toHaveCount(0)
+
+  await page.getByRole('button', { name: /^Reset$/i }).click()
+  await page
+    .getByRole('button', { name: /^Scope$/i })
+    .first()
+    .click()
+  await page
+    .locator('[data-slot="command-item"]')
+    .filter({ hasText: 'Global' })
+    .click()
+  await expect(page.getByText('SERVICE_LASSO_ROOT')).toBeVisible()
+  await expect(page.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toHaveCount(0)
+  await expect(table.getByText('global').first()).toBeVisible()
 })
 
 test('service detail tabs are deep-linkable and restore through browser history', async ({
