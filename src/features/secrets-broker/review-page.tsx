@@ -33,7 +33,9 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -242,7 +244,7 @@ function SecretsBrokerReviewTable({
   }, [table, ensurePageInRange])
 
   return (
-    <div className='flex flex-1 flex-col gap-4'>
+    <div className='flex min-h-0 flex-1 flex-col gap-4'>
       <DataTableToolbar
         table={table}
         searchPlaceholder='Search services, variables, refs, sources, and status...'
@@ -256,9 +258,9 @@ function SecretsBrokerReviewTable({
           },
         ]}
       />
-      <div className='overflow-hidden rounded-md border'>
-        <Table>
-          <TableHeader>
+      <DataTableScrollRegion>
+        <Table contained={false}>
+          <TableHeader className={dataTableStickyHeaderClassName}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row'>
                 {headerGroup.headers.map((header) => (
@@ -315,7 +317,7 @@ function SecretsBrokerReviewTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableScrollRegion>
       <DataTablePagination table={table} className='mt-auto' />
     </div>
   )
@@ -367,7 +369,7 @@ export function SecretsBrokerReviewPage() {
         </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <ReviewLoading />
         ) : (

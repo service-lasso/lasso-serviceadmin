@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link, getRouteApi } from '@tanstack/react-router'
+import { getRouteApi } from '@tanstack/react-router'
 import { BookOpenText, FileText, FolderOpen, Search } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -14,11 +13,10 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { HeaderActions } from '@/components/page-toolbar'
+import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 
@@ -296,6 +294,9 @@ export function HelpCenter() {
     description:
       'Guides and runbooks for operating local Service Lasso services.',
   })
+  usePageToolbar({
+    quickNav: [{ id: 'services', label: 'Services', to: '/services' }],
+  })
 
   const search = route.useSearch()
   const navigate = route.useNavigate()
@@ -303,6 +304,7 @@ export function HelpCenter() {
 
   const docs = useMemo(() => buildDocEntries(), [])
 
+  /** Filter docs as the operator types in the docs-column search field. */
   const filteredDocs = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     if (!normalized) return docs
@@ -328,9 +330,9 @@ export function HelpCenter() {
   }, [filteredDocs])
 
   const openDoc = (docId: string) => {
-    navigate({
+    void navigate({
       search: (prev) => ({
-        ...(prev as Record<string, unknown>),
+        ...prev,
         doc: docId,
       }),
     })
@@ -339,15 +341,6 @@ export function HelpCenter() {
   return (
     <>
       <Header fixed>
-        <div className='relative w-full max-w-sm'>
-          <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder='Search docs...'
-            className='pl-9'
-          />
-        </div>
         <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
@@ -355,57 +348,63 @@ export function HelpCenter() {
         </HeaderActions>
       </Header>
 
-      <Main fluid className='flex h-full flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-end gap-2'>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-          </div>
-        </div>
-
-        <div className='grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]'>
-          <Card className='min-h-0'>
-            <CardHeader>
+      <Main fixed fluid className='min-h-0 gap-4 sm:gap-6'>
+        <div className='grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]'>
+          <Card className='flex min-h-0 min-w-0 flex-col overflow-hidden'>
+            <CardHeader className='shrink-0'>
               <CardTitle className='flex items-center gap-2'>
                 <FolderOpen className='size-4' /> Docs
               </CardTitle>
               <CardDescription>Help documents.</CardDescription>
             </CardHeader>
-            <CardContent className='min-h-0'>
-              <ScrollArea className='h-[calc(100vh-18rem)] pr-3'>
-                <div className='space-y-4'>
+            <CardContent className='flex min-h-0 min-w-0 flex-1 flex-col gap-3'>
+              <div className='relative shrink-0'>
+                <Search className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder='Search docs...'
+                  aria-label='Search docs'
+                  className='pl-9'
+                />
+              </div>
+              <div
+                className='min-h-0 min-w-0 flex-1 overflow-auto pr-1'
+                data-testid='help-doc-list'
+              >
+                <div className='grid min-w-0 grid-cols-1 gap-4'>
                   {Object.entries(groupedDocs).map(([section, entries]) => (
-                    <div key={section} className='space-y-1.5'>
+                    <div key={section} className='min-w-0 space-y-1.5'>
                       <div className='flex items-center gap-2 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase'>
-                        <BookOpenText className='size-3.5' />
-                        {section}
+                        <BookOpenText className='size-3.5 shrink-0' />
+                        <span className='min-w-0 break-words'>{section}</span>
                       </div>
-                      <div className='space-y-1'>
+                      <div className='grid min-w-0 grid-cols-1 gap-1'>
                         {entries.map((doc) => (
                           <button
                             key={doc.id}
                             type='button'
+                            data-testid='help-doc-card'
                             onClick={() => openDoc(doc.id)}
-                            className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-accent ${
+                            className={`min-w-0 overflow-hidden rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-accent ${
                               selectedDoc?.id === doc.id
                                 ? 'border-primary bg-primary/5'
                                 : ''
                             }`}
                           >
-                            <div className='flex items-start justify-between gap-2'>
-                              <div className='min-w-0'>
-                                <div className='truncate text-sm leading-5 font-medium'>
+                            <div className='flex min-w-0 items-start justify-between gap-2'>
+                              <div className='min-w-0 flex-1 overflow-hidden'>
+                                <div className='text-sm leading-5 font-medium break-words'>
                                   {doc.title}
                                 </div>
-                                <div className='line-clamp-2 text-[11px] leading-4 text-muted-foreground'>
+                                <div className='text-[11px] leading-4 break-words text-muted-foreground'>
                                   {doc.description}
                                 </div>
                               </div>
                               <div className='flex shrink-0 flex-col items-end gap-1'>
                                 <Badge
                                   variant='outline'
-                                  className='text-[10px]'
+                                  className='max-w-full text-[10px] whitespace-normal'
                                 >
                                   {statusLabels[doc.status]}
                                 </Badge>
@@ -424,18 +423,18 @@ export function HelpCenter() {
                     </div>
                   ) : null}
                 </div>
-              </ScrollArea>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className='min-h-0'>
-            <CardHeader>
-              <div className='flex flex-wrap items-center justify-between gap-2'>
-                <div>
-                  <CardTitle>
+          <Card className='flex min-h-0 min-w-0 flex-col overflow-hidden'>
+            <CardHeader className='shrink-0'>
+              <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0 flex-1 overflow-hidden'>
+                  <CardTitle className='break-words'>
                     {selectedDoc?.title ?? 'No doc selected'}
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className='break-words'>
                     {selectedDoc
                       ? `${selectedDoc.section} · ${selectedDoc.fileName} · ${selectedDoc.description}`
                       : 'Pick a markdown file from the docs list.'}
@@ -455,11 +454,9 @@ export function HelpCenter() {
                 ) : null}
               </div>
             </CardHeader>
-            <CardContent className='min-h-0'>
+            <CardContent className='min-h-0 min-w-0 flex-1 overflow-auto pr-1'>
               {selectedDoc ? (
-                <ScrollArea className='h-[calc(100vh-18rem)] pr-4'>
-                  <MarkdownArticle content={selectedDoc.content} />
-                </ScrollArea>
+                <MarkdownArticle content={selectedDoc.content} />
               ) : (
                 <div className='rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>
                   No markdown docs are available yet under `docs/help/`.

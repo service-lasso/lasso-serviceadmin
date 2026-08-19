@@ -33,7 +33,9 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -428,12 +430,9 @@ export function Variables({ service, search, navigate }: VariablesProps) {
               ]}
             />
 
-            <div
-              className='min-h-[320px] flex-1 overflow-auto rounded-md border'
-              data-testid='variables-table-scroll-region'
-            >
-              <Table className='table-fixed'>
-                <TableHeader className='sticky top-0 z-10 bg-background'>
+            <DataTableScrollRegion testId='variables-table-scroll-region'>
+              <Table contained={false} className='table-fixed'>
+                <TableHeader className={dataTableStickyHeaderClassName}>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id} className='group/row'>
                       {headerGroup.headers.map((header) => (
@@ -506,7 +505,7 @@ export function Variables({ service, search, navigate }: VariablesProps) {
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </DataTableScrollRegion>
 
             <DataTablePagination table={table} className='mt-auto' />
           </div>

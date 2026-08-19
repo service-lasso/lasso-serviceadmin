@@ -38,7 +38,9 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -443,7 +445,7 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
   }, [table, ensurePageInRange])
 
   return (
-    <div className='flex flex-1 flex-col gap-4'>
+    <div className='flex min-h-0 flex-1 flex-col gap-4'>
       <DataTableToolbar
         table={table}
         searchPlaceholder='Search services, URLs, binds, ports, and route labels...'
@@ -477,9 +479,9 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
           },
         ]}
       />
-      <div className='overflow-hidden rounded-md border'>
-        <Table>
-          <TableHeader>
+      <DataTableScrollRegion>
+        <Table contained={false}>
+          <TableHeader className={dataTableStickyHeaderClassName}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row'>
                 {headerGroup.headers.map((header) => (
@@ -538,7 +540,7 @@ function ServiceRoutesTable({ rows }: { rows: ServiceRouteRow[] }) {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableScrollRegion>
       <DataTablePagination table={table} className='mt-auto' />
     </div>
   )
@@ -568,7 +570,7 @@ export function ServiceRoutes() {
         </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <ServiceRoutesLoading />
         ) : (

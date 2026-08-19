@@ -33,7 +33,9 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -233,11 +235,11 @@ export function Installed() {
         </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <InstalledLoading />
         ) : (
-          <div className='flex flex-1 flex-col gap-4'>
+          <div className='flex min-h-0 flex-1 flex-col gap-4'>
             <DataTableToolbar
               table={table}
               searchPlaceholder='Search services, packages, versions, or paths...'
@@ -262,9 +264,9 @@ export function Installed() {
               ]}
             />
 
-            <div className='overflow-hidden rounded-md border'>
-              <Table>
-                <TableHeader>
+            <DataTableScrollRegion>
+              <Table contained={false}>
+                <TableHeader className={dataTableStickyHeaderClassName}>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
                       {headerGroup.headers.map((header) => (
@@ -306,7 +308,7 @@ export function Installed() {
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </DataTableScrollRegion>
 
             <DataTablePagination table={table} className='mt-auto' />
           </div>

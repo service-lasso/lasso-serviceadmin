@@ -421,14 +421,14 @@ describe('Secrets Broker overview dashboard', () => {
 
     await expectActivePageIdentity('Providers')
     expect(
-      await screen.findByRole('region', {
+      screen.queryByRole('region', {
         name: /Live provider source metadata/i,
       })
-    ).toBeVisible()
+    ).not.toBeInTheDocument()
     expect(
-      screen.getByText(/Explicit Service Admin stub mode is enabled/i)
-    ).toBeVisible()
-    expect(screen.getByText(/stub fixture metadata/i)).toBeVisible()
+      screen.queryByText(/Live provider source metadata/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/stub fixture metadata/i)).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /^Add provider$/i })
     ).toBeVisible()
@@ -439,7 +439,9 @@ describe('Secrets Broker overview dashboard', () => {
     expect(screen.getByRole('columnheader', { name: /Health/i })).toBeVisible()
     expect(screen.getAllByText(/Local encrypted store/i)[0]).toBeVisible()
     expect(screen.getAllByText(/local-encrypted-store/i)[0]).toBeVisible()
-    expect(screen.getByText(/^0$/i)).toBeVisible()
+    const providerScrollRegion = screen.getByTestId('data-table-scroll-region')
+    expect(providerScrollRegion).toHaveClass('flex-1')
+    expect(providerScrollRegion).toHaveClass('overflow-auto')
     await user.click(screen.getByRole('button', { name: /^Actions$/i }))
     expect(
       screen.getByRole('menuitem', { name: /View\/Edit configuration/i })

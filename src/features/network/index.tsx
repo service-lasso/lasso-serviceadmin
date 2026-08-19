@@ -34,7 +34,9 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -295,11 +297,11 @@ export function Network() {
         </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <NetworkLoading />
         ) : (
-          <div className='flex flex-1 flex-col gap-4'>
+          <div className='flex min-h-0 flex-1 flex-col gap-4'>
             <DataTableToolbar
               table={table}
               searchPlaceholder='Search services, URLs, binds, ports, or exposure...'
@@ -325,9 +327,9 @@ export function Network() {
               ]}
             />
 
-            <div className='overflow-hidden rounded-md border'>
-              <Table>
-                <TableHeader>
+            <DataTableScrollRegion>
+              <Table contained={false}>
+                <TableHeader className={dataTableStickyHeaderClassName}>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
                       {headerGroup.headers.map((header) => (
@@ -369,7 +371,7 @@ export function Network() {
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </DataTableScrollRegion>
 
             <DataTablePagination table={table} className='mt-auto' />
           </div>

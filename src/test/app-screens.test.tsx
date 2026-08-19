@@ -351,6 +351,44 @@ describe('app screens', () => {
     expect(screen.getAllByText(/Runtime-backed/i).length).toBeGreaterThan(0)
   })
 
+  it('keeps Help Center Services in the header and wraps doc cards in columns', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/help-center')
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Search docs/i)).toBeVisible()
+    })
+
+    const header = document.querySelector('header')
+    expect(header).not.toBeNull()
+    if (!header) {
+      throw new Error('Help Center header was not rendered.')
+    }
+
+    expect(header.querySelector('a[href="/services"]')).not.toBeNull()
+    expect(document.querySelector('main a[href="/services"]')).toBeNull()
+
+    const cards = screen.getAllByTestId('help-doc-card')
+    expect(cards.length).toBeGreaterThan(0)
+    expect(cards[0]).toHaveClass('min-w-0')
+    expect(cards[0]).toHaveClass('overflow-hidden')
+    expect(screen.getByTestId('help-doc-list')).toHaveClass('overflow-auto')
+
+    await user.type(screen.getByPlaceholderText(/Search docs/i), 'packaging')
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', {
+          name: /^Service Admin Packaging and Release Artifacts$/i,
+        })
+      ).toBeVisible()
+    })
+    expect(
+      screen.queryByRole('heading', {
+        name: /^Operator Troubleshooting Runbooks$/i,
+      })
+    ).not.toBeInTheDocument()
+  })
+
   it.each([
     [
       '/services',
