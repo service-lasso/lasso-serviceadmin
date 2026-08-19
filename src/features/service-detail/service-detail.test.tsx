@@ -314,14 +314,18 @@ describe('service detail quick actions', () => {
       quickActions.getByRole('link', { name: /open variables/i })
     ).toHaveAttribute('href', '/variables?service=%40serviceadmin')
     expect(
+      quickActions.getByRole('link', { name: /open secrets/i })
+    ).toHaveAttribute('href', '/secrets-broker/secrets?secret=%40serviceadmin')
+    expect(
       quickActions.getByRole('link', { name: /open network/i })
-    ).toHaveAttribute('href', '/network')
+    ).toHaveAttribute('href', '/network?service=%40serviceadmin')
     expect(
       quickActions.getByRole('link', { name: /open runtime/i })
     ).toHaveAttribute('href', '/runtime?service=%40serviceadmin')
     expect(quickActions.queryByText(/^Logs$/i)).toBeNull()
     expect(quickActions.queryByText(/^Dependencies$/i)).toBeNull()
     expect(quickActions.queryByText(/^Variables$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Secrets$/i)).toBeNull()
     expect(quickActions.queryByText(/^Network$/i)).toBeNull()
     expect(quickActions.queryByText(/^Runtime$/i)).toBeNull()
     expect(
@@ -355,7 +359,7 @@ describe('service detail quick actions', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('links Node Sample Service details to the metadata-only secret journey', async () => {
+  it('links service details Secrets to the KV page filtered by this service id', async () => {
     __setStubServicesForTest([buildNodeSampleService()])
 
     await renderRoute('/services/node-sample-service')
@@ -371,8 +375,11 @@ describe('service detail quick actions', () => {
     )
 
     expect(
-      quickActions.getByRole('link', { name: /open secret journey/i })
-    ).toHaveAttribute('href', '/secrets-broker#node-sample-secret-journey')
+      quickActions.getByRole('link', { name: /open secrets/i })
+    ).toHaveAttribute(
+      'href',
+      '/secrets-broker/secrets?secret=node-sample-service'
+    )
   })
 
   it('keeps the Config tab focused on the server.json editor', async () => {

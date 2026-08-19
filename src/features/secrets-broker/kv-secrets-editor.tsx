@@ -58,6 +58,8 @@ type RevealRequest = {
 
 type KvSecretsEditorProps = {
   overview: SecretsBrokerOverview | null | undefined
+  pathFilter?: string
+  onPathFilterChange?: (value: string) => void
 }
 
 function parentPrefix(path: string): string {
@@ -367,7 +369,11 @@ export function fieldRowVisibleInKeyFilter(
  * split with independent scroll. Stored values stay hidden until a per-row
  * audited reveal; only one field value is shown at a time.
  */
-export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
+export function KvSecretsEditor({
+  overview,
+  pathFilter: pathFilterProp,
+  onPathFilterChange,
+}: KvSecretsEditorProps) {
   const queryClient = useQueryClient()
   const sources = useMemo(() => kvSourceOptions(overview), [overview])
   const [sourceId, setSourceId] = useState('local')
@@ -383,9 +389,22 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
     undefined
   )
   const [status, setStatus] = useState('')
-  const [pathFilter, setPathFilter] = useState('')
+  const [uncontrolledPathFilter, setUncontrolledPathFilter] = useState('')
   const [keyFilter, setKeyFilter] = useState('')
   const [pathDraft, setPathDraft] = useState('')
+  const pathFilter = pathFilterProp ?? uncontrolledPathFilter
+
+  /**
+   * Keep URL-backed path filters when the page supplies them; otherwise
+   * store the filter locally for isolated editor tests.
+   */
+  const setPathFilter = (value: string) => {
+    if (onPathFilterChange) {
+      onPathFilterChange(value)
+      return
+    }
+    setUncontrolledPathFilter(value)
+  }
 
   const source: KvSourceOption = sources.find(
     (item) => item.id === sourceId

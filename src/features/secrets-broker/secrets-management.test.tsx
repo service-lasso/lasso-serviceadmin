@@ -188,6 +188,34 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
     expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
   })
 
+  it('reads the secret search param into the KV path filter', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              keys: ['apps/', 'db', 'services/@serviceadmin/'],
+            },
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      return new Response(JSON.stringify({}), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/secrets-broker/secrets?secret=%40serviceadmin')
+
+    await expectActivePageIdentity('Secrets')
+    expect(screen.getByLabelText('Filter paths')).toHaveValue('@serviceadmin')
+    expect(
+      await screen.findByRole('button', { name: 'services/@serviceadmin/' })
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'db' })).not.toBeInTheDocument()
+  })
+
   it('keeps fixtures and modeled safe surfaces free of secret material', () => {
     expect(managedSecretsHaveSecretMaterial()).toBe(false)
     expect(managedSecretSafeSurfacesIncludeSecretMaterial()).toBe(false)

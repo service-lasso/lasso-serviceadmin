@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -40,6 +40,22 @@ import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+
+const route = getRouteApi('/_authenticated/runtime/')
+
+/**
+ * Keep only the service matching the Runtime `service` search param.
+ */
+function runtimeServicesForSearch(
+  services: DashboardService[],
+  serviceId: string | undefined
+): DashboardService[] {
+  const normalized = serviceId?.trim() ?? ''
+  if (!normalized) {
+    return services
+  }
+  return services.filter((service) => service.id === normalized)
+}
 
 function RuntimeLoading() {
   return (
@@ -195,16 +211,22 @@ export function Runtime() {
     ],
   })
 
+  const searchState = route.useSearch()
   const servicesQuery = useServices()
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'status', desc: false },
     { id: 'name', desc: false },
   ])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const services = useMemo(
+    () =>
+      runtimeServicesForSearch(servicesQuery.data ?? [], searchState.service),
+    [searchState.service, servicesQuery.data]
+  )
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: servicesQuery.data ?? [],
+    data: services,
     columns,
     state: {
       sorting,
@@ -221,11 +243,8 @@ export function Runtime() {
   })
 
   const runtimes = useMemo(
-    () =>
-      Array.from(
-        new Set((servicesQuery.data ?? []).map((service) => service.role))
-      ).sort(),
-    [servicesQuery.data]
+    () => Array.from(new Set(services.map((service) => service.role))).sort(),
+    [services]
   )
 
   return (

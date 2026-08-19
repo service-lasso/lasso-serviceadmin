@@ -37,7 +37,7 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function renderEditor() {
+function renderEditor(pathFilter?: string) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -46,7 +46,7 @@ function renderEditor() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <KvSecretsEditor overview={null} />
+      <KvSecretsEditor overview={null} pathFilter={pathFilter} />
     </QueryClientProvider>
   )
 }
@@ -624,5 +624,30 @@ describe('KV secrets editor', () => {
         .filter((call) => String(call[0]).includes('/kv/data/'))
         .map((call) => auditReasonFromInit(call[1]))
     ).toEqual([KV_LOAD_FIELD_NAMES_REASON])
+  })
+
+  it('seeds the path filter from the supplied service identity', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({
+          data: {
+            keys: ['apps/', 'db', 'services/@serviceadmin/'],
+          },
+        })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor('@serviceadmin')
+
+    expect(screen.getByLabelText('Filter paths')).toHaveValue('@serviceadmin')
+    expect(
+      await screen.findByRole('button', { name: 'services/@serviceadmin/' })
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'db' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'apps/' })
+    ).not.toBeInTheDocument()
   })
 })
