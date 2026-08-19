@@ -124,6 +124,8 @@ const defaultServices: DashboardService[] = [
       lastCheckAt: '2026-04-11T10:18:00+10:00',
       lastRestartAt: '2026-04-07T21:54:00+10:00',
       summary: 'Ingress is serving routes and health checks are green.',
+      pid: 8081,
+      runId: '2026-04-07T21-54-00-000Z',
     },
     endpoints: [
       {
@@ -230,6 +232,8 @@ const defaultServices: DashboardService[] = [
       lastRestartAt: '2026-04-11T08:03:00+10:00',
       summary:
         'UI responds on the required port and current stub actions are available.',
+      pid: 17701,
+      runId: '2026-04-11T08-03-00-000Z',
     },
     endpoints: [
       {

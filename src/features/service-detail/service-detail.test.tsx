@@ -82,6 +82,8 @@ function buildNodeSampleService(): DashboardService {
       lastCheckAt: '2026-07-02T08:25:00Z',
       lastRestartAt: '2026-07-02T08:22:00Z',
       summary: 'Runtime process pid 4242 is healthy.',
+      pid: 4242,
+      runId: 'node-sample-run-1',
     },
     endpoints: [
       {
@@ -159,6 +161,41 @@ describe('service detail overview metadata table', () => {
         'C:\\projects\\service-lasso\\lasso-@serviceadmin'
       )[0]
     ).toBeVisible()
+  })
+
+  it('shows State, Started, PID, and Run on Overview instead of Terminal', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const runStatus = screen.getByTestId('service-detail-overview-run-status')
+    expect(within(runStatus).getByText('State')).toBeVisible()
+    expect(within(runStatus).getByText('running')).toBeVisible()
+    expect(within(runStatus).getByText('PID')).toBeVisible()
+    expect(within(runStatus).getByText('17701')).toBeVisible()
+    expect(within(runStatus).getByText('Run')).toBeVisible()
+    expect(
+      within(runStatus).getByText('2026-04-11T08-03-00-000Z')
+    ).toBeVisible()
+    expect(
+      within(runStatus).queryByText('Not recorded')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const terminalCard = await screen.findByTestId('service-detail-terminal')
+    expect(within(terminalCard).queryByText(/^State$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^PID$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Run$/i)).toBeNull()
+    expect(
+      screen.getByRole('textbox', { name: /terminal input/i })
+    ).toBeInTheDocument()
   })
 
   it('keeps full metadata values available for wrapped or truncated table cells', async () => {
@@ -971,6 +1008,16 @@ describe('service detail quick actions', () => {
         screen.getByRole('heading', { name: /^Node Sample Service$/i })
       ).toBeVisible()
     })
+
+    await user.click(screen.getByRole('tab', { name: /overview/i }))
+    const runStatus = screen.getByTestId('service-detail-overview-run-status')
+    expect(within(runStatus).getByText('4242')).toBeVisible()
+    expect(within(runStatus).getByText('node-sample-run-1')).toBeVisible()
+    expect(
+      within(runStatus).queryByText('Not recorded')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
 
     const visibleTerminal = await screen.findByTestId(
       'service-detail-terminal-visible-lines'
