@@ -40,6 +40,39 @@ test('services table filters and opens service detail', async ({ page }) => {
   ).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Toggle theme' })).toBeVisible()
+  const identity = header.getByTestId('active-page-identity')
+  const toolbar = header.getByTestId('page-toolbar')
+  const links = header.getByRole('button', { name: 'Links', exact: true })
+  const themeSwitch = page.getByRole('button', { name: 'Toggle theme' })
+  const startAll = header.getByRole('button', {
+    name: 'Start all',
+    exact: true,
+  })
+  const identityBox = await identity.boundingBox()
+  const toolbarBox = await toolbar.boundingBox()
+  const startBox = await startAll.boundingBox()
+  const linksBox = await links.boundingBox()
+  const themeBox = await themeSwitch.boundingBox()
+  const leadingRight = await header.evaluate((element) => {
+    const row = element.firstElementChild
+    const leading = row?.firstElementChild
+    if (!leading) {
+      return 0
+    }
+    return leading.getBoundingClientRect().right
+  })
+  expect(identityBox).toBeTruthy()
+  expect(toolbarBox).toBeTruthy()
+  expect(startBox).toBeTruthy()
+  expect(linksBox).toBeTruthy()
+  expect(themeBox).toBeTruthy()
+  if (identityBox && toolbarBox && startBox && linksBox && themeBox) {
+    const emptyCenter = (leadingRight + toolbarBox.x) / 2
+    const titleCenter = identityBox.x + identityBox.width / 2
+    expect(Math.abs(titleCenter - emptyCenter)).toBeLessThan(24)
+    expect(Math.abs(startBox.y - linksBox.y)).toBeLessThan(8)
+    expect(linksBox.x).toBeLessThan(themeBox.x)
+  }
   await expect(
     page.getByRole('button', { name: 'Start all', exact: true })
   ).toBeEnabled()

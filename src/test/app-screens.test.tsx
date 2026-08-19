@@ -434,6 +434,8 @@ describe('app screens', () => {
       toolbar.compareDocumentPosition(themeSwitch) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+    expect(toolbar.className).toContain('flex-nowrap')
+    expect(toolbar.className).not.toContain('flex-wrap')
     expect(screen.getByRole('button', { name: /^Start all$/ })).toBeVisible()
     expect(
       screen.queryByRole('navigation', { name: /^Quick Nav$/i })
