@@ -72,18 +72,12 @@ function emptyCreateRow(): FieldRow[] {
   return [{ key: 'value', value: '' }]
 }
 
-function storedFieldValue(
-  fields: Record<string, string>,
-  key: string
-): string {
+function storedFieldValue(fields: Record<string, string>, key: string): string {
   const value = fields[key]
   return typeof value === 'string' ? value : ''
 }
 
-function hasStoredField(
-  fields: Record<string, string>,
-  key: string
-): boolean {
+function hasStoredField(fields: Record<string, string>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(fields, key)
 }
 
@@ -113,7 +107,8 @@ function buildRowsAfterRead(
 
 /**
  * PATCH/POST payload: skip stored fields that are not currently revealed so an
- * empty masked row cannot overwrite a hidden value.
+ * empty masked row cannot overwrite a hidden value. Newly added keys are not
+ * in `loadedFields`, so they are included.
  */
 function fieldsForSave(
   rows: FieldRow[],
@@ -132,6 +127,58 @@ function fieldsForSave(
     fields[key] = row.value
   }
   return fields
+}
+
+/**
+ * Keep known field names after save. KV list/metadata only return path keys,
+ * not field names, so the editor cannot rebuild rows from a list refresh.
+ */
+function rowsAfterSave(
+  rows: FieldRow[],
+  loadedFields: Record<string, string>
+): FieldRow[] {
+  const seen = new Set<string>()
+  const next: FieldRow[] = []
+  for (const row of rows) {
+    const key = row.key.trim()
+    if (!key || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    next.push({ key, value: '' })
+  }
+  for (const key of Object.keys(loadedFields)) {
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    next.push({ key, value: '' })
+  }
+  if (next.length === 0) {
+    return emptyCreateRow()
+  }
+  return next
+}
+
+/**
+ * Mark saved and previously loaded keys as stored (names only) so the next
+ * save still skips unrevealed fields. Values stay empty until an audited reveal.
+ */
+function loadedFieldsAfterSave(
+  rows: FieldRow[],
+  loadedFields: Record<string, string>
+): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const key of Object.keys(loadedFields)) {
+    next[key] = ''
+  }
+  for (const row of rows) {
+    const key = row.key.trim()
+    if (key) {
+      next[key] = ''
+    }
+  }
+  return next
 }
 
 /**
@@ -300,12 +347,17 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
     },
     onSuccess: async (result) => {
       const path = selectedPath || joinPath(prefix, createPath.trim())
+      const nextRows = rowsAfterSave(rows, loadedFields)
+      const nextLoaded = loadedFieldsAfterSave(rows, loadedFields)
       setSelectedPath(path)
       setCreatePath('')
       setCas(result.version)
+      setSelectedVersion(result.version)
       setStatus(`Saved version ${result.version}.`)
-      resetStoredReveal()
-      setRows(emptyCreateRow())
+      setRevealedKey('')
+      setRevealPrompt(null)
+      setLoadedFields(nextLoaded)
+      setRows(nextRows)
       await queryClient.invalidateQueries({
         queryKey: ['secrets-broker', 'kv'],
       })
@@ -639,12 +691,7 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                       ) : (
                         <Eye className='size-4' />
                       )}
-                      {revealButtonLabel(
-                        row,
-                        index,
-                        revealedKey,
-                        fieldsLoaded
-                      )}
+                      {revealButtonLabel(row, index, revealedKey, fieldsLoaded)}
                     </Button>
                   ) : null}
                 </div>
