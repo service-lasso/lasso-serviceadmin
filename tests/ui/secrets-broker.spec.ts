@@ -263,17 +263,12 @@ test.describe('Secrets Broker browser coverage', () => {
 
     await page.getByRole('button', { name: 'db' }).click()
     await expect(page.getByText(kvSentinelValue)).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Load fields' }).click()
-    await confirmAuditedReveal(page, 'incident review for db credentials')
     await expectFieldName(page, 1, 'username')
     await expectFieldName(page, 2, 'password')
     await expectFieldValue(page, 1, '')
     await expectFieldValue(page, 2, '')
     expect(kvDataGets).toHaveLength(1)
-    expect(kvDataGets[0]?.auditReason).toBe(
-      'incident review for db credentials'
-    )
+    expect(kvDataGets[0]?.auditReason).toBe('load field names')
 
     await page.getByRole('button', { name: 'Reveal password' }).click()
     await confirmAuditedReveal(page, 'need password for local restore')
@@ -304,12 +299,16 @@ test.describe('Secrets Broker browser coverage', () => {
     await page.goto('/secrets-broker/secrets')
     await expectNoBlankScreen(page)
     await page.getByRole('button', { name: 'db' }).click()
-    await page.getByRole('button', { name: 'Load fields' }).click()
+    await expectFieldName(page, 2, 'password')
+    const hydrateGets = [...kvDataGets]
+    expect(hydrateGets).toHaveLength(1)
+    expect(hydrateGets[0]?.auditReason).toBe('load field names')
+    await page.getByRole('button', { name: 'Reveal password' }).click()
     await page.getByRole('button', { name: 'Request reveal' }).click()
     await expect(
       page.getByText('Enter an audit reason before revealing.')
     ).toBeVisible()
-    expect(kvDataGets).toEqual([])
+    expect(kvDataGets).toEqual(hydrateGets)
 
     await page.getByLabel('Audit reason').fill('password=SuperSecret1234')
     await page.getByLabel('Confirm this controlled reveal').check()
@@ -317,7 +316,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(
       page.getByText('Audit reason cannot contain secret material.')
     ).toBeVisible()
-    expect(kvDataGets).toEqual([])
+    expect(kvDataGets).toEqual(hydrateGets)
     await expect(page.getByText(kvSentinelValue)).toHaveCount(0)
     await expectFieldValue(page, 1, '')
     await page.getByRole('button', { name: 'Cancel reveal' }).click()
