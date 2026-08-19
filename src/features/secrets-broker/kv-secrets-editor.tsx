@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, FileKey2, Folder, Plus, Trash2 } from 'lucide-react'
 import type { SecretsBrokerOverview } from '@/lib/secrets-broker/client'
@@ -75,6 +75,62 @@ function joinPath(prefix: string, key: string): string {
     return leaf
   }
   return `${prefix}/${leaf}`
+}
+
+/** Audited GET data reason used to hydrate field names without revealing values. */
+export const KV_LOAD_FIELD_NAMES_REASON = 'load field names'
+
+export type KvPathNavigation = {
+  prefix: string
+  selectedPath: string
+  folder: boolean
+}
+
+/**
+ * Parse a pasted or typed KV path into folder browse vs leaf select.
+ * A trailing slash means browse that folder; otherwise treat as a leaf.
+ */
+export function parseKvPathNavigation(raw: string): KvPathNavigation {
+  const original = raw.trim()
+  const folder = original.endsWith('/')
+  const trimmed = original.replace(/^\/+/gu, '').replace(/\/+$/gu, '')
+  if (!trimmed) {
+    return { prefix: '', selectedPath: '', folder: false }
+  }
+  if (folder) {
+    return { prefix: trimmed, selectedPath: '', folder: true }
+  }
+  return {
+    prefix: parentPrefix(trimmed),
+    selectedPath: trimmed,
+    folder: false,
+  }
+}
+
+/**
+ * Display value for the KV Path textbox: selected leaf, folder with slash, or empty.
+ */
+export function kvPathBoxValue(prefix: string, selectedPath: string): string {
+  if (selectedPath) {
+    return selectedPath
+  }
+  if (prefix) {
+    return `${prefix}/`
+  }
+  return ''
+}
+
+/**
+ * Keep field names only. Values must not be copied into editor state during hydrate.
+ */
+function maskSecretValues(
+  fields: Record<string, string>
+): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const key of Object.keys(fields)) {
+    next[key] = ''
+  }
+  return next
 }
 
 function emptyCreateRow(): FieldRow[] {
@@ -329,6 +385,7 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
   const [status, setStatus] = useState('')
   const [pathFilter, setPathFilter] = useState('')
   const [keyFilter, setKeyFilter] = useState('')
+  const [pathDraft, setPathDraft] = useState('')
 
   const source: KvSourceOption = sources.find(
     (item) => item.id === sourceId
@@ -363,6 +420,87 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
     setRevealPrompt(null)
   }
 
+  useEffect(() => {
+    setPathDraft(kvPathBoxValue(prefix, selectedPath))
+  }, [prefix, selectedPath])
+
+  /**
+   * Metadata has no field names. Hydrate keys from audited GET data and keep
+   * values masked until a per-row reveal.
+   */
+  useEffect(() => {
+    if (!selectedPath) {
+      return
+    }
+    let cancelled = false
+    setStatus('Loading field names.')
+    void readKvData(selectedPath, {
+      source: source.id,
+      version: selectedVersion,
+      reason: KV_LOAD_FIELD_NAMES_REASON,
+    })
+      .then((data) => {
+        if (cancelled) {
+          return
+        }
+        setLoadedFields(maskSecretValues(data.fields))
+        setCas(data.version)
+        setRevealedKey('')
+        setRevealPrompt(null)
+        setRows(buildRowsAfterRead(data.fields, '', []))
+        setStatus(
+          `Loaded field names for version ${data.version}. Reveal one field at a time.`
+        )
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return
+        }
+        setLoadedFields({})
+        setRevealedKey('')
+        setRevealPrompt(null)
+        setRows([{ key: '', value: '' }])
+        if (error instanceof KvRequestError && error.status === 404) {
+          setStatus('No stored secret at this path. Add fields to create it.')
+          return
+        }
+        setStatus(errorMessage(error))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedPath, selectedVersion, source.id])
+
+  const applyPathNavigation = (raw: string) => {
+    const next = parseKvPathNavigation(raw)
+    setPathFilter('')
+    setKeyFilter('')
+    setCreatePath('')
+    resetStoredReveal()
+    setCas(undefined)
+    setSelectedVersion(undefined)
+    if (!next.selectedPath && !next.prefix) {
+      setPrefix('')
+      setSelectedPath('')
+      setRows(emptyCreateRow())
+      setStatus('')
+      setPathDraft('')
+      return
+    }
+    if (next.folder || !next.selectedPath) {
+      setPrefix(next.prefix)
+      setSelectedPath('')
+      setRows(emptyCreateRow())
+      setStatus(next.prefix ? `Browsing ${next.prefix}.` : '')
+      setPathDraft(kvPathBoxValue(next.prefix, ''))
+      return
+    }
+    setPrefix(next.prefix)
+    setSelectedPath(next.selectedPath)
+    setRows([{ key: '', value: '' }])
+    setPathDraft(next.selectedPath)
+  }
+
   const revealMutation = useMutation({
     mutationFn: async ({ fieldKey, reason }: RevealRequest) => {
       const data = await readKvData(selectedPath, {
@@ -375,7 +513,11 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
     onSuccess: ({ data, fieldKey }) => {
       const nextRevealed =
         fieldKey && hasStoredField(data.fields, fieldKey) ? fieldKey : ''
-      setLoadedFields(data.fields)
+      const masked = maskSecretValues(data.fields)
+      if (nextRevealed) {
+        masked[nextRevealed] = storedFieldValue(data.fields, nextRevealed)
+      }
+      setLoadedFields(masked)
       setCas(data.version)
       setRevealedKey(nextRevealed)
       setRows((previous) =>
@@ -396,7 +538,11 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      const path = selectedPath || joinPath(prefix, createPath.trim())
+      const navigated = parseKvPathNavigation(pathDraft)
+      const path =
+        selectedPath ||
+        navigated.selectedPath ||
+        joinPath(prefix, createPath.trim())
       const fields = fieldsForSave(rows, loadedFields, revealedKey)
       if (!path) {
         throw new Error('Enter a KV path before saving.')
@@ -410,13 +556,16 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
       return writeKvData(path, fields, writeCas, query)
     },
     onSuccess: async (result) => {
-      const path = selectedPath || joinPath(prefix, createPath.trim())
+      const navigated = parseKvPathNavigation(pathDraft)
+      const path =
+        selectedPath ||
+        navigated.selectedPath ||
+        joinPath(prefix, createPath.trim())
       const nextRows = rowsAfterSave(rows, loadedFields)
       const nextLoaded = loadedFieldsAfterSave(rows, loadedFields)
       setSelectedPath(path)
       setCreatePath('')
       setCas(result.version)
-      setSelectedVersion(result.version)
       setStatus(`Saved version ${result.version}.`)
       setRevealedKey('')
       setRevealPrompt(null)
@@ -577,6 +726,31 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
               <div className='flex shrink-0 flex-col gap-2 border-b p-3'>
                 <h3 className='text-sm font-medium'>KV Path</h3>
                 <div className='space-y-1'>
+                  <Label htmlFor='kv-path'>Path</Label>
+                  <Input
+                    id='kv-path'
+                    aria-label='KV path'
+                    value={pathDraft}
+                    onChange={(event) => setPathDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        applyPathNavigation(pathDraft)
+                      }
+                    }}
+                    onPaste={(event) => {
+                      const pasted = event.clipboardData.getData('text')
+                      if (!pasted.trim()) {
+                        return
+                      }
+                      event.preventDefault()
+                      setPathDraft(pasted.trim())
+                      applyPathNavigation(pasted)
+                    }}
+                    placeholder={prefix ? `${prefix}/app/db` : 'apps/db'}
+                  />
+                </div>
+                <div className='space-y-1'>
                   <Label htmlFor='kv-path-filter'>Filter paths</Label>
                   <Input
                     id='kv-path-filter'
@@ -592,9 +766,7 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                     variant='ghost'
                     size='sm'
                     onClick={() => {
-                      setPrefix('')
-                      setSelectedPath('')
-                      setPathFilter('')
+                      applyPathNavigation('')
                     }}
                   >
                     root
@@ -611,9 +783,7 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                           variant='ghost'
                           size='sm'
                           onClick={() => {
-                            setPrefix(next)
-                            setSelectedPath('')
-                            setPathFilter('')
+                            applyPathNavigation(`${next}/`)
                           }}
                         >
                           / {segment}
@@ -626,8 +796,8 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                       variant='ghost'
                       size='sm'
                       onClick={() => {
-                        setPrefix(parentPrefix(prefix))
-                        setPathFilter('')
+                        const parent = parentPrefix(prefix)
+                        applyPathNavigation(parent ? `${parent}/` : '')
                       }}
                     >
                       Up
@@ -672,21 +842,10 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                       className='justify-start'
                       onClick={() => {
                         if (isFolder) {
-                          setPrefix(fullPath)
-                          setSelectedPath('')
-                          setPathFilter('')
-                          resetStoredReveal()
+                          applyPathNavigation(`${fullPath}/`)
                           return
                         }
-                        setSelectedPath(fullPath)
-                        setKeyFilter('')
-                        resetStoredReveal()
-                        setSelectedVersion(undefined)
-                        setCas(undefined)
-                        setRows([{ key: '', value: '' }])
-                        setStatus(
-                          'Path selected. Load field names, then reveal one value at a time.'
-                        )
+                        applyPathNavigation(fullPath)
                       }}
                     >
                       {isFolder ? (
@@ -716,21 +875,6 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                     value={keyFilter}
                     onChange={(event) => setKeyFilter(event.target.value)}
                     placeholder='Search keys'
-                  />
-                </div>
-                <div className='space-y-1'>
-                  <Label htmlFor='kv-create-path'>Path</Label>
-                  <Input
-                    id='kv-create-path'
-                    value={selectedPath || createPath}
-                    onChange={(event) => {
-                      setSelectedPath('')
-                      setCreatePath(event.target.value)
-                      setCas(undefined)
-                      setSelectedVersion(undefined)
-                      resetStoredReveal()
-                    }}
-                    placeholder={prefix ? `${prefix}/app/db` : 'apps/db'}
                   />
                 </div>
               </div>

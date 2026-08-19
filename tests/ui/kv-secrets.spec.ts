@@ -2,6 +2,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
 const sentinelPassword = 'kv-sentinel-alpha'
 const usernameValue = 'db-user'
+const loadFieldNamesReason = 'load field names'
 
 const forbiddenSecretMaterialPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
@@ -95,12 +96,60 @@ async function installKvRoutes(page: Page) {
     const method = request.method()
 
     if (url.includes('/kv/metadata/') && url.includes('list=true')) {
-      await route.fulfill(json({ data: { keys: ['apps/', 'db'] } }))
+      if (url.includes('/kv/metadata/services/node-sample-service')) {
+        await route.fulfill(
+          json({ data: { keys: ['sample.GENERATED_TOKEN'] } })
+        )
+        return
+      }
+      if (url.includes('/kv/metadata/services')) {
+        await route.fulfill(json({ data: { keys: ['node-sample-service/'] } }))
+        return
+      }
+      await route.fulfill(
+        json({ data: { keys: ['apps/', 'db', 'services/'] } })
+      )
+      return
+    }
+
+    if (
+      url.includes(
+        '/kv/metadata/services/node-sample-service/sample.GENERATED_TOKEN'
+      ) &&
+      !url.includes('list=true')
+    ) {
+      await route.fulfill(json(metadataBody()))
       return
     }
 
     if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
       await route.fulfill(json(metadataBody()))
+      return
+    }
+
+    if (
+      url.includes(
+        '/kv/data/services/node-sample-service/sample.GENERATED_TOKEN'
+      ) &&
+      (method === 'GET' || method === '')
+    ) {
+      const reason = request.headers()['x-secretsbroker-audit-reason'] ?? ''
+      dataGets.push({ url, reason })
+      await route.fulfill(
+        json({
+          data: {
+            data: {
+              value: sentinelPassword,
+            },
+            metadata: {
+              version: 1,
+              created_time: '2026-08-18T00:00:00Z',
+              deletion_time: '',
+              destroyed: false,
+            },
+          },
+        })
+      )
       return
     }
 
@@ -139,7 +188,9 @@ async function installMutableKvRoutes(page: Page) {
     const method = request.method()
 
     if (url.includes('/kv/metadata/') && url.includes('list=true')) {
-      await route.fulfill(json({ data: { keys: ['apps/', 'db'] } }))
+      await route.fulfill(
+        json({ data: { keys: ['apps/', 'db', 'services/'] } })
+      )
       return
     }
 
@@ -181,6 +232,9 @@ async function installMutableKvRoutes(page: Page) {
     if (url.includes('/kv/data/db') && method === 'PATCH') {
       const body = request.postData() ?? ''
       patches.push(body)
+      if (body.includes('kv-test-field')) {
+        stored['kv-test-field'] = sentinelPassword
+      }
       version += 1
       await route.fulfill(
         json({
@@ -298,15 +352,12 @@ test.describe('KV-only Secrets page', () => {
     expect(dataGets).toEqual([])
 
     await page.getByRole('button', { name: 'db' }).click()
-    await page.getByRole('button', { name: 'Load fields' }).click()
-    await confirmAuditedReveal(page, 'incident review for db credentials')
-
     await expect(page.getByLabel('Field 1 name')).toHaveValue('username')
     await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
     await expect(page.getByText(sentinelPassword)).toHaveCount(0)
     await expect(page.getByText(usernameValue)).toHaveCount(0)
     expect(dataGets).toHaveLength(1)
-    expect(dataGets[0]?.reason).toBe('incident review for db credentials')
+    expect(dataGets[0]?.reason).toBe(loadFieldNamesReason)
 
     await page.getByRole('button', { name: 'Reveal password' }).click()
     await confirmAuditedReveal(page, 'need password for local restore')
@@ -333,7 +384,11 @@ test.describe('KV-only Secrets page', () => {
     const { dataGets } = await installKvRoutes(page)
     await page.goto('/secrets-broker/secrets')
     await page.getByRole('button', { name: 'db' }).click()
-    await page.getByRole('button', { name: 'Load fields' }).click()
+    await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
+    const hydrateGets = [...dataGets]
+    expect(hydrateGets).toHaveLength(1)
+    expect(hydrateGets[0]?.reason).toBe(loadFieldNamesReason)
+    await page.getByRole('button', { name: 'Reveal password' }).click()
     await page.getByRole('button', { name: 'Request reveal' }).click()
     await expect(
       page.getByText('Enter an audit reason before revealing.')
@@ -345,7 +400,7 @@ test.describe('KV-only Secrets page', () => {
     await expect(
       page.getByText('Audit reason cannot contain secret material.')
     ).toBeVisible()
-    expect(dataGets).toEqual([])
+    expect(dataGets).toEqual(hydrateGets)
     await expect(page.getByText(sentinelPassword)).toHaveCount(0)
     expect(consoleErrors).toEqual([])
   })
@@ -356,8 +411,6 @@ test.describe('KV-only Secrets page', () => {
     const { patches } = await installMutableKvRoutes(page)
     await page.goto('/secrets-broker/secrets')
     await page.getByRole('button', { name: 'db' }).click()
-    await page.getByRole('button', { name: 'Load fields' }).click()
-    await confirmAuditedReveal(page, 'incident review for db credentials')
     await expect(page.getByLabel('Field 1 name')).toHaveValue('username')
     await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
 
@@ -385,12 +438,12 @@ test.describe('KV-only Secrets page', () => {
     const { dataGets } = await installKvRoutes(page)
     await page.goto('/secrets-broker/secrets')
     await page.getByRole('button', { name: 'db' }).click()
-    const loadButton = page.getByRole('button', { name: 'Load fields' })
-    await expect(loadButton).toBeVisible()
-    await expect(loadButton).toHaveAttribute('aria-label', 'Load fields')
-    await expect(loadButton).toHaveText('')
+    const revealButton = page.getByRole('button', { name: 'Reveal password' })
+    await expect(revealButton).toBeVisible()
+    await expect(revealButton).toHaveAttribute('aria-label', 'Reveal password')
+    await expect(revealButton).toHaveText('')
 
-    await loadButton.click()
+    await revealButton.click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(
       page.getByText(/Clicking outside this dialog cancels the reveal/i)
@@ -404,7 +457,8 @@ test.describe('KV-only Secrets page', () => {
       force: true,
     })
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    expect(dataGets).toEqual([])
+    expect(dataGets).toHaveLength(1)
+    expect(dataGets[0]?.reason).toBe(loadFieldNamesReason)
     await expect(page.getByText(sentinelPassword)).toHaveCount(0)
     expect(consoleErrors).toEqual([])
   })
@@ -423,6 +477,14 @@ test.describe('KV-only Secrets page', () => {
     ).toHaveCount(1)
     await expect(page.getByTestId('kv-path-pane')).toBeVisible()
     await expect(page.getByTestId('kv-value-pane')).toBeVisible()
+    await expect(
+      page.getByTestId('kv-path-pane').getByRole('textbox', { name: 'KV path' })
+    ).toBeVisible()
+    await expect(
+      page
+        .getByTestId('kv-value-pane')
+        .getByRole('textbox', { name: 'KV path' })
+    ).toHaveCount(0)
     await expect(page.getByRole('table')).toBeVisible()
     await expect(page.getByText(/OpenBao-compatible secrets/i)).toHaveCount(0)
     await expect(page.getByText('No values in the key list')).toHaveCount(0)
@@ -435,8 +497,6 @@ test.describe('KV-only Secrets page', () => {
     await expect(page.getByRole('button', { name: 'apps/' })).toHaveCount(0)
 
     await page.getByRole('button', { name: 'db' }).click()
-    await page.getByRole('button', { name: 'Load fields' }).click()
-    await confirmAuditedReveal(page, 'incident review for db credentials')
     await expect(page.getByLabel('Field 1 name')).toHaveValue('username')
     await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
 
@@ -453,6 +513,30 @@ test.describe('KV-only Secrets page', () => {
     await page.getByRole('button', { name: 'Cancel reveal' }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('pastes a path in KV Path to navigate and hydrates masked field names', async ({
+    page,
+  }) => {
+    const { dataGets } = await installKvRoutes(page)
+    await page.goto('/secrets-broker/secrets')
+    await expect(page.getByRole('button', { name: 'services/' })).toBeVisible()
+    const pathBox = page.getByRole('textbox', { name: 'KV path' })
+    await pathBox.fill('services/node-sample-service/sample.GENERATED_TOKEN')
+    await pathBox.press('Enter')
+    await expect(page.getByLabel('Field 1 name')).toHaveValue('value')
+    await expect(
+      page.getByRole('button', { name: '/ node-sample-service' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'sample.GENERATED_TOKEN' })
+    ).toBeVisible()
+    await expect(page.getByLabel('Field 1 value')).toHaveValue('')
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    expect(dataGets.length).toBeGreaterThan(0)
+    expect(dataGets[dataGets.length - 1]?.reason).toBe(loadFieldNamesReason)
+    await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })
 })

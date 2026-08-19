@@ -6,12 +6,29 @@ import {
   fieldRowVisibleInKeyFilter,
   filterKvPaths,
   KvSecretsEditor,
+  KV_LOAD_FIELD_NAMES_REASON,
+  kvPathBoxValue,
   matchesKvFilter,
+  parseKvPathNavigation,
 } from './kv-secrets-editor'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
+
+function auditReasonFromInit(init?: RequestInit): string {
+  const headers = init?.headers
+  if (
+    !headers ||
+    typeof headers !== 'object' ||
+    headers instanceof Headers ||
+    Array.isArray(headers)
+  ) {
+    return ''
+  }
+  const reason = headers['X-Secretsbroker-Audit-Reason']
+  return typeof reason === 'string' ? reason : ''
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -68,6 +85,35 @@ function secretBody() {
   }
 }
 
+function generatedTokenBody() {
+  return {
+    data: {
+      data: {
+        value: 'kv-sentinel-alpha',
+      },
+      metadata: {
+        version: 1,
+        created_time: '2026-08-18T00:00:00Z',
+        deletion_time: '',
+        destroyed: false,
+      },
+    },
+  }
+}
+
+/**
+ * Child keys for a list=true metadata URL. Longer prefixes are matched first.
+ */
+function listKeysForUrl(url: string): string[] {
+  if (url.includes('/kv/metadata/services/node-sample-service')) {
+    return ['sample.GENERATED_TOKEN']
+  }
+  if (url.includes('/kv/metadata/services')) {
+    return ['node-sample-service/']
+  }
+  return ['apps/', 'db', 'services/']
+}
+
 async function confirmAuditedReveal(
   user: ReturnType<typeof userEvent.setup>,
   reason: string
@@ -91,7 +137,7 @@ describe('KV secrets editor', () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
-        return jsonResponse({ data: { keys: ['apps/', 'db'] } })
+        return jsonResponse({ data: { keys: listKeysForUrl(url) } })
       }
       if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
         return jsonResponse(metadataBody())
@@ -121,20 +167,17 @@ describe('KV secrets editor', () => {
     ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'db' }))
-    await user.click(screen.getByRole('button', { name: 'Load fields' }))
-    await confirmAuditedReveal(user, 'incident review for db credentials')
-
     expect(await screen.findByDisplayValue('username')).toBeVisible()
     expect(screen.getByDisplayValue('password')).toBeVisible()
     expect(
       screen.queryByDisplayValue('kv-sentinel-alpha')
     ).not.toBeInTheDocument()
     expect(screen.queryByDisplayValue('db-user')).not.toBeInTheDocument()
-    const firstDataCall = fetchMock.mock.calls.find((call) =>
+    const hydrateCall = fetchMock.mock.calls.find((call) =>
       String(call[0]).includes('/kv/data/db')
     )
-    expect(firstDataCall?.[1]?.headers).toEqual({
-      'X-Secretsbroker-Audit-Reason': 'incident review for db credentials',
+    expect(hydrateCall?.[1]?.headers).toEqual({
+      'X-Secretsbroker-Audit-Reason': KV_LOAD_FIELD_NAMES_REASON,
     })
 
     await user.click(screen.getByRole('button', { name: 'Reveal password' }))
@@ -158,12 +201,18 @@ describe('KV secrets editor', () => {
 
   it('rejects empty or secret-like audit reasons', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
-        return jsonResponse({ data: { keys: ['db'] } })
+        return jsonResponse({ data: { keys: listKeysForUrl(url) } })
       }
       if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
         return jsonResponse(metadataBody())
+      }
+      if (
+        url.includes('/kv/data/db') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse(secretBody())
       }
       throw new Error(`Unexpected URL: ${url}`)
     })
@@ -171,7 +220,8 @@ describe('KV secrets editor', () => {
 
     renderEditor()
     await user.click(await screen.findByRole('button', { name: 'db' }))
-    await user.click(screen.getByRole('button', { name: 'Load fields' }))
+    expect(await screen.findByDisplayValue('password')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Reveal password' }))
     await user.click(screen.getByRole('button', { name: 'Request reveal' }))
     expect(
       await screen.findByText('Enter an audit reason before revealing.')
@@ -187,17 +237,17 @@ describe('KV secrets editor', () => {
       await screen.findByText('Audit reason cannot contain secret material.')
     ).toBeVisible()
     expect(
-      fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes('/kv/data/db')
-      )
-    ).toBe(false)
+      fetchMock.mock.calls
+        .filter((call) => String(call[0]).includes('/kv/data/db'))
+        .map((call) => auditReasonFromInit(call[1]))
+    ).toEqual([KV_LOAD_FIELD_NAMES_REASON])
   })
 
   it('shows version metadata without values', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
-        return jsonResponse({ data: { keys: ['db'] } })
+        return jsonResponse({ data: { keys: listKeysForUrl(url) } })
       }
       if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
         return jsonResponse({
@@ -220,6 +270,12 @@ describe('KV secrets editor', () => {
           },
         })
       }
+      if (
+        url.includes('/kv/data/db') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse(secretBody())
+      }
       throw new Error(`Unexpected URL: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -230,6 +286,8 @@ describe('KV secrets editor', () => {
       await screen.findByRole('button', { name: 'v2 deleted' })
     ).toBeVisible()
     expect(screen.getByRole('button', { name: 'v1' })).toBeVisible()
+    expect(await screen.findByDisplayValue('username')).toBeVisible()
+    expect(screen.getByDisplayValue('password')).toBeVisible()
     expect(
       screen.queryByDisplayValue('kv-sentinel-alpha')
     ).not.toBeInTheDocument()
@@ -276,6 +334,9 @@ describe('KV secrets editor', () => {
       if (url.includes('/kv/data/db') && method === 'PATCH') {
         const body = typeof init?.body === 'string' ? init.body : ''
         patchedBodies.push(body)
+        if (body.includes('kv-test-field')) {
+          stored['kv-test-field'] = 'kv-sentinel-alpha'
+        }
         version += 1
         return jsonResponse({
           data: {
@@ -308,8 +369,6 @@ describe('KV secrets editor', () => {
 
     renderEditor()
     await user.click(await screen.findByRole('button', { name: 'db' }))
-    await user.click(screen.getByRole('button', { name: 'Load fields' }))
-    await confirmAuditedReveal(user, 'incident review for db credentials')
     expect(await screen.findByDisplayValue('username')).toBeVisible()
     expect(screen.getByDisplayValue('password')).toBeVisible()
 
@@ -333,12 +392,18 @@ describe('KV secrets editor', () => {
 
   it('opens an icon-only reveal modal and cancels on overlay click', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
-        return jsonResponse({ data: { keys: ['db'] } })
+        return jsonResponse({ data: { keys: listKeysForUrl(url) } })
       }
       if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
         return jsonResponse(metadataBody())
+      }
+      if (
+        url.includes('/kv/data/db') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse(secretBody())
       }
       throw new Error(`Unexpected URL: ${url}`)
     })
@@ -346,11 +411,13 @@ describe('KV secrets editor', () => {
 
     renderEditor()
     await user.click(await screen.findByRole('button', { name: 'db' }))
-    const loadButton = screen.getByRole('button', { name: 'Load fields' })
-    expect(loadButton).toHaveAttribute('aria-label', 'Load fields')
-    expect(loadButton.textContent?.trim() ?? '').toBe('')
+    const revealButton = await screen.findByRole('button', {
+      name: 'Reveal password',
+    })
+    expect(revealButton).toHaveAttribute('aria-label', 'Reveal password')
+    expect(revealButton.textContent?.trim() ?? '').toBe('')
 
-    await user.click(loadButton)
+    await user.click(revealButton)
     expect(await screen.findByRole('dialog')).toBeVisible()
     expect(
       screen.getByText(/Clicking outside this dialog cancels the reveal/i)
@@ -360,10 +427,10 @@ describe('KV secrets editor', () => {
     await user.click(revealOverlay())
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(
-      fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes('/kv/data/db')
-      )
-    ).toBe(false)
+      fetchMock.mock.calls
+        .filter((call) => String(call[0]).includes('/kv/data/db'))
+        .map((call) => auditReasonFromInit(call[1]))
+    ).toEqual([KV_LOAD_FIELD_NAMES_REASON])
   })
 
   it('keeps Source outside the KV store card and splits Path/Value panes', async () => {
@@ -397,6 +464,16 @@ describe('KV secrets editor', () => {
 
     const split = screen.getByTestId('kv-path-pane').parentElement
     expect(split).toHaveClass('grid-cols-2')
+    expect(
+      within(screen.getByTestId('kv-path-pane')).getByRole('textbox', {
+        name: 'KV path',
+      })
+    ).toBeVisible()
+    expect(
+      within(screen.getByTestId('kv-value-pane')).queryByRole('textbox', {
+        name: 'KV path',
+      })
+    ).not.toBeInTheDocument()
 
     const keyList = screen.getByTestId('kv-store-key-list')
     expect(keyList).toHaveClass('flex-1')
@@ -456,8 +533,6 @@ describe('KV secrets editor', () => {
 
     renderEditor()
     await user.click(await screen.findByRole('button', { name: 'db' }))
-    await user.click(screen.getByRole('button', { name: 'Load fields' }))
-    await confirmAuditedReveal(user, 'incident review for db credentials')
     expect(await screen.findByDisplayValue('username')).toBeVisible()
     expect(screen.getByDisplayValue('password')).toBeVisible()
 
@@ -475,5 +550,79 @@ describe('KV secrets editor', () => {
     expect(fieldRowVisibleInKeyFilter('', 'pass')).toBe(true)
     expect(fieldRowVisibleInKeyFilter('password', 'pass')).toBe(true)
     expect(fieldRowVisibleInKeyFilter('username', 'pass')).toBe(false)
+  })
+
+  it('parses pasted KV paths into folder browse vs leaf select', () => {
+    expect(
+      parseKvPathNavigation(
+        'services/node-sample-service/sample.GENERATED_TOKEN'
+      )
+    ).toEqual({
+      prefix: 'services/node-sample-service',
+      selectedPath: 'services/node-sample-service/sample.GENERATED_TOKEN',
+      folder: false,
+    })
+    expect(parseKvPathNavigation('services/node-sample-service/')).toEqual({
+      prefix: 'services/node-sample-service',
+      selectedPath: '',
+      folder: true,
+    })
+    expect(kvPathBoxValue('services/node-sample-service', '')).toBe(
+      'services/node-sample-service/'
+    )
+    expect(
+      kvPathBoxValue(
+        'services/node-sample-service',
+        'services/node-sample-service/sample.GENERATED_TOKEN'
+      )
+    ).toBe('services/node-sample-service/sample.GENERATED_TOKEN')
+  })
+
+  it('navigates when a path is pasted into KV Path and hydrates masked names', async () => {
+    const user = userEvent.setup()
+    const generatedPath = 'services/node-sample-service/sample.GENERATED_TOKEN'
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: listKeysForUrl(url) } })
+      }
+      if (
+        url.includes(`/kv/metadata/${generatedPath}`) &&
+        !url.includes('list=true')
+      ) {
+        return jsonResponse(metadataBody())
+      }
+      if (
+        url.includes(`/kv/data/${generatedPath}`) &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse(generatedTokenBody())
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    expect(
+      await screen.findByRole('button', { name: 'services/' })
+    ).toBeVisible()
+    const pathBox = screen.getByRole('textbox', { name: 'KV path' })
+    await user.click(pathBox)
+    await user.paste(generatedPath)
+
+    expect(await screen.findByDisplayValue('value')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: '/ node-sample-service' })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'sample.GENERATED_TOKEN' })
+    ).toBeVisible()
+    expect(
+      screen.queryByDisplayValue('kv-sentinel-alpha')
+    ).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls
+        .filter((call) => String(call[0]).includes('/kv/data/'))
+        .map((call) => auditReasonFromInit(call[1]))
+    ).toEqual([KV_LOAD_FIELD_NAMES_REASON])
   })
 })
