@@ -402,7 +402,7 @@ test('help center, logs, tables, and providers chrome', async ({ page }) => {
   await expectActivePageIdentity(page, 'Logs')
   await expect(page.getByText('Selected service')).toHaveCount(0)
   await expect(page.getByText('Viewer mode')).toHaveCount(0)
-  await expect(page.getByText('Log entries')).toBeVisible()
+  await expect(page.getByText('Log entries', { exact: true })).toBeVisible()
 
   await page.goto('/services')
   const servicesScroll = page.getByTestId('data-table-scroll-region')

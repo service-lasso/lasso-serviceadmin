@@ -312,7 +312,7 @@ describe('logs page operator states', () => {
         'Uses the resolved service log endpoint and scroll-follow behavior.'
       )
     ).not.toBeInTheDocument()
-    expect(screen.getByText('Log entries')).toBeVisible()
+    expect(screen.getByText('Log entries', { exact: true })).toBeVisible()
     expect(screen.getByPlaceholderText('Search services...')).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'STDOUT' })
