@@ -9,6 +9,31 @@ const logsDebugEnabled =
   import.meta.env.VITE_SERVICE_LASSO_LOGS_DEBUG === 'true'
 const relativeLogsApiBaseUrl = ''
 
+/** Canonical Logs tab id for merged stdout, stderr, and service.log content. */
+export const ALL_LOG_SOURCE = 'default'
+
+/**
+ * Maps advertised combined/all source ids onto the Core `default` log type.
+ */
+export function canonicalLogSourceId(
+  sourceId: string | undefined
+): ServiceLogType {
+  if (!sourceId || sourceId === 'combined' || sourceId === 'all') {
+    return ALL_LOG_SOURCE
+  }
+
+  return sourceId
+}
+
+/**
+ * Query `type` value Core accepts for a Logs source tab.
+ */
+export function resolveServiceLogReadType(
+  type: ServiceLogType
+): ServiceLogType {
+  return canonicalLogSourceId(type)
+}
+
 export type ServiceLogInfo = {
   serviceId: string
   type: ServiceLogType
@@ -153,15 +178,16 @@ export async function fetchServiceLogInfo(
   service: DashboardService,
   type: ServiceLogType
 ) {
+  const readType = resolveServiceLogReadType(type)
   const params = new URLSearchParams({
     service: service.id,
-    type,
+    type: readType,
   })
   const infoUrl = buildLogsApiUrl('/api/services/log-info', params)
 
   debugLogs('requesting log info', {
     serviceId: service.id,
-    type,
+    type: readType,
     infoUrl,
   })
 
@@ -205,9 +231,10 @@ export async function fetchServiceLogChunk(
   before?: number,
   limit = 100
 ) {
+  const readType = resolveServiceLogReadType(type)
   const params = new URLSearchParams({
     service: service.id,
-    type,
+    type: readType,
     limit: String(limit),
   })
 
@@ -219,7 +246,7 @@ export async function fetchServiceLogChunk(
 
   debugLogs('requesting log chunk', {
     serviceId: service.id,
-    type,
+    type: readType,
     before: before ?? null,
     limit,
     chunkUrl,

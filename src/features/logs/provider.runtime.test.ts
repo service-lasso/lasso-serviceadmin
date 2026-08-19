@@ -81,6 +81,55 @@ describe('logs provider configured api mode', () => {
     expect(chunk.nextBefore).toBe(40)
   })
 
+  it('maps combined log type to the default Core read type', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: 'http://api.test',
+    }))
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          serviceId: '@serviceadmin',
+          type: 'default',
+          path: 'C:\\runtime\\@serviceadmin.log',
+          availableTypes: ['default'],
+          totalLines: 1,
+          start: 0,
+          end: 1,
+          hasMore: false,
+          nextBefore: 0,
+          limit: 100,
+          lines: ['combined line'],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchServiceLogChunk, fetchServiceLogInfo, canonicalLogSourceId } =
+      await import('./provider')
+
+    expect(canonicalLogSourceId('combined')).toBe('default')
+    expect(canonicalLogSourceId('all')).toBe('default')
+    expect(canonicalLogSourceId('stderr')).toBe('stderr')
+
+    await fetchServiceLogInfo(service as never, 'combined')
+    await fetchServiceLogChunk(service as never, 'combined')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://api.test/api/services/log-info?service=%40serviceadmin&type=default'
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://api.test/api/logs/read?service=%40serviceadmin&type=default&limit=100'
+    )
+  })
+
   it('fails cleanly when the runtime api returns non-json content', async () => {
     vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
       serviceLassoApiBaseUrl: 'http://api.test',
