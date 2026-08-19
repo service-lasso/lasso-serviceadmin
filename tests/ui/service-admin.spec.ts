@@ -312,6 +312,11 @@ test('service detail tabs are deep-linkable and restore through browser history'
 
   await page.getByRole('tab', { name: /logs/i }).click()
   await expect(page).toHaveURL(/\/services\/%40serviceadmin\?tab=logs$/)
+  await expect(page.getByTestId('service-detail-logs-workspace')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'STDOUT' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'STDERR' })).toBeVisible()
+  await expect(page.getByText('Diagnostics + recent logs')).toHaveCount(0)
+  await expect(page.getByPlaceholder('Search services...')).toHaveCount(0)
 
   await page.getByRole('tab', { name: /variables/i }).click()
   await expect(page).toHaveURL(/\/services\/%40serviceadmin\?tab=variables$/)

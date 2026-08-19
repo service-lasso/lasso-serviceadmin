@@ -314,6 +314,12 @@ describe('logs page operator states', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByText('Log entries')).toBeVisible()
     expect(screen.getByPlaceholderText('Search services...')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'STDOUT' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('service-detail-logs-workspace')
+    ).not.toBeInTheDocument()
   })
 
   it('uses runtime source tabs for all stdout stderr and additional log views', async () => {

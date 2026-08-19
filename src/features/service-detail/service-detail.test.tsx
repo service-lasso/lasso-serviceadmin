@@ -293,7 +293,15 @@ describe('service detail quick actions', () => {
     expect(
       logsPanel.queryByRole('link', { name: /open runtime view/i })
     ).toBeNull()
-    expect(screen.getByText('Diagnostics + recent logs')).toBeVisible()
+    expect(screen.getByTestId('service-detail-logs-workspace')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDOUT' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDERR' })).toBeVisible()
+    expect(
+      screen.queryByText('Diagnostics + recent logs')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText('Search services...')
+    ).not.toBeInTheDocument()
   })
 
   it('links Node Sample Service details to the metadata-only secret journey', async () => {
@@ -339,7 +347,7 @@ describe('service detail quick actions', () => {
     expect(screen.queryByText(/authorization headers/i)).toBeNull()
   })
 
-  it('shows separate stdout and stderr run streams without leaking sensitive values', async () => {
+  it('shows stdout and stderr through the shared log viewer without leaking sensitive values', async () => {
     const user = userEvent.setup()
 
     vi.stubGlobal(
@@ -409,31 +417,41 @@ describe('service detail quick actions', () => {
 
     await user.click(screen.getByRole('tab', { name: /logs/i }))
 
-    const streams = screen.getByTestId('service-detail-run-streams')
+    expect(screen.getByTestId('service-detail-logs-workspace')).toBeVisible()
+    expect(
+      screen.queryByPlaceholderText('Search services...')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDOUT' }))
 
     await waitFor(() => {
-      expect(within(streams).getByText('Stdout')).toBeVisible()
-      expect(within(streams).getByText('Stderr')).toBeVisible()
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /stdout server listening/
+      )
     })
 
-    expect(
-      within(streams).getByTestId('service-detail-stdout-lines')
-    ).toHaveTextContent(/stdout server listening/)
-    expect(
-      within(streams).getByTestId('service-detail-stderr-lines')
-    ).toHaveTextContent(/ERROR startup/)
-    expect(
-      within(streams).getByTestId('service-detail-stdout-lines')
-    ).toHaveTextContent(/token=\[redacted\]/)
-    expect(
-      within(streams).getByTestId('service-detail-stderr-lines')
-    ).toHaveTextContent(/password=\[redacted\]/)
-    expect(within(streams).queryByText(/hidden-value/)).not.toBeInTheDocument()
-    expect(within(streams).queryByText(/hunter2/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+      /token=\[redacted\]/
+    )
+    expect(screen.queryByText(/hidden-value/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDERR' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /ERROR startup/
+      )
+    })
+
+    expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+      /password=\[redacted\]/
+    )
+    expect(screen.queryByText(/hunter2/)).not.toBeInTheDocument()
   })
 
-  it('shows runtime overview events when stdout and stderr stream files are empty', async () => {
+  it('keeps the file editor for empty stderr and does not request combined', async () => {
     const user = userEvent.setup()
+    const requestedTypes: string[] = []
 
     vi.stubGlobal(
       'fetch',
@@ -443,14 +461,23 @@ describe('service detail quick actions', () => {
         const type = parsed.searchParams.get('type') ?? 'default'
 
         if (parsed.pathname === '/api/services/log-info') {
+          requestedTypes.push(`info:${type}`)
           return new Response(
             JSON.stringify({
               serviceId,
-              type,
-              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              type: 'default',
+              path: `C:\\runtime\\${serviceId}\\service.log`,
               available: true,
               availableTypes: ['default', 'stdout', 'stderr'],
               sources: [
+                {
+                  id: 'combined',
+                  label: 'Combined runtime log',
+                  stream: 'combined',
+                  runId: 'run-1',
+                  path: `C:\\runtime\\${serviceId}\\service.log`,
+                  available: true,
+                },
                 {
                   kind: 'current',
                   stream: 'stdout',
@@ -475,6 +502,7 @@ describe('service detail quick actions', () => {
         }
 
         if (parsed.pathname === '/api/logs/read') {
+          requestedTypes.push(type)
           return new Response(
             JSON.stringify({
               serviceId,
@@ -537,21 +565,44 @@ describe('service detail quick actions', () => {
 
     await user.click(screen.getByRole('tab', { name: /logs/i }))
 
-    const overview = await screen.findByTestId('service-detail-log-overview')
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer')).toBeVisible()
+      expect(screen.getByText('0 loaded lines')).toBeVisible()
+    })
 
-    expect(within(overview).getByText('Runtime log overview')).toBeVisible()
-    expect(within(overview).getByText('run-1')).toBeVisible()
-    expect(within(overview).getByText(/serviceadmin:start/)).toBeVisible()
-    expect(within(overview).getByText(/token=\[redacted\]/)).toBeVisible()
+    expect(requestedTypes).toContain('default')
+    expect(requestedTypes).toContain('info:default')
+    expect(requestedTypes).not.toContain('combined')
+    expect(requestedTypes).not.toContain('info:combined')
+    expect(screen.queryByText('Combined runtime log')).not.toBeInTheDocument()
     expect(
-      within(overview).queryByText(/review-secret/)
+      within(screen.getByTestId('service-detail-log-sources')).getByText('All')
+    ).toBeVisible()
+    expect(
+      screen.queryByText('Diagnostics + recent logs')
     ).not.toBeInTheDocument()
     expect(
-      screen.getAllByText(/No stdout entries are recorded/i).length
-    ).toBeGreaterThan(0)
+      screen.queryByText('No recent log preview entries yet.')
+    ).not.toBeInTheDocument()
     expect(
-      screen.getAllByText(/No stderr entries are recorded/i).length
-    ).toBeGreaterThan(0)
+      screen.queryByText(/No stdout entries are recorded/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/No stderr entries are recorded/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/review-secret/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDERR' }))
+
+    await waitFor(() => {
+      expect(requestedTypes).toContain('stderr')
+      expect(screen.getByText('0 loaded lines')).toBeVisible()
+    })
+
+    expect(screen.getByTestId('logs-viewer')).toBeVisible()
+    expect(
+      screen.queryByText('No current log entries yet')
+    ).not.toBeInTheDocument()
   })
 
   it('renders the Terminal tab from safe stdout history without leaking values', async () => {
@@ -939,16 +990,32 @@ describe('service detail quick actions', () => {
 
     await user.click(screen.getByRole('tab', { name: /logs/i }))
 
-    const streams = await screen.findByTestId('service-detail-run-streams')
-    const overview = await screen.findByTestId('service-detail-log-overview')
+    await screen.findByTestId('service-detail-logs-workspace')
 
-    expect(within(overview).getByText('node-sample-run-1')).toBeVisible()
     expect(
-      within(streams).getByTestId('service-detail-stdout-lines')
-    ).toHaveTextContent(/demo log message="canonical normal"|command pong/)
+      within(screen.getByTestId('service-detail-log-sources')).getByText('All')
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDOUT' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDERR' })).toBeVisible()
     expect(
-      within(streams).getByTestId('service-detail-stderr-lines')
-    ).toHaveTextContent(/demo error message="canonical error"/)
+      screen.queryByPlaceholderText('Search services...')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDOUT' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /node-sample-service starting/
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: 'STDERR' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /demo error message="canonical error"/
+      )
+    })
     expect(
       screen.queryByText(/ACTUAL_SECRET|CLIENT_SECRET|PASSWORD=/)
     ).toBeNull()
