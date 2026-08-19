@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Activity,
   AlertTriangle,
@@ -6,10 +7,13 @@ import {
   PackageOpen,
   Play,
   RefreshCcw,
+  ShieldAlert,
+  ShieldCheck,
   Star,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  useBrokerTelemetry,
   useDashboardAction,
   useDashboardSummary,
   useFavoriteFeatureState,
@@ -36,6 +40,12 @@ import { HeaderActions } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  brokerReadyLabel,
+  deriveBrokerReadyState,
+  findSecretsBrokerService,
+  formatBrokerLockoutCount,
+} from './broker-home-posture'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
@@ -61,12 +71,14 @@ function SummaryCard({
   description,
   icon: Icon,
   action,
+  valueAriaLabel,
 }: {
   title: string
   value: string
   description: string
   icon: React.ElementType
   action?: React.ReactNode
+  valueAriaLabel?: string
 }) {
   return (
     <Card>
@@ -76,7 +88,9 @@ function SummaryCard({
       </CardHeader>
       <CardContent className='space-y-3'>
         <div>
-          <div className='text-2xl font-bold'>{value}</div>
+          <div className='text-2xl font-bold' aria-label={valueAriaLabel}>
+            {value}
+          </div>
           <p className='text-xs text-muted-foreground'>{description}</p>
         </div>
         {action ? <div>{action}</div> : null}
@@ -176,7 +190,7 @@ function DashboardLoading() {
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
         <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-          {Array.from({ length: 4 }).map((_, index) => (
+          {Array.from({ length: 6 }).map((_, index) => (
             <Card key={index}>
               <CardHeader>
                 <Skeleton className='h-4 w-24' />
@@ -268,6 +282,7 @@ export function Dashboard() {
   })
 
   const summaryQuery = useDashboardSummary()
+  const brokerTelemetry = useBrokerTelemetry()
   const actionMutation = useDashboardAction()
 
   if (summaryQuery.isLoading) {
@@ -279,10 +294,28 @@ export function Dashboard() {
   }
 
   const summary = summaryQuery.data
+  const brokerService = findSecretsBrokerService(summary)
+  const brokerReadyState = deriveBrokerReadyState(brokerService)
+  const brokerReadyDisplay = brokerReadyLabel(brokerReadyState)
+  const brokerLockoutDisplay = formatBrokerLockoutCount(
+    brokerTelemetry.isError || brokerTelemetry.isLoading
+      ? null
+      : (brokerTelemetry.data?.counters.activeLockouts ?? null)
+  )
   const isReloadingRuntime =
     actionMutation.isPending && actionMutation.variables === 'reload-runtime'
   const isStartingServices =
     actionMutation.isPending && actionMutation.variables === 'start-services'
+  const openSecretsAction = (
+    <Button
+      asChild
+      size='sm'
+      variant='outline'
+      className='w-full justify-start'
+    >
+      <Link to='/secrets-broker/secrets'>Open Secrets</Link>
+    </Button>
+  )
 
   return (
     <>
@@ -347,6 +380,26 @@ export function Dashboard() {
             value={String(summary.installedCount)}
             description='Installed services tracked by Service Lasso'
             icon={PackageOpen}
+          />
+          <SummaryCard
+            title='Broker ready'
+            value={brokerReadyDisplay}
+            valueAriaLabel={`Broker ready ${brokerReadyDisplay}`}
+            description={
+              brokerService
+                ? `${brokerService.name} process is ${brokerService.status}`
+                : '@secretsbroker is not on this runtime'
+            }
+            icon={ShieldCheck}
+            action={openSecretsAction}
+          />
+          <SummaryCard
+            title='Broker lockouts'
+            value={brokerLockoutDisplay}
+            valueAriaLabel={`Broker lockout count ${brokerLockoutDisplay}`}
+            description='Active lockout count from Broker telemetry'
+            icon={ShieldAlert}
+            action={openSecretsAction}
           />
         </div>
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>

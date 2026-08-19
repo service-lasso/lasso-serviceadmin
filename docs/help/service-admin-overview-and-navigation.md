@@ -25,7 +25,7 @@ Service Admin must not imply that a page is live or durable unless the runtime o
 | Network | Review endpoint, host, port, and exposure metadata for local services. Use it with Routes when a service is healthy but unreachable. | [Product status and safety](product-status-and-safety.md) |
 | Operations / Telemetry | Inspect runtime and Secrets Broker telemetry status metadata. This page does not configure exporters or reveal telemetry headers or tokens. | [Operations Telemetry Operator Guide](operations-telemetry-operator-guide.md), [Product status and safety](product-status-and-safety.md) |
 | Operations / Audit | Inspect safe operation and broker audit metadata where exposed. Use operation ids, audit ids, timestamps, and outcomes as evidence. | [Product status and safety](product-status-and-safety.md) |
-| Secrets Broker | Review broker posture, providers, secret refs, topology, and guarded secret-management workflows. Raw secret values and provider credentials stay out of the UI. | [Service install and setup config](service-install-and-setup-config.md), [Product status and safety](product-status-and-safety.md) |
+| Secrets Broker | Review local KV secrets, providers, topology, and guarded secret-management workflows. Broker ready and lockout counts live on Dashboard. Raw secret values and provider credentials stay out of the UI. | [Variables and Secrets Broker Safety Guide](variables-and-secrets-broker-safety-guide.md), [Product status and safety](product-status-and-safety.md) |
 | Settings | Adjust local Service Admin preferences such as appearance. Do not assume identity, account, or notification durability without a live backend contract. | [Product status and safety](product-status-and-safety.md) |
 | Help Center | Read operator guides and runbooks sourced from `docs/help/`. Use search when you already know the surface or symptom. | [Help Docs](README.md) |
 
@@ -33,7 +33,7 @@ Service Admin must not imply that a page is live or durable unless the runtime o
 
 When something looks wrong, start with the narrowest evidence that can prove where the problem lives:
 
-1. Open Dashboard and check overall runtime status, problem services, and recovery prompts.
+1. Open Dashboard and check overall runtime status, Broker ready, lockout counts, problem services, and recovery prompts.
 2. Open Runtime if Dashboard cannot load, looks stale, or reports runtime health warnings.
 3. Open Services and the affected service detail to confirm lifecycle state, health, recent action results, and operation ids.
 4. Open Dependencies when a service is blocked by another service, a secret ref, or startup order.

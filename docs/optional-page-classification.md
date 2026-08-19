@@ -13,6 +13,7 @@ This classification decides which optional Service Admin pages remain in primary
 | Support Bundle | Keep as embedded diagnostic action | `/support-bundle` redirects to `/secrets-broker/sources` | Hide standalone page from primary sidebar | service-lasso/lasso-serviceadmin#66 | Secret-safe local diagnostics are useful for on-prem support, but the current export is not wired to a real backend endpoint. The retained operator job is the metadata-only support-bundle review embedded in the Secrets Broker diagnostics context, with export disabled until the real redacted export API exists. |
 | Policy Simulation | Keep as Audit Logging context | `/secrets-broker/policy-simulation` redirects to `/operations/audit-logging` | Hide standalone page from primary sidebar | service-lasso/lasso-serviceadmin#67; broker policy baseline service-lasso/lasso-secretsbroker#56; service-lasso/lasso-serviceadmin#125 | The policy dry-run concept is useful, but it should not appear as a complete first-class page until the broker policy contract is live. Related safe metadata belongs with Audit Logging rather than a catch-all controls page. |
 | Operational Controls | Remove | `/secrets-broker/operational-controls` redirects to `/operations/audit-logging` | Remove from primary sidebar | service-lasso/lasso-serviceadmin#237 | The catch-all page mixed audit, telemetry, provider, policy, and lockout concerns. Audit/event review belongs under Operations / Audit Logging, while provider and secret actions stay on their owner pages. |
+| Secrets Broker Overview | Remove | `/secrets-broker` redirects to `/secrets-broker/secrets` | Remove from primary sidebar | service-lasso/lasso-serviceadmin#528 | Overview duplicated Dashboard plus Providers and shipped fixture-only preview copy. Broker ready and lockout counts belong on home. Deep pages stay Secrets, Providers, Topology, Review, and Audit. |
 
 ## Exact UI changes
 
@@ -21,6 +22,7 @@ This classification decides which optional Service Admin pages remain in primary
 - Removed the standalone `Policy Simulation` sidebar item; legacy route `/secrets-broker/policy-simulation` redirects to `/operations/audit-logging`.
 - Removed the `Operational Controls` sidebar item; legacy route `/secrets-broker/operational-controls` redirects to `/operations/audit-logging`.
 - Removed the standalone `Support Bundle` sidebar item; legacy route `/support-bundle` redirects to `/secrets-broker/sources`, where the metadata-only support-bundle review remains embedded with export unavailable.
+- Removed the `Overview` sidebar item; legacy route `/secrets-broker` redirects to `/secrets-broker/secrets`. Broker ready and lockout counts live on Dashboard home.
 
 ## Route retention
 

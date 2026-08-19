@@ -169,7 +169,7 @@ function ConnectionDetailMissing({ connectionId }: { connectionId: string }) {
           </CardHeader>
           <CardContent>
             <Button asChild variant='secondary'>
-              <Link to='/secrets-broker'>Back to Secrets Broker overview</Link>
+              <Link to='/secrets-broker/sources'>Back to Providers</Link>
             </Button>
           </CardContent>
         </Card>
@@ -657,7 +657,7 @@ export function SecretsBrokerProviderConnectionDetailPage({
         <div className='flex flex-wrap items-start justify-between gap-4'>
           <div>
             <div className='mb-2 flex items-center gap-2 text-sm text-muted-foreground'>
-              <Link to='/secrets-broker' className='hover:underline'>
+              <Link to='/secrets-broker/secrets' className='hover:underline'>
                 Secrets Broker
               </Link>
               <span>/</span>

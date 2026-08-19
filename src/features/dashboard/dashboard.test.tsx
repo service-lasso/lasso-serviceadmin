@@ -2,13 +2,17 @@ import { renderRoute } from '@/test/render-route'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DashboardSummary } from '@/lib/service-lasso-dashboard/types'
+import type {
+  DashboardService,
+  DashboardSummary,
+} from '@/lib/service-lasso-dashboard/types'
 
 const hookMocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   useDashboardAction: vi.fn(),
   useDashboardService: vi.fn(),
   useDashboardSummary: vi.fn(),
+  useBrokerTelemetry: vi.fn(),
   useServices: vi.fn(),
   useFavoriteFeatureState: vi.fn(),
   useToggleFavorite: vi.fn(),
@@ -18,6 +22,7 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
   useDashboardAction: hookMocks.useDashboardAction,
   useDashboardService: hookMocks.useDashboardService,
   useDashboardSummary: hookMocks.useDashboardSummary,
+  useBrokerTelemetry: hookMocks.useBrokerTelemetry,
   useServices: hookMocks.useServices,
   useFavoriteFeatureState: hookMocks.useFavoriteFeatureState,
   useToggleFavorite: hookMocks.useToggleFavorite,
@@ -62,6 +67,15 @@ describe('Dashboard runtime health action', () => {
     })
     hookMocks.useFavoriteFeatureState.mockReturnValue({ enabled: true })
     hookMocks.useToggleFavorite.mockReturnValue({ mutateAsync: vi.fn() })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: {
+        counters: {
+          activeLockouts: 0,
+        },
+      },
+      isError: false,
+      isLoading: false,
+    })
   })
 
   it('runs the reload runtime action from the runtime health card', async () => {
@@ -120,5 +134,119 @@ describe('Dashboard runtime health action', () => {
     expect(
       screen.getByRole('button', { name: /Starting services/i })
     ).toBeDisabled()
+  })
+})
+
+function brokerService(
+  overrides: Partial<DashboardService> = {}
+): DashboardService {
+  return {
+    id: '@secretsbroker',
+    name: 'Secrets Broker',
+    status: 'running',
+    favorite: false,
+    note: 'Local encrypted KV',
+    links: [],
+    installed: true,
+    role: 'secrets-broker',
+    runtimeHealth: {
+      state: 'running',
+      health: 'healthy',
+      uptime: '1h',
+      lastCheckAt: '2026-08-19T10:26:00.000Z',
+      summary: 'Healthy',
+    },
+    endpoints: [],
+    metadata: {
+      serviceType: 'core',
+      runtime: 'node',
+      version: 'test',
+      build: 'test',
+    },
+    dependencies: [],
+    dependents: [],
+    environmentVariables: [],
+    recentLogs: [],
+    actions: [],
+    ...overrides,
+  }
+}
+
+describe('Dashboard Secrets Broker chips', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    hookMocks.useDashboardAction.mockReturnValue({
+      isPending: false,
+      mutate: hookMocks.mutate,
+      variables: undefined,
+    })
+    hookMocks.useServices.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
+    hookMocks.useDashboardService.mockReturnValue({
+      data: null,
+      isLoading: false,
+    })
+    hookMocks.useFavoriteFeatureState.mockReturnValue({ enabled: true })
+    hookMocks.useToggleFavorite.mockReturnValue({ mutateAsync: vi.fn() })
+  })
+
+  it('shows Broker ready and lockout counts without secret values', async () => {
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: {
+        ...summary(),
+        others: [brokerService()],
+      },
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: {
+        counters: {
+          activeLockouts: 2,
+        },
+      },
+      isError: false,
+      isLoading: false,
+    })
+
+    await renderRoute('/')
+
+    expect(screen.getByText('Broker ready')).toBeVisible()
+    expect(screen.getByLabelText('Broker ready Ready')).toHaveTextContent(
+      'Ready'
+    )
+    expect(screen.getByText('Broker lockouts')).toBeVisible()
+    expect(screen.getByLabelText('Broker lockout count 2')).toHaveTextContent(
+      '2'
+    )
+    expect(
+      screen.getAllByRole('link', { name: 'Open Secrets' })[0]
+    ).toHaveAttribute('href', '/secrets-broker/secrets')
+    expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/password=/i)).not.toBeInTheDocument()
+  })
+
+  it('shows Unavailable when @secretsbroker is missing from the dashboard payload', async () => {
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: summary(),
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: undefined,
+      isError: true,
+      isLoading: false,
+    })
+
+    await renderRoute('/')
+
+    expect(screen.getByLabelText('Broker ready Unavailable')).toHaveTextContent(
+      'Unavailable'
+    )
+    expect(screen.getByLabelText('Broker lockout count —')).toHaveTextContent(
+      '—'
+    )
   })
 })
