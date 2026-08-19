@@ -761,8 +761,7 @@ function ServiceLazyLogViewer({
     sourceOptions[0]
   const sourceLabel = activeSource?.label ?? labelForLogSource(selectedSource)
   const showFileEditor =
-    lines.length > 0 ||
-    (Boolean(logInfo?.path) && logInfo?.available !== false)
+    lines.length > 0 || (Boolean(logInfo?.path) && logInfo?.available !== false)
 
   return (
     <div className='space-y-3'>
