@@ -7,7 +7,6 @@ import {
   type ReactNode,
 } from 'react'
 import { Link } from '@tanstack/react-router'
-import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
   Position,
   useEdgesState,
@@ -692,30 +691,6 @@ function LocalDependencyGraph({ service }: { service: DashboardService }) {
 const SERVICE_DETAIL_LOG_STREAM_POLL_MS = 4000
 const SERVICE_DETAIL_TERMINAL_LIMIT = 240
 
-function extractRuntimePid(service: DashboardService) {
-  const values = [service.note, service.runtimeHealth.summary]
-
-  for (const value of values) {
-    const match = value.match(/\bpid\s+(\d+)\b/i)
-    if (match?.[1]) return match[1]
-  }
-
-  return null
-}
-
-function resolveRunId(
-  info: ServiceLogInfo | null,
-  chunk: ServiceLogChunk | null
-) {
-  return (
-    chunk?.source?.runId ??
-    info?.source?.runId ??
-    info?.sources?.find((source) => source.stream === 'stdout')?.runId ??
-    info?.sources?.find((source) => source.kind === 'current')?.runId ??
-    null
-  )
-}
-
 function resolveStdinCapability(
   service: DashboardService,
   info: ServiceLogInfo | null
@@ -974,22 +949,6 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
         </form>
       </CardContent>
     </Card>
-  )
-}
-
-function MetadataRow({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className='rounded-lg border p-3'>
-      <div className='flex items-center justify-between gap-3'>
-        <div className='min-w-0'>
-          <div className='font-medium'>{label}</div>
-          <div className='text-sm break-all text-muted-foreground'>
-            {value ?? 'Not recorded'}
-          </div>
-        </div>
-        <CopyValueButton value={value} />
-      </div>
-    </div>
   )
 }
 
