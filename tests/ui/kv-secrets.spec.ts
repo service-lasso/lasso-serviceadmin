@@ -223,6 +223,7 @@ async function installMutableKvRoutes(page: Page) {
 }
 
 async function confirmAuditedReveal(page: Page, reason: string) {
+  await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByLabel('Audit reason').fill(reason)
   await page.getByLabel('Confirm this controlled reveal').check()
   await page.getByRole('button', { name: 'Request reveal' }).click()
@@ -370,6 +371,36 @@ test.describe('KV-only Secrets page', () => {
     expect(patches[0]).toContain('kv-test-field')
     expect(patches[0]).not.toContain('username')
     await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('opens an icon-only reveal modal and cancels when clicking outside', async ({
+    page,
+  }) => {
+    const { dataGets } = await installKvRoutes(page)
+    await page.goto('/secrets-broker/secrets')
+    await page.getByRole('button', { name: 'db' }).click()
+    const loadButton = page.getByRole('button', { name: 'Load fields' })
+    await expect(loadButton).toBeVisible()
+    await expect(loadButton).toHaveAttribute('aria-label', 'Load fields')
+    await expect(loadButton).toHaveText('')
+
+    await loadButton.click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(
+      page.getByText(/Clicking outside this dialog cancels the reveal/i)
+    ).toBeVisible()
+    await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveClass(
+      /backdrop-blur/
+    )
+
+    await page.locator('[data-slot="dialog-overlay"]').click({
+      position: { x: 8, y: 8 },
+      force: true,
+    })
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    expect(dataGets).toEqual([])
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
     expect(consoleErrors).toEqual([])
   })
 })

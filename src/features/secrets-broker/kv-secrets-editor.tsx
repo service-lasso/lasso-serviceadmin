@@ -27,6 +27,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -225,6 +233,9 @@ function auditReasonRejection(reason: string): string {
   return ''
 }
 
+/**
+ * Accessible name for the icon-only reveal/hide control.
+ */
 function revealButtonLabel(
   row: FieldRow,
   index: number,
@@ -242,6 +253,23 @@ function revealButtonLabel(
     return 'Load fields'
   }
   return `Reveal field ${index + 1}`
+}
+
+/**
+ * Dialog heading for the audited reveal prompt.
+ */
+function revealDialogTitle(
+  row: FieldRow | undefined,
+  fieldsLoaded: boolean
+): string {
+  const key = row?.key.trim() ?? ''
+  if (key) {
+    return `Reveal ${key}`
+  }
+  if (!fieldsLoaded) {
+    return 'Load field names'
+  }
+  return 'Reveal secret field'
 }
 
 /**
@@ -646,8 +674,6 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
             const key = row.key.trim()
             const isRevealed = Boolean(key) && key === revealedKey
             const showRevealControls = metadataReady
-            const promptOpen =
-              revealPrompt !== null && revealPrompt.rowIndex === index
             return (
               <div key={`field-${index}`} className='grid gap-2'>
                 <div className='grid gap-2 md:grid-cols-[1fr_1fr_auto]'>
@@ -686,8 +712,14 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                     <Button
                       type='button'
                       variant='outline'
-                      size='sm'
+                      size='icon'
                       disabled={busy}
+                      aria-label={revealButtonLabel(
+                        row,
+                        index,
+                        revealedKey,
+                        fieldsLoaded
+                      )}
                       onClick={() => {
                         if (isRevealed) {
                           hideRevealedRow(index)
@@ -701,69 +733,9 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
                       ) : (
                         <Eye className='size-4' />
                       )}
-                      {revealButtonLabel(row, index, revealedKey, fieldsLoaded)}
                     </Button>
                   ) : null}
                 </div>
-                {promptOpen && revealPrompt ? (
-                  <div className='grid gap-2 rounded-md border bg-muted/40 p-3'>
-                    <div className='space-y-1'>
-                      <Label htmlFor={`kv-audit-reason-${index}`}>
-                        Audit reason
-                      </Label>
-                      <Input
-                        id={`kv-audit-reason-${index}`}
-                        aria-label='Audit reason'
-                        value={revealPrompt.reason}
-                        onChange={(event) =>
-                          setRevealPrompt({
-                            ...revealPrompt,
-                            reason: event.target.value,
-                            error: '',
-                          })
-                        }
-                        placeholder='Why this field is being revealed'
-                      />
-                    </div>
-                    <Label className='flex items-center gap-2 text-sm'>
-                      <Checkbox
-                        aria-label='Confirm this controlled reveal'
-                        checked={revealPrompt.confirmed}
-                        onCheckedChange={(checked) =>
-                          setRevealPrompt({
-                            ...revealPrompt,
-                            confirmed: checked === true,
-                            error: '',
-                          })
-                        }
-                      />
-                      I confirm this controlled reveal
-                    </Label>
-                    {revealPrompt.error ? (
-                      <p className='text-sm text-destructive'>
-                        {revealPrompt.error}
-                      </p>
-                    ) : null}
-                    <div className='flex flex-wrap gap-2'>
-                      <Button
-                        type='button'
-                        size='sm'
-                        disabled={busy}
-                        onClick={submitRevealPrompt}
-                      >
-                        Request reveal
-                      </Button>
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => setRevealPrompt(null)}
-                      >
-                        Cancel reveal
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
               </div>
             )
           })}
@@ -829,6 +801,87 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
           {status ? <p className='text-sm'>{status}</p> : null}
         </div>
       </CardContent>
+      <Dialog
+        open={revealPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open && !revealMutation.isPending) {
+            setRevealPrompt(null)
+          }
+        }}
+      >
+        <DialogContent
+          className='sm:max-w-md'
+          overlayClassName='bg-black/40 backdrop-blur-sm'
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {revealDialogTitle(
+                revealPrompt ? rows[revealPrompt.rowIndex] : undefined,
+                fieldsLoaded
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Enter an audit reason and confirm. Clicking outside this dialog
+              cancels the reveal.
+            </DialogDescription>
+          </DialogHeader>
+          {revealPrompt ? (
+            <div className='grid gap-3'>
+              <div className='space-y-1'>
+                <Label htmlFor='kv-audit-reason'>Audit reason</Label>
+                <Input
+                  id='kv-audit-reason'
+                  aria-label='Audit reason'
+                  value={revealPrompt.reason}
+                  onChange={(event) =>
+                    setRevealPrompt({
+                      ...revealPrompt,
+                      reason: event.target.value,
+                      error: '',
+                    })
+                  }
+                  placeholder='Why this field is being revealed'
+                />
+              </div>
+              <Label className='flex items-center gap-2 text-sm'>
+                <Checkbox
+                  aria-label='Confirm this controlled reveal'
+                  checked={revealPrompt.confirmed}
+                  onCheckedChange={(checked) =>
+                    setRevealPrompt({
+                      ...revealPrompt,
+                      confirmed: checked === true,
+                      error: '',
+                    })
+                  }
+                />
+                I confirm this controlled reveal
+              </Label>
+              {revealPrompt.error ? (
+                <p className='text-sm text-destructive'>{revealPrompt.error}</p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={() => setRevealPrompt(null)}
+            >
+              Cancel reveal
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              disabled={busy}
+              onClick={submitRevealPrompt}
+            >
+              Request reveal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

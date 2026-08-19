@@ -45,17 +45,24 @@ function DialogOverlay({
   )
 }
 
+/**
+ * Dialog surface with optional overlay styling.
+ * `overlayClassName` is kept off the content node so it only styles the backdrop.
+ */
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /** Extra overlay classes, such as backdrop blur for confirm modals. */
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal data-slot='dialog-portal'>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot='dialog-content'
         className={cn(

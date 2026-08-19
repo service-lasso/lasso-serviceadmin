@@ -67,9 +67,18 @@ async function confirmAuditedReveal(
   user: ReturnType<typeof userEvent.setup>,
   reason: string
 ) {
+  expect(await screen.findByRole('dialog')).toBeVisible()
   await user.type(screen.getByLabelText('Audit reason'), reason)
   await user.click(screen.getByLabelText('Confirm this controlled reveal'))
   await user.click(screen.getByRole('button', { name: 'Request reveal' }))
+}
+
+function revealOverlay(): HTMLElement {
+  const overlay = document.querySelector('[data-slot="dialog-overlay"]')
+  if (!(overlay instanceof HTMLElement)) {
+    throw new Error('Reveal dialog overlay was not found.')
+  }
+  return overlay
 }
 
 describe('KV secrets editor', () => {
@@ -308,6 +317,41 @@ describe('KV secrets editor', () => {
     expect(patchedBodies[0]).toContain('kv-test-field')
     expect(patchedBodies[0]).not.toContain('username')
     expect(screen.queryByDisplayValue('value')).not.toBeInTheDocument()
+  })
+
+  it('opens an icon-only reveal modal and cancels on overlay click', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: ['db'] } })
+      }
+      if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+        return jsonResponse(metadataBody())
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'db' }))
+    const loadButton = screen.getByRole('button', { name: 'Load fields' })
+    expect(loadButton).toHaveAttribute('aria-label', 'Load fields')
+    expect(loadButton.textContent?.trim() ?? '').toBe('')
+
+    await user.click(loadButton)
+    expect(await screen.findByRole('dialog')).toBeVisible()
+    expect(
+      screen.getByText(/Clicking outside this dialog cancels the reveal/i)
+    ).toBeVisible()
+    expect(revealOverlay().className).toMatch(/backdrop-blur/)
+
+    await user.click(revealOverlay())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes('/kv/data/db')
+      )
+    ).toBe(false)
   })
 
   it('fills remaining height and scrolls the key list internally', async () => {
