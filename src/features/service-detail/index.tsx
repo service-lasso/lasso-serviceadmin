@@ -1426,18 +1426,21 @@ export function ServiceDetail({
                         <ArrowRight className='size-4' />
                       </Link>
                     </ServiceDetailQuickAction>
-                    {hasServiceSecretJourneyEntryPoint(service) ? (
-                      <ServiceDetailQuickAction label='Secret journey'>
-                        <a
-                          href='/secrets-broker#node-sample-secret-journey'
-                          aria-label='Open secret journey'
-                        >
-                          <KeyRound className='size-4' />
-                        </a>
-                      </ServiceDetailQuickAction>
-                    ) : null}
+                    <ServiceDetailQuickAction label='Secrets'>
+                      <Link
+                        to='/secrets-broker/secrets'
+                        search={{ secret: service.id }}
+                        aria-label='Open secrets'
+                      >
+                        <KeyRound className='size-4' />
+                      </Link>
+                    </ServiceDetailQuickAction>
                     <ServiceDetailQuickAction label='Network'>
-                      <Link to='/network' aria-label='Open network'>
+                      <Link
+                        to='/network'
+                        search={{ service: service.id }}
+                        aria-label='Open network'
+                      >
                         <Network className='size-4' />
                       </Link>
                     </ServiceDetailQuickAction>

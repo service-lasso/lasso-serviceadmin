@@ -120,4 +120,17 @@ describe('network page', () => {
     ).toBeNull()
     expect(screen.queryByRole('cell', { name: /^docs$/i })).toBeNull()
   })
+
+  it('filters operator endpoints to the service search param', async () => {
+    await renderRoute('/network?service=%40serviceadmin')
+
+    await waitFor(() => {
+      expect(screen.getByText('http://127.0.0.1:17883/api')).toBeVisible()
+    })
+
+    expect(screen.getByText('http://127.0.0.1:17700')).toBeVisible()
+    expect(
+      screen.queryByText('https://archive.service-lasso.local')
+    ).not.toBeInTheDocument()
+  })
 })

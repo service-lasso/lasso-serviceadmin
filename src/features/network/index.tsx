@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -50,6 +50,22 @@ type NetworkRow = {
   service: DashboardService
   endpoint: DashboardService['endpoints'][number]
   url: string
+}
+
+const route = getRouteApi('/_authenticated/network/')
+
+/**
+ * Keep only endpoints that belong to the service id from search params.
+ */
+function networkRowsForService(
+  rows: NetworkRow[],
+  serviceId: string | undefined
+): NetworkRow[] {
+  const normalized = serviceId?.trim() ?? ''
+  if (!normalized) {
+    return rows
+  }
+  return rows.filter((row) => row.service.id === normalized)
 }
 
 const nonServiceEndpointLabelTerms = [
@@ -243,6 +259,7 @@ export function Network() {
     ],
   })
 
+  const searchState = route.useSearch()
   const servicesQuery = useServices()
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'serviceName', desc: false },
@@ -251,7 +268,7 @@ export function Network() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   const rows = useMemo<NetworkRow[]>(() => {
-    return (servicesQuery.data ?? []).flatMap((service) =>
+    const allRows = (servicesQuery.data ?? []).flatMap((service) =>
       service.endpoints
         .filter(isOperatorNetworkEndpoint)
         .map((endpoint, index) => ({
@@ -261,7 +278,8 @@ export function Network() {
           url: renderServiceEndpointUrl(endpoint),
         }))
     )
-  }, [servicesQuery.data])
+    return networkRowsForService(allRows, searchState.service)
+  }, [searchState.service, servicesQuery.data])
 
   const protocols = useMemo(
     () => Array.from(new Set(rows.map((row) => row.endpoint.protocol))).sort(),

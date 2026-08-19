@@ -19,6 +19,19 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
           lastRestartAt: '2026-06-05 21:26',
         },
       },
+      {
+        id: '@archive',
+        name: 'Archive',
+        role: '@archive',
+        status: 'available',
+        runtimeHealth: {
+          health: 'healthy',
+          summary: 'Archive runtime is healthy.',
+          uptime: '3h',
+          lastCheckAt: '2026-06-05 21:40',
+          lastRestartAt: '2026-06-05 18:00',
+        },
+      },
     ],
     isLoading: false,
   }),
@@ -39,5 +52,14 @@ describe('runtime page', () => {
     expect(
       screen.getByText('Managed Service Admin runtime is healthy.')
     ).toBeVisible()
+  })
+
+  it('filters the runtime table to the service search param', async () => {
+    await renderRoute('/runtime?service=%40serviceadmin')
+
+    await expectActivePageIdentity('Runtime')
+
+    expect(screen.getByRole('link', { name: /Service Admin/i })).toBeVisible()
+    expect(screen.queryByRole('link', { name: /Archive/i })).toBeNull()
   })
 })
