@@ -140,7 +140,7 @@ describe('KV client', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (
         url.includes('/kv/data/apps/db') &&
-        (!init || init.method === 'GET')
+        (!init?.method || init.method === 'GET')
       ) {
         return new Response(
           JSON.stringify({
@@ -178,9 +178,16 @@ describe('KV client', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const current = await readKvData('apps/db', { source: 'openbao-dev' })
+    const current = await readKvData('apps/db', {
+      source: 'openbao-dev',
+      reason: 'incident review for db credentials',
+    })
     expect(current.fields.password).toBe('kv-sentinel-alpha')
     expect(current.version).toBe(2)
+    const readInit = fetchMock.mock.calls[0]?.[1]
+    expect(readInit?.headers).toEqual({
+      'X-Secretsbroker-Audit-Reason': 'incident review for db credentials',
+    })
 
     const written = await writeKvData(
       'apps/db',

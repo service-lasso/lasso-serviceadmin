@@ -1,0 +1,248 @@
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
+
+const sentinelPassword = 'kv-sentinel-alpha'
+const usernameValue = 'db-user'
+
+const forbiddenSecretMaterialPatterns = [
+  /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
+  /\bAKIA[0-9A-Z]{16}\b/,
+  /\b(?:bearer|token|api[_-]?key|client[_-]?secret|password)\s*[=:]\s*['"][^'"]{8,}/i,
+  /(?:access|refresh|id)[_-]?token\s*[=:]\s*[^\s]{12,}/i,
+]
+
+/**
+ * Browser proof for the KV-only Secrets page. CI and Release both run
+ * `npm run test:ui`, so this file is the release-gated E2E coverage.
+ */
+async function expectNoBlankScreen(page: Page) {
+  await expect(page.locator('main')).toBeVisible()
+  await expect(page.locator('main')).not.toBeEmpty()
+  await expect(
+    page
+      .getByRole('button', { name: /Service Lasso instance selector/i })
+      .first()
+  ).toBeVisible()
+}
+
+async function expectActivePageIdentity(page: Page, identity: string) {
+  await expect(page.getByTestId('active-page-identity')).toHaveAccessibleName(
+    `Current page: ${identity}`
+  )
+}
+
+async function expectNoSecretMaterial(page: Page) {
+  const visibleText = await page.locator('body').innerText()
+  for (const pattern of forbiddenSecretMaterialPatterns) {
+    expect(
+      visibleText,
+      `forbidden secret material pattern ${pattern}`
+    ).not.toMatch(pattern)
+  }
+}
+
+function json(body: unknown) {
+  return {
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  }
+}
+
+function metadataBody() {
+  return {
+    data: {
+      current_version: 1,
+      created_time: '2026-08-18T00:00:00Z',
+      updated_time: '2026-08-18T00:00:00Z',
+      versions: {
+        '1': {
+          created_time: '2026-08-18T00:00:00Z',
+          deletion_time: '',
+          destroyed: false,
+        },
+      },
+    },
+  }
+}
+
+function secretBody() {
+  return {
+    data: {
+      data: {
+        username: usernameValue,
+        password: sentinelPassword,
+      },
+      metadata: {
+        version: 1,
+        created_time: '2026-08-18T00:00:00Z',
+        deletion_time: '',
+        destroyed: false,
+      },
+    },
+  }
+}
+
+/**
+ * Intercept Broker KV proxy calls so stub-mode Vite can exercise the live KV
+ * editor without a running Core/Broker.
+ */
+async function installKvRoutes(page: Page) {
+  const dataGets: Array<{ url: string; reason: string }> = []
+
+  await page.route('**/api/services/**/proxy/v1/kv/**', async (route) => {
+    const request = route.request()
+    const url = request.url()
+    const method = request.method()
+
+    if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+      await route.fulfill(json({ data: { keys: ['apps/', 'db'] } }))
+      return
+    }
+
+    if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+      await route.fulfill(json(metadataBody()))
+      return
+    }
+
+    if (
+      url.includes('/kv/data/db') &&
+      (method === 'GET' || method === '')
+    ) {
+      const reason = request.headers()['x-secretsbroker-audit-reason'] ?? ''
+      dataGets.push({ url, reason })
+      await route.fulfill(json(secretBody()))
+      return
+    }
+
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ errors: [`unmocked KV URL ${url}`] }),
+    })
+  })
+
+  return { dataGets }
+}
+
+async function confirmAuditedReveal(page: Page, reason: string) {
+  await page.getByLabel('Audit reason').fill(reason)
+  await page.getByLabel('Confirm this controlled reveal').check()
+  await page.getByRole('button', { name: 'Request reveal' }).click()
+}
+
+test.describe('KV-only Secrets page', () => {
+  const consoleErrors: string[] = []
+
+  test.beforeEach(async ({ page }) => {
+    consoleErrors.length = 0
+    page.on('console', (message) => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text())
+      }
+    })
+    page.on('pageerror', (error) => {
+      consoleErrors.push(error.message)
+    })
+  })
+
+  test.afterEach(async ({ page }, testInfo: TestInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await testInfo.attach('route.txt', {
+        body: page.url(),
+        contentType: 'text/plain',
+      })
+      await testInfo.attach('console-errors.txt', {
+        body: consoleErrors.join('\n') || '(none)',
+        contentType: 'text/plain',
+      })
+      await testInfo.attach('failure-screenshot', {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      })
+    }
+  })
+
+  test('renders KV store without the retired management catalog', async ({
+    page,
+  }) => {
+    await installKvRoutes(page)
+    await page.goto('/secrets-broker/secrets')
+    await expectNoBlankScreen(page)
+    await expectActivePageIdentity(page, 'Secrets')
+    await expect(page.getByText('KV store')).toBeVisible()
+    await expect(page.getByText(/Operator queue/i)).toHaveCount(0)
+    await expect(page.getByText(/Live secret metadata status/i)).toHaveCount(0)
+    await expect(page.getByText(/Secrets management table/i)).toHaveCount(0)
+    await expect(page.getByText(/SESSION_SIGNING_KEY/i)).toHaveCount(0)
+    await expect(
+      page.getByRole('button', { name: /Simulate stub apply/i })
+    ).toHaveCount(0)
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('lists KV keys without showing values until a per-row audited reveal', async ({
+    page,
+  }) => {
+    const { dataGets } = await installKvRoutes(page)
+    await page.goto('/secrets-broker/secrets')
+    await expect(page.getByRole('button', { name: 'db' })).toBeVisible()
+    await expect(page.getByText(/No values in the key list/i)).toBeVisible()
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    await expect(page.getByText(usernameValue)).toHaveCount(0)
+    expect(dataGets).toEqual([])
+
+    await page.getByRole('button', { name: 'db' }).click()
+    await page.getByRole('button', { name: 'Load fields' }).click()
+    await confirmAuditedReveal(page, 'incident review for db credentials')
+
+    await expect(page.getByLabel('Field 1 name')).toHaveValue('username')
+    await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    await expect(page.getByText(usernameValue)).toHaveCount(0)
+    expect(dataGets).toHaveLength(1)
+    expect(dataGets[0]?.reason).toBe('incident review for db credentials')
+
+    await page.getByRole('button', { name: 'Reveal password' }).click()
+    await confirmAuditedReveal(page, 'need password for local restore')
+    await expect(page.getByLabel('Field 2 value')).toHaveValue(sentinelPassword)
+    await expect(page.getByLabel('Field 1 value')).toHaveValue('')
+    await expect(page.getByText(usernameValue)).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Reveal username' }).click()
+    await confirmAuditedReveal(page, 'need username for local restore')
+    await expect(page.getByLabel('Field 1 value')).toHaveValue(usernameValue)
+    await expect(page.getByLabel('Field 2 value')).toHaveValue('')
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Hide username' }).click()
+    await expect(page.getByLabel('Field 1 value')).toHaveValue('')
+    await expect(page.getByText(usernameValue)).toHaveCount(0)
+    await expectNoSecretMaterial(page)
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('rejects empty or secret-like audit reasons before a KV read', async ({
+    page,
+  }) => {
+    const { dataGets } = await installKvRoutes(page)
+    await page.goto('/secrets-broker/secrets')
+    await page.getByRole('button', { name: 'db' }).click()
+    await page.getByRole('button', { name: 'Load fields' }).click()
+    await page.getByRole('button', { name: 'Request reveal' }).click()
+    await expect(
+      page.getByText('Enter an audit reason before revealing.')
+    ).toBeVisible()
+
+    await page.getByLabel('Audit reason').fill('password=SuperSecret1234')
+    await page.getByLabel('Confirm this controlled reveal').check()
+    await page.getByRole('button', { name: 'Request reveal' }).click()
+    await expect(
+      page.getByText('Audit reason cannot contain secret material.')
+    ).toBeVisible()
+    expect(dataGets).toEqual([])
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    expect(consoleErrors).toEqual([])
+  })
+})

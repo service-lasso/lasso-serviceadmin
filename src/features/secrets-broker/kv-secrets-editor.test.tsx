@@ -29,25 +29,64 @@ function renderEditor() {
   )
 }
 
+function metadataBody() {
+  return {
+    data: {
+      current_version: 1,
+      created_time: '2026-08-18T00:00:00Z',
+      updated_time: '2026-08-18T00:00:00Z',
+      versions: {
+        '1': {
+          created_time: '2026-08-18T00:00:00Z',
+          deletion_time: '',
+          destroyed: false,
+        },
+      },
+    },
+  }
+}
+
+function secretBody() {
+  return {
+    data: {
+      data: {
+        username: 'db-user',
+        password: 'kv-sentinel-alpha',
+      },
+      metadata: {
+        version: 1,
+        created_time: '2026-08-18T00:00:00Z',
+        deletion_time: '',
+        destroyed: false,
+      },
+    },
+  }
+}
+
+async function confirmAuditedReveal(
+  user: ReturnType<typeof userEvent.setup>,
+  reason: string
+) {
+  await user.type(screen.getByLabelText('Audit reason'), reason)
+  await user.click(screen.getByLabelText('Confirm this controlled reveal'))
+  await user.click(screen.getByRole('button', { name: 'Request reveal' }))
+}
+
 describe('KV secrets editor', () => {
-  it('browses keys without showing values until reveal', async () => {
+  it('reveals one field at a time after an audited confirm', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
         return jsonResponse({ data: { keys: ['apps/', 'db'] } })
       }
-      if (url.includes('/kv/data/db') && (!init || init.method === 'GET')) {
-        return jsonResponse({
-          data: {
-            data: { password: 'kv-sentinel-alpha' },
-            metadata: {
-              version: 1,
-              created_time: '2026-08-18T00:00:00Z',
-              deletion_time: '',
-              destroyed: false,
-            },
-          },
-        })
+      if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+        return jsonResponse(metadataBody())
+      }
+      if (
+        url.includes('/kv/data/db') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse(secretBody())
       }
       throw new Error(`Unexpected URL: ${url}`)
     })
@@ -61,12 +100,110 @@ describe('KV secrets editor', () => {
     ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'db' }))
-    await user.click(
-      screen.getByRole('button', { name: /Reveal current version/i })
-    )
-    expect(await screen.findByDisplayValue('kv-sentinel-alpha')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Load fields' }))
+    await confirmAuditedReveal(user, 'incident review for db credentials')
 
-    await user.click(screen.getByRole('button', { name: /Hide values/i }))
+    expect(await screen.findByDisplayValue('username')).toBeVisible()
+    expect(screen.getByDisplayValue('password')).toBeVisible()
+    expect(
+      screen.queryByDisplayValue('kv-sentinel-alpha')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('db-user')).not.toBeInTheDocument()
+    const firstDataCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('/kv/data/db')
+    )
+    expect(firstDataCall?.[1]?.headers).toEqual({
+      'X-Secretsbroker-Audit-Reason': 'incident review for db credentials',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Reveal password' }))
+    await confirmAuditedReveal(user, 'need password for local restore')
+    expect(await screen.findByDisplayValue('kv-sentinel-alpha')).toBeVisible()
+    expect(screen.queryByDisplayValue('db-user')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Reveal username' }))
+    await confirmAuditedReveal(user, 'need username for local restore')
+    expect(await screen.findByDisplayValue('db-user')).toBeVisible()
+    expect(
+      screen.queryByDisplayValue('kv-sentinel-alpha')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide username' }))
+    expect(screen.queryByDisplayValue('db-user')).not.toBeInTheDocument()
+    expect(
+      screen.queryByDisplayValue('kv-sentinel-alpha')
+    ).not.toBeInTheDocument()
+  })
+
+  it('rejects empty or secret-like audit reasons', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: ['db'] } })
+      }
+      if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+        return jsonResponse(metadataBody())
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'db' }))
+    await user.click(screen.getByRole('button', { name: 'Load fields' }))
+    await user.click(screen.getByRole('button', { name: 'Request reveal' }))
+    expect(
+      await screen.findByText('Enter an audit reason before revealing.')
+    ).toBeVisible()
+
+    await user.type(screen.getByLabelText('Audit reason'), 'password=SuperSecret1234')
+    await user.click(screen.getByLabelText('Confirm this controlled reveal'))
+    await user.click(screen.getByRole('button', { name: 'Request reveal' }))
+    expect(
+      await screen.findByText('Audit reason cannot contain secret material.')
+    ).toBeVisible()
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes('/kv/data/db')
+      )
+    ).toBe(false)
+  })
+
+  it('shows version metadata without values', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: ['db'] } })
+      }
+      if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+        return jsonResponse({
+          data: {
+            current_version: 2,
+            created_time: '2026-08-18T00:00:00Z',
+            updated_time: '2026-08-18T00:00:02Z',
+            versions: {
+              '1': {
+                created_time: '2026-08-18T00:00:00Z',
+                deletion_time: '',
+                destroyed: false,
+              },
+              '2': {
+                created_time: '2026-08-18T00:00:02Z',
+                deletion_time: '2026-08-18T00:00:03Z',
+                destroyed: false,
+              },
+            },
+          },
+        })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'db' }))
+    expect(await screen.findByRole('button', { name: 'v2 deleted' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'v1' })).toBeVisible()
     expect(
       screen.queryByDisplayValue('kv-sentinel-alpha')
     ).not.toBeInTheDocument()
