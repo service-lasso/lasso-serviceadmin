@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, Folder, FileKey2, Plus, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, FileKey2, Folder, Plus, Trash2 } from 'lucide-react'
 import type { SecretsBrokerOverview } from '@/lib/secrets-broker/client'
 import {
   KvRequestError,
@@ -17,15 +17,8 @@ import {
 } from '@/lib/secrets-broker/kv-client'
 import { containsUnsafeBrokerText } from '@/lib/service-lasso-dashboard/secrets-safe-text'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -37,6 +30,14 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type FieldRow = {
   key: string
@@ -273,10 +274,42 @@ function revealDialogTitle(
 }
 
 /**
+ * Case-insensitive substring match for path and key search filters.
+ */
+export function matchesKvFilter(value: string, filter: string): boolean {
+  const needle = filter.trim().toLowerCase()
+  if (!needle) {
+    return true
+  }
+  return value.toLowerCase().includes(needle)
+}
+
+/**
+ * Paths shown in the KV Path pane after applying the path search filter.
+ */
+export function filterKvPaths(keys: string[], filter: string): string[] {
+  return keys.filter((key) => matchesKvFilter(key, filter))
+}
+
+/**
+ * Keep unnamed draft rows visible while filtering the KV Value table by key.
+ */
+export function fieldRowVisibleInKeyFilter(
+  fieldKey: string,
+  filter: string
+): boolean {
+  const trimmed = fieldKey.trim()
+  if (!trimmed) {
+    return true
+  }
+  return matchesKvFilter(trimmed, filter)
+}
+
+/**
  * OpenBao-shaped path browser and field editor for local or remote KV sources.
- * Stored values stay hidden until a per-row audited reveal; only one field
- * value is shown at a time. The card grows to fill remaining page height;
- * the key list scrolls internally when paths overflow.
+ * Source sits in page chrome above the card. The card is a 50/50 Path/Value
+ * split with independent scroll. Stored values stay hidden until a per-row
+ * audited reveal; only one field value is shown at a time.
  */
 export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
   const queryClient = useQueryClient()
@@ -294,6 +327,8 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
     undefined
   )
   const [status, setStatus] = useState('')
+  const [pathFilter, setPathFilter] = useState('')
+  const [keyFilter, setKeyFilter] = useState('')
 
   const source: KvSourceOption = sources.find(
     (item) => item.id === sourceId
@@ -427,6 +462,10 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
   })
 
   const keys = listQuery.data?.keys ?? []
+  const visiblePaths = filterKvPaths(keys, pathFilter)
+  const visibleFieldRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => fieldRowVisibleInKeyFilter(row.key, keyFilter))
   const busy =
     saveMutation.isPending ||
     deleteMutation.isPending ||
@@ -483,324 +522,417 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
   }
 
   return (
-    <Card
-      className='flex min-h-0 flex-1 flex-col overflow-hidden'
-      data-testid='kv-store-card'
+    <div
+      className='flex min-h-0 flex-1 flex-col gap-3'
+      data-testid='kv-secrets-editor'
     >
-      <CardHeader className='shrink-0'>
-        <CardTitle className='flex items-center gap-2'>
-          <FileKey2 className='size-4' />
-          KV store
-        </CardTitle>
-        <CardDescription>
-          OpenBao-compatible secrets. Local encrypted store is the
-          out-of-the-box backend; a configured Vault or OpenBao source uses the
-          same editor. Reveal is per field and shows only one value at a time.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden'>
-        <div className='flex shrink-0 flex-wrap items-end gap-3'>
-          <div className='space-y-1'>
-            <Label htmlFor='kv-source'>Source</Label>
-            <select
-              id='kv-source'
-              className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
-              value={source.id}
-              onChange={(event) => {
-                setSourceId(event.target.value)
-                setPrefix('')
-                setSelectedPath('')
-                resetStoredReveal()
-                setCas(undefined)
-                setSelectedVersion(undefined)
-                setStatus('')
-              }}
-            >
-              {sources.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Badge variant='outline'>{source.kind}</Badge>
-          <Badge variant='outline'>No values in the key list</Badge>
-        </div>
-
-        <div className='flex shrink-0 flex-wrap items-center gap-2 text-sm'>
-          <Button
-            type='button'
-            variant='ghost'
-            size='sm'
-            onClick={() => {
+      <div
+        className='flex shrink-0 flex-wrap items-end gap-3'
+        data-testid='kv-source-chrome'
+      >
+        <div className='space-y-1'>
+          <Label htmlFor='kv-source'>Source</Label>
+          <select
+            id='kv-source'
+            className='h-9 rounded-md border border-input bg-transparent px-3 text-sm'
+            value={source.id}
+            onChange={(event) => {
+              setSourceId(event.target.value)
               setPrefix('')
               setSelectedPath('')
+              resetStoredReveal()
+              setCas(undefined)
+              setSelectedVersion(undefined)
+              setStatus('')
+              setPathFilter('')
+              setKeyFilter('')
             }}
           >
-            root
-          </Button>
-          {prefix
-            .split('/')
-            .filter(Boolean)
-            .map((segment, index, all) => {
-              const next = all.slice(0, index + 1).join('/')
-              return (
-                <Button
-                  key={next}
-                  type='button'
-                  variant='ghost'
-                  size='sm'
-                  onClick={() => {
-                    setPrefix(next)
-                    setSelectedPath('')
-                  }}
-                >
-                  / {segment}
-                </Button>
-              )
-            })}
+            {sources.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </div>
+      </div>
 
-        {listQuery.isError ? (
-          <Alert variant='destructive'>
-            <AlertTitle>KV list unavailable</AlertTitle>
-            <AlertDescription>{errorMessage(listQuery.error)}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <div
-          className='grid min-h-0 flex-1 content-start gap-2 overflow-auto'
-          data-testid='kv-store-key-list'
-        >
-          {keys.length === 0 && !listQuery.isLoading ? (
-            <p className='text-sm text-muted-foreground'>
-              No keys at this path. Create one below.
-            </p>
-          ) : null}
-          {keys.map((key) => {
-            const isFolder = key.endsWith('/')
-            return (
-              <Button
-                key={key}
-                type='button'
-                variant='outline'
-                className='justify-start'
-                onClick={() => {
-                  if (isFolder) {
-                    setPrefix(joinPath(prefix, key))
-                    setSelectedPath('')
-                    resetStoredReveal()
-                    return
-                  }
-                  setSelectedPath(joinPath(prefix, key))
-                  resetStoredReveal()
-                  setSelectedVersion(undefined)
-                  setCas(undefined)
-                  setRows([{ key: '', value: '' }])
-                  setStatus(
-                    'Path selected. Load field names, then reveal one value at a time.'
-                  )
-                }}
-              >
-                {isFolder ? (
-                  <Folder className='size-4' />
-                ) : (
-                  <FileKey2 className='size-4' />
-                )}
-                {key}
-              </Button>
-            )
-          })}
-        </div>
-
-        <div
-          className='grid max-h-[55%] shrink-0 gap-3 overflow-auto rounded-md border p-3'
-          data-testid='kv-store-field-editor'
-        >
-          <div className='space-y-1'>
-            <Label htmlFor='kv-create-path'>Path</Label>
-            <Input
-              id='kv-create-path'
-              value={selectedPath || createPath}
-              onChange={(event) => {
-                setSelectedPath('')
-                setCreatePath(event.target.value)
-                setCas(undefined)
-                setSelectedVersion(undefined)
-                resetStoredReveal()
-              }}
-              placeholder={prefix ? `${prefix}/app/db` : 'apps/db'}
-            />
-          </div>
-
-          {versions.length > 0 ? (
-            <div className='space-y-2'>
-              <p className='text-xs font-medium text-muted-foreground uppercase'>
-                Versions
-              </p>
-              <div className='flex flex-wrap gap-2'>
-                {versions.map((entry) => (
+      <Card
+        className='flex min-h-0 flex-1 flex-col overflow-hidden'
+        data-testid='kv-store-card'
+      >
+        <CardHeader className='shrink-0'>
+          <CardTitle className='flex items-center gap-2'>
+            <FileKey2 className='size-4' />
+            KV store
+          </CardTitle>
+        </CardHeader>
+        <CardContent className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+          <div className='grid min-h-0 flex-1 grid-cols-2 gap-4'>
+            <section
+              className='flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border'
+              data-testid='kv-path-pane'
+              aria-label='KV Path'
+            >
+              <div className='flex shrink-0 flex-col gap-2 border-b p-3'>
+                <h3 className='text-sm font-medium'>KV Path</h3>
+                <div className='space-y-1'>
+                  <Label htmlFor='kv-path-filter'>Filter paths</Label>
+                  <Input
+                    id='kv-path-filter'
+                    aria-label='Filter paths'
+                    value={pathFilter}
+                    onChange={(event) => setPathFilter(event.target.value)}
+                    placeholder='Search paths'
+                  />
+                </div>
+                <div className='flex flex-wrap items-center gap-2 text-sm'>
                   <Button
-                    key={entry.version}
                     type='button'
+                    variant='ghost'
                     size='sm'
-                    variant={
-                      selectedVersion === entry.version ||
-                      (selectedVersion === undefined &&
-                        entry.version === currentVersion)
-                        ? 'default'
-                        : 'outline'
-                    }
                     onClick={() => {
-                      setSelectedVersion(entry.version)
-                      setCas(entry.version)
-                      resetStoredReveal()
-                      setStatus(
-                        entry.deleted
-                          ? `Version ${entry.version} is soft-deleted. Undelete restores it.`
-                          : `Version ${entry.version} selected. Reveal one field at a time.`
-                      )
+                      setPrefix('')
+                      setSelectedPath('')
+                      setPathFilter('')
                     }}
                   >
-                    v{entry.version}
-                    {entry.deleted ? ' deleted' : ''}
+                    root
                   </Button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {rows.map((row, index) => {
-            const key = row.key.trim()
-            const isRevealed = Boolean(key) && key === revealedKey
-            const showRevealControls = metadataReady
-            return (
-              <div key={`field-${index}`} className='grid gap-2'>
-                <div className='grid gap-2 md:grid-cols-[1fr_1fr_auto]'>
-                  <Input
-                    aria-label={`Field ${index + 1} name`}
-                    value={row.key}
-                    onChange={(event) => {
-                      const next = [...rows]
-                      const nextKey = event.target.value
-                      next[index] = { ...row, key: nextKey }
-                      setRows(next)
-                      if (revealedKey && revealedKey === key) {
-                        setRevealedKey(nextKey.trim())
-                      }
-                    }}
-                    placeholder='field name'
-                  />
-                  <Input
-                    aria-label={`Field ${index + 1} value`}
-                    type={isRevealed || !metadataReady ? 'text' : 'password'}
-                    value={row.value}
-                    onChange={(event) => {
-                      const next = [...rows]
-                      next[index] = { ...row, value: event.target.value }
-                      setRows(next)
-                    }}
-                    placeholder={
-                      isRevealed
-                        ? 'secret value'
-                        : metadataReady
-                          ? 'hidden until this field is revealed'
-                          : 'secret value'
-                    }
-                  />
-                  {showRevealControls ? (
+                  {prefix
+                    .split('/')
+                    .filter(Boolean)
+                    .map((segment, index, all) => {
+                      const next = all.slice(0, index + 1).join('/')
+                      return (
+                        <Button
+                          key={next}
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => {
+                            setPrefix(next)
+                            setSelectedPath('')
+                            setPathFilter('')
+                          }}
+                        >
+                          / {segment}
+                        </Button>
+                      )
+                    })}
+                  {prefix ? (
                     <Button
                       type='button'
-                      variant='outline'
-                      size='icon'
-                      disabled={busy}
-                      aria-label={revealButtonLabel(
-                        row,
-                        index,
-                        revealedKey,
-                        fieldsLoaded
-                      )}
+                      variant='ghost'
+                      size='sm'
                       onClick={() => {
-                        if (isRevealed) {
-                          hideRevealedRow(index)
-                          return
-                        }
-                        openRevealPrompt(index)
+                        setPrefix(parentPrefix(prefix))
+                        setPathFilter('')
                       }}
                     >
-                      {isRevealed ? (
-                        <EyeOff className='size-4' />
-                      ) : (
-                        <Eye className='size-4' />
-                      )}
+                      Up
                     </Button>
                   ) : null}
                 </div>
               </div>
-            )
-          })}
 
-          <div className='flex flex-wrap gap-2'>
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              onClick={() => setRows([...rows, { key: '', value: '' }])}
+              {listQuery.isError ? (
+                <Alert variant='destructive' className='m-3 shrink-0'>
+                  <AlertTitle>KV list unavailable</AlertTitle>
+                  <AlertDescription>
+                    {errorMessage(listQuery.error)}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              <div
+                className='grid min-h-0 flex-1 content-start gap-2 overflow-auto p-3'
+                data-testid='kv-store-key-list'
+              >
+                {keys.length === 0 && !listQuery.isLoading ? (
+                  <p className='text-sm text-muted-foreground'>
+                    No keys at this path. Create one in KV Value.
+                  </p>
+                ) : null}
+                {keys.length > 0 && visiblePaths.length === 0 ? (
+                  <p className='text-sm text-muted-foreground'>
+                    No paths match this filter.
+                  </p>
+                ) : null}
+                {visiblePaths.map((key) => {
+                  const isFolder = key.endsWith('/')
+                  const fullPath = joinPath(prefix, key)
+                  return (
+                    <Button
+                      key={key}
+                      type='button'
+                      variant={
+                        fullPath === selectedPath ? 'default' : 'outline'
+                      }
+                      className='justify-start'
+                      onClick={() => {
+                        if (isFolder) {
+                          setPrefix(fullPath)
+                          setSelectedPath('')
+                          setPathFilter('')
+                          resetStoredReveal()
+                          return
+                        }
+                        setSelectedPath(fullPath)
+                        setKeyFilter('')
+                        resetStoredReveal()
+                        setSelectedVersion(undefined)
+                        setCas(undefined)
+                        setRows([{ key: '', value: '' }])
+                        setStatus(
+                          'Path selected. Load field names, then reveal one value at a time.'
+                        )
+                      }}
+                    >
+                      {isFolder ? (
+                        <Folder className='size-4' />
+                      ) : (
+                        <FileKey2 className='size-4' />
+                      )}
+                      {key}
+                    </Button>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section
+              className='flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border'
+              data-testid='kv-value-pane'
+              aria-label='KV Value'
             >
-              <Plus className='size-4' />
-              Add field
-            </Button>
-            <Button
-              type='button'
-              size='sm'
-              disabled={busy}
-              onClick={() => saveMutation.mutate()}
-            >
-              Save
-            </Button>
-            {metadataReady ? (
-              <Button
-                type='button'
-                variant='destructive'
-                size='sm'
-                disabled={busy}
-                onClick={() => deleteMutation.mutate()}
+              <div className='flex shrink-0 flex-col gap-2 border-b p-3'>
+                <h3 className='text-sm font-medium'>KV Value</h3>
+                <div className='space-y-1'>
+                  <Label htmlFor='kv-key-filter'>Search keys</Label>
+                  <Input
+                    id='kv-key-filter'
+                    aria-label='Search keys'
+                    value={keyFilter}
+                    onChange={(event) => setKeyFilter(event.target.value)}
+                    placeholder='Search keys'
+                  />
+                </div>
+                <div className='space-y-1'>
+                  <Label htmlFor='kv-create-path'>Path</Label>
+                  <Input
+                    id='kv-create-path'
+                    value={selectedPath || createPath}
+                    onChange={(event) => {
+                      setSelectedPath('')
+                      setCreatePath(event.target.value)
+                      setCas(undefined)
+                      setSelectedVersion(undefined)
+                      resetStoredReveal()
+                    }}
+                    placeholder={prefix ? `${prefix}/app/db` : 'apps/db'}
+                  />
+                </div>
+              </div>
+
+              <div
+                className='flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3'
+                data-testid='kv-store-field-editor'
               >
-                <Trash2 className='size-4' />
-                Soft delete
-              </Button>
-            ) : null}
-            {metadataReady ? (
-              <Button
-                type='button'
-                variant='outline'
-                size='sm'
-                disabled={busy}
-                onClick={() => undeleteMutation.mutate()}
-              >
-                Undelete
-              </Button>
-            ) : null}
-            {prefix ? (
-              <Button
-                type='button'
-                variant='ghost'
-                size='sm'
-                onClick={() => setPrefix(parentPrefix(prefix))}
-              >
-                Up
-              </Button>
-            ) : null}
+                {versions.length > 0 ? (
+                  <div className='space-y-2'>
+                    <p className='text-xs font-medium text-muted-foreground uppercase'>
+                      Versions
+                    </p>
+                    <div className='flex flex-wrap gap-2'>
+                      {versions.map((entry) => (
+                        <Button
+                          key={entry.version}
+                          type='button'
+                          size='sm'
+                          variant={
+                            selectedVersion === entry.version ||
+                            (selectedVersion === undefined &&
+                              entry.version === currentVersion)
+                              ? 'default'
+                              : 'outline'
+                          }
+                          onClick={() => {
+                            setSelectedVersion(entry.version)
+                            setCas(entry.version)
+                            resetStoredReveal()
+                            setStatus(
+                              entry.deleted
+                                ? `Version ${entry.version} is soft-deleted. Undelete restores it.`
+                                : `Version ${entry.version} selected. Reveal one field at a time.`
+                            )
+                          }}
+                        >
+                          v{entry.version}
+                          {entry.deleted ? ' deleted' : ''}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {rows.length > 0 && visibleFieldRows.length === 0 ? (
+                  <p className='text-sm text-muted-foreground'>
+                    No keys match this filter.
+                  </p>
+                ) : null}
+
+                <Table contained={false}>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Key</TableHead>
+                      <TableHead>Value</TableHead>
+                      <TableHead className='w-12'>
+                        <span className='sr-only'>Reveal</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleFieldRows.map(({ row, index }) => {
+                      const key = row.key.trim()
+                      const isRevealed = Boolean(key) && key === revealedKey
+                      const showRevealControls = metadataReady
+                      return (
+                        <TableRow key={`field-${index}`}>
+                          <TableCell className='whitespace-normal'>
+                            <Input
+                              aria-label={`Field ${index + 1} name`}
+                              value={row.key}
+                              onChange={(event) => {
+                                const next = [...rows]
+                                const nextKey = event.target.value
+                                next[index] = { ...row, key: nextKey }
+                                setRows(next)
+                                if (revealedKey && revealedKey === key) {
+                                  setRevealedKey(nextKey.trim())
+                                }
+                              }}
+                              placeholder='field name'
+                            />
+                          </TableCell>
+                          <TableCell className='whitespace-normal'>
+                            <Input
+                              aria-label={`Field ${index + 1} value`}
+                              type={
+                                isRevealed || !metadataReady
+                                  ? 'text'
+                                  : 'password'
+                              }
+                              value={row.value}
+                              onChange={(event) => {
+                                const next = [...rows]
+                                next[index] = {
+                                  ...row,
+                                  value: event.target.value,
+                                }
+                                setRows(next)
+                              }}
+                              placeholder={
+                                isRevealed
+                                  ? 'secret value'
+                                  : metadataReady
+                                    ? 'hidden until this field is revealed'
+                                    : 'secret value'
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {showRevealControls ? (
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='icon'
+                                disabled={busy}
+                                aria-label={revealButtonLabel(
+                                  row,
+                                  index,
+                                  revealedKey,
+                                  fieldsLoaded
+                                )}
+                                onClick={() => {
+                                  if (isRevealed) {
+                                    hideRevealedRow(index)
+                                    return
+                                  }
+                                  openRevealPrompt(index)
+                                }}
+                              >
+                                {isRevealed ? (
+                                  <EyeOff className='size-4' />
+                                ) : (
+                                  <Eye className='size-4' />
+                                )}
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className='flex shrink-0 flex-col gap-2 border-t p-3'>
+                <div className='flex flex-wrap gap-2'>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => setRows([...rows, { key: '', value: '' }])}
+                  >
+                    <Plus className='size-4' />
+                    Add field
+                  </Button>
+                  <Button
+                    type='button'
+                    size='sm'
+                    disabled={busy}
+                    onClick={() => saveMutation.mutate()}
+                  >
+                    Save
+                  </Button>
+                  {metadataReady ? (
+                    <Button
+                      type='button'
+                      variant='destructive'
+                      size='sm'
+                      disabled={busy}
+                      onClick={() => deleteMutation.mutate()}
+                    >
+                      <Trash2 className='size-4' />
+                      Soft delete
+                    </Button>
+                  ) : null}
+                  {metadataReady ? (
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      disabled={busy}
+                      onClick={() => undeleteMutation.mutate()}
+                    >
+                      Undelete
+                    </Button>
+                  ) : null}
+                </div>
+                {writeCas !== undefined ? (
+                  <p className='text-xs text-muted-foreground'>
+                    CAS version {writeCas}
+                    {currentVersion ? ` · current ${currentVersion}` : ''}
+                  </p>
+                ) : null}
+                {status ? <p className='text-sm'>{status}</p> : null}
+              </div>
+            </section>
           </div>
-          {writeCas !== undefined ? (
-            <p className='text-xs text-muted-foreground'>
-              CAS version {writeCas}
-              {currentVersion ? ` · current ${currentVersion}` : ''}
-            </p>
-          ) : null}
-          {status ? <p className='text-sm'>{status}</p> : null}
-        </div>
-      </CardContent>
+        </CardContent>
+      </Card>
+
       <Dialog
         open={revealPrompt !== null}
         onOpenChange={(open) => {
@@ -882,6 +1014,6 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   )
 }

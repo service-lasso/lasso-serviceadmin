@@ -257,7 +257,7 @@ test.describe('Secrets Broker browser coverage', () => {
     await expect(page.getByText('KV store')).toBeVisible()
     await expectCatalogCopyAbsent(page)
     await expect(page.getByRole('button', { name: 'db' })).toBeVisible()
-    await expect(page.getByText(/No values in the key list/i)).toBeVisible()
+    await expect(page.getByText('No values in the key list')).toHaveCount(0)
     await expect(page.getByText(kvSentinelValue)).toHaveCount(0)
     await expectNoSecretMaterial(page)
 
