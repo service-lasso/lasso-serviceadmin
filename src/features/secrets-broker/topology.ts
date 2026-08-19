@@ -298,15 +298,38 @@ export function buildSecretsBrokerTopology(
   return { rows, nodes: Array.from(nodes.values()), edges }
 }
 
-const nodePositionByKind: Record<
-  SecretsBrokerTopologyNodeKind,
-  { x: number; y: number }
-> = {
-  broker: { x: -580, y: 0 },
-  provider: { x: -300, y: -120 },
-  service: { x: -300, y: 160 },
-  variable: { x: 20, y: 0 },
-  ref: { x: 340, y: 0 },
+/**
+ * Rank order for Mapping graph layout. Top-to-bottom keeps populated ranks
+ * as rows so siblings can spread across pane width instead of stacking in
+ * a single X column per kind.
+ */
+export const TOPOLOGY_LAYOUT_RANK_ORDER: readonly SecretsBrokerTopologyNodeKind[] =
+  ['broker', 'provider', 'service', 'variable', 'ref']
+
+/** Fallback pane size used before ResizeObserver reports a real box. */
+export const DEFAULT_TOPOLOGY_LAYOUT_BOUNDS = {
+  width: 1280,
+  height: 720,
+} as const
+
+export type TopologyGraphLayoutBounds = {
+  width: number
+  height: number
+}
+
+export type TopologyGraphLayoutOptions = {
+  bounds?: TopologyGraphLayoutBounds
+  nodeWidth?: number
+  nodeHeight?: number
+  rankdir?: 'TB' | 'LR'
+  minRanksep?: number
+  minNodesep?: number
+  padding?: number
+}
+
+export type SecretsBrokerGraphNodeData = {
+  label: string
+  kind: SecretsBrokerTopologyNodeKind
 }
 
 const nodeKindColor: Record<SecretsBrokerTopologyNodeKind, string> = {
@@ -326,34 +349,258 @@ const edgeStatusColor: Record<SecretsBrokerTopologyEdge['status'], string> = {
   unknown: '#64748b',
 }
 
-export function toReactFlowSecretsBrokerTopology(
-  topology: SecretsBrokerTopology
+const DEFAULT_NODE_WIDTH = 190
+const DEFAULT_NODE_HEIGHT = 72
+const DEFAULT_MIN_RANKSEP = 96
+const DEFAULT_MIN_NODESEP = 48
+const DEFAULT_LAYOUT_PADDING = 48
+const MIN_PANE_SIZE = 8
+
+/**
+ * Treat unmeasured or collapsed panes as the default operator canvas so
+ * first paint still spreads horizontally instead of stacking a DAG column.
+ */
+function resolvedLayoutBounds(
+  bounds: TopologyGraphLayoutBounds | undefined
+): TopologyGraphLayoutBounds {
+  const width = bounds?.width ?? 0
+  const height = bounds?.height ?? 0
+  return {
+    width:
+      width >= MIN_PANE_SIZE ? width : DEFAULT_TOPOLOGY_LAYOUT_BOUNDS.width,
+    height:
+      height >= MIN_PANE_SIZE ? height : DEFAULT_TOPOLOGY_LAYOUT_BOUNDS.height,
+  }
+}
+
+function topologyRankGroups(
+  nodes: readonly SecretsBrokerTopologyNode[]
+): SecretsBrokerTopologyNode[][] {
+  return TOPOLOGY_LAYOUT_RANK_ORDER.map((kind) =>
+    nodes.filter((node) => node.kind === kind)
+  ).filter((rankNodes) => rankNodes.length > 0)
+}
+
+function maxColumnsForWidth(
+  availableWidth: number,
+  nodeSize: number,
+  minNodesep: number,
+  nodeCount: number
 ) {
-  const kindIndexes = new Map<SecretsBrokerTopologyNodeKind, number>()
+  const packedSlot = nodeSize + minNodesep
+  const fitted = Math.max(
+    1,
+    Math.floor((availableWidth + minNodesep) / packedSlot)
+  )
+  return Math.min(nodeCount, fitted)
+}
 
-  const nodes: Node[] = topology.nodes.map((node) => {
-    const index = kindIndexes.get(node.kind) ?? 0
-    kindIndexes.set(node.kind, index + 1)
-    const base = nodePositionByKind[node.kind]
+/**
+ * Place one rank on a width-aware grid. Column count is how many nodes fit
+ * in `availableWidth`, so a populated rank spreads across the pane instead
+ * of sharing a single X.
+ */
+function placeRankOnGrid(options: {
+  rankNodes: readonly SecretsBrokerTopologyNode[]
+  originX: number
+  originY: number
+  availableWidth: number
+  nodeWidth: number
+  nodeHeight: number
+  minNodesep: number
+  rowStride: number
+  positions: Map<string, { x: number; y: number }>
+}): { rowCount: number; height: number } {
+  const {
+    rankNodes,
+    originX,
+    originY,
+    availableWidth,
+    nodeWidth,
+    nodeHeight,
+    minNodesep,
+    rowStride,
+    positions,
+  } = options
 
-    return {
-      id: node.id,
-      position: { x: base.x, y: base.y + index * 110 },
-      data: {
-        label: `${node.label}\n${node.kind}`,
-      },
-      style: {
-        border: `2px solid ${nodeKindColor[node.kind]}`,
-        borderRadius: 8,
-        background: '#ffffff',
-        color: '#0f172a',
-        fontSize: 12,
-        minWidth: 150,
-        maxWidth: 230,
-        whiteSpace: 'pre-line',
-      },
+  if (rankNodes.length === 0) {
+    return { rowCount: 0, height: 0 }
+  }
+
+  const columnCount = maxColumnsForWidth(
+    availableWidth,
+    nodeWidth,
+    minNodesep,
+    rankNodes.length
+  )
+  const rowCount = Math.ceil(rankNodes.length / columnCount)
+  const startX =
+    columnCount === 1 ? originX + (availableWidth - nodeWidth) / 2 : originX
+  const columnStride =
+    columnCount === 1 ? 0 : (availableWidth - nodeWidth) / (columnCount - 1)
+
+  rankNodes.forEach((node, index) => {
+    const column = index % columnCount
+    const row = Math.floor(index / columnCount)
+    positions.set(node.id, {
+      x: startX + column * columnStride,
+      y: originY + row * rowStride,
+    })
+  })
+
+  return {
+    rowCount,
+    height: rowCount * nodeHeight + Math.max(rowCount - 1, 0) * minNodesep,
+  }
+}
+
+/**
+ * Rank-aware Mapping graph positions. Default rankdir is TB so siblings in
+ * a rank use container width; LR keeps kinds as columns and spreads them
+ * across that same width.
+ */
+export function layoutSecretsBrokerTopologyPositions(
+  nodes: readonly SecretsBrokerTopologyNode[],
+  options: TopologyGraphLayoutOptions = {}
+): Map<string, { x: number; y: number }> {
+  const nodeWidth = options.nodeWidth ?? DEFAULT_NODE_WIDTH
+  const nodeHeight = options.nodeHeight ?? DEFAULT_NODE_HEIGHT
+  const minRanksep = options.minRanksep ?? DEFAULT_MIN_RANKSEP
+  const minNodesep = options.minNodesep ?? DEFAULT_MIN_NODESEP
+  const padding = options.padding ?? DEFAULT_LAYOUT_PADDING
+  const rankdir = options.rankdir ?? 'TB'
+  const bounds = resolvedLayoutBounds(options.bounds)
+  const innerWidth = Math.max(bounds.width - padding * 2, nodeWidth)
+  const innerHeight = Math.max(bounds.height - padding * 2, nodeHeight)
+  const ranks = topologyRankGroups(nodes)
+  const positions = new Map<string, { x: number; y: number }>()
+
+  if (ranks.length === 0) {
+    return positions
+  }
+
+  if (rankdir === 'LR') {
+    const ranksep =
+      ranks.length > 1
+        ? Math.max(
+            minRanksep,
+            (innerWidth - ranks.length * nodeWidth) / (ranks.length - 1)
+          )
+        : minRanksep
+
+    ranks.forEach((rankNodes, rankIndex) => {
+      const originX = padding + rankIndex * (nodeWidth + ranksep)
+      rankNodes.forEach((node, index) => {
+        const packedHeight =
+          rankNodes.length * nodeHeight +
+          Math.max(rankNodes.length - 1, 0) * minNodesep
+        const columnHeight = Math.max(packedHeight, innerHeight)
+        const startY =
+          rankNodes.length === 1
+            ? padding + (columnHeight - nodeHeight) / 2
+            : padding
+        const rowStride =
+          rankNodes.length === 1
+            ? 0
+            : (columnHeight - nodeHeight) / (rankNodes.length - 1)
+        positions.set(node.id, {
+          x: originX,
+          y: startY + index * rowStride,
+        })
+      })
+    })
+
+    return positions
+  }
+
+  const rowStride = nodeHeight + minNodesep
+  const packedRankHeights = ranks.map((rankNodes) => {
+    const columnCount = maxColumnsForWidth(
+      innerWidth,
+      nodeWidth,
+      minNodesep,
+      rankNodes.length
+    )
+    const rowCount = Math.ceil(rankNodes.length / columnCount)
+    return rowCount * nodeHeight + Math.max(rowCount - 1, 0) * minNodesep
+  })
+  const packedTotalHeight =
+    packedRankHeights.reduce((total, height) => total + height, 0) +
+    Math.max(ranks.length - 1, 0) * minRanksep
+  const extraHeight = Math.max(0, innerHeight - packedTotalHeight)
+  const ranksep =
+    ranks.length > 1
+      ? minRanksep + extraHeight / (ranks.length - 1)
+      : minRanksep
+
+  let cursorY = padding
+  ranks.forEach((rankNodes, rankIndex) => {
+    const placed = placeRankOnGrid({
+      rankNodes,
+      originX: padding,
+      originY: cursorY,
+      availableWidth: innerWidth,
+      nodeWidth,
+      nodeHeight,
+      minNodesep,
+      rowStride,
+      positions,
+    })
+    cursorY += placed.height
+    if (rankIndex < ranks.length - 1) {
+      cursorY += ranksep
     }
   })
+
+  return positions
+}
+
+function graphNodePosition(
+  positions: Map<string, { x: number; y: number }>,
+  nodeId: string
+) {
+  const position = positions.get(nodeId)
+  if (position) {
+    return position
+  }
+  return { x: 0, y: 0 }
+}
+
+/**
+ * Convert topology nodes/edges into React Flow elements whose positions
+ * fill the observed pane instead of a fixed skinny DAG column.
+ */
+export function toReactFlowSecretsBrokerTopology(
+  topology: SecretsBrokerTopology,
+  options: TopologyGraphLayoutOptions = {}
+) {
+  const positions = layoutSecretsBrokerTopologyPositions(
+    topology.nodes,
+    options
+  )
+
+  const nodes: Node<SecretsBrokerGraphNodeData>[] = topology.nodes.map(
+    (node) => {
+      return {
+        id: node.id,
+        position: graphNodePosition(positions, node.id),
+        data: {
+          label: `${node.label}\n${node.kind}`,
+          kind: node.kind,
+        },
+        style: {
+          border: `2px solid ${nodeKindColor[node.kind]}`,
+          borderRadius: 8,
+          background: '#ffffff',
+          color: '#0f172a',
+          fontSize: 12,
+          minWidth: 150,
+          maxWidth: 230,
+          whiteSpace: 'pre-line',
+        },
+      }
+    }
+  )
 
   const edges: Edge[] = topology.edges.map((edge) => ({
     id: edge.id,
