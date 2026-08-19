@@ -104,10 +104,7 @@ async function installKvRoutes(page: Page) {
       return
     }
 
-    if (
-      url.includes('/kv/data/db') &&
-      (method === 'GET' || method === '')
-    ) {
+    if (url.includes('/kv/data/db') && (method === 'GET' || method === '')) {
       const reason = request.headers()['x-secretsbroker-audit-reason'] ?? ''
       dataGets.push({ url, reason })
       await route.fulfill(json(secretBody()))
@@ -122,6 +119,107 @@ async function installKvRoutes(page: Page) {
   })
 
   return { dataGets }
+}
+
+/**
+ * Mutable KV mock so add-field-then-save can assert PATCH merge without a live
+ * Broker. Field names after save come from editor state, not list/metadata.
+ */
+async function installMutableKvRoutes(page: Page) {
+  const stored: Record<string, string> = {
+    username: usernameValue,
+    password: sentinelPassword,
+  }
+  let version = 1
+  const patches: string[] = []
+
+  await page.route('**/api/services/**/proxy/v1/kv/**', async (route) => {
+    const request = route.request()
+    const url = request.url()
+    const method = request.method()
+
+    if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+      await route.fulfill(json({ data: { keys: ['apps/', 'db'] } }))
+      return
+    }
+
+    if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+      const versions: Record<
+        string,
+        {
+          created_time: string
+          deletion_time: string
+          destroyed: boolean
+        }
+      > = {
+        '1': {
+          created_time: '2026-08-18T00:00:00Z',
+          deletion_time: '',
+          destroyed: false,
+        },
+      }
+      if (version >= 2) {
+        versions['2'] = {
+          created_time: '2026-08-18T00:00:02Z',
+          deletion_time: '',
+          destroyed: false,
+        }
+      }
+      await route.fulfill(
+        json({
+          data: {
+            current_version: version,
+            created_time: '2026-08-18T00:00:00Z',
+            updated_time: '2026-08-18T00:00:00Z',
+            versions,
+          },
+        })
+      )
+      return
+    }
+
+    if (url.includes('/kv/data/db') && method === 'PATCH') {
+      const body = request.postData() ?? ''
+      patches.push(body)
+      version += 1
+      await route.fulfill(
+        json({
+          data: {
+            version,
+            created_time: '2026-08-18T00:00:02Z',
+            deletion_time: '',
+            destroyed: false,
+          },
+        })
+      )
+      return
+    }
+
+    if (url.includes('/kv/data/db') && (method === 'GET' || method === '')) {
+      await route.fulfill(
+        json({
+          data: {
+            data: stored,
+            metadata: {
+              version,
+              created_time: '2026-08-18T00:00:00Z',
+              deletion_time: '',
+              destroyed: false,
+            },
+          },
+        })
+      )
+      return
+    }
+
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ errors: [`unmocked KV URL ${url}`] }),
+    })
+  })
+
+  return { patches }
 }
 
 async function confirmAuditedReveal(page: Page, reason: string) {
@@ -243,6 +341,35 @@ test.describe('KV-only Secrets page', () => {
     ).toBeVisible()
     expect(dataGets).toEqual([])
     await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('keeps a newly added field name visible after save', async ({
+    page,
+  }) => {
+    const { patches } = await installMutableKvRoutes(page)
+    await page.goto('/secrets-broker/secrets')
+    await page.getByRole('button', { name: 'db' }).click()
+    await page.getByRole('button', { name: 'Load fields' }).click()
+    await confirmAuditedReveal(page, 'incident review for db credentials')
+    await expect(page.getByLabel('Field 1 name')).toHaveValue('username')
+    await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
+
+    await page.getByRole('button', { name: 'Add field' }).click()
+    await page.getByLabel('Field 3 name').fill('kv-test-field')
+    await page.getByLabel('Field 3 value').fill(sentinelPassword)
+    await page.getByRole('button', { name: 'Save' }).click()
+
+    await expect(page.getByText('Saved version 2.')).toBeVisible()
+    await expect(page.getByLabel('Field 1 name')).toHaveValue('username')
+    await expect(page.getByLabel('Field 2 name')).toHaveValue('password')
+    await expect(page.getByLabel('Field 3 name')).toHaveValue('kv-test-field')
+    await expect(page.getByLabel('Field 3 value')).toHaveValue('')
+    await expect(page.getByText(sentinelPassword)).toHaveCount(0)
+    expect(patches).toHaveLength(1)
+    expect(patches[0]).toContain('kv-test-field')
+    expect(patches[0]).not.toContain('username')
+    await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })
 })

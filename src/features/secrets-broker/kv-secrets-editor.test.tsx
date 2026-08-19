@@ -156,7 +156,10 @@ describe('KV secrets editor', () => {
       await screen.findByText('Enter an audit reason before revealing.')
     ).toBeVisible()
 
-    await user.type(screen.getByLabelText('Audit reason'), 'password=SuperSecret1234')
+    await user.type(
+      screen.getByLabelText('Audit reason'),
+      'password=SuperSecret1234'
+    )
     await user.click(screen.getByLabelText('Confirm this controlled reveal'))
     await user.click(screen.getByRole('button', { name: 'Request reveal' }))
     expect(
@@ -202,10 +205,108 @@ describe('KV secrets editor', () => {
 
     renderEditor()
     await user.click(await screen.findByRole('button', { name: 'db' }))
-    expect(await screen.findByRole('button', { name: 'v2 deleted' })).toBeVisible()
+    expect(
+      await screen.findByRole('button', { name: 'v2 deleted' })
+    ).toBeVisible()
     expect(screen.getByRole('button', { name: 'v1' })).toBeVisible()
     expect(
       screen.queryByDisplayValue('kv-sentinel-alpha')
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps a newly added field name visible after save', async () => {
+    const user = userEvent.setup()
+    const stored: Record<string, string> = {
+      username: 'db-user',
+      password: 'kv-sentinel-alpha',
+    }
+    let version = 1
+    const patchedBodies: string[] = []
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: ['db'] } })
+      }
+      if (url.includes('/kv/metadata/db') && !url.includes('list=true')) {
+        return jsonResponse({
+          data: {
+            current_version: version,
+            created_time: '2026-08-18T00:00:00Z',
+            updated_time: '2026-08-18T00:00:00Z',
+            versions: {
+              '1': {
+                created_time: '2026-08-18T00:00:00Z',
+                deletion_time: '',
+                destroyed: false,
+              },
+              ...(version >= 2
+                ? {
+                    '2': {
+                      created_time: '2026-08-18T00:00:02Z',
+                      deletion_time: '',
+                      destroyed: false,
+                    },
+                  }
+                : {}),
+            },
+          },
+        })
+      }
+      if (url.includes('/kv/data/db') && method === 'PATCH') {
+        const body = typeof init?.body === 'string' ? init.body : ''
+        patchedBodies.push(body)
+        version += 1
+        return jsonResponse({
+          data: {
+            version,
+            created_time: '2026-08-18T00:00:02Z',
+            deletion_time: '',
+            destroyed: false,
+          },
+        })
+      }
+      if (
+        url.includes('/kv/data/db') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse({
+          data: {
+            data: stored,
+            metadata: {
+              version,
+              created_time: '2026-08-18T00:00:00Z',
+              deletion_time: '',
+              destroyed: false,
+            },
+          },
+        })
+      }
+      throw new Error(`Unexpected URL: ${url} ${method}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'db' }))
+    await user.click(screen.getByRole('button', { name: 'Load fields' }))
+    await confirmAuditedReveal(user, 'incident review for db credentials')
+    expect(await screen.findByDisplayValue('username')).toBeVisible()
+    expect(screen.getByDisplayValue('password')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Add field' }))
+    await user.type(screen.getByLabelText('Field 3 name'), 'kv-test-field')
+    await user.type(screen.getByLabelText('Field 3 value'), 'kv-sentinel-alpha')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Saved version 2.')).toBeVisible()
+    expect(screen.getByDisplayValue('username')).toBeVisible()
+    expect(screen.getByDisplayValue('password')).toBeVisible()
+    expect(screen.getByDisplayValue('kv-test-field')).toBeVisible()
+    expect(
+      screen.queryByDisplayValue('kv-sentinel-alpha')
+    ).not.toBeInTheDocument()
+    expect(patchedBodies).toHaveLength(1)
+    expect(patchedBodies[0]).toContain('kv-test-field')
+    expect(patchedBodies[0]).not.toContain('username')
+    expect(screen.queryByDisplayValue('value')).not.toBeInTheDocument()
   })
 })
