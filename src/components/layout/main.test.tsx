@@ -1,10 +1,6 @@
 import { render } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Main } from './main'
-
-vi.mock('@/components/page-toolbar', () => ({
-  PageToolbar: () => null,
-}))
 
 describe('Main layout container', () => {
   it('uses the available workspace width by default', () => {
@@ -25,5 +21,11 @@ describe('Main layout container', () => {
     expect(main?.className).toContain('@7xl/content:mx-auto')
     expect(main?.className).toContain('@7xl/content:w-full')
     expect(main?.className).toContain('@7xl/content:max-w-7xl')
+  })
+
+  it('does not render a second page toolbar in the body', () => {
+    const { container } = render(<Main>Content</Main>)
+
+    expect(container.querySelector('[data-testid="page-toolbar"]')).toBeNull()
   })
 })

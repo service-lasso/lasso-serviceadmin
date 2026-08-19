@@ -7,23 +7,25 @@ type LifecycleActionKind = Extract<
 >
 
 /**
- * Filled lifecycle colors: start is green, stop and restart are red.
+ * Outline lifecycle chrome: colour the icon only.
+ * Start is emerald; stop and restart are red. Disabled uses a muted icon,
+ * not a faded filled button.
  */
-export function getLifecycleActionFillClass(kind: LifecycleActionKind) {
+export function getLifecycleActionIconClass(kind: LifecycleActionKind) {
   if (kind === 'start') {
-    return 'border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white focus-visible:border-emerald-700 focus-visible:ring-emerald-600/30 disabled:border-emerald-600/40 disabled:bg-emerald-600/40 disabled:text-white'
+    return 'text-emerald-600 hover:text-emerald-700 disabled:text-muted-foreground'
   }
 
-  return 'border-red-600 bg-red-600 text-white hover:border-red-700 hover:bg-red-700 hover:text-white focus-visible:border-red-700 focus-visible:ring-red-600/30 disabled:border-red-600/40 disabled:bg-red-600/40 disabled:text-white'
-}
-
-export function getLifecycleActionHoverClass(kind: LifecycleActionKind) {
-  return getLifecycleActionFillClass(kind)
+  return 'text-red-600 hover:text-red-700 disabled:text-muted-foreground'
 }
 
 export function lifecycleActionButtonClass(
   kind: LifecycleActionKind,
   className?: string
 ) {
-  return cn(getLifecycleActionFillClass(kind), className)
+  return cn(
+    'disabled:opacity-100 disabled:bg-background',
+    getLifecycleActionIconClass(kind),
+    className
+  )
 }

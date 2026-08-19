@@ -99,6 +99,7 @@ import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { HeaderActions } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -1595,7 +1596,7 @@ function ServiceLifecycleHeaderControls({
                 <Button
                   type='button'
                   size='icon'
-                  variant='default'
+                  variant='outline'
                   className={lifecycleActionButtonClass(
                     action.kind,
                     'size-10 shrink-0'
@@ -1796,7 +1797,7 @@ function ServiceActionButton({
     return (
       <Button
         key={key}
-        variant='default'
+        variant='outline'
         size='sm'
         disabled={actionMutation.isPending || !enabled}
         className={lifecycleActionButtonClass(lifecycleAction)}
@@ -1904,11 +1905,11 @@ export function ServiceDetail({
     <>
       <Header fixed>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { Link, useRouterState, type LinkProps } from '@tanstack/react-router'
-import { Compass, type LucideIcon } from 'lucide-react'
+import { BookOpenText, Compass, type LucideIcon } from 'lucide-react'
 import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -55,8 +55,26 @@ type PageToolbarContextValue = {
 
 const PageToolbarContext = createContext<PageToolbarContextValue | null>(null)
 
+type HeaderActionsProps = {
+  children: ReactNode
+  className?: string
+}
+
 /**
- * Provides the compact page Action list / Quick Nav slot rendered by Main.
+ * Header right cluster. Page actions and the Links menu sit immediately
+ * left of ThemeSwitch (and the rest of the trailing chrome).
+ */
+export function HeaderActions({ children, className }: HeaderActionsProps) {
+  return (
+    <div className={cn('ms-auto flex items-center space-x-4', className)}>
+      <PageToolbar />
+      {children}
+    </div>
+  )
+}
+
+/**
+ * Provides the compact page Action list / Quick Nav / Links slot.
  */
 export function PageToolbarProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<PageToolbarConfig>({})
@@ -72,7 +90,7 @@ export function PageToolbarProvider({ children }: { children: ReactNode }) {
 
 /**
  * Registers icon actions and page Quick Nav items for the current screen.
- * Help-center links are merged automatically from the active route.
+ * Help-center links are rendered separately as a Links menu.
  */
 export function usePageToolbar(config: PageToolbarConfig) {
   const context = useContext(PageToolbarContext)
@@ -120,8 +138,8 @@ function actionButtonClass(tone: PageActionTone | undefined) {
 }
 
 /**
- * Compact Action list (icons) plus Quick Nav. Help links join Quick Nav.
- * Quick Nav is inline from `md` and collapses to a menu on small viewports.
+ * Compact Action list, page Quick Nav, and a Links dropdown for help docs.
+ * Rendered in the Header right cluster, immediately left of ThemeSwitch.
  */
 export function PageToolbar() {
   const context = useContext(PageToolbarContext)
@@ -130,16 +148,9 @@ export function PageToolbar() {
   })
   const helpLinks = getContextualHelpLinks(pathname)
   const actions = context?.config.actions ?? []
-  const pageNav = context?.config.quickNav ?? []
-  const helpNav: PageQuickNavItem[] = helpLinks.map((link) => ({
-    id: `help:${link.doc}:${link.label}`,
-    label: link.label,
-    to: '/help-center',
-    search: { doc: link.doc },
-  }))
-  const quickNav = [...pageNav, ...helpNav]
+  const quickNav = context?.config.quickNav ?? []
 
-  if (!actions.length && !quickNav.length) {
+  if (!actions.length && !quickNav.length && !helpLinks.length) {
     return null
   }
 
@@ -157,7 +168,7 @@ export function PageToolbar() {
                 key={action.id}
                 type='button'
                 size='icon'
-                variant={action.tone ? 'default' : 'outline'}
+                variant='outline'
                 className={actionButtonClass(action.tone)}
                 aria-label={action.label}
                 title={action.label}
@@ -184,15 +195,7 @@ export function PageToolbar() {
           >
             {quickNav.map((item) => (
               <Button key={item.id} variant='ghost' size='sm' asChild>
-                <Link
-                  to={item.to}
-                  search={item.search}
-                  aria-label={
-                    item.to === '/help-center'
-                      ? `Open Help Center: ${item.label}`
-                      : item.label
-                  }
-                >
+                <Link to={item.to} search={item.search} aria-label={item.label}>
                   {item.label}
                 </Link>
               </Button>
@@ -220,11 +223,7 @@ export function PageToolbar() {
                       to={item.to}
                       search={item.search}
                       className={cn('cursor-pointer')}
-                      aria-label={
-                        item.to === '/help-center'
-                          ? `Open Help Center: ${item.label}`
-                          : item.label
-                      }
+                      aria-label={item.label}
                     >
                       {item.label}
                     </Link>
@@ -234,6 +233,38 @@ export function PageToolbar() {
             </DropdownMenu>
           </div>
         </>
+      ) : null}
+
+      {helpLinks.length ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              aria-label='Links'
+            >
+              <BookOpenText className='size-3.5' />
+              Links
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='end'>
+            <DropdownMenuLabel>Links</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {helpLinks.map((link) => (
+              <DropdownMenuItem key={`${link.doc}:${link.label}`} asChild>
+                <Link
+                  to='/help-center'
+                  search={{ doc: link.doc }}
+                  className={cn('cursor-pointer')}
+                  aria-label={`Open Help Center: ${link.label}`}
+                >
+                  {link.label}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
     </div>
   )

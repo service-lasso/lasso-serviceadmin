@@ -405,19 +405,40 @@ describe('app screens', () => {
   ])(
     'adds contextual Help Center doc links on %s',
     async (path, accessibleName, href) => {
+      const user = userEvent.setup()
       await renderRoute(path)
 
-      expect(
-        screen.getByRole('navigation', {
-          name: /^Quick Nav$/i,
-        })
-      ).toBeVisible()
+      const toolbar = screen.getByTestId('page-toolbar')
+      expect(toolbar.closest('header')).not.toBeNull()
+      expect(toolbar.closest('main')).toBeNull()
+
+      await user.click(screen.getByRole('button', { name: /^Links$/i }))
 
       expect(
-        screen.getByRole('link', { name: accessibleName })
+        screen.getByRole('menuitem', { name: accessibleName })
       ).toHaveAttribute('href', href)
     }
   )
+
+  it('places services page actions in the header left of the theme switch', async () => {
+    await renderRoute('/services')
+
+    const toolbar = screen.getByTestId('page-toolbar')
+    const themeSwitch = screen.getByRole('button', { name: /toggle theme/i })
+    const header = toolbar.closest('header')
+
+    expect(header).not.toBeNull()
+    expect(toolbar.closest('main')).toBeNull()
+    expect(header?.contains(themeSwitch)).toBe(true)
+    expect(
+      toolbar.compareDocumentPosition(themeSwitch) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Start all$/ })).toBeVisible()
+    expect(
+      screen.queryByRole('navigation', { name: /^Quick Nav$/i })
+    ).not.toBeInTheDocument()
+  })
 
   it.each(headerIdentityRoutes)(
     'moves $identity page identity into the header without a duplicated body heading',

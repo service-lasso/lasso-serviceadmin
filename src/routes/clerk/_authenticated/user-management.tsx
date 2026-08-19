@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { LearnMore } from '@/components/learn-more'
+import { HeaderActions } from '@/components/page-toolbar'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { UsersDialogs } from '@/features/users/components/users-dialogs'
@@ -48,10 +49,10 @@ function UserManagement() {
     <UsersProvider>
       <Header fixed>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <UserButton />
-        </div>
+        </HeaderActions>
       </Header>
 
       <Main>
