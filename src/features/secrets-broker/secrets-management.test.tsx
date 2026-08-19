@@ -81,6 +81,10 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
 
     await expectActivePageIdentity('Secrets')
     expect(await screen.findByText('KV store')).toBeVisible()
+    const main = screen.getByRole('main')
+    expect(main).toHaveAttribute('data-layout', 'fixed')
+    expect(main).toHaveClass('min-h-0')
+    expect(screen.getByTestId('kv-store-card')).toHaveClass('flex-1')
     expect(
       screen.queryByText(/Secrets Broker API unavailable/i)
     ).not.toBeInTheDocument()

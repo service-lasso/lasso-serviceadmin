@@ -309,4 +309,31 @@ describe('KV secrets editor', () => {
     expect(patchedBodies[0]).not.toContain('username')
     expect(screen.queryByDisplayValue('value')).not.toBeInTheDocument()
   })
+
+  it('fills remaining height and scrolls the key list internally', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/kv/metadata/') && url.includes('list=true')) {
+        return jsonResponse({ data: { keys: [] } })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderEditor()
+    expect(await screen.findByText('KV store')).toBeVisible()
+
+    const card = screen.getByTestId('kv-store-card')
+    expect(card).toHaveClass('flex-1')
+    expect(card).toHaveClass('min-h-0')
+    expect(card).toHaveClass('overflow-hidden')
+
+    const keyList = screen.getByTestId('kv-store-key-list')
+    expect(keyList).toHaveClass('flex-1')
+    expect(keyList).toHaveClass('min-h-0')
+    expect(keyList).toHaveClass('overflow-auto')
+
+    const fieldEditor = screen.getByTestId('kv-store-field-editor')
+    expect(fieldEditor).toHaveClass('overflow-auto')
+    expect(fieldEditor).toHaveClass('max-h-[55%]')
+  })
 })

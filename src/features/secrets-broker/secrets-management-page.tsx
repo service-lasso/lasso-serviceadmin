@@ -11,7 +11,9 @@ import { KvSecretsEditor } from '@/features/secrets-broker/kv-secrets-editor'
 
 /**
  * Secrets is the KV editor only. The old management catalog lived on this
- * route beside KV and is removed as redundant.
+ * route beside KV and is removed as redundant. `Main fixed` makes the KV
+ * card fill remaining height under the header instead of leaving empty page
+ * space below a short card.
  */
 export function SecretsManagementPage() {
   usePageMetadata({
@@ -35,7 +37,7 @@ export function SecretsManagementPage() {
         </div>
       </Header>
 
-      <Main id='content' className='space-y-6'>
+      <Main id='content' fixed className='min-h-0 gap-4'>
         <KvSecretsEditor overview={liveOverview} />
       </Main>
     </>
