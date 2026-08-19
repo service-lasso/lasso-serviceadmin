@@ -66,12 +66,19 @@ type HeaderActionsProps = {
  */
 export function HeaderActions({ children, className }: HeaderActionsProps) {
   return (
-    <div className={cn('ms-auto flex items-center space-x-4', className)}>
+    <div
+      className={cn(
+        'flex flex-nowrap items-center justify-end gap-4',
+        className
+      )}
+    >
       <PageToolbar />
       {children}
     </div>
   )
 }
+
+HeaderActions.displayName = 'HeaderActions'
 
 /**
  * Provides the compact page Action list / Quick Nav / Links slot.
@@ -156,7 +163,7 @@ export function PageToolbar() {
 
   return (
     <div
-      className='flex flex-wrap items-center justify-end gap-2'
+      className='flex flex-nowrap items-center justify-end gap-2'
       data-testid='page-toolbar'
     >
       {actions.length ? (
