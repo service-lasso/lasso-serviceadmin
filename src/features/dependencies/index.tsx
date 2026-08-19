@@ -51,7 +51,7 @@ import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { usePageToolbar } from '@/components/page-toolbar'
+import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search as GlobalSearch } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -478,11 +478,11 @@ export function Dependencies() {
     <>
       <Header fixed>
         <GlobalSearch />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>

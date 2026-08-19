@@ -139,7 +139,7 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         <Button
           type='button'
           size='icon'
-          variant='default'
+          variant='outline'
           className={lifecycleActionButtonClass('start', 'size-8')}
           aria-label={`Start ${service.name}`}
           title={`Start ${service.name}`}
@@ -156,7 +156,7 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         <Button
           type='button'
           size='icon'
-          variant='default'
+          variant='outline'
           className={lifecycleActionButtonClass('stop', 'size-8')}
           aria-label={`Stop ${service.name}`}
           title={`Stop ${service.name}`}
@@ -173,7 +173,7 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
         <Button
           type='button'
           size='icon'
-          variant='default'
+          variant='outline'
           className={lifecycleActionButtonClass('restart', 'size-8')}
           aria-label={`Restart ${service.name}`}
           title={`Restart ${service.name}`}

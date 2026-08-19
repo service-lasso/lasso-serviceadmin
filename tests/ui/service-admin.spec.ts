@@ -28,42 +28,66 @@ test('services table filters and opens service detail', async ({ page }) => {
   await page.goto('/services')
 
   await expectActivePageIdentity(page, 'Services')
+  const header = page.locator('header')
+  await expect(header.getByTestId('page-toolbar')).toBeVisible()
+  await expect(page.locator('main').getByTestId('page-toolbar')).toHaveCount(0)
+  await expect(
+    header.getByRole('button', { name: 'Start all', exact: true })
+  ).toBeVisible()
+  await header.getByRole('button', { name: 'Links', exact: true }).click()
+  await expect(
+    page.getByRole('menuitem', { name: 'Open Help Center: Service actions' })
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Toggle theme' })).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Start all', exact: true })
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Start all', exact: true })
-  ).toHaveClass(/bg-emerald-600/)
+  ).toHaveClass(/text-emerald-600/)
+  await expect(
+    page.getByRole('button', { name: 'Start all', exact: true })
+  ).not.toHaveClass(/bg-emerald-600/)
   await expect(
     page.getByRole('button', { name: 'Stop all', exact: true })
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Stop all', exact: true })
-  ).toHaveClass(/bg-red-600/)
+  ).toHaveClass(/text-red-600/)
+  await expect(
+    page.getByRole('button', { name: 'Stop all', exact: true })
+  ).not.toHaveClass(/bg-red-600/)
   await expect(
     page.getByRole('button', { name: 'Restart all', exact: true })
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Restart all', exact: true })
-  ).toHaveClass(/bg-red-600/)
+  ).toHaveClass(/text-red-600/)
+  await expect(
+    page.getByRole('button', { name: 'Restart all', exact: true })
+  ).not.toHaveClass(/bg-red-600/)
   await expect(
     page.getByRole('button', { name: 'Start Traefik', exact: true })
   ).toBeDisabled()
   await expect(
     page.getByRole('button', { name: 'Start Traefik', exact: true })
-  ).toHaveClass(/bg-emerald-600/)
+  ).toHaveClass(/text-emerald-600/)
+  await expect(
+    page.getByRole('button', { name: 'Start Traefik', exact: true })
+  ).toHaveClass(/disabled:text-muted-foreground/)
   await expect(
     page.getByRole('button', { name: 'Stop Traefik', exact: true })
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Stop Traefik', exact: true })
-  ).toHaveClass(/bg-red-600/)
+  ).toHaveClass(/text-red-600/)
   await expect(
     page.getByRole('button', { name: 'Restart Traefik', exact: true })
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Restart Traefik', exact: true })
-  ).toHaveClass(/bg-red-600/)
+  ).toHaveClass(/text-red-600/)
 
   await page
     .getByPlaceholder(
@@ -132,7 +156,10 @@ test('services table filters and opens service detail', async ({ page }) => {
   ).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Stop service', exact: true })
-  ).toHaveClass(/bg-red-600/)
+  ).toHaveClass(/text-red-600/)
+  await expect(
+    page.getByRole('button', { name: 'Stop service', exact: true })
+  ).not.toHaveClass(/bg-red-600/)
   await expect(
     page.getByRole('button', { name: 'Restart service', exact: true })
   ).toBeDisabled()
