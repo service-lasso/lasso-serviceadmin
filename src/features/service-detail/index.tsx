@@ -1153,13 +1153,6 @@ function ServiceLifecycleHeaderControls({
   )
 }
 
-function hasServiceSecretJourneyEntryPoint(service: DashboardService) {
-  return (
-    service.id === 'node-sample-service' ||
-    service.metadata.packageId === '@service-lasso/node-sample-service'
-  )
-}
-
 function ServiceActionButton({
   action,
   service,
