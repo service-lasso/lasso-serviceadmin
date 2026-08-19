@@ -131,6 +131,7 @@ async function expectCatalogCopyAbsent(page: Page) {
 }
 
 async function confirmAuditedReveal(page: Page, reason: string) {
+  await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByLabel('Audit reason').fill(reason)
   await page.getByLabel('Confirm this controlled reveal').check()
   await page.getByRole('button', { name: 'Request reveal' }).click()
