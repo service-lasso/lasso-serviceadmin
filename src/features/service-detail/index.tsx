@@ -109,6 +109,7 @@ import {
   type ServiceTerminalStdinCapability,
 } from '@/features/logs/provider'
 import { ServiceDetailLogsPanel } from '@/features/logs/service-log-viewer'
+import { FavoriteToggle } from '@/features/services/components/favorite-toggle'
 import { EnvironmentTable } from './environment-table'
 import { buildMetadataTableRows } from './metadata-table'
 import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
@@ -1381,9 +1382,12 @@ export function ServiceDetail({
                       <HealthBadge health={service.runtimeHealth.health} />
                     </div>
                     <div>
-                      <h2 className='text-2xl font-bold tracking-tight'>
-                        {service.name}
-                      </h2>
+                      <div className='flex items-center gap-2'>
+                        <h2 className='text-2xl font-bold tracking-tight'>
+                          {service.name}
+                        </h2>
+                        <FavoriteToggle service={service} />
+                      </div>
                       <p className='text-sm text-muted-foreground'>
                         {service.id} · {service.role}
                       </p>

@@ -8,21 +8,17 @@ import {
   Search,
   ScrollText,
   Square,
-  Star,
 } from 'lucide-react'
 import { renderServiceLinkUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
-import {
-  useFavoriteFeatureState,
-  useDashboardAction,
-  useToggleFavorite,
-} from '@/lib/service-lasso-dashboard/hooks'
+import { useDashboardAction } from '@/lib/service-lasso-dashboard/hooks'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { LongText } from '@/components/long-text'
 import { DataTableRowActions } from './data-table-row-actions'
+import { FavoriteToggle } from './favorite-toggle'
 
 function renderStatusBadge(status: DashboardService['status']) {
   if (status === 'running') {
@@ -43,32 +39,11 @@ function renderStatusBadge(status: DashboardService['status']) {
 }
 
 function FavoriteCell({ service }: { service: DashboardService }) {
-  const toggleFavorite = useToggleFavorite()
-  const favoriteFeature = useFavoriteFeatureState()
-
   return (
-    <button
-      type='button'
-      aria-label={service.favorite ? 'Remove favorite' : 'Add favorite'}
-      title={
-        favoriteFeature.enabled
-          ? service.favorite
-            ? 'Remove favorite'
-            : 'Add favorite'
-          : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-      }
-      disabled={!favoriteFeature.enabled}
+    <FavoriteToggle
+      service={service}
       className='inline-flex items-center rounded-md border p-2 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
-      onClick={(event) => {
-        event.stopPropagation()
-        if (!favoriteFeature.enabled) return
-        void toggleFavorite.mutateAsync(service.id)
-      }}
-    >
-      <Star
-        className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
-      />
-    </button>
+    />
   )
 }
 

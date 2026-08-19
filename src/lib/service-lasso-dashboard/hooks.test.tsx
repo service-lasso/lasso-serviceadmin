@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useDashboardAction } from './hooks'
+import { useDashboardAction, useToggleFavorite } from './hooks'
 import type { DashboardSummary } from './types'
 
 const mocks = vi.hoisted(() => ({
@@ -66,6 +66,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe('useDashboardAction', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('shows a success toast after runtime reload refreshes dashboard data', async () => {
@@ -170,5 +171,34 @@ describe('useAuditEvents', () => {
 
     expect(mocks.fetchAuditEvents).toHaveBeenCalledWith(filters)
     expect(result.current.data?.pagination.limit).toBe(10)
+  })
+
+  it('toggles favorites through the live dashboard action when the Vite flag is unset', async () => {
+    mocks.runDashboardAction.mockResolvedValueOnce(summary())
+
+    const { result } = renderHook(() => useToggleFavorite(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync('@nginx')
+    })
+
+    expect(mocks.runDashboardAction).toHaveBeenCalledWith({
+      kind: 'toggle-favorite',
+      serviceId: '@nginx',
+    })
+  })
+
+  it('does not toggle favorites when the Vite kill-switch is false', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_FAVORITES_ENABLED', 'false')
+    vi.resetModules()
+
+    const { useToggleFavorite: loadToggleFavorite } = await import('./hooks')
+    const { result } = renderHook(() => loadToggleFavorite(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync('@nginx')
+    })
+
+    expect(mocks.runDashboardAction).not.toHaveBeenCalled()
   })
 })

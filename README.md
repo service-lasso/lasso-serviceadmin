@@ -36,7 +36,7 @@ Example:
 
 ```bash
 VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001
-VITE_SERVICE_LASSO_FAVORITES_ENABLED=true
+# VITE_SERVICE_LASSO_FAVORITES_ENABLED=false
 ```
 
 Current UI runtime behavior:
@@ -48,14 +48,14 @@ Current UI runtime behavior:
 - when that stub flag is absent or false, pages without a live API contract must render unavailable/setup-needed states instead of deterministic sample rows or stub controls
 - lifecycle and favorite changes are persisted in browser local storage during demo/stub development sessions
 - a missing, misconfigured, or unavailable runtime API is treated as an error instead of falling back to sample status
-- favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
-- favorites are expected to load from `GET /api/services/meta`
+- favorites editing is enabled by default against live Core and stub local state; set `VITE_SERVICE_LASSO_FAVORITES_ENABLED=false` to disable the star controls
+- favorites are expected to load from `GET /api/dashboard` / service `favorite` and `GET /api/services/meta`
 - favorites are expected to update through `PATCH /api/services/:serviceId/meta`
 - service status is expected to load from `GET /api/dashboard` and `GET /api/dashboard/services`
 - bulk start is expected to call `POST /api/runtime/actions/startAll`
 - reload is expected to call `POST /api/runtime/actions/reload`
 - set `VITE_SERVICE_LASSO_LOGS_DEBUG=true` to enable Logs screen debug output in the browser console outside dev mode
-- if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
+- favorite controls stay visible but disabled only when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=false`
 
 ## Service Lasso UI migration rule
 
