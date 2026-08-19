@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AlertTriangle, Network, Search as SearchIcon, X } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
@@ -9,7 +9,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
-import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
+import {
+  DependencyGraphCanvas,
+  type GraphPaneSize,
+} from '@/components/dependency-graph-canvas'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
@@ -24,13 +27,16 @@ import {
 
 function TopologyLoading() {
   return (
-    <Card className='flex min-h-0 flex-1 flex-col'>
-      <CardHeader>
+    <Card
+      className='flex min-h-0 flex-1 flex-col overflow-hidden'
+      data-testid='mapping-graph-card'
+    >
+      <CardHeader className='shrink-0'>
         <Skeleton className='h-6 w-52' />
         <Skeleton className='h-4 w-96' />
       </CardHeader>
-      <CardContent className='flex-1'>
-        <Skeleton className='h-full min-h-[520px] w-full' />
+      <CardContent className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+        <Skeleton className='h-full min-h-0 w-full flex-1' />
       </CardContent>
     </Card>
   )
@@ -53,6 +59,10 @@ export function SecretsBrokerTopologyPage() {
 
   const servicesQuery = useServices()
   const [topologySearchQuery, setTopologySearchQuery] = useState('')
+  const [paneSize, setPaneSize] = useState<GraphPaneSize>({
+    width: 0,
+    height: 0,
+  })
   const topology = useMemo(
     () => buildSecretsBrokerTopology(servicesQuery.data ?? []),
     [servicesQuery.data]
@@ -62,9 +72,21 @@ export function SecretsBrokerTopologyPage() {
     [topology, topologySearchQuery]
   )
   const graph = useMemo(
-    () => toReactFlowSecretsBrokerTopology(filteredTopology),
-    [filteredTopology]
+    () =>
+      toReactFlowSecretsBrokerTopology(filteredTopology, {
+        bounds: paneSize,
+        rankdir: 'TB',
+      }),
+    [filteredTopology, paneSize]
   )
+  const handlePaneSizeChange = useCallback((size: GraphPaneSize) => {
+    setPaneSize((current) => {
+      if (current.width === size.width && current.height === size.height) {
+        return current
+      }
+      return size
+    })
+  }, [])
   const unmappedCount = topology.rows.filter(
     (row) => row.status !== 'mapped'
   ).length
@@ -83,12 +105,15 @@ export function SecretsBrokerTopologyPage() {
         </HeaderActions>
       </Header>
 
-      <Main className='flex min-h-0 flex-1 flex-col gap-4'>
+      <Main id='content' fixed className='min-h-0 gap-4'>
         {servicesQuery.isLoading ? (
           <TopologyLoading />
         ) : (
-          <Card className='flex min-h-0 flex-1 flex-col'>
-            <CardHeader className='space-y-1'>
+          <Card
+            className='flex min-h-0 flex-1 flex-col overflow-hidden'
+            data-testid='mapping-graph-card'
+          >
+            <CardHeader className='shrink-0 space-y-1'>
               <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div className='flex items-center gap-2 font-semibold'>
                   <Network className='size-4' />
@@ -153,9 +178,9 @@ export function SecretsBrokerTopologyPage() {
                 </p>
               </div>
             </CardHeader>
-            <CardContent className='flex min-h-0 flex-1 flex-col'>
+            <CardContent className='flex min-h-0 flex-1 flex-col overflow-hidden'>
               {unmappedCount ? (
-                <div className='mb-3 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'>
+                <div className='mb-3 flex shrink-0 items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'>
                   <AlertTriangle className='size-4' />
                   {unmappedCount} secret-like variable
                   {unmappedCount === 1 ? '' : 's'} need mapping review.{' '}
@@ -171,7 +196,9 @@ export function SecretsBrokerTopologyPage() {
                 <DependencyGraphCanvas
                   nodes={graph.nodes}
                   edges={graph.edges}
-                  height={720}
+                  fill
+                  paneTestId='mapping-graph-pane'
+                  onPaneSizeChange={handlePaneSizeChange}
                   draggable={false}
                   selectable={false}
                   showMiniMap={false}
@@ -186,11 +213,11 @@ export function SecretsBrokerTopologyPage() {
                   ]}
                 />
               ) : hasTopologySearch ? (
-                <div className='flex min-h-[480px] flex-1 items-center justify-center rounded-md border text-sm text-muted-foreground'>
+                <div className='flex min-h-0 flex-1 items-center justify-center rounded-md border text-sm text-muted-foreground'>
                   No topology nodes or relationships match the current search.
                 </div>
               ) : (
-                <div className='flex min-h-[480px] flex-1 items-center justify-center rounded-md border text-sm text-muted-foreground'>
+                <div className='flex min-h-0 flex-1 items-center justify-center rounded-md border text-sm text-muted-foreground'>
                   No secret-like service variables were reported by the runtime.
                 </div>
               )}

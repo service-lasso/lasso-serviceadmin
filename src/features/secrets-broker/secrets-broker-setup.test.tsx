@@ -993,6 +993,12 @@ describe('Secrets Broker root redirect', () => {
     expect(
       screen.getByText(/Showing \d+ of \d+ nodes and \d+ of \d+ relationships/i)
     ).toBeVisible()
+    expect(screen.getByRole('main')).toHaveAttribute('data-layout', 'fixed')
+    expect(screen.getByTestId('mapping-graph-card')).toHaveClass('flex-1')
+    expect(screen.getByTestId('mapping-graph-pane')).toHaveClass('flex-1')
+    expect(screen.getByTestId('dependency-graph-fill')).toBeInTheDocument()
+    expect(screen.getByText('mapped')).toBeVisible()
+    expect(screen.getByText('missing / unmapped')).toBeVisible()
 
     await user.type(graphSearch, 'zz-no-match')
     expect(
