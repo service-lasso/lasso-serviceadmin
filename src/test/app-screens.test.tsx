@@ -434,9 +434,7 @@ describe('app screens', () => {
       toolbar.compareDocumentPosition(themeSwitch) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
-    expect(
-      screen.getByRole('button', { name: 'Start all', exact: true })
-    ).toBeVisible()
+    expect(screen.getByRole('button', { name: /^Start all$/ })).toBeVisible()
     expect(
       screen.queryByRole('navigation', { name: /^Quick Nav$/i })
     ).not.toBeInTheDocument()
