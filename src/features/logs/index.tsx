@@ -49,6 +49,8 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
+  ALL_LOG_SOURCE,
+  canonicalLogSourceId,
   debugLogs,
   fetchServiceLogChunk,
   fetchServiceLogInfo,
@@ -101,7 +103,6 @@ function LogsLoading() {
 const DEFAULT_LOG_CHUNK_SIZE = 100
 const LOAD_OLDER_THRESHOLD_PX = 48
 const FOLLOW_POLL_MS = 4000
-const ALL_LOG_SOURCE = 'default'
 
 type LogViewerScrollArgs = {
   scrollTop: number
@@ -136,7 +137,9 @@ function labelForLogSource(sourceId: string, source?: ServiceLogSource) {
 }
 
 function sourceIdFor(source: ServiceLogSource) {
-  return source.id ?? source.stream ?? source.kind ?? source.path ?? ''
+  return canonicalLogSourceId(
+    source.id ?? source.stream ?? source.kind ?? source.path ?? ''
+  )
 }
 
 function buildLogSourceOptions(
@@ -146,10 +149,16 @@ function buildLogSourceOptions(
   const sourceMap = new Map<string, LogSourceOption>()
 
   function addSource(option: LogSourceOption) {
-    const existing = sourceMap.get(option.id)
-    sourceMap.set(option.id, {
+    const id = canonicalLogSourceId(option.id)
+    const existing = sourceMap.get(id)
+    sourceMap.set(id, {
       ...existing,
       ...option,
+      id,
+      label:
+        id === ALL_LOG_SOURCE
+          ? (existing?.label ?? 'All')
+          : (option.label ?? existing?.label),
       available: option.available ?? existing?.available,
       path: option.path ?? existing?.path,
       source: option.source ?? existing?.source,
@@ -751,6 +760,9 @@ function ServiceLazyLogViewer({
     sourceOptions.find((source) => source.id === selectedSource) ??
     sourceOptions[0]
   const sourceLabel = activeSource?.label ?? labelForLogSource(selectedSource)
+  const showFileEditor =
+    lines.length > 0 ||
+    (Boolean(logInfo?.path) && logInfo?.available !== false)
 
   return (
     <div className='space-y-3'>
@@ -824,7 +836,7 @@ function ServiceLazyLogViewer({
               total {totalLines.toLocaleString()} lines
             </div>
           </div>
-          {lines.length ? (
+          {showFileEditor ? (
             <div ref={viewerRef}>
               <RealServiceLogViewer
                 key={`${service.id}:${selectedSource}:${logInfo?.path ?? 'default'}`}
@@ -872,8 +884,9 @@ export function Logs() {
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
   const effectiveSelectedServiceId = searchState.service ?? selectedServiceId
-  const selectedSource = (searchState.source ??
-    ALL_LOG_SOURCE) as ServiceLogType
+  const selectedSource = canonicalLogSourceId(
+    (searchState.source ?? ALL_LOG_SOURCE) as ServiceLogType
+  )
 
   const filteredServices = useMemo(() => {
     const normalized = serviceQuery.trim().toLowerCase()
@@ -911,7 +924,10 @@ export function Logs() {
       search: (previous) => ({
         ...(previous as Record<string, unknown>),
         service: selectedService?.id,
-        source: source === ALL_LOG_SOURCE ? undefined : source,
+        source:
+          canonicalLogSourceId(source) === ALL_LOG_SOURCE
+            ? undefined
+            : canonicalLogSourceId(source),
       }),
     })
   }

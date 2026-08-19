@@ -156,11 +156,13 @@ describe('logs page operator states', () => {
       expect(screen.getByText('Runtime log overview')).toBeVisible()
     })
 
-    expect(screen.getByText('No current log entries yet')).toBeVisible()
+    expect(screen.getByText('0 loaded lines')).toBeVisible()
     expect(
-      screen.getByText(/@serviceadmin listening on http:\/\/0\.0\.0\.0:17700/)
-    ).toBeVisible()
-    expect(screen.getByText(/token=\[redacted\]/)).toBeVisible()
+      screen.queryByText('No current log entries yet')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Unable to load log content right now.')
+    ).not.toBeInTheDocument()
   })
 
   it('exposes Logs actions from the services table', async () => {
@@ -573,5 +575,150 @@ describe('logs page operator states', () => {
         screen.getByText('Unable to load log content right now.')
       ).toBeVisible()
     })
+  })
+
+  it('keeps the file editor for empty stderr and treats combined as All', async () => {
+    const requestedTypes: string[] = []
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? ''
+        const type = parsed.searchParams.get('type') ?? 'default'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          requestedTypes.push(`info:${type}`)
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'default',
+              path: 'C:\\runtime\\@serviceadmin\\service.log',
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              sources: [
+                {
+                  id: 'combined',
+                  label: 'Combined runtime log',
+                  stream: 'combined',
+                  runId: 'run-empty-stderr',
+                  path: 'C:\\runtime\\@serviceadmin\\service.log',
+                  available: true,
+                },
+                {
+                  id: 'stdout',
+                  label: 'stdout',
+                  stream: 'stdout',
+                  path: 'C:\\runtime\\@serviceadmin\\stdout.log',
+                  available: true,
+                },
+                {
+                  id: 'stderr',
+                  label: 'stderr',
+                  stream: 'stderr',
+                  path: 'C:\\runtime\\@serviceadmin\\stderr.log',
+                  available: true,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          requestedTypes.push(type)
+          const isStderr = type === 'stderr'
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: isStderr
+                ? 'C:\\runtime\\@serviceadmin\\stderr.log'
+                : 'C:\\runtime\\@serviceadmin\\service.log',
+              available: true,
+              totalLines: isStderr ? 0 : 2,
+              start: 0,
+              end: isStderr ? 0 : 2,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 100,
+              lines: isStderr
+                ? []
+                : [
+                    '{"level":"stdout","message":"openobserve started"}',
+                    '{"level":"stderr","message":""}',
+                  ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/services/%40serviceadmin/logs') {
+          return new Response(
+            JSON.stringify({
+              logs: {
+                serviceId: '@serviceadmin',
+                logPath: 'C:\\runtime\\@serviceadmin\\service.log',
+                stdoutPath: 'C:\\runtime\\@serviceadmin\\stdout.log',
+                stderrPath: 'C:\\runtime\\@serviceadmin\\stderr.log',
+                entries: [
+                  {
+                    level: 'stdout',
+                    message: 'openobserve started',
+                  },
+                ],
+                archives: [],
+                retention: { maxArchives: 3 },
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    const { router } = await renderRoute(
+      '/logs?service=%40serviceadmin&source=combined'
+    )
+
+    await waitFor(() => {
+      expect(requestedTypes).toContain('default')
+    })
+
+    expect(requestedTypes).not.toContain('combined')
+    expect(screen.getByRole('tab', { name: 'All' })).toBeVisible()
+    expect(
+      screen.queryByRole('tab', { name: 'Combined runtime log' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Unable to load log content right now.')
+    ).not.toBeInTheDocument()
+    expect(router.state.location.search.source).toBe('combined')
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'stderr' }))
+
+    await waitFor(() => {
+      expect(requestedTypes).toContain('stderr')
+      expect(screen.getByText('0 loaded lines')).toBeVisible()
+    })
+
+    expect(
+      screen.queryByText('No current log entries yet')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Unable to load log content right now.')
+    ).not.toBeInTheDocument()
   })
 })
