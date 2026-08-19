@@ -247,7 +247,8 @@ function revealButtonLabel(
 /**
  * OpenBao-shaped path browser and field editor for local or remote KV sources.
  * Stored values stay hidden until a per-row audited reveal; only one field
- * value is shown at a time.
+ * value is shown at a time. The card grows to fill remaining page height;
+ * the key list scrolls internally when paths overflow.
  */
 export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
   const queryClient = useQueryClient()
@@ -454,8 +455,11 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card
+      className='flex min-h-0 flex-1 flex-col overflow-hidden'
+      data-testid='kv-store-card'
+    >
+      <CardHeader className='shrink-0'>
         <CardTitle className='flex items-center gap-2'>
           <FileKey2 className='size-4' />
           KV store
@@ -466,8 +470,8 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
           same editor. Reveal is per field and shows only one value at a time.
         </CardDescription>
       </CardHeader>
-      <CardContent className='space-y-4'>
-        <div className='flex flex-wrap items-end gap-3'>
+      <CardContent className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden'>
+        <div className='flex shrink-0 flex-wrap items-end gap-3'>
           <div className='space-y-1'>
             <Label htmlFor='kv-source'>Source</Label>
             <select
@@ -495,7 +499,7 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
           <Badge variant='outline'>No values in the key list</Badge>
         </div>
 
-        <div className='flex flex-wrap items-center gap-2 text-sm'>
+        <div className='flex shrink-0 flex-wrap items-center gap-2 text-sm'>
           <Button
             type='button'
             variant='ghost'
@@ -536,7 +540,10 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
           </Alert>
         ) : null}
 
-        <div className='grid gap-2'>
+        <div
+          className='grid min-h-0 flex-1 content-start gap-2 overflow-auto'
+          data-testid='kv-store-key-list'
+        >
           {keys.length === 0 && !listQuery.isLoading ? (
             <p className='text-sm text-muted-foreground'>
               No keys at this path. Create one below.
@@ -578,7 +585,10 @@ export function KvSecretsEditor({ overview }: KvSecretsEditorProps) {
           })}
         </div>
 
-        <div className='grid gap-3 rounded-md border p-3'>
+        <div
+          className='grid max-h-[55%] shrink-0 gap-3 overflow-auto rounded-md border p-3'
+          data-testid='kv-store-field-editor'
+        >
           <div className='space-y-1'>
             <Label htmlFor='kv-create-path'>Path</Label>
             <Input
