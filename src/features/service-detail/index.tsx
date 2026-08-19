@@ -126,6 +126,7 @@ import {
   getServiceDetailTabShortcutLabel,
   type ServiceDetailTabId,
 } from './service-detail-tabs'
+import { ServiceRunStatusCards } from './service-run-status-cards'
 
 const editableShortcutTargetSelector = [
   'input',
@@ -1887,6 +1888,7 @@ export function ServiceDetail({
                     value='overview'
                     className='mt-0 min-h-0 flex-1 space-y-4 overflow-auto'
                   >
+                    <ServiceRunStatusCards service={service} />
                     <div className='grid gap-4 md:grid-cols-3'>
                       <Card>
                         <CardHeader className='pb-2'>

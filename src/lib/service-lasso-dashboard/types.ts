@@ -21,6 +21,8 @@ export type ServiceRuntimeHealth = {
   lastCheckAt: string
   lastRestartAt?: string
   summary: string
+  pid?: number | null
+  runId?: string | null
 }
 
 export type ServiceEndpoint = {
