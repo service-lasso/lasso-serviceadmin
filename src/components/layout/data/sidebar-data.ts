@@ -8,7 +8,6 @@ import {
   GitBranch,
   Globe,
   Network,
-  ShieldCheck,
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
@@ -103,11 +102,6 @@ export const sidebarData: SidebarData = {
     {
       title: 'Secrets Broker',
       items: [
-        {
-          title: 'Overview',
-          url: '/secrets-broker',
-          icon: ShieldCheck,
-        },
         {
           title: 'Secrets',
           url: '/secrets-broker/secrets',

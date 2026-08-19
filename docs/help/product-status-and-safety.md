@@ -18,7 +18,7 @@ Do not describe a page as live, durable, runtime-backed, or production-ready unl
 
 | Surface | Current status | Operator note |
 | --- | --- | --- |
-| Dashboard | Runtime-backed | Reads runtime dashboard metadata through the Service Admin runtime proxy. Treat service state, health, and lifecycle metadata as the operator-visible runtime summary. |
+| Dashboard | Runtime-backed | Reads runtime dashboard metadata through the Service Admin runtime proxy. Treat service state, health, Broker ready, lockout counts, and lifecycle metadata as the operator-visible runtime summary. Never show secret values or auto-onboard because home loaded. |
 | Services | Runtime-backed | Lists Service Lasso service metadata and lifecycle state from the runtime. Service actions must keep returning operation ids, safe status, and recovery guidance. |
 | Runtime | Runtime-backed | Shows runtime health and readiness signals. Health rows are operational status evidence, not raw process logs or secret-bearing diagnostics. |
 | Logs | Runtime-backed | Reads runtime log metadata and safe log lines through the runtime boundary. Docs must continue to describe redaction and retention limits. |
@@ -28,8 +28,7 @@ Do not describe a page as live, durable, runtime-backed, or production-ready unl
 | Network and Service Routes | Metadata-only | Shows route and network posture from configured service metadata. It should not imply public reachability unless a runtime check proves it. |
 | Operations / Telemetry | Metadata-only | Shows Service Lasso runtime and Secrets Broker telemetry status through runtime APIs. It does not configure exporters, send telemetry, or reveal OTLP endpoints, headers, tokens, cookies, raw request bodies, raw response bodies, or environment values. |
 | Operations / Audit Logging | Metadata-only with runtime-backed events where exposed | Shows durable action and broker audit metadata when the runtime exposes it, and fallback status when unavailable. It must not claim immutable audit durability unless the backend audit sink and tests prove it. |
-| Secrets Broker overview | Preview/static contract with runtime-backed status where exposed | Shows broker posture, provider state, and safe metadata. Provider credentials, raw secret values, request bodies, and response bodies must stay out of the UI and docs. |
-| Secrets Broker Secrets | Preview/static contract with guarded runtime reads where exposed | Secret rows, previews, receipts, and operation trails are metadata-only. Reveal, rotate, reset, policy, and migration actions require broker operation ids, audit reasons, confirmation, and terminal status evidence before docs can call them applied. |
+| Secrets Broker Secrets | Preview/static contract with guarded runtime reads where exposed | `/secrets-broker` redirects here. Secret rows, previews, receipts, and operation trails are metadata-only. Reveal, rotate, reset, policy, and migration actions require broker operation ids, audit reasons, confirmation, and terminal status evidence before docs can call them applied. Home shows Broker ready and lockout counts. |
 | Secrets Broker Sources | Metadata-only setup guidance | Shows provider setup and source posture. Authentication status may be shown, but provider tokens and credential material must never appear. |
 | Secrets Broker Topology | Metadata-only | Shows service-to-secret-ref relationships and validation state. It does not prove secret value availability. |
 | Support Bundle and Diagnostics | Metadata-only / backend contract required | The embedded support review is safe local diagnostic metadata. Export remains unavailable until a redacted backend export API exists and tests prove the bundle omits secrets. |

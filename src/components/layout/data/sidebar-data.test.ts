@@ -58,6 +58,7 @@ describe('sidebar optional page classification', () => {
     expect(titles).not.toContain('Backup / Keys')
     expect(titles).not.toContain('Audit / Events')
     expect(titles).not.toContain('Operational Controls')
+    expect(titles).not.toContain('Overview')
     expect(titles).toContain('Providers')
   })
 
@@ -67,12 +68,20 @@ describe('sidebar optional page classification', () => {
     )
 
     expect(secretsBrokerGroup?.items.map((item) => item.url)).toEqual([
-      '/secrets-broker',
       '/secrets-broker/secrets',
       '/secrets-broker/sources',
       '/secrets-broker/topology',
       '/secrets-broker/review',
     ])
+    expect(secretsBrokerGroup?.items.map((item) => item.title)).toEqual([
+      'Secrets',
+      'Providers',
+      'Topology',
+      'Review',
+    ])
+    expect(
+      secretsBrokerGroup?.items.every((item) => item.title !== 'Overview')
+    ).toBe(true)
     expect(
       secretsBrokerGroup?.items.every((item) => !item.url?.includes('#'))
     ).toBe(true)
@@ -102,7 +111,6 @@ describe('Help Center navigation coverage', () => {
     const safetyGuide = 'help/variables-and-secrets-broker-safety-guide.md'
 
     expect(coverageByRoute.get('/variables')?.articleId).toBe(safetyGuide)
-    expect(coverageByRoute.get('/secrets-broker')?.articleId).toBe(safetyGuide)
     expect(coverageByRoute.get('/secrets-broker/secrets')?.articleId).toBe(
       safetyGuide
     )

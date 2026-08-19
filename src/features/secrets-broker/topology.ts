@@ -193,7 +193,7 @@ export function buildSecretsBrokerTopology(
     label: '@secretsbroker',
     kind: 'broker',
     summary: 'Broker metadata surface for service SecretRef mappings.',
-    detailHref: '/secrets-broker',
+    detailHref: '/secrets-broker/secrets',
     auditHref: '/operations/audit-logging',
     diagnosticHref: '/secrets-broker/sources',
   })

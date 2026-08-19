@@ -11,6 +11,8 @@ test('dashboard renders and starts stopped services', async ({ page }) => {
 
   await expectActivePageIdentity(page, 'Dashboard')
   await expect(page.getByText('Runtime health', { exact: true })).toBeVisible()
+  await expect(page.getByText('Broker ready', { exact: true })).toBeVisible()
+  await expect(page.getByText('Broker lockouts', { exact: true })).toBeVisible()
   await expect(page.getByText('1 stopped, 1 degraded')).toBeVisible()
   await expect(page.getByText('2/4')).toBeVisible()
   await expect(page.getByText('Dagu').first()).toBeVisible()

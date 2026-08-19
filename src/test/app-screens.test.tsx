@@ -57,7 +57,7 @@ const appScreens: ScreenCase[] = [
   },
   {
     path: '/secrets-broker',
-    title: 'Service Admin - Secrets Broker Overview',
+    title: 'Service Admin - Secrets Broker Secrets',
   },
   {
     path: '/secrets-broker/secrets',
@@ -108,6 +108,7 @@ const appScreens: ScreenCase[] = [
 ]
 
 const removedSecretsBrokerRoutes = [
+  ['/secrets-broker', '/secrets-broker/secrets'],
   ['/secrets-broker/provider-connections', '/secrets-broker/sources'],
   ['/secrets-broker/diagnostics', '/secrets-broker/sources'],
   ['/secrets-broker/secret-inventory', '/secrets-broker/sources'],
@@ -188,12 +189,6 @@ const headerIdentityRoutes: HeaderIdentityCase[] = [
     path: '/secrets-broker/review',
     identity: 'Review',
     removedHeading: /^Secrets Broker review$/i,
-  },
-  {
-    path: '/secrets-broker',
-    identity: 'Overview',
-    removedHeading: /^Overview$/i,
-    removedCopy: /Secrets Broker runtime posture/i,
   },
   {
     path: '/secrets-broker/secrets',

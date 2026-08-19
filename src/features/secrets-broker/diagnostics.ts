@@ -21,7 +21,7 @@ export type SecretsBrokerDiagnostic = {
   sourceLabel: string
   link: {
     label: string
-    to: '/dependencies' | '/logs' | '/variables' | '/secrets-broker'
+    to: '/dependencies' | '/logs' | '/variables' | '/secrets-broker/secrets'
     search?: Record<string, string>
   }
 }

@@ -189,24 +189,18 @@ test.describe('Secrets Broker browser coverage', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('link', { name: 'Overview' }).click()
+    await page
+      .locator('[data-sidebar="menu-button"]')
+      .filter({ hasText: 'Secrets' })
+      .first()
+      .click()
 
-    await expect(page).toHaveURL(/\/secrets-broker$/)
+    await expect(page).toHaveURL(/\/secrets-broker\/secrets$/)
     await expectNoBlankScreen(page)
-    await expectActivePageIdentity(page, 'Overview')
-    await expect(page.getByText(/@secretsbroker overview/i)).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: 'View providers' })
-    ).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Add provider' })).toBeVisible()
-    await expect(
-      page.getByRole('main').getByRole('link', { name: 'Audit', exact: true })
-    ).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: 'View provider status' })
-    ).toBeVisible()
+    await expectActivePageIdentity(page, 'Secrets')
+    await expect(page.getByText('KV store')).toBeVisible()
+    await expectCatalogCopyAbsent(page)
     await expectNoSecretMaterial(page)
-    await expect(page.getByText(/raw values hidden/i).first()).toBeVisible()
     expect(consoleErrors).toEqual([])
   })
 
@@ -216,13 +210,17 @@ test.describe('Secrets Broker browser coverage', () => {
     await page.goto('/')
 
     const navLinks = [
-      ['Overview', /\/secrets-broker$/],
       ['Secrets', /\/secrets-broker\/secrets$/],
       ['Providers', /\/secrets-broker\/sources$/],
       ['Topology', /\/secrets-broker\/topology$/],
       ['Review', /\/secrets-broker\/review$/],
     ] as const
 
+    await expect(
+      page
+        .locator('[data-sidebar="menu-button"]')
+        .filter({ hasText: 'Overview' })
+    ).toHaveCount(0)
     await expect(
       page
         .locator('[data-sidebar="menu-button"]')
@@ -326,49 +324,24 @@ test.describe('Secrets Broker browser coverage', () => {
     expect(consoleErrors).toEqual([])
   })
 
-  test('covers healthy degraded offline and unconfigured broker states', async ({
+  test('redirects the broker root to Secrets after home chips exist', async ({
     page,
   }) => {
+    await page.goto('/')
+    await expect(page.getByText('Broker ready', { exact: true })).toBeVisible()
+    await expect(
+      page.getByText('Broker lockouts', { exact: true })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'Open Secrets' }).first()
+    ).toBeVisible()
+
     await page.goto('/secrets-broker')
+    await expect(page).toHaveURL(/\/secrets-broker\/secrets$/)
     await expectNoBlankScreen(page)
-
-    const previewState = page.locator('#broker-overview-scenario')
-
-    await previewState.selectOption('healthy')
-    await expect(page.getByText('@secretsbroker healthy')).toBeVisible()
-    await expect(page.getByText(/Broker API is reachable/i)).toBeVisible()
-    await expect(page.getByText(/Can my services start/i)).toBeVisible()
-    await expect(
-      page.getByText(/All startup-critical service refs resolve/i)
-    ).toBeVisible()
-    await expect(page.getByText(/Generated first-run secrets/i)).toBeVisible()
-
-    await previewState.selectOption('degraded')
-    await expect(page.getByText('@secretsbroker degraded')).toBeVisible()
-    await expect(page.getByText(/source_auth_required/i).first()).toBeVisible()
-    await expect(page.getByText(/Two services cannot start/i)).toBeVisible()
-    await expect(
-      page.getByText(/provider-owned reauthentication/i)
-    ).toHaveCount(0)
-    await expect(page.getByText(/broker-owned reauthentication/i)).toBeVisible()
-
-    await previewState.selectOption('offline')
-    await expect(page.getByText('@secretsbroker offline')).toBeVisible()
-    await expect(page.getByText('API reachable', { exact: true })).toBeVisible()
-    await expect(page.getByText('no', { exact: true }).first()).toBeVisible()
-    await expect(
-      page.getByText(/cannot confirm startup secret resolution/i)
-    ).toBeVisible()
-
-    await previewState.selectOption('unconfigured')
-    await expect(page.getByText('@secretsbroker setup needed')).toBeVisible()
-    await expect(
-      page.getByText(/Add a local encrypted store/i).first()
-    ).toBeVisible()
-    await expect(
-      page.getByText(/Initialize local encrypted store/i)
-    ).toBeVisible()
-
+    await expectActivePageIdentity(page, 'Secrets')
+    await expect(page.getByText('KV store')).toBeVisible()
+    await expect(page.locator('#broker-overview-scenario')).toHaveCount(0)
     await expectNoSecretMaterial(page)
     expect(consoleErrors).toEqual([])
   })
@@ -417,6 +390,7 @@ test.describe('Secrets Broker browser coverage', () => {
     }
 
     const removedRoutes = [
+      ['/secrets-broker', /\/secrets-broker\/secrets$/],
       ['/secrets-broker/provider-connections', /\/secrets-broker\/sources$/],
       ['/secrets-broker/diagnostics', /\/secrets-broker\/sources$/],
       ['/secrets-broker/secret-inventory', /\/secrets-broker\/sources$/],

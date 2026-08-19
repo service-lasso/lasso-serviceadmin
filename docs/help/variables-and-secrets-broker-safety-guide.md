@@ -74,21 +74,22 @@ the secret.
 
 ## Operator workflow
 
-1. Use **Variables** to review service-scoped and global non-sensitive values.
-2. Promote duplicated non-sensitive values to global variables when shared use
+1. Use **Dashboard** to check Broker ready and active lockout counts. Home never shows secret values and does not onboard on read.
+2. Use **Variables** to review service-scoped and global non-sensitive values.
+3. Promote duplicated non-sensitive values to global variables when shared use
    is intentional.
-3. Move sensitive values into Secrets Broker and store only a secret ref in the
+4. Move sensitive values into Secrets Broker and store only a secret ref in the
    service config.
-4. Use **Secrets Broker** pages to review provider, source, topology, policy,
-   operation, and audit metadata.
-5. Use reveal or write-back flows only when the UI asks for explicit
+5. Use **Secrets** for the local KV editor, **Providers** for source status,
+   **Topology** and **Review** for mappings, and **Audit** for events.
+6. Use reveal or write-back flows only when the UI asks for explicit
    confirmation, an audit reason, and terminal operation evidence.
-6. Use **Audit** to review policy outcomes and operation receipts.
-7. Use **Support Bundle** only for redacted diagnostic metadata.
+7. Use **Audit** to review policy outcomes and operation receipts.
+8. Use **Support Bundle** only for redacted diagnostic metadata.
 
 ## Related docs
 
 - [Environment Variables: Global and Service Reuse](environment-variables-global-and-service-reuse.md)
 - [Product status and safety](product-status-and-safety.md)
 - [Secret-safe support bundle export](../support-bundle-export.md)
-- [Secrets Broker setup wizard](../secrets-broker-setup-wizard.md)
+- [Service install and setup config](service-install-and-setup-config.md)

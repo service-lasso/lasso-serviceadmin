@@ -112,39 +112,21 @@ const topologyTestServices = [
   },
 ] as DashboardService[]
 
-describe('Secrets Broker overview dashboard', () => {
-  it('shows the operator overview without setup-wall or plaintext values', async () => {
-    await renderRoute('/secrets-broker')
+describe('Secrets Broker root redirect', () => {
+  it('redirects /secrets-broker to the KV Secrets page', async () => {
+    const { router } = await renderRoute('/secrets-broker')
 
-    await expectActivePageIdentity('Overview')
-    expect(screen.getAllByText(/Values hidden/i)[0]).toBeVisible()
-    expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
-    expect(screen.getByText(/Ready providers/i)).toBeVisible()
-    expect(screen.getByText(/Needs operator action/i)).toBeVisible()
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/secrets-broker/secrets')
+    })
+    await expectActivePageIdentity('Secrets')
+    expect(screen.getByText('KV store')).toBeVisible()
     expect(
-      screen
-        .getAllByRole('link', { name: /^Audit$/i })
-        .some(
-          (link) => link.getAttribute('href') === '/operations/audit-logging'
-        )
-    ).toBe(true)
-    expect(
-      screen.getByRole('link', { name: /View provider status/i })
-    ).toHaveAttribute('href', '/secrets-broker/sources')
-    expect(
-      screen.queryByRole('heading', { name: /Secret Sources \/ Backends/i })
+      screen.queryByRole('heading', { name: /^Overview$/i })
     ).not.toBeInTheDocument()
-    expect(screen.queryByText(/Source setup paths/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Cancel setup/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Preview state/i)).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('heading', {
-        name: /Privileged single-secret reveal/i,
-      })
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('heading', {
-        name: /Backup, restore, and key management/i,
-      })
+      screen.queryByText(/@secretsbroker overview/i)
     ).not.toBeInTheDocument()
     expect(screen.queryByText('supersecret')).not.toBeInTheDocument()
     expect(screen.queryByText('plaintext secret')).not.toBeInTheDocument()
@@ -154,107 +136,6 @@ describe('Secrets Broker overview dashboard', () => {
         fixture: serviceLassoSecretLeakSentinels[0].value,
       })
     ).toThrow(/Secret material leak detected/)
-  })
-
-  it('renders broker overview healthy degraded offline and unconfigured states', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
-
-    expect(screen.getByText(/@secretsbroker overview/i)).toBeVisible()
-    expect(
-      await screen.findByRole('region', {
-        name: /Live Secrets Broker status/i,
-      })
-    ).toBeVisible()
-    expect(
-      screen.getByText(/Explicit Service Admin stub mode is enabled/i)
-    ).toBeVisible()
-    expect(screen.getAllByText(/stub fixture metadata/i)[0]).toBeVisible()
-    expect(screen.getByText(/@secretsbroker healthy/i)).toBeVisible()
-    expect(screen.getByText(/Broker API is reachable/i)).toBeVisible()
-    expect(screen.getByText(/local encrypted store reachable/i)).toBeVisible()
-    expect(screen.getByText(/key version v3/i)).toBeVisible()
-    expect(screen.getByText(/View providers/i)).toBeVisible()
-    expect(screen.getAllByText(/^Audit$/i)[0]).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Preview state/i),
-      'degraded'
-    )
-    expect(screen.getByText(/@secretsbroker degraded/i)).toBeVisible()
-    expect(screen.getAllByText(/source_auth_required/i)[0]).toBeVisible()
-    expect(screen.getByText(/Recent resolve failures/i)).toBeVisible()
-    expect(screen.getByText(/refresh failure · vault/i)).toBeVisible()
-
-    await user.selectOptions(screen.getByLabelText(/Preview state/i), 'offline')
-    expect(screen.getByText(/@secretsbroker offline/i)).toBeVisible()
-    expect(screen.getAllByText(/API reachable/i)[0]).toBeVisible()
-    expect(screen.getByText(/^no$/i)).toBeVisible()
-    expect(screen.getByText(/live backend state unavailable/i)).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Preview state/i),
-      'unconfigured'
-    )
-    expect(screen.getByText(/@secretsbroker setup needed/i)).toBeVisible()
-    expect(screen.getAllByText(/setup_needed/i)[0]).toBeVisible()
-    expect(
-      screen.getByText(
-        /Add a local encrypted store or connect an external source/i
-      )
-    ).toBeVisible()
-    expect(
-      screen.queryByText(/correct-horse-battery-staple/i)
-    ).not.toBeInTheDocument()
-  })
-
-  it('renders the Node Sample Service secret journey ready and blocked states safely', async () => {
-    const user = userEvent.setup()
-    await renderRoute('/secrets-broker')
-
-    expect(screen.getByText(/Service secret journey/i)).toBeVisible()
-    expect(screen.getByText(/Node Sample Service ready/i)).toBeVisible()
-    expect(screen.getAllByText(/resolve_ready/i)[0]).toBeVisible()
-    expect(screen.getAllByText(/writeback_allowed/i)[0]).toBeVisible()
-    expect(screen.getByText(/raw value: hidden/i)).toBeVisible()
-    expect(screen.getByText(/copy value: unavailable/i)).toBeVisible()
-    expect(
-      screen.getByRole('link', { name: /^Service details$/i })
-    ).toHaveAttribute('href', '/services/node-sample-service?tab=config')
-    expect(
-      screen.getByRole('link', { name: /^Secrets table$/i })
-    ).toHaveAttribute('href', '/secrets-broker/secrets')
-    expect(
-      screen
-        .getAllByRole('link', { name: /^Providers$/i })
-        .some((link) => link.getAttribute('href') === '/secrets-broker/sources')
-    ).toBe(true)
-    expect(
-      screen.getByRole('link', { name: /^Audit Logging$/i })
-    ).toHaveAttribute('href', '/operations/audit-logging')
-
-    await user.selectOptions(
-      screen.getByLabelText(/Journey state/i),
-      'missing-ref'
-    )
-    expect(screen.getByText(/Node Sample Service missing ref/i)).toBeVisible()
-    expect(screen.getAllByText(/blocked_missing_ref/i)[0]).toBeVisible()
-    expect(screen.getByText(/First-run secret not available/i)).toBeVisible()
-
-    await user.selectOptions(
-      screen.getByLabelText(/Journey state/i),
-      'locked-store'
-    )
-    expect(screen.getByText(/Node Sample Service locked store/i)).toBeVisible()
-    expect(screen.getAllByText(/blocked_store_locked/i)[0]).toBeVisible()
-    expect(screen.getByText(/Local encrypted store locked/i)).toBeVisible()
-    expect(
-      screen.queryByText(/correct-horse-battery-staple/i)
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/generated-secret-value/i)
-    ).not.toBeInTheDocument()
-    assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
   it('redirects the removed operational controls route to Audit', async () => {
@@ -270,18 +151,7 @@ describe('Secrets Broker overview dashboard', () => {
     assertNoSecretMaterial(collectBrowserLeakSurfaces())
   })
 
-  it('keeps overview action-oriented and provider setup detail on the providers page', async () => {
-    const overview = await renderRoute('/secrets-broker')
-
-    await expectActivePageIdentity('Overview')
-    expect(screen.getByText(/Reconnect required/i)).toBeVisible()
-    expect(screen.getByText(/Recent denied requests/i)).toBeVisible()
-    expect(
-      screen.queryByText(/Affected refs and services/i)
-    ).not.toBeInTheDocument()
-    expect(screen.queryByText(/Cancel setup/i)).not.toBeInTheDocument()
-
-    overview.unmount()
+  it('keeps provider setup detail on the providers page', async () => {
     await renderRoute('/secrets-broker/sources')
 
     await expectActivePageIdentity('Providers')

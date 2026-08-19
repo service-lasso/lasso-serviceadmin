@@ -63,10 +63,6 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
     articleId: 'help/operations-audit-operator-guide.md',
   },
   {
-    route: '/secrets-broker',
-    articleId: 'help/variables-and-secrets-broker-safety-guide.md',
-  },
-  {
     route: '/secrets-broker/secrets',
     articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
