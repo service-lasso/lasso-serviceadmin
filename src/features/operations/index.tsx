@@ -41,7 +41,9 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -805,16 +807,16 @@ function OperationsTable<TData>({
   })
 
   return (
-    <div className='flex flex-1 flex-col gap-4'>
+    <div className='flex min-h-0 flex-1 flex-col gap-4'>
       <DataTableToolbar
         table={table}
         searchKey={searchKey}
         searchPlaceholder={searchPlaceholder}
         filters={filters}
       />
-      <div className='overflow-hidden rounded-md border'>
-        <Table className='table-fixed'>
-          <TableHeader>
+      <DataTableScrollRegion>
+        <Table contained={false} className='table-fixed'>
+          <TableHeader className={dataTableStickyHeaderClassName}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -856,7 +858,7 @@ function OperationsTable<TData>({
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableScrollRegion>
       <DataTablePagination table={table} className='mt-auto' />
     </div>
   )
@@ -920,8 +922,8 @@ export function OperationsTelemetry() {
   return (
     <>
       <OperationsHeader />
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='grid gap-4 md:grid-cols-3'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
+        <div className='grid shrink-0 gap-4 md:grid-cols-3'>
           <div className='rounded-md border p-4'>
             <div className='flex items-center gap-2 text-sm font-medium'>
               <Activity className='size-4' /> Service Lasso signals
@@ -964,31 +966,33 @@ export function OperationsTelemetry() {
           </div>
         </div>
 
-        {servicesQuery.isLoading ||
-        telemetryQuery.isLoading ||
-        secretsBrokerTelemetryQuery.isLoading ? (
-          <OperationsLoading />
-        ) : (
-          <OperationsTable
-            data={rows}
-            columns={telemetryColumns}
-            searchKey='signal'
-            searchPlaceholder='Search telemetry signals...'
-            filters={[
-              { columnId: 'source', title: 'Source', options: sourceOptions },
-              {
-                columnId: 'state',
-                title: 'State',
-                options: [
-                  { label: 'Available', value: 'available' },
-                  { label: 'Degraded', value: 'degraded' },
-                  { label: 'Unavailable', value: 'unavailable' },
-                ],
-              },
-            ]}
-            emptyMessage='No telemetry rows match the current filters.'
-          />
-        )}
+        <div className='flex min-h-0 flex-1 flex-col'>
+          {servicesQuery.isLoading ||
+          telemetryQuery.isLoading ||
+          secretsBrokerTelemetryQuery.isLoading ? (
+            <OperationsLoading />
+          ) : (
+            <OperationsTable
+              data={rows}
+              columns={telemetryColumns}
+              searchKey='signal'
+              searchPlaceholder='Search telemetry signals...'
+              filters={[
+                { columnId: 'source', title: 'Source', options: sourceOptions },
+                {
+                  columnId: 'state',
+                  title: 'State',
+                  options: [
+                    { label: 'Available', value: 'available' },
+                    { label: 'Degraded', value: 'degraded' },
+                    { label: 'Unavailable', value: 'unavailable' },
+                  ],
+                },
+              ]}
+              emptyMessage='No telemetry rows match the current filters.'
+            />
+          )}
+        </div>
       </Main>
     </>
   )
@@ -1044,8 +1048,8 @@ export function OperationsAuditLogging() {
   return (
     <>
       <OperationsHeader />
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='grid gap-4 md:grid-cols-5'>
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
+        <div className='grid shrink-0 gap-4 md:grid-cols-5'>
           <div className='rounded-md border p-4'>
             <div className='flex items-center gap-2 text-sm font-medium'>
               <Activity className='size-4' /> Data source
@@ -1103,7 +1107,7 @@ export function OperationsAuditLogging() {
             </p>
           </div>
         </div>
-        <div className='rounded-md border border-dashed bg-muted/20 p-4 text-sm'>
+        <div className='shrink-0 rounded-md border border-dashed bg-muted/20 p-4 text-sm'>
           <div className='font-medium text-foreground'>{auditNotice.title}</div>
           <p className='mt-1 text-muted-foreground'>
             {auditNotice.description}
@@ -1115,26 +1119,28 @@ export function OperationsAuditLogging() {
             outside this surface.
           </p>
         </div>
-        {auditEventsQuery.isLoading ? (
-          <OperationsLoading />
-        ) : (
-          <OperationsTable
-            data={rows}
-            columns={auditColumns}
-            searchKey='event'
-            searchPlaceholder='Search audit events...'
-            filters={[
-              { columnId: 'source', title: 'Source', options: sourceOptions },
-              { columnId: 'outcome', title: 'Outcome', options: outcomes },
-              {
-                columnId: 'tamperEvidence',
-                title: 'Chain',
-                options: chainStates,
-              },
-            ]}
-            emptyMessage={auditNotice.emptyMessage}
-          />
-        )}
+        <div className='flex min-h-0 flex-1 flex-col'>
+          {auditEventsQuery.isLoading ? (
+            <OperationsLoading />
+          ) : (
+            <OperationsTable
+              data={rows}
+              columns={auditColumns}
+              searchKey='event'
+              searchPlaceholder='Search audit events...'
+              filters={[
+                { columnId: 'source', title: 'Source', options: sourceOptions },
+                { columnId: 'outcome', title: 'Outcome', options: outcomes },
+                {
+                  columnId: 'tamperEvidence',
+                  title: 'Chain',
+                  options: chainStates,
+                },
+              ]}
+              emptyMessage={auditNotice.emptyMessage}
+            />
+          )}
+        </div>
       </Main>
     </>
   )

@@ -325,3 +325,44 @@ test('runtime, network, installed, and variables tables render', async ({
   ).toBeVisible()
   await expect(page.getByText('SERVICE_LASSO_ROOT').first()).toBeVisible()
 })
+
+test('help center, logs, tables, and providers chrome', async ({ page }) => {
+  await page.goto('/help-center')
+  await expectActivePageIdentity(page, 'Help Center')
+  const header = page.locator('header')
+  await expect(header.getByRole('link', { name: 'Services' })).toBeVisible()
+  await expect(page.locator('main a[href="/services"]')).toHaveCount(0)
+  await expect(page.getByPlaceholder(/Search docs/i)).toBeVisible()
+  await expect(page.getByTestId('help-doc-card').first()).toBeVisible()
+  await page.getByPlaceholder(/Search docs/i).fill('packaging')
+  await expect(
+    page.getByRole('heading', {
+      name: /Service Admin Packaging and Release Artifacts/i,
+    })
+  ).toBeVisible()
+
+  await page.goto('/logs')
+  await expectActivePageIdentity(page, 'Logs')
+  await expect(page.getByText('Selected service')).toHaveCount(0)
+  await expect(page.getByText('Viewer mode')).toHaveCount(0)
+  await expect(page.getByText('Log entries')).toBeVisible()
+
+  await page.goto('/services')
+  const servicesScroll = page.getByTestId('data-table-scroll-region')
+  await expect(servicesScroll).toBeVisible()
+  await expect(page.getByRole('button', { name: /next page/i })).toBeVisible()
+  const paginationBox = await page
+    .getByRole('button', { name: /next page/i })
+    .boundingBox()
+  const scrollBox = await servicesScroll.boundingBox()
+  expect(scrollBox).toBeTruthy()
+  expect(paginationBox).toBeTruthy()
+  if (scrollBox && paginationBox) {
+    expect(paginationBox.y).toBeGreaterThan(scrollBox.y)
+  }
+
+  await page.goto('/secrets-broker/sources')
+  await expectActivePageIdentity(page, 'Providers')
+  await expect(page.getByText('Live provider source metadata')).toHaveCount(0)
+  await expect(page.getByTestId('data-table-scroll-region')).toBeVisible()
+})

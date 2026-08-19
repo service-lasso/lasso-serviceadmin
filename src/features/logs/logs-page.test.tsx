@@ -293,6 +293,29 @@ describe('logs page operator states', () => {
     expect(screen.queryByText(/token=hidden-value/i)).not.toBeInTheDocument()
   })
 
+  it('removes redundant summary cards and stretches remaining log panes', async () => {
+    await renderRoute('/logs?service=@serviceadmin')
+
+    await waitFor(() => {
+      expect(screen.getByText('Service Admin UI')).toBeVisible()
+    })
+
+    expect(screen.queryByText('Selected service')).not.toBeInTheDocument()
+    expect(screen.queryByText('Viewer mode')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Choose a service from the table to change log context.'
+      )
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Uses the resolved service log endpoint and scroll-follow behavior.'
+      )
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Log entries')).toBeVisible()
+    expect(screen.getByPlaceholderText('Search services...')).toBeVisible()
+  })
+
   it('uses runtime source tabs for all stdout stderr and additional log views', async () => {
     const user = userEvent.setup()
     const requestedTypes: string[] = []
