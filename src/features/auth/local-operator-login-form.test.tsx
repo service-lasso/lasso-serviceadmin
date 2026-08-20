@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeIdentity } from '@/lib/service-lasso-dashboard/runtime-auth'
 import { LocalOperatorLoginForm } from './local-operator-login-form'
 
+const zitadelProvider = {
+  id: 'zitadel',
+  label: 'ZITADEL',
+  kind: 'zitadel' as const,
+  startUrl: 'https://auth.example.test/start',
+}
+
 function blockedIdentity(
   overrides: Partial<RuntimeIdentity> = {}
 ): RuntimeIdentity {
@@ -26,14 +33,17 @@ function blockedIdentity(
 }
 
 describe('LocalOperatorLoginForm', () => {
-  it('shows local and token fields for remote browsers when FORCE_SSO is off', () => {
+  it('shows local, token, and provider fields for remote browsers when FORCE_SSO is off', () => {
     render(
       <LocalOperatorLoginForm
-        identity={blockedIdentity()}
+        identity={blockedIdentity({
+          identityProviders: [zitadelProvider],
+        })}
         hostname='192.168.1.9'
         onAuthenticated={() => undefined}
       />
     )
+    expect(screen.getByText(/login with zitadel/i)).toBeVisible()
     expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
     expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
   })
@@ -43,14 +53,7 @@ describe('LocalOperatorLoginForm', () => {
       <LocalOperatorLoginForm
         identity={blockedIdentity({
           forceSso: true,
-          identityProviders: [
-            {
-              id: 'zitadel',
-              label: 'ZITADEL',
-              kind: 'zitadel',
-              startUrl: 'https://auth.example.test/start',
-            },
-          ],
+          identityProviders: [zitadelProvider],
         })}
         hostname='192.168.1.9'
         onAuthenticated={() => undefined}
@@ -64,5 +67,41 @@ describe('LocalOperatorLoginForm', () => {
       screen.queryByLabelText(/local-admin token/i)
     ).not.toBeInTheDocument()
     expect(screen.getByText(/FORCE_SSO is on/i)).toBeVisible()
+  })
+
+  it('keeps local, token, and provider fields on loopback when FORCE_SSO is on', () => {
+    render(
+      <LocalOperatorLoginForm
+        identity={blockedIdentity({
+          local: true,
+          remoteAuthRequired: false,
+          forceSso: true,
+          identityProviders: [zitadelProvider],
+          blockers: [],
+        })}
+        hostname='127.0.0.1'
+        onAuthenticated={() => undefined}
+      />
+    )
+    expect(screen.getByText(/login with zitadel/i)).toBeVisible()
+    expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
+    expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
+    expect(screen.queryByText(/FORCE_SSO is on/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps local and token fields when the hostname is loopback even if Core local is false', () => {
+    render(
+      <LocalOperatorLoginForm
+        identity={blockedIdentity({
+          forceSso: true,
+          identityProviders: [zitadelProvider],
+        })}
+        hostname='localhost'
+        onAuthenticated={() => undefined}
+      />
+    )
+    expect(screen.getByText(/login with zitadel/i)).toBeVisible()
+    expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
+    expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
   })
 })

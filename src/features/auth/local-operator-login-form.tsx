@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import {
   LOCAL_OPERATOR_USERNAME,
+  isLoopbackLoginOrigin,
   writeLocalOperatorSession,
 } from '@/lib/service-lasso-dashboard/local-operator-session'
 import type { RuntimeIdentity } from '@/lib/service-lasso-dashboard/runtime-auth'
@@ -75,7 +76,8 @@ export function LocalOperatorLoginForm({
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  const forceSsoRemote = identity.forceSso && !identity.local
+  const loopbackOrigin = isLoopbackLoginOrigin(identity, hostname)
+  const forceSsoRemote = identity.forceSso && !loopbackOrigin
   const showLocalForms = !forceSsoRemote
 
   async function onSubmit(

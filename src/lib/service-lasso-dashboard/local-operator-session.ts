@@ -20,6 +20,17 @@ export function isLoopbackHostname(hostname: string): boolean {
   )
 }
 
+/**
+ * True when this Admin origin must keep every login method visible.
+ * FORCE_SSO may hide Local/Token only when this is false.
+ */
+export function isLoopbackLoginOrigin(
+  identity: { local: boolean },
+  hostname: string
+): boolean {
+  return identity.local || isLoopbackHostname(hostname)
+}
+
 export function readLocalOperatorSession(): string | null {
   try {
     const value = sessionStorage.getItem(LOCAL_OPERATOR_SESSION_KEY)
