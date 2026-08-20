@@ -181,19 +181,29 @@ test('services table filters and opens service detail', async ({ page }) => {
     page.getByText('Operator dashboard for Service Lasso')
   ).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Start service', exact: true })
+    page
+      .getByTestId('service-detail-lifecycle-controls')
+      .getByRole('button', { name: 'Start service', exact: true })
   ).toBeDisabled()
   await expect(
-    page.getByRole('button', { name: 'Start service', exact: true })
+    page
+      .getByTestId('service-detail-lifecycle-controls')
+      .getByRole('button', { name: 'Start service', exact: true })
   ).toHaveAttribute('title', 'Start service unavailable for Service Admin UI')
   await expect(
-    page.getByRole('button', { name: 'Stop service', exact: true })
+    page
+      .getByTestId('service-detail-lifecycle-controls')
+      .getByRole('button', { name: 'Stop service', exact: true })
   ).toBeEnabled()
   await expect(
-    page.getByRole('button', { name: 'Stop service', exact: true })
+    page
+      .getByTestId('service-detail-lifecycle-controls')
+      .getByRole('button', { name: 'Stop service', exact: true })
   ).toHaveClass(/text-red-600/)
   await expect(
-    page.getByRole('button', { name: 'Stop service', exact: true })
+    page
+      .getByTestId('service-detail-lifecycle-controls')
+      .getByRole('button', { name: 'Stop service', exact: true })
   ).not.toHaveClass(/bg-red-600/)
   await expect(
     page.getByRole('button', { name: 'Restart service', exact: true })
