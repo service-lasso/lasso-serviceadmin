@@ -28,9 +28,26 @@
       "description": "Stop the Dagu workflow engine gracefully."
     }
   },
+  "endpoints": [
+    {
+      "id": "web",
+      "kind": "network",
+      "label": "Web UI",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 8082,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    }
+  ],
   "execconfig": {
     "serviceorder": 40,
-    "serviceport": 8082,
     "execcwd": ".",
     "executable": "dagu",
     "env": {
@@ -39,8 +56,11 @@
     "depend_on": [
       "@traefik"
     ],
-    "healthcheck": {
-      "type": "process"
-    }
+    "healthchecks": [
+      {
+        "id": "process-ready",
+        "type": "process"
+      }
+    ]
   }
 }

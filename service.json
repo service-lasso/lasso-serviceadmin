@@ -1,42 +1,72 @@
 {
   "id": "@serviceadmin",
-  "name": "Service Admin UI",
-  "description": "Operator UI for inspecting and controlling Service Lasso services.",
-  "enabled": true,
+  "name": "Core Service Admin",
+  "description": "Authenticated operator UI for Service Lasso and its Secrets Broker.",
   "version": "0.1.0",
-  "logoutput": true,
-  "icon": "layout-dashboard",
-  "servicetype": 20,
-  "servicelocation": 10,
-  "actions": {
-    "install": {
-      "description": "Install or refresh the Service Admin UI release content."
+  "enabled": true,
+  "depend_on": ["@node"],
+  "ports": { "ui": 17700 },
+  "env": {
+    "SERVICE_HOST": "127.0.0.1",
+    "SERVICE_PORT": "${UI_PORT}",
+    "SERVICE_LASSO_API_BASE_URL": "http://127.0.0.1:17883",
+    "SERVICE_LASSO_RUNTIME_API_BASE_URL": "http://127.0.0.1:17883"
+  },
+  "urls": [
+    { "label": "ui", "url": "http://127.0.0.1:${UI_PORT}/", "kind": "local" }
+  ],
+  "artifact": {
+    "kind": "archive",
+    "source": {
+      "type": "github-release",
+      "repo": "service-lasso/lasso-serviceadmin",
+      "channel": "latest"
     },
-    "config": {
-      "description": "Materialize the effective Service Admin runtime configuration."
-    },
-    "start": {
-      "description": "Start the Service Admin UI."
-    },
-    "stop": {
-      "description": "Stop the Service Admin UI gracefully."
+    "platforms": {
+      "win32": {
+        "assetName": "@serviceadmin-win32.zip",
+        "archiveType": "zip",
+        "command": "node",
+        "args": ["runtime/server.js"],
+        "checksum": {
+          "algorithm": "sha256",
+          "assetName": "SHA256SUMS.txt"
+        }
+      },
+      "linux": {
+        "assetName": "@serviceadmin-linux.tar.gz",
+        "archiveType": "tar.gz",
+        "command": "node",
+        "args": ["runtime/server.js"],
+        "checksum": {
+          "algorithm": "sha256",
+          "assetName": "SHA256SUMS.txt"
+        }
+      },
+      "darwin": {
+        "assetName": "@serviceadmin-darwin.tar.gz",
+        "archiveType": "tar.gz",
+        "command": "node",
+        "args": ["runtime/server.js"],
+        "checksum": {
+          "algorithm": "sha256",
+          "assetName": "SHA256SUMS.txt"
+        }
+      }
     }
   },
+  "healthchecks": [
+    { "id": "process-ready", "type": "process" }
+  ],
   "execconfig": {
     "serviceorder": 100,
-    "serviceport": 17700,
     "execcwd": ".",
-    "executable": "NODE",
-    "args": [
-      "runtime/server.js"
+    "executable": "node",
+    "args": ["runtime/server.js"],
+    "depend_on": ["@node"],
+    "healthchecks": [
+      { "id": "process-ready", "type": "process" }
     ],
-    "depend_on": [
-      "@traefik",
-      "@node"
-    ],
-    "healthcheck": {
-      "type": "process"
-    },
     "execservice": "@node"
   }
 }

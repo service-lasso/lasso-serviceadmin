@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - master
+      - develop
 
   pull_request:
     branches:
       - master
+      - develop
 
 jobs:
   install-lint-build:
@@ -18,29 +20,40 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
-          cache: npm
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
 
       - name: Lint the code
-        run: npm run lint
+        run: pnpm lint
 
       # - name: Analyze unused files and dependencies
       #   run: pnpm knip
 
       - name: Run Prettier check
-        run: npm run format:check
+        run: pnpm format:check
 
       - name: Run unit tests
-        run: npm run test:unit
+        run: pnpm test:unit
 
       - name: Build the project
-        run: npm run build
+        run: pnpm build
+
+      - name: Verify packaged runtime
+        run: pnpm test:runtime
 
       - name: Verify hosted Chrome
         run: google-chrome --version
@@ -49,11 +62,10 @@ jobs:
         timeout-minutes: 15
         env:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
-        run: npm run test:ui
+        run: pnpm test:ui
 
-      - name: Run service template checks
+      - name: Build and verify release artifact
         timeout-minutes: 15
-        shell: bash
         run: |
-          bash ./scripts/test.sh
-          bash ./scripts/package.sh
+          pnpm package:artifact -- linux
+          pnpm package:verify -- linux
