@@ -765,4 +765,89 @@ describe('service lasso dashboard runtime client', () => {
     expect(listed.status).toBe('available')
     expect(listed.items[0]?.state).toBe('read')
   })
+
+  it('hides and restores an Inbox item through the runtime mutation API', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    const item = {
+      id: 'inbox-update-available-traefik',
+      dedupeKey: 'update:available:@traefik:current',
+      title: 'Update available: @traefik',
+      summary: 'Traefik has a newer package ready for review.',
+      details: null,
+      type: 'update',
+      severity: 'info',
+      source: 'updater',
+      state: 'unread',
+      visibility: 'visible',
+      createdAt: '2026-08-20T01:10:00.000Z',
+      updatedAt: '2026-08-20T01:10:00.000Z',
+      readAt: null,
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: '@traefik',
+        route: '/services/%40traefik',
+      },
+      action: {
+        label: 'Open service',
+        target: '/services/%40traefik',
+        kind: 'link',
+        availability: 'available',
+      },
+    }
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        url ===
+          'http://runtime.test/api/operator/inbox/inbox-update-available-traefik/hide' &&
+        init?.method === 'POST'
+      ) {
+        return jsonResponse({
+          inbox: {
+            items: [
+              {
+                ...item,
+                visibility: 'hidden',
+                hiddenAt: '2026-08-20T02:00:00.000Z',
+              },
+            ],
+          },
+        })
+      }
+
+      if (
+        url ===
+          'http://runtime.test/api/operator/inbox/inbox-update-available-traefik/unhide' &&
+        init?.method === 'POST'
+      ) {
+        return jsonResponse({
+          inbox: {
+            items: [{ ...item, visibility: 'visible', hiddenAt: null }],
+          },
+        })
+      }
+
+      if (
+        url === 'http://runtime.test/api/operator/inbox?filter=all&limit=200'
+      ) {
+        return jsonResponse({
+          inbox: {
+            items: [item],
+            pagination: { limit: 200, nextCursor: null, total: 1 },
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { hideInboxItem, unhideInboxItem } = await import('./client')
+    const hidden = await hideInboxItem('inbox-update-available-traefik')
+    const restored = await unhideInboxItem('inbox-update-available-traefik')
+
+    expect(hidden.status).toBe('available')
+    expect(restored.status).toBe('available')
+    expect(restored.items[0]?.visibility).toBe('visible')
+  })
 })

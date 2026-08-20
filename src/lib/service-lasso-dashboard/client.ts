@@ -18,6 +18,8 @@ import {
   fetchTelemetryPreview as fetchStubTelemetryPreview,
   markInboxItemsRead as markStubInboxItemsRead,
   markInboxRead as markStubInboxRead,
+  hideInboxItem as hideStubInboxItem,
+  unhideInboxItem as unhideStubInboxItem,
   runDashboardAction as runStubDashboardAction,
   saveServiceConfigDocument as saveStubServiceConfigDocument,
   serviceLassoApiBaseUrl,
@@ -509,6 +511,34 @@ export async function markInboxItemsRead(itemIds: string[]) {
     action: 'read',
     ids: itemIds,
   })
+}
+
+/**
+ * Hides one Inbox item through Core `POST /api/operator/inbox/:id/hide`.
+ */
+export async function hideInboxItem(itemId: string) {
+  if (isServiceAdminStubModeEnabled()) {
+    return hideStubInboxItem(itemId)
+  }
+
+  return mutateRuntimeInbox(
+    `/api/operator/inbox/${encodeURIComponent(itemId)}/hide`,
+    {}
+  )
+}
+
+/**
+ * Restores one hidden Inbox item through Core `POST /api/operator/inbox/:id/unhide`.
+ */
+export async function unhideInboxItem(itemId: string) {
+  if (isServiceAdminStubModeEnabled()) {
+    return unhideStubInboxItem(itemId)
+  }
+
+  return mutateRuntimeInbox(
+    `/api/operator/inbox/${encodeURIComponent(itemId)}/unhide`,
+    {}
+  )
 }
 
 export async function fetchServiceConfigDocument(serviceId: string) {

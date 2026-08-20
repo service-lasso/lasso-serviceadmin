@@ -47,6 +47,12 @@ const helpLinksByRoute: Record<string, HelpLink[]> = {
       doc: 'help/network-and-service-routes-operator-guide.md',
     },
   ],
+  '/inbox': [
+    {
+      label: 'Inbox guide',
+      doc: 'help/operations-inbox-operator-guide.md',
+    },
+  ],
   '/operations/telemetry': [
     {
       label: 'Telemetry guide',

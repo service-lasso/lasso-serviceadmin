@@ -4,15 +4,18 @@ import { Link } from '@tanstack/react-router'
 import { Inbox as InboxIcon } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  useHideInboxItem,
   useInbox,
   useInboxCounts,
   useMarkInboxItemsRead,
   useMarkInboxRead,
+  useUnhideInboxItem,
 } from '@/lib/service-lasso-dashboard/hooks'
 import {
   filterInboxItemsForView,
   resolveInboxDeepLink,
   type InboxDeepLink,
+  type InboxViewFilter,
 } from '@/lib/service-lasso-dashboard/inbox'
 import type {
   InboxListResult,
@@ -30,7 +33,46 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
-type InboxViewFilter = 'unread' | 'read' | 'all'
+/**
+ * Returns the Unread / Read / All / Hidden filter button label.
+ */
+function inboxViewLabel(option: InboxViewFilter, hiddenCount: number): string {
+  if (option === 'unread') {
+    return 'Unread'
+  }
+  if (option === 'read') {
+    return 'Read'
+  }
+  if (option === 'all') {
+    return 'All'
+  }
+  if (hiddenCount > 0) {
+    return `Hidden (${hiddenCount})`
+  }
+  return 'Hidden'
+}
+
+/**
+ * Empty-list copy for the current Inbox filter and runtime availability.
+ */
+function inboxEmptyMessage(
+  status: InboxListResult['status'] | undefined,
+  view: InboxViewFilter
+): string {
+  if (status === 'unavailable') {
+    return 'Runtime Inbox messages are unavailable.'
+  }
+  if (view === 'unread') {
+    return 'No unread Inbox messages.'
+  }
+  if (view === 'read') {
+    return 'No read Inbox messages.'
+  }
+  if (view === 'hidden') {
+    return 'No hidden Inbox messages.'
+  }
+  return 'No Inbox messages.'
+}
 
 function formatInboxTime(value: string) {
   const parsed = new Date(value)
@@ -156,13 +198,18 @@ function InboxDeepLinkAnchor({
 function InboxItemCard({
   item,
   onMarkRead,
-  markReadPending,
+  onHide,
+  onRestore,
+  mutationPending,
 }: {
   item: OperatorInboxItem
   onMarkRead: (itemId: string) => void
-  markReadPending: boolean
+  onHide: (itemId: string) => void
+  onRestore: (itemId: string) => void
+  mutationPending: boolean
 }) {
   const unread = item.state === 'unread'
+  const hidden = item.visibility === 'hidden'
 
   return (
     <article
@@ -172,7 +219,7 @@ function InboxItemCard({
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div className='min-w-0 flex-1'>
           <div className='flex flex-wrap items-center gap-2'>
-            {unread ? (
+            {unread && !hidden ? (
               <span className='size-2 shrink-0 rounded-full bg-primary' />
             ) : null}
             <h2 className='text-base font-semibold'>{item.title}</h2>
@@ -181,6 +228,7 @@ function InboxItemCard({
             </Badge>
             <Badge variant='outline'>{item.type}</Badge>
             <Badge variant='secondary'>{unread ? 'Unread' : 'Read'}</Badge>
+            {hidden ? <Badge variant='outline'>Hidden</Badge> : null}
           </div>
           <p className='mt-2 text-sm text-muted-foreground'>{item.summary}</p>
           {item.details ? (
@@ -192,16 +240,38 @@ function InboxItemCard({
         </div>
         <div className='flex shrink-0 flex-wrap items-center gap-2'>
           <InboxTargetLink item={item} />
-          {unread ? (
+          {hidden ? (
             <Button
               type='button'
               size='sm'
-              onClick={() => onMarkRead(item.id)}
-              disabled={markReadPending}
+              onClick={() => onRestore(item.id)}
+              disabled={mutationPending}
             >
-              Mark read
+              Restore
             </Button>
-          ) : null}
+          ) : (
+            <>
+              {unread ? (
+                <Button
+                  type='button'
+                  size='sm'
+                  onClick={() => onMarkRead(item.id)}
+                  disabled={mutationPending}
+                >
+                  Mark read
+                </Button>
+              ) : null}
+              <Button
+                type='button'
+                size='sm'
+                variant='outline'
+                onClick={() => onHide(item.id)}
+                disabled={mutationPending}
+              >
+                Hide
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </article>
@@ -222,10 +292,14 @@ export function OperatorInboxPage() {
   })
 
   const [view, setView] = useState<InboxViewFilter>('unread')
-  const inboxQuery = useInbox({ filter: 'all', limit: 200 })
+  const visibleQuery = useInbox({ filter: 'all', limit: 200 })
+  const hiddenQuery = useInbox({ filter: 'hidden', limit: 200 })
   const countsQuery = useInboxCounts()
   const markRead = useMarkInboxRead()
   const markItemsRead = useMarkInboxItemsRead()
+  const hideItem = useHideInboxItem()
+  const unhideItem = useUnhideInboxItem()
+  const inboxQuery = view === 'hidden' ? hiddenQuery : visibleQuery
   const result = inboxQuery.data
   const notice = inboxSourceNotice(result)
   const items = useMemo(
@@ -234,17 +308,25 @@ export function OperatorInboxPage() {
   )
   const unreadIds = useMemo(
     () =>
-      filterInboxItemsForView(result?.items ?? [], 'unread').map(
+      filterInboxItemsForView(visibleQuery.data?.items ?? [], 'unread').map(
         (item) => item.id
       ),
-    [result?.items]
+    [visibleQuery.data?.items]
   )
   const unreadCount =
     countsQuery.data?.status === 'available' ? countsQuery.data.unread : 0
-  const totalVisible = result?.items.filter(
+  const hiddenCount =
+    countsQuery.data?.status === 'available' && countsQuery.data.counts
+      ? countsQuery.data.counts.hidden
+      : 0
+  const totalVisible = visibleQuery.data?.items.filter(
     (item) => item.visibility === 'visible'
   ).length
-  const markReadPending = markRead.isPending || markItemsRead.isPending
+  const mutationPending =
+    markRead.isPending ||
+    markItemsRead.isPending ||
+    hideItem.isPending ||
+    unhideItem.isPending
 
   return (
     <>
@@ -274,7 +356,9 @@ export function OperatorInboxPage() {
               {typeof totalVisible === 'number' ? totalVisible : '—'}
             </div>
             <p className='text-xs text-muted-foreground'>
-              Hidden records stay restorable in the runtime store.
+              {hiddenCount === 1
+                ? '1 hidden notice stays restorable in the runtime store.'
+                : `${hiddenCount} hidden notices stay restorable in the runtime store.`}
             </p>
           </div>
           <div className='rounded-md border p-4'>
@@ -298,7 +382,7 @@ export function OperatorInboxPage() {
         </div>
 
         <div className='flex flex-wrap items-center gap-2'>
-          {(['unread', 'read', 'all'] as const).map((option) => (
+          {(['unread', 'read', 'all', 'hidden'] as const).map((option) => (
             <Button
               key={option}
               type='button'
@@ -306,18 +390,14 @@ export function OperatorInboxPage() {
               variant={view === option ? 'default' : 'outline'}
               onClick={() => setView(option)}
             >
-              {option === 'unread'
-                ? 'Unread'
-                : option === 'read'
-                  ? 'Read'
-                  : 'All'}
+              {inboxViewLabel(option, hiddenCount)}
             </Button>
           ))}
           <Button
             type='button'
             size='sm'
             variant='outline'
-            disabled={unreadIds.length === 0 || markReadPending}
+            disabled={unreadIds.length === 0 || mutationPending}
             onClick={() => markItemsRead.mutate(unreadIds)}
           >
             Mark all read
@@ -331,13 +411,7 @@ export function OperatorInboxPage() {
           </div>
         ) : items.length === 0 ? (
           <p className='text-sm text-muted-foreground'>
-            {result?.status === 'unavailable'
-              ? 'Runtime Inbox messages are unavailable.'
-              : view === 'unread'
-                ? 'No unread Inbox messages.'
-                : view === 'read'
-                  ? 'No read Inbox messages.'
-                  : 'No Inbox messages.'}
+            {inboxEmptyMessage(result?.status, view)}
           </p>
         ) : (
           <div className='flex flex-col gap-3'>
@@ -346,7 +420,9 @@ export function OperatorInboxPage() {
                 key={item.id}
                 item={item}
                 onMarkRead={(itemId) => markRead.mutate(itemId)}
-                markReadPending={markReadPending}
+                onHide={(itemId) => hideItem.mutate(itemId)}
+                onRestore={(itemId) => unhideItem.mutate(itemId)}
+                mutationPending={mutationPending}
               />
             ))}
           </div>

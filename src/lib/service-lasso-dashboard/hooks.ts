@@ -44,8 +44,10 @@ import {
   fetchServiceTelemetryPreview,
   fetchServices,
   fetchTelemetryPreview,
+  hideInboxItem,
   markInboxItemsRead,
   markInboxRead,
+  unhideInboxItem,
   runDashboardAction,
 } from './client'
 import { runtimeIdentityAuditContext, useRuntimeIdentity } from './runtime-auth'
@@ -155,6 +157,36 @@ export function useMarkInboxItemsRead() {
 
   return useMutation({
     mutationFn: (itemIds: string[]) => markInboxItemsRead(itemIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
+    },
+  })
+}
+
+/**
+ * Hides one Inbox item and refreshes list plus badge counts.
+ */
+export function useHideInboxItem() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (itemId: string) => hideInboxItem(itemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
+    },
+  })
+}
+
+/**
+ * Restores one hidden Inbox item and refreshes list plus badge counts.
+ */
+export function useUnhideInboxItem() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (itemId: string) => unhideInboxItem(itemId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
       void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
