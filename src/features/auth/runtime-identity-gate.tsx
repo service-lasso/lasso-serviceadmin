@@ -1,9 +1,13 @@
 import { useEffect } from 'react'
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
-import { useRuntimeIdentity } from '@/lib/service-lasso-dashboard/runtime-auth'
+import {
+  identityUnlocksUi,
+  useRuntimeIdentity,
+} from '@/lib/service-lasso-dashboard/runtime-auth'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { LocalOperatorLoginForm } from '@/features/auth/local-operator-login-form'
 
 function IdentityBoundary({
   title,
@@ -30,6 +34,10 @@ function IdentityBoundary({
   )
 }
 
+function browserHostname(): string {
+  return window.location.hostname
+}
+
 export function RuntimeIdentityGate({
   children,
 }: {
@@ -37,10 +45,12 @@ export function RuntimeIdentityGate({
 }) {
   const identityQuery = useRuntimeIdentity()
   const setUser = useAuthStore((state) => state.auth.setUser)
+  const hostname = browserHostname()
+  const identity = identityQuery.data
+  const unlocked = identity ? identityUnlocksUi(identity, hostname) : false
 
   useEffect(() => {
-    const identity = identityQuery.data
-    if (!identity?.authenticated || !identity.actorKind || !identity.actorId) {
+    if (!identity || !unlocked || !identity.actorKind || !identity.actorId) {
       setUser(null)
       return
     }
@@ -52,7 +62,7 @@ export function RuntimeIdentityGate({
       roles: identity.roles,
       permissions: identity.permissions,
     })
-  }, [identityQuery.data, setUser])
+  }, [identity, unlocked, setUser])
 
   if (identityQuery.isLoading) {
     return (
@@ -73,18 +83,32 @@ export function RuntimeIdentityGate({
     )
   }
 
-  if (!identityQuery.data?.authenticated) {
+  if (!unlocked && identity) {
+    return (
+      <main className='mx-auto flex min-h-svh w-full max-w-lg items-center px-4 py-8'>
+        <LocalOperatorLoginForm
+          identity={identity}
+          hostname={hostname}
+          onAuthenticated={() => {
+            void identityQuery.refetch()
+          }}
+        />
+      </main>
+    )
+  }
+
+  if (!unlocked) {
     return (
       <IdentityBoundary
         title='Authentication required'
-        description='Open Service Admin through the protected Traefik route and complete the configured identity-provider login. Service Admin does not collect or store provider passwords or tokens.'
+        description='Open Service Admin on 127.0.0.1 as break-glass, or complete local/token/SSO login.'
         retry={() => void identityQuery.refetch()}
       />
     )
   }
 
   return (
-    <div data-runtime-identity={identityQuery.data.actorKind}>
+    <div data-runtime-identity={identity?.actorKind}>
       <span className='sr-only'>
         <ShieldCheck /> Trusted identity verified
       </span>

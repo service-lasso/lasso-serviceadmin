@@ -5,6 +5,7 @@ import {
   unavailableInboxList,
   unreadBadgeCount,
 } from './inbox'
+import { withLocalOperatorRequestInit } from './local-operator-session'
 import {
   buildStubServiceLogUrl,
   fetchAuditEvents as fetchStubAuditEvents,
@@ -102,7 +103,10 @@ async function readResponseBody(response: Response, contentType: string) {
 }
 
 async function fetchRuntimeJson<T>(pathname: string, init?: RequestInit) {
-  const response = await fetch(buildApiUrl(pathname), init)
+  const response = await fetch(
+    buildApiUrl(pathname),
+    withLocalOperatorRequestInit(init)
+  )
   const contentType = response.headers.get('content-type') ?? ''
 
   if (!response.ok) {

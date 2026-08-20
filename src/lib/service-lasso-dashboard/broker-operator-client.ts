@@ -3,6 +3,7 @@
  * Isolated from the master dashboard stub so packaged master UI keeps its
  * existing secrets-broker pages while gaining 478 alias/lifecycle APIs.
  */
+import { withLocalOperatorRequestInit } from './local-operator-session'
 import {
   requireSafeBrokerIdentifier,
   sanitizeBrokerDisplayText,
@@ -304,11 +305,11 @@ export async function fetchRuntimeJson<T>(
     ...detailsBase,
     endpoint,
   }
-  const requestInit: RequestInit = {
+  const requestInit: RequestInit = withLocalOperatorRequestInit({
     method: options?.method,
     headers: options?.headers,
     body: options?.body,
-  }
+  })
 
   try {
     response = await fetch(endpoint, requestInit)

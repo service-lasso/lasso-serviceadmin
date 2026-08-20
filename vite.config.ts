@@ -6,6 +6,7 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { promises as fs } from 'fs'
 import type { IncomingMessage, ServerResponse } from 'http'
 import {
+  applyOriginalClientAddressHeader,
   resolveRuntimeProxyTarget,
   shouldEnableStubLogMiddleware,
 } from './src/lib/service-lasso-dashboard/runtime-proxy-target'
@@ -344,6 +345,19 @@ export default defineConfig({
           process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET
         ),
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            applyOriginalClientAddressHeader(
+              (name, value) => {
+                proxyReq.setHeader(name, value)
+              },
+              (name) => {
+                proxyReq.removeHeader(name)
+              },
+              req.socket.remoteAddress
+            )
+          })
+        },
       },
     },
   },
@@ -354,6 +368,19 @@ export default defineConfig({
           process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET
         ),
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            applyOriginalClientAddressHeader(
+              (name, value) => {
+                proxyReq.setHeader(name, value)
+              },
+              (name) => {
+                proxyReq.removeHeader(name)
+              },
+              req.socket.remoteAddress
+            )
+          })
+        },
       },
     },
   },

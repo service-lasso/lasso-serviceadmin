@@ -3,8 +3,16 @@ import {
   fetchRuntimeJson,
   serviceLassoStubDataEnabled,
 } from './broker-operator-client'
+import { isLoopbackHostname } from './local-operator-session'
 
 export type RuntimeActorKind = 'local-root' | 'zitadel' | 'local-token'
+
+export type RuntimeIdentityProvider = {
+  id: string
+  label: string
+  kind: 'zitadel'
+  startUrl: string | null
+}
 
 export type RuntimeIdentity = {
   contractVersion: 'service-lasso.auth-status.v1'
@@ -13,6 +21,10 @@ export type RuntimeIdentity = {
   actorId: string | null
   local: boolean
   remoteAuthRequired: boolean
+  forceSso: boolean
+  localTokenConfigured: boolean
+  localOperatorConfigured: boolean
+  identityProviders: RuntimeIdentityProvider[]
   workspaceId: string | null
   roles: string[]
   permissions: string[]
@@ -103,6 +115,7 @@ export function normalizeRuntimeIdentity(payload: unknown): RuntimeIdentity {
   const workspaceId = safeIdentifier(actor.workspaceId)
   const roles = safeStringArray(actor.roles)
   const permissions = safePermissionArray(actor.permissions)
+  const identityProviders = parseIdentityProviders(policy.identityProviders)
 
   return {
     contractVersion,
@@ -111,11 +124,58 @@ export function normalizeRuntimeIdentity(payload: unknown): RuntimeIdentity {
     actorId,
     local: request.local,
     remoteAuthRequired: policy.remoteAuthRequired,
+    forceSso: policy.forceSso === true,
+    localTokenConfigured: policy.localTokenConfigured === true,
+    localOperatorConfigured: policy.localOperatorConfigured === true,
+    identityProviders,
     workspaceId,
     roles,
     permissions,
     blockers,
   }
+}
+
+function parseIdentityProviders(value: unknown): RuntimeIdentityProvider[] {
+  if (!Array.isArray(value) || value.length > 16) {
+    return []
+  }
+  const providers: RuntimeIdentityProvider[] = []
+  for (const entry of value) {
+    if (!isRecord(entry) || entry.kind !== 'zitadel') {
+      continue
+    }
+    const id = safeIdentifier(entry.id)
+    const label = safeIdentifier(entry.label)
+    if (!id || !label) {
+      continue
+    }
+    const startUrl =
+      typeof entry.startUrl === 'string' && /^https?:\/\//u.test(entry.startUrl)
+        ? entry.startUrl
+        : null
+    providers.push({ id, label, kind: 'zitadel', startUrl })
+  }
+  return providers
+}
+
+/**
+ * local-root is trusted only on loopback browser origins. LAN/hostname needs
+ * local-token or zitadel, even if Core still reports local-root via a proxy.
+ */
+export function identityUnlocksUi(
+  identity: RuntimeIdentity,
+  hostname: string
+): boolean {
+  if (!identity.authenticated || !identity.actorKind || !identity.actorId) {
+    return false
+  }
+  if (
+    identity.actorKind === 'local-token' ||
+    identity.actorKind === 'zitadel'
+  ) {
+    return true
+  }
+  return identity.actorKind === 'local-root' && isLoopbackHostname(hostname)
 }
 
 /** Trusted local-root identity used by stub dashboards and Vitest screens. */
@@ -126,6 +186,10 @@ const fixtureRuntimeIdentity: RuntimeIdentity = {
   actorId: 'local-root',
   local: true,
   remoteAuthRequired: false,
+  forceSso: false,
+  localTokenConfigured: true,
+  localOperatorConfigured: true,
+  identityProviders: [],
   workspaceId: 'local',
   roles: ['serviceadmin.owner'],
   permissions: ['*'],
