@@ -178,21 +178,26 @@ The Dependencies page should have these sections:
    - search input
    - top-level jumps back into other operator pages
 
-2. **Graph summary cards**
-   - service count
-   - edge count
-   - selected node
-   - keep these compact
+2. **Graph controls**
+   - search, status, category, and utility-node filters
+   - stay compact at the top (`shrink-0`) so the graph can use leftover height
 
 3. **Main React Flow canvas**
    - this is the primary surface
    - should dominate the page visually
+   - with the selected-service details card, fill remaining viewport height
+     under Graph controls (`Main fixed` + `min-h-0` flex children, both panes
+     `flex-1 min-h-0`)
+   - canvas uses `fill` plus pane `ResizeObserver` / `fitView` so React Flow
+     uses the taller box instead of a fixed 520px island
 
 4. **Selected service side panel**
    - short summary
    - status badges
    - counts of dependencies/dependents
    - links to service details and logs
+   - grows with the graph and scrolls internally when relationship lists
+     overflow; quick-action buttons stay pinned in the card footer
 
 ## Node design spec
 

@@ -92,8 +92,9 @@ function paneLayoutKey(nodes: Node[]) {
 }
 
 /**
- * React Flow surface. `fill` grows with the parent (Mapping graph); a
- * numeric `height` keeps legacy callers such as Dependencies unchanged.
+ * React Flow surface. `fill` grows with the parent (Mapping graph and
+ * Dependencies page). A numeric `height` keeps callers such as the
+ * service-detail neighborhood graph at a fixed canvas size.
  */
 export function DependencyGraphCanvas({
   nodes,
@@ -173,14 +174,14 @@ export function DependencyGraphCanvas({
 
   return (
     <div
-      className={cn('flex min-h-0 flex-col gap-3', fill && 'flex-1')}
+      className={cn('flex h-full min-h-0 flex-col gap-3', fill && 'flex-1')}
       data-testid={fill ? 'dependency-graph-fill' : undefined}
     >
       <div
         ref={paneRef}
         data-testid={paneTestId}
         className={cn(
-          fill ? 'min-h-0 flex-1 overflow-hidden' : undefined,
+          fill ? 'h-full min-h-0 flex-1 overflow-hidden' : undefined,
           isDark
             ? 'rounded-lg border bg-slate-950'
             : 'rounded-lg border bg-slate-50'
