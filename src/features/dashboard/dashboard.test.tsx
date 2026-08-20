@@ -1,5 +1,5 @@
 import { renderRoute } from '@/test/render-route'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -13,6 +13,10 @@ const hookMocks = vi.hoisted(() => ({
   useDashboardService: vi.fn(),
   useDashboardSummary: vi.fn(),
   useBrokerTelemetry: vi.fn(),
+  useInboxCounts: vi.fn(),
+  useFleetMetrics: vi.fn(),
+  useRuntimeInstanceHome: vi.fn(),
+  useNetworkHome: vi.fn(),
   useServices: vi.fn(),
   useFavoriteFeatureState: vi.fn(),
   useToggleFavorite: vi.fn(),
@@ -27,6 +31,10 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', async (importOriginal) => {
     useDashboardService: hookMocks.useDashboardService,
     useDashboardSummary: hookMocks.useDashboardSummary,
     useBrokerTelemetry: hookMocks.useBrokerTelemetry,
+    useInboxCounts: hookMocks.useInboxCounts,
+    useFleetMetrics: hookMocks.useFleetMetrics,
+    useRuntimeInstanceHome: hookMocks.useRuntimeInstanceHome,
+    useNetworkHome: hookMocks.useNetworkHome,
     useServices: hookMocks.useServices,
     useFavoriteFeatureState: hookMocks.useFavoriteFeatureState,
     useToggleFavorite: hookMocks.useToggleFavorite,
@@ -86,6 +94,34 @@ function summary(): DashboardSummary {
   }
 }
 
+function mockHomeQueries() {
+  hookMocks.useInboxCounts.mockReturnValue({
+    data: { unread: 3 },
+    isError: false,
+    isLoading: false,
+  })
+  hookMocks.useFleetMetrics.mockReturnValue({
+    data: [],
+    isError: false,
+    isLoading: false,
+  })
+  hookMocks.useRuntimeInstanceHome.mockReturnValue({
+    data: {
+      phase: 'running',
+      activeGenerationId: 'gen-test',
+      classification: 'selected',
+      staleCount: 0,
+    },
+    isError: false,
+    isLoading: false,
+  })
+  hookMocks.useNetworkHome.mockReturnValue({
+    data: [],
+    isError: false,
+    isLoading: false,
+  })
+}
+
 describe('Dashboard runtime health action', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -113,6 +149,7 @@ describe('Dashboard runtime health action', () => {
       isError: false,
       isLoading: false,
     })
+    mockHomeQueries()
   })
 
   it('runs the reload runtime action from the runtime health card', async () => {
@@ -258,6 +295,7 @@ describe('Dashboard Secrets Broker chips', () => {
     })
     hookMocks.useFavoriteFeatureState.mockReturnValue({ enabled: true })
     hookMocks.useToggleFavorite.mockReturnValue({ mutateAsync: vi.fn() })
+    mockHomeQueries()
   })
 
   it('shows Broker ready and lockout counts without secret values', async () => {
@@ -294,6 +332,92 @@ describe('Dashboard Secrets Broker chips', () => {
     ).toHaveAttribute('href', '/secrets-broker/secrets')
     expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/password=/i)).not.toBeInTheDocument()
+  })
+
+  it('replaces link-count exposure with listen ports and named failure detail', async () => {
+    const stopped = echoService()
+    stopped.status = 'stopped'
+    stopped.note = 'process-ready failed'
+    stopped.installed = false
+    stopped.runtimeHealth.lastRestartAt = '2026-08-19T09:54:00.000Z'
+    stopped.runtimeHealth.state = 'stopped'
+    stopped.runtimeHealth.health = 'critical'
+    stopped.endpoints = [
+      {
+        label: 'Local',
+        url: 'http://127.0.0.1:8080',
+        bind: '127.0.0.1',
+        port: 8080,
+        protocol: 'http',
+        exposure: 'local',
+      },
+    ]
+    const running = echoService()
+    running.id = '@traefik'
+    running.name = 'Traefik'
+    running.status = 'running'
+    running.endpoints = [
+      {
+        label: 'Web',
+        url: 'http://127.0.0.1:19080',
+        bind: '0.0.0.0',
+        port: 19080,
+        protocol: 'http',
+        exposure: 'local',
+      },
+    ]
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: {
+        ...summary(),
+        others: [running],
+        problemServices: [stopped],
+        warnings: ['Echo Service is not healthy.'],
+      },
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: {
+        counters: {
+          activeLockouts: 0,
+        },
+      },
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useFleetMetrics.mockReturnValue({
+      data: [
+        {
+          serviceId: 'echo-service',
+          running: false,
+          crashCount: 1,
+          lastTermination: 'crashed',
+          stdoutLines: 4,
+          stderrLines: 2,
+        },
+      ],
+      isError: false,
+      isLoading: false,
+    })
+
+    await renderRoute('/')
+
+    expect(screen.getByText('Listen ports')).toBeVisible()
+    expect(screen.getByLabelText('Listen ports 1')).toHaveTextContent('1')
+    expect(screen.queryByText('Network exposure')).not.toBeInTheDocument()
+    expect(screen.getByText('Inbox unread')).toBeVisible()
+    expect(screen.getByLabelText('Inbox unread 3')).toHaveTextContent('3')
+    expect(
+      within(screen.getByRole('main')).getByRole('link', { name: 'Open Inbox' })
+    ).toHaveAttribute('href', '/inbox')
+    expect(screen.getByText('Generation lane')).toBeVisible()
+    expect(screen.getByLabelText('Traefik running')).toBeVisible()
+    expect(screen.getByText('Log volume')).toBeVisible()
+    expect(screen.getByText('process-ready failed')).toBeVisible()
+    expect(screen.getByText(/Last start 2026-08-19 09:54 UTC/)).toBeVisible()
+    expect(screen.getByText(/Not installed/)).toBeVisible()
+    expect(screen.getByText('Crashed')).toBeVisible()
+    expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
   })
 
   it('shows Unavailable when @secretsbroker is missing from the dashboard payload', async () => {

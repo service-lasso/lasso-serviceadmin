@@ -5,10 +5,13 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  FleetServiceMetrics,
   InboxCountsResult,
   InboxListResult,
   InboxQuery,
+  NetworkHomeEndpoint,
   OperatorInboxItem,
+  RuntimeInstanceHome,
   ServiceConfigDocument,
   ServiceConfigRevision,
   ServiceConfigSaveResult,
@@ -1410,6 +1413,52 @@ export async function fetchInboxCounts(): Promise<InboxCountsResult> {
     unread: unreadBadgeCount(counts),
     counts,
   } satisfies InboxCountsResult)
+}
+
+/**
+ * Fixture fleet metrics so home crash/log chips work in Playwright stub mode.
+ */
+export async function fetchFleetMetrics(): Promise<FleetServiceMetrics[]> {
+  await wait(40)
+  return services.map((service) => ({
+    serviceId: service.id,
+    running: service.status === 'running',
+    crashCount: 0,
+    lastTermination: service.status === 'stopped' ? 'stopped' : null,
+    stdoutLines: service.recentLogs.filter((entry) => entry.source === 'stdout')
+      .length,
+    stderrLines: service.recentLogs.filter((entry) => entry.source === 'stderr')
+      .length,
+  }))
+}
+
+/**
+ * Fixture generation lane for Dashboard home in stub mode.
+ */
+export async function fetchRuntimeInstanceHome(): Promise<RuntimeInstanceHome> {
+  await wait(40)
+  return {
+    phase: 'running',
+    activeGenerationId: 'stub-gen-01',
+    classification: 'selected',
+    staleCount: 0,
+  }
+}
+
+/**
+ * Fixture network endpoints for Traefik reserved-route counting in stub mode.
+ */
+export async function fetchNetworkHome(): Promise<NetworkHomeEndpoint[]> {
+  await wait(40)
+  return services.flatMap((service) =>
+    service.endpoints.map((endpoint) => ({
+      serviceId: service.id,
+      label: endpoint.label,
+      port: endpoint.port,
+      bind: endpoint.bind,
+      kind: endpoint.exposure,
+    }))
+  )
 }
 
 /**

@@ -1,4 +1,9 @@
 import {
+  parseFleetMetricsPayload,
+  parseNetworkHomePayload,
+  parseRuntimeInstanceHome,
+} from './home-runtime'
+import {
   parseInboxCountsPayload,
   parseInboxListPayload,
   unavailableInboxCounts,
@@ -11,6 +16,9 @@ import {
   fetchAuditEvents as fetchStubAuditEvents,
   fetchInbox as fetchStubInbox,
   fetchInboxCounts as fetchStubInboxCounts,
+  fetchFleetMetrics as fetchStubFleetMetrics,
+  fetchRuntimeInstanceHome as fetchStubRuntimeInstanceHome,
+  fetchNetworkHome as fetchStubNetworkHome,
   fetchServiceConfigDocument as fetchStubServiceConfigDocument,
   fetchDashboardService as fetchStubDashboardService,
   fetchDashboardSummary as fetchStubDashboardSummary,
@@ -36,6 +44,9 @@ import type {
   InboxCountsResult,
   InboxListResult,
   InboxQuery,
+  FleetServiceMetrics,
+  NetworkHomeEndpoint,
+  RuntimeInstanceHome,
   ServiceConfigDocument,
   ServiceConfigSaveResult,
   ServiceLogType,
@@ -479,6 +490,51 @@ export async function fetchInbox(query: InboxQuery = {}) {
 }
 
 /**
+ * Reads optional Core JSON without throwing. Home chips fail closed.
+ */
+async function readOptionalRuntimeJson(
+  pathname: string
+): Promise<unknown | null> {
+  try {
+    const response = await fetch(
+      buildApiUrl(pathname),
+      withLocalOperatorRequestInit()
+    )
+    const contentType = response.headers.get('content-type') ?? ''
+
+    if (!response.ok) {
+      return null
+    }
+
+    if (!contentType.toLowerCase().includes('application/json')) {
+      return null
+    }
+
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+async function fetchRuntimeFleetMetrics(): Promise<
+  FleetServiceMetrics[] | null
+> {
+  return parseFleetMetricsPayload(await readOptionalRuntimeJson('/api/metrics'))
+}
+
+async function fetchRuntimeInstanceHomeSnapshot(): Promise<RuntimeInstanceHome | null> {
+  return parseRuntimeInstanceHome(
+    await readOptionalRuntimeJson('/api/runtime/instance')
+  )
+}
+
+async function fetchRuntimeNetworkHome(): Promise<
+  NetworkHomeEndpoint[] | null
+> {
+  return parseNetworkHomePayload(await readOptionalRuntimeJson('/api/network'))
+}
+
+/**
  * Loads Inbox unread counts for header and sidebar badges.
  */
 export async function fetchInboxCounts() {
@@ -487,6 +543,43 @@ export async function fetchInboxCounts() {
   }
 
   return fetchRuntimeInboxCounts()
+}
+
+/**
+ * Loads fleet process and log-line metrics for Dashboard home chips.
+ */
+export async function fetchFleetMetrics(): Promise<
+  FleetServiceMetrics[] | null
+> {
+  if (isServiceAdminStubModeEnabled()) {
+    return fetchStubFleetMetrics()
+  }
+
+  return fetchRuntimeFleetMetrics()
+}
+
+/**
+ * Loads the active generation lane for Dashboard home.
+ */
+export async function fetchRuntimeInstanceHome(): Promise<RuntimeInstanceHome | null> {
+  if (isServiceAdminStubModeEnabled()) {
+    return fetchStubRuntimeInstanceHome()
+  }
+
+  return fetchRuntimeInstanceHomeSnapshot()
+}
+
+/**
+ * Loads network endpoints for Traefik reserved-route counting on home.
+ */
+export async function fetchNetworkHome(): Promise<
+  NetworkHomeEndpoint[] | null
+> {
+  if (isServiceAdminStubModeEnabled()) {
+    return fetchStubNetworkHome()
+  }
+
+  return fetchRuntimeNetworkHome()
 }
 
 /**
