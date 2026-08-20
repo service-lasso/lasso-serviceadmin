@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { sidebarData } from './data/sidebar-data'
+import { InboxHeaderChip } from './inbox-header-chip'
 import { type NavItem } from './types'
 
 const HEADER_ACTIONS_DISPLAY_NAME = 'HeaderActions'
@@ -143,6 +144,7 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
         <div className='flex min-w-0 items-center gap-3 sm:gap-4'>
           <SidebarTrigger variant='outline' className='max-md:scale-125' />
           <Separator orientation='vertical' className='h-6' />
+          <InboxHeaderChip />
           {leading}
         </div>
         <div className='flex min-w-0 items-center justify-center'>

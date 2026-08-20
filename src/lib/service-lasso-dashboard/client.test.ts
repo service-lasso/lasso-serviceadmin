@@ -658,4 +658,111 @@ describe('service lasso dashboard runtime client', () => {
     )
     expect(runtimeSummary.favorites.map((item) => item.id)).toEqual(['@nginx'])
   })
+
+  it('returns Inbox fixtures only when explicit stub mode is enabled', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchInbox, fetchInboxCounts } = await import('./client')
+    const listed = await fetchInbox({ filter: 'unread', limit: 200 })
+    const counts = await fetchInboxCounts()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(listed.status).toBe('available')
+    expect(listed.stubMode).toBe(true)
+    expect(listed.items.some((item) => item.title.includes('@traefik'))).toBe(
+      true
+    )
+    expect(counts.unread).toBe(4)
+  })
+
+  it('reports the runtime Inbox API as unavailable on 404 without using stubs', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('http://runtime.test/api/operator/inbox')) {
+        return jsonResponse({ detail: 'not found' }, { status: 404 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchInbox, fetchInboxCounts } = await import('./client')
+
+    await expect(fetchInbox({ filter: 'all' })).resolves.toMatchObject({
+      status: 'unavailable',
+      stubMode: false,
+      items: [],
+    })
+    await expect(fetchInboxCounts()).resolves.toMatchObject({
+      status: 'unavailable',
+      unread: 0,
+    })
+  })
+
+  it('marks an Inbox item read through the runtime mutation API', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    const item = {
+      id: 'inbox-update-available-traefik',
+      dedupeKey: 'update:available:@traefik:current',
+      title: 'Update available: @traefik',
+      summary: 'Traefik has a newer package ready for review.',
+      details: null,
+      type: 'update',
+      severity: 'info',
+      source: 'updater',
+      state: 'unread',
+      visibility: 'visible',
+      createdAt: '2026-08-20T01:10:00.000Z',
+      updatedAt: '2026-08-20T01:10:00.000Z',
+      readAt: null,
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: '@traefik',
+        route: '/services/%40traefik',
+      },
+      action: {
+        label: 'Open service',
+        target: '/services/%40traefik',
+        kind: 'link',
+        availability: 'available',
+      },
+    }
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        url ===
+          'http://runtime.test/api/operator/inbox/inbox-update-available-traefik/read' &&
+        init?.method === 'POST'
+      ) {
+        return jsonResponse({ inbox: { items: [{ ...item, state: 'read' }] } })
+      }
+
+      if (
+        url === 'http://runtime.test/api/operator/inbox?filter=all&limit=200'
+      ) {
+        return jsonResponse({
+          inbox: {
+            items: [
+              { ...item, state: 'read', readAt: '2026-08-20T02:00:00.000Z' },
+            ],
+            pagination: { limit: 200, nextCursor: null, total: 1 },
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { markInboxRead } = await import('./client')
+    const listed = await markInboxRead('inbox-update-available-traefik')
+
+    expect(listed.status).toBe('available')
+    expect(listed.items[0]?.state).toBe('read')
+  })
 })

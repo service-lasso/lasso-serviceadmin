@@ -37,6 +37,7 @@ import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
 import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
 import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authenticated/installed/index'
+import { Route as AuthenticatedInboxIndexRouteImport } from './routes/_authenticated/inbox/index'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
 import { Route as AuthenticatedFleetOverviewIndexRouteImport } from './routes/_authenticated/fleet-overview/index'
 import { Route as AuthenticatedDependenciesIndexRouteImport } from './routes/_authenticated/dependencies/index'
@@ -217,6 +218,11 @@ const AuthenticatedInstalledIndexRoute =
     path: '/installed/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedInboxIndexRoute = AuthenticatedInboxIndexRouteImport.update({
+  id: '/inbox/',
+  path: '/inbox/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedHelpCenterIndexRoute =
   AuthenticatedHelpCenterIndexRouteImport.update({
     id: '/help-center/',
@@ -452,6 +458,7 @@ export interface FileRoutesByFullPath {
   '/dependencies/': typeof AuthenticatedDependenciesIndexRoute
   '/fleet-overview/': typeof AuthenticatedFleetOverviewIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
+  '/inbox/': typeof AuthenticatedInboxIndexRoute
   '/installed/': typeof AuthenticatedInstalledIndexRoute
   '/logs/': typeof AuthenticatedLogsIndexRoute
   '/network/': typeof AuthenticatedNetworkIndexRoute
@@ -510,6 +517,7 @@ export interface FileRoutesByTo {
   '/dependencies': typeof AuthenticatedDependenciesIndexRoute
   '/fleet-overview': typeof AuthenticatedFleetOverviewIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
+  '/inbox': typeof AuthenticatedInboxIndexRoute
   '/installed': typeof AuthenticatedInstalledIndexRoute
   '/logs': typeof AuthenticatedLogsIndexRoute
   '/network': typeof AuthenticatedNetworkIndexRoute
@@ -573,6 +581,7 @@ export interface FileRoutesById {
   '/_authenticated/dependencies/': typeof AuthenticatedDependenciesIndexRoute
   '/_authenticated/fleet-overview/': typeof AuthenticatedFleetOverviewIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
+  '/_authenticated/inbox/': typeof AuthenticatedInboxIndexRoute
   '/_authenticated/installed/': typeof AuthenticatedInstalledIndexRoute
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
@@ -634,6 +643,7 @@ export interface FileRouteTypes {
     | '/dependencies/'
     | '/fleet-overview/'
     | '/help-center/'
+    | '/inbox/'
     | '/installed/'
     | '/logs/'
     | '/network/'
@@ -692,6 +702,7 @@ export interface FileRouteTypes {
     | '/dependencies'
     | '/fleet-overview'
     | '/help-center'
+    | '/inbox'
     | '/installed'
     | '/logs'
     | '/network'
@@ -754,6 +765,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dependencies/'
     | '/_authenticated/fleet-overview/'
     | '/_authenticated/help-center/'
+    | '/_authenticated/inbox/'
     | '/_authenticated/installed/'
     | '/_authenticated/logs/'
     | '/_authenticated/network/'
@@ -979,6 +991,13 @@ declare module '@tanstack/react-router' {
       path: '/installed'
       fullPath: '/installed/'
       preLoaderRoute: typeof AuthenticatedInstalledIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/inbox/': {
+      id: '/_authenticated/inbox/'
+      path: '/inbox'
+      fullPath: '/inbox/'
+      preLoaderRoute: typeof AuthenticatedInboxIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/help-center/': {
@@ -1259,6 +1278,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDependenciesIndexRoute: typeof AuthenticatedDependenciesIndexRoute
   AuthenticatedFleetOverviewIndexRoute: typeof AuthenticatedFleetOverviewIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
+  AuthenticatedInboxIndexRoute: typeof AuthenticatedInboxIndexRoute
   AuthenticatedInstalledIndexRoute: typeof AuthenticatedInstalledIndexRoute
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
@@ -1315,6 +1335,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDependenciesIndexRoute: AuthenticatedDependenciesIndexRoute,
   AuthenticatedFleetOverviewIndexRoute: AuthenticatedFleetOverviewIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
+  AuthenticatedInboxIndexRoute: AuthenticatedInboxIndexRoute,
   AuthenticatedInstalledIndexRoute: AuthenticatedInstalledIndexRoute,
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,

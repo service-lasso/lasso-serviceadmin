@@ -88,6 +88,10 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Operations Audit',
   },
   {
+    path: '/inbox',
+    title: 'Service Admin - Inbox',
+  },
+  {
     path: '/auth-session',
     heading: /^Trusted SSO identity context$/i,
     title: 'Service Admin - Trusted SSO Identity',
@@ -234,6 +238,12 @@ const headerIdentityRoutes: HeaderIdentityCase[] = [
     removedCopy: /Metadata-only operation events/i,
   },
   {
+    path: '/inbox',
+    identity: 'Inbox',
+    removedHeading: /^Inbox$/i,
+    removedCopy: /Monitor runtime health, launch service actions/i,
+  },
+  {
     path: '/network',
     identity: 'Network',
     removedHeading: /^Network$/i,
@@ -262,6 +272,19 @@ describe('app screens', () => {
         expect(document.title).toBe(title)
       })
     }
+  })
+
+  it('shows the Inbox unread count in navigation and the header chip', async () => {
+    await renderRoute('/')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'Inbox, 4 unread' })
+      ).toBeVisible()
+    })
+    expect(screen.getByTestId('inbox-header-chip')).toHaveAccessibleName(
+      'Open Inbox, 4 unread'
+    )
   })
 
   it('loads the operator troubleshooting runbook in Help Center', async () => {

@@ -39,9 +39,13 @@ import {
   fetchAuditEvents,
   fetchDashboardService,
   fetchDashboardSummary,
+  fetchInbox,
+  fetchInboxCounts,
   fetchServiceTelemetryPreview,
   fetchServices,
   fetchTelemetryPreview,
+  markInboxItemsRead,
+  markInboxRead,
   runDashboardAction,
 } from './client'
 import { runtimeIdentityAuditContext, useRuntimeIdentity } from './runtime-auth'
@@ -57,6 +61,7 @@ import type {
   CoreSecretRotationExecutionRequest,
   DashboardAction,
   DashboardService,
+  InboxQuery,
   SecretCreateRequest,
   SecretDecommissionRequest,
   SecretMutationRequest,
@@ -100,6 +105,60 @@ export function useAuditEvents(filters: AuditEventsFilters = {}) {
   return useQuery({
     queryKey: [...dashboardQueryKey, 'audit-events', filters],
     queryFn: () => fetchAuditEvents(filters),
+  })
+}
+
+const inboxQueryKey = [...dashboardQueryKey, 'inbox']
+const inboxCountsQueryKey = [...dashboardQueryKey, 'inbox-counts']
+
+/**
+ * Loads durable operator Inbox messages for the Inbox page.
+ */
+export function useInbox(query: InboxQuery = {}) {
+  return useQuery({
+    queryKey: [...inboxQueryKey, query],
+    queryFn: () => fetchInbox(query),
+  })
+}
+
+/**
+ * Loads unread Inbox counts for header and sidebar badges.
+ */
+export function useInboxCounts() {
+  return useQuery({
+    queryKey: inboxCountsQueryKey,
+    queryFn: fetchInboxCounts,
+    refetchInterval: 30_000,
+  })
+}
+
+/**
+ * Marks one Inbox item read and refreshes list plus badge counts.
+ */
+export function useMarkInboxRead() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (itemId: string) => markInboxRead(itemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
+    },
+  })
+}
+
+/**
+ * Marks many Inbox items read and refreshes list plus badge counts.
+ */
+export function useMarkInboxItemsRead() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (itemIds: string[]) => markInboxItemsRead(itemIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
+    },
   })
 }
 

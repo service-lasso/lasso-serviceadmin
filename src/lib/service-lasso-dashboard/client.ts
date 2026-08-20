@@ -1,12 +1,23 @@
 import {
+  parseInboxCountsPayload,
+  parseInboxListPayload,
+  unavailableInboxCounts,
+  unavailableInboxList,
+  unreadBadgeCount,
+} from './inbox'
+import {
   buildStubServiceLogUrl,
   fetchAuditEvents as fetchStubAuditEvents,
+  fetchInbox as fetchStubInbox,
+  fetchInboxCounts as fetchStubInboxCounts,
   fetchServiceConfigDocument as fetchStubServiceConfigDocument,
   fetchDashboardService as fetchStubDashboardService,
   fetchDashboardSummary as fetchStubDashboardSummary,
   fetchServiceTelemetryPreview as fetchStubServiceTelemetryPreview,
   fetchServices as fetchStubServices,
   fetchTelemetryPreview as fetchStubTelemetryPreview,
+  markInboxItemsRead as markStubInboxItemsRead,
+  markInboxRead as markStubInboxRead,
   runDashboardAction as runStubDashboardAction,
   saveServiceConfigDocument as saveStubServiceConfigDocument,
   serviceLassoApiBaseUrl,
@@ -19,6 +30,9 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  InboxCountsResult,
+  InboxListResult,
+  InboxQuery,
   ServiceConfigDocument,
   ServiceConfigSaveResult,
   ServiceLogType,
@@ -314,6 +328,185 @@ export async function fetchAuditEvents(filters: AuditEventsFilters = {}) {
   }
 
   return fetchRuntimeAuditEvents(filters)
+}
+
+function buildInboxQueryString(query: InboxQuery = {}) {
+  const params = new URLSearchParams()
+  if (query.filter) {
+    params.set('filter', query.filter)
+  }
+  if (query.limit !== undefined) {
+    params.set('limit', String(query.limit))
+  }
+  if (query.cursor) {
+    params.set('cursor', query.cursor)
+  }
+  const queryString = params.toString()
+  return queryString ? `?${queryString}` : ''
+}
+
+async function fetchRuntimeInbox(
+  query: InboxQuery = {}
+): Promise<InboxListResult> {
+  try {
+    const pathname = `/api/operator/inbox${buildInboxQueryString(query)}`
+    const response = await fetch(buildApiUrl(pathname))
+    const contentType = response.headers.get('content-type') ?? ''
+
+    if (response.status === 404) {
+      return unavailableInboxList()
+    }
+
+    if (!response.ok) {
+      const body = await readResponseBody(response, contentType)
+      const bodyMessage =
+        typeof body === 'string' && body.trim()
+          ? body.trim()
+          : readApiErrorMessage(body)
+      const suffix = bodyMessage ? `: ${bodyMessage}` : '.'
+      return {
+        ...unavailableInboxList(),
+        unavailableReason: `Service Lasso runtime Inbox API returned ${response.status}${suffix}`,
+      }
+    }
+
+    if (!contentType.toLowerCase().includes('application/json')) {
+      return unavailableInboxList()
+    }
+
+    const parsed = parseInboxListPayload(await response.json())
+    if (!parsed) {
+      return unavailableInboxList()
+    }
+    return parsed
+  } catch {
+    return unavailableInboxList()
+  }
+}
+
+async function fetchRuntimeInboxCounts(): Promise<InboxCountsResult> {
+  try {
+    const response = await fetch(buildApiUrl('/api/operator/inbox/counts'))
+    const contentType = response.headers.get('content-type') ?? ''
+
+    if (response.status === 404) {
+      return unavailableInboxCounts()
+    }
+
+    if (!response.ok) {
+      return unavailableInboxCounts()
+    }
+
+    if (!contentType.toLowerCase().includes('application/json')) {
+      return unavailableInboxCounts()
+    }
+
+    const counts = parseInboxCountsPayload(await response.json())
+    if (!counts) {
+      return unavailableInboxCounts()
+    }
+
+    return {
+      status: 'available',
+      stubMode: false,
+      unavailableReason: null,
+      unread: unreadBadgeCount(counts),
+      counts,
+    }
+  } catch {
+    return unavailableInboxCounts()
+  }
+}
+
+async function mutateRuntimeInbox(
+  pathname: string,
+  body: Record<string, unknown>
+): Promise<InboxListResult> {
+  try {
+    const response = await fetch(buildApiUrl(pathname), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    const contentType = response.headers.get('content-type') ?? ''
+
+    if (response.status === 404) {
+      return unavailableInboxList()
+    }
+
+    if (!response.ok) {
+      const payload = await readResponseBody(response, contentType)
+      const bodyMessage =
+        typeof payload === 'string' && payload.trim()
+          ? payload.trim()
+          : readApiErrorMessage(payload)
+      const suffix = bodyMessage ? `: ${bodyMessage}` : '.'
+      throw new Error(
+        `Service Lasso runtime Inbox API returned ${response.status}${suffix}`
+      )
+    }
+
+    return fetchRuntimeInbox({ filter: 'all', limit: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+    throw new Error(
+      unavailableInboxList().unavailableReason ?? 'Inbox mutation failed.'
+    )
+  }
+}
+
+/**
+ * Loads durable operator Inbox messages from Core, or fixture data in stub mode.
+ */
+export async function fetchInbox(query: InboxQuery = {}) {
+  if (isServiceAdminStubModeEnabled()) {
+    return fetchStubInbox(query)
+  }
+
+  return fetchRuntimeInbox(query)
+}
+
+/**
+ * Loads Inbox unread counts for header and sidebar badges.
+ */
+export async function fetchInboxCounts() {
+  if (isServiceAdminStubModeEnabled()) {
+    return fetchStubInboxCounts()
+  }
+
+  return fetchRuntimeInboxCounts()
+}
+
+/**
+ * Marks one Inbox item read through the Core mutation API.
+ */
+export async function markInboxRead(itemId: string) {
+  if (isServiceAdminStubModeEnabled()) {
+    return markStubInboxRead(itemId)
+  }
+
+  return mutateRuntimeInbox(
+    `/api/operator/inbox/${encodeURIComponent(itemId)}/read`,
+    {}
+  )
+}
+
+/**
+ * Marks many Inbox items read through the Core bulk mutation API.
+ */
+export async function markInboxItemsRead(itemIds: string[]) {
+  if (isServiceAdminStubModeEnabled()) {
+    return markStubInboxItemsRead(itemIds)
+  }
+
+  return mutateRuntimeInbox('/api/operator/inbox/bulk', {
+    action: 'read',
+    ids: itemIds,
+  })
 }
 
 export async function fetchServiceConfigDocument(serviceId: string) {

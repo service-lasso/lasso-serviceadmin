@@ -1,9 +1,14 @@
+import { countOperatorInboxItems, unreadBadgeCount } from './inbox'
 import type {
   AuditEventsFilters,
   AuditEventsResult,
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  InboxCountsResult,
+  InboxListResult,
+  InboxQuery,
+  OperatorInboxItem,
   ServiceConfigDocument,
   ServiceConfigRevision,
   ServiceConfigSaveResult,
@@ -1146,6 +1151,308 @@ export async function fetchAuditEvents(
       total: events.length,
     },
   } satisfies AuditEventsResult)
+}
+
+function createDefaultInboxItems(): OperatorInboxItem[] {
+  return [
+    {
+      id: 'inbox-update-available-traefik',
+      dedupeKey: 'update:available:@traefik:current',
+      title: 'Update available: @traefik',
+      summary: 'Traefik has a newer package ready for review.',
+      details:
+        'Current version v3.1.2. Newer artifact is waiting in the update channel.',
+      type: 'update',
+      severity: 'info',
+      source: 'updater',
+      state: 'unread',
+      visibility: 'visible',
+      createdAt: '2026-08-20T01:10:00.000Z',
+      updatedAt: '2026-08-20T01:10:00.000Z',
+      readAt: null,
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: '@traefik',
+        route: '/services/%40traefik/updates',
+      },
+      action: {
+        label: 'Open service',
+        target: '/services/%40traefik/updates',
+        kind: 'link',
+        availability: 'available',
+      },
+    },
+    {
+      id: 'inbox-service-health-dagu',
+      dedupeKey: 'service:health.degraded:dagu:current',
+      title: 'Service health degraded: dagu',
+      summary:
+        'Dagu reported a degraded health check and needs operator review.',
+      details: null,
+      type: 'error',
+      severity: 'warning',
+      source: 'service',
+      state: 'unread',
+      visibility: 'visible',
+      createdAt: '2026-08-20T01:12:00.000Z',
+      updatedAt: '2026-08-20T01:12:00.000Z',
+      readAt: null,
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: 'dagu',
+        route: '/services/dagu',
+      },
+      action: {
+        label: 'Open service',
+        target: '/services/dagu',
+        kind: 'link',
+        availability: 'available',
+      },
+    },
+    {
+      id: 'inbox-workflow-failed-serviceadmin',
+      dedupeKey: 'workflow:serviceadmin-backup:run-22',
+      title: 'Workflow needs attention: serviceadmin-backup',
+      summary: 'Scheduled backup workflow failed before writing an archive.',
+      details:
+        'Inspect the service log for the failed run without opening secret material.',
+      type: 'error',
+      severity: 'error',
+      source: 'workflow',
+      state: 'unread',
+      visibility: 'visible',
+      createdAt: '2026-08-20T01:14:00.000Z',
+      updatedAt: '2026-08-20T01:14:00.000Z',
+      readAt: null,
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: '@serviceadmin',
+        workflowId: 'serviceadmin-backup',
+        route: '/logs?service=%40serviceadmin',
+      },
+      action: {
+        label: 'Open logs',
+        target: '/logs?service=%40serviceadmin',
+        kind: 'link',
+        availability: 'available',
+      },
+    },
+    {
+      id: 'inbox-system-startup',
+      dedupeKey: 'system:runtime.startup:current',
+      title: 'Runtime startup',
+      summary:
+        'Service Lasso runtime finished startup and is accepting operator API traffic.',
+      details: null,
+      type: 'system',
+      severity: 'info',
+      source: 'system',
+      state: 'unread',
+      visibility: 'visible',
+      createdAt: '2026-08-20T01:00:00.000Z',
+      updatedAt: '2026-08-20T01:00:00.000Z',
+      readAt: null,
+      hiddenAt: null,
+      relatedTarget: {
+        route: '/runtime',
+      },
+      action: {
+        label: 'Review',
+        target: '/runtime',
+        kind: 'link',
+        availability: 'available',
+      },
+    },
+    {
+      id: 'inbox-diagnostics-archive',
+      dedupeKey: 'diagnostics:archive.completed:@serviceadmin',
+      title: 'Diagnostics archive completed',
+      summary: 'A metadata-only diagnostics archive is ready for local review.',
+      details:
+        'The archive path is recorded by the runtime. Secret values are not included.',
+      type: 'help',
+      severity: 'success',
+      source: 'runtime',
+      state: 'read',
+      visibility: 'visible',
+      createdAt: '2026-08-19T22:40:00.000Z',
+      updatedAt: '2026-08-19T22:45:00.000Z',
+      readAt: '2026-08-19T22:45:00.000Z',
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: '@serviceadmin',
+        route: '/logs?service=%40serviceadmin',
+      },
+      action: {
+        label: 'Open logs',
+        target: '/logs?service=%40serviceadmin',
+        kind: 'link',
+        availability: 'available',
+      },
+    },
+    {
+      id: 'inbox-update-installed-serviceadmin',
+      dedupeKey: 'update:installed:@serviceadmin:current',
+      title: 'Update installed: @serviceadmin',
+      summary:
+        'Service Admin installed the selected artifact and remains healthy.',
+      details: null,
+      type: 'update',
+      severity: 'success',
+      source: 'updater',
+      state: 'read',
+      visibility: 'visible',
+      createdAt: '2026-08-19T21:15:00.000Z',
+      updatedAt: '2026-08-19T21:20:00.000Z',
+      readAt: '2026-08-19T21:20:00.000Z',
+      hiddenAt: null,
+      relatedTarget: {
+        serviceId: '@serviceadmin',
+        route: '/services/%40serviceadmin',
+      },
+      action: {
+        label: 'Open service',
+        target: '/services/%40serviceadmin',
+        kind: 'link',
+        availability: 'available',
+      },
+    },
+  ]
+}
+
+let stubInboxItems = createDefaultInboxItems()
+
+/**
+ * Restores fixture Inbox items so unit tests do not leak mark-read mutations.
+ */
+export function resetStubInbox() {
+  stubInboxItems = createDefaultInboxItems()
+}
+
+function matchesInboxFilter(
+  item: OperatorInboxItem,
+  filter: NonNullable<InboxQuery['filter']>
+) {
+  if (filter === 'all') {
+    return item.visibility === 'visible'
+  }
+  if (filter === 'unread') {
+    return item.state === 'unread' && item.visibility === 'visible'
+  }
+  if (filter === 'updates') {
+    return item.type === 'update' && item.visibility === 'visible'
+  }
+  if (filter === 'system') {
+    return item.type === 'system' && item.visibility === 'visible'
+  }
+  if (filter === 'workflow') {
+    return item.type === 'workflow' && item.visibility === 'visible'
+  }
+  if (filter === 'service') {
+    return item.type === 'service' && item.visibility === 'visible'
+  }
+  if (filter === 'errors') {
+    return (
+      (item.type === 'error' ||
+        item.severity === 'error' ||
+        item.severity === 'critical') &&
+      item.visibility === 'visible'
+    )
+  }
+  return item.visibility === 'hidden'
+}
+
+function listStubInboxItems(query: InboxQuery = {}): InboxListResult {
+  const filter = query.filter ?? 'all'
+  const limit = Math.min(Math.max(query.limit ?? 50, 1), 200)
+  const offset = query.cursor
+    ? Math.max(Number.parseInt(query.cursor, 10) || 0, 0)
+    : 0
+  const filtered = stubInboxItems.filter((item) =>
+    matchesInboxFilter(item, filter)
+  )
+  const page = filtered.slice(offset, offset + limit)
+  const nextOffset = offset + page.length
+
+  return structuredClone({
+    status: 'available',
+    stubMode: true,
+    unavailableReason: null,
+    items: page,
+    pagination: {
+      limit,
+      nextCursor: nextOffset < filtered.length ? String(nextOffset) : null,
+      total: filtered.length,
+    },
+  } satisfies InboxListResult)
+}
+
+/**
+ * Returns fixture Inbox messages used by Playwright and local stub mode.
+ */
+export async function fetchInbox(
+  query: InboxQuery = {}
+): Promise<InboxListResult> {
+  await wait(40)
+  return listStubInboxItems(query)
+}
+
+/**
+ * Returns fixture Inbox unread counts for header and sidebar badges.
+ */
+export async function fetchInboxCounts(): Promise<InboxCountsResult> {
+  await wait(40)
+  const counts = countOperatorInboxItems(stubInboxItems)
+  return structuredClone({
+    status: 'available',
+    stubMode: true,
+    unavailableReason: null,
+    unread: unreadBadgeCount(counts),
+    counts,
+  } satisfies InboxCountsResult)
+}
+
+/**
+ * Marks one fixture Inbox item read while preserving other records.
+ */
+export async function markInboxRead(itemId: string): Promise<InboxListResult> {
+  await wait(40)
+  const now = '2026-08-20T02:00:00.000Z'
+  stubInboxItems = stubInboxItems.map((item) => {
+    if (item.id !== itemId) {
+      return item
+    }
+    return {
+      ...item,
+      state: 'read',
+      updatedAt: now,
+      readAt: now,
+    }
+  })
+  return listStubInboxItems({ filter: 'all', limit: 200 })
+}
+
+/**
+ * Marks many fixture Inbox items read in one operator action.
+ */
+export async function markInboxItemsRead(
+  itemIds: string[]
+): Promise<InboxListResult> {
+  await wait(40)
+  const selected = new Set(itemIds)
+  const now = '2026-08-20T02:00:00.000Z'
+  stubInboxItems = stubInboxItems.map((item) => {
+    if (!selected.has(item.id)) {
+      return item
+    }
+    return {
+      ...item,
+      state: 'read',
+      updatedAt: now,
+      readAt: now,
+    }
+  })
+  return listStubInboxItems({ filter: 'all', limit: 200 })
 }
 
 export async function fetchDashboardService(serviceId: string) {

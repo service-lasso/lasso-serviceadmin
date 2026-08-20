@@ -93,10 +93,12 @@ describe('sidebar optional page classification', () => {
     )
 
     expect(operationsGroup?.items.map((item) => item.url)).toEqual([
+      '/inbox',
       '/operations/telemetry',
       '/operations/audit-logging',
     ])
     expect(operationsGroup?.items.map((item) => item.title)).toEqual([
+      'Inbox',
       'Telemetry',
       'Audit',
     ])
