@@ -2,7 +2,8 @@ import { Link, useSearch } from '@tanstack/react-router'
 import { Loader2, ShieldCheck, ShieldX } from 'lucide-react'
 import { isLoopbackLoginOrigin } from '@/lib/service-lasso-dashboard/local-operator-session'
 import {
-  identityUnlocksUi,
+  allowLocalRootBreakGlass,
+  resolveIdentityGateSurface,
   useRuntimeIdentity,
 } from '@/lib/service-lasso-dashboard/runtime-auth'
 import { Button } from '@/components/ui/button'
@@ -14,25 +15,29 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { FirstRunCredentialsPanel } from '@/features/auth/first-run-credentials-panel'
 import { LocalOperatorLoginForm } from '@/features/auth/local-operator-login-form'
 import { AuthLayout } from '../auth-layout'
 
 /**
- * Loopback `/sign-in` always offers local-root Continue plus Local, Token,
- * and provider buttons. FORCE_SSO hides Local/Token only on remote origins.
+ * Loopback `/sign-in` forces first-run copy/save, then token/password login.
+ * Continue as local-root is explicit break-glass. FORCE_SSO hides Local/Token
+ * only on remote origins.
  */
 export function SignIn() {
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
   const identity = useRuntimeIdentity()
   const hostname = window.location.hostname
-  const unlocked = identity.data
-    ? identityUnlocksUi(identity.data, hostname)
-    : false
+  const surface = identity.data
+    ? resolveIdentityGateSurface(identity.data, hostname, {
+        allowLocalRootBreakGlass: allowLocalRootBreakGlass(),
+      })
+    : null
+  const unlocked = surface === 'unlocked'
   const loopbackOrigin = identity.data
     ? isLoopbackLoginOrigin(identity.data, hostname)
     : isLoopbackLoginOrigin({ local: false }, hostname)
-  const showLoginMethods =
-    Boolean(identity.data) && (!unlocked || loopbackOrigin)
+  const showLoginMethods = surface === 'login' || (unlocked && loopbackOrigin)
 
   return (
     <AuthLayout>
@@ -43,9 +48,10 @@ export function SignIn() {
             Trusted Service Lasso access
           </CardTitle>
           <CardDescription>
-            Loopback always offers local-root, Lasso-local password, vault
-            token, and SSO when configured. FORCE_SSO hides Local and Token only
-            on remote origins.
+            First start requires copying the local-admin token. Later visits use
+            that token or the local-operator password. Loopback keeps an
+            explicit Continue as local-root control. FORCE_SSO hides Local and
+            Token only on remote origins.
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-4 text-sm'>
@@ -55,6 +61,13 @@ export function SignIn() {
             </div>
           ) : identity.data ? (
             <>
+              {surface === 'first-run' ? (
+                <FirstRunCredentialsPanel
+                  onAcknowledged={() => {
+                    void identity.refetch()
+                  }}
+                />
+              ) : null}
               {unlocked ? (
                 <>
                   <p>

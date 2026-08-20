@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import {
   LOCAL_OPERATOR_USERNAME,
+  isLoopbackHostname,
   isLoopbackLoginOrigin,
   writeLocalOperatorSession,
+  writeLocalRootBreakGlass,
 } from '@/lib/service-lasso-dashboard/local-operator-session'
 import type { RuntimeIdentity } from '@/lib/service-lasso-dashboard/runtime-auth'
 import { Button } from '@/components/ui/button'
@@ -193,6 +195,20 @@ export function LocalOperatorLoginForm({
       ) : null}
 
       {error ? <p className='text-sm text-destructive'>{error}</p> : null}
+      {isLoopbackHostname(hostname) ? (
+        <Button
+          type='button'
+          variant='ghost'
+          className='w-full'
+          disabled={pending}
+          onClick={() => {
+            writeLocalRootBreakGlass()
+            onAuthenticated()
+          }}
+        >
+          Continue as local-root
+        </Button>
+      ) : null}
       <p className='text-xs text-muted-foreground'>
         This browser origin is {hostname}. Retrieve the token on loopback KV
         first if you have not already.

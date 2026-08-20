@@ -1,4 +1,5 @@
 export const LOCAL_OPERATOR_SESSION_KEY = 'service-lasso.local-operator-session'
+export const LOCAL_ROOT_BREAK_GLASS_KEY = 'service-lasso.local-root-break-glass'
 export const ORIGINAL_CLIENT_ADDRESS_HEADER = 'x-service-lasso-client-address'
 export const LOCAL_ADMIN_TOKEN_HEADER = 'x-service-lasso-admin-token'
 export const LOCAL_OPERATOR_USERNAME = 'local-operator'
@@ -53,6 +54,34 @@ export function writeLocalOperatorSession(token: string): void {
 export function clearLocalOperatorSession(): void {
   try {
     sessionStorage.removeItem(LOCAL_OPERATOR_SESSION_KEY)
+  } catch {
+    // sessionStorage may be unavailable in locked-down browsers.
+  }
+}
+
+/**
+ * Explicit loopback local-root unlock for this browser tab only.
+ * First-run and later visits must not set this automatically.
+ */
+export function readLocalRootBreakGlass(): boolean {
+  try {
+    return sessionStorage.getItem(LOCAL_ROOT_BREAK_GLASS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeLocalRootBreakGlass(): void {
+  try {
+    sessionStorage.setItem(LOCAL_ROOT_BREAK_GLASS_KEY, '1')
+  } catch {
+    // sessionStorage may be unavailable in locked-down browsers.
+  }
+}
+
+export function clearLocalRootBreakGlass(): void {
+  try {
+    sessionStorage.removeItem(LOCAL_ROOT_BREAK_GLASS_KEY)
   } catch {
     // sessionStorage may be unavailable in locked-down browsers.
   }
