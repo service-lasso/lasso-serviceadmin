@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   isLoopbackHostname,
   isLoopbackLoginOrigin,
+  readLocalRootBreakGlass,
+  writeLocalRootBreakGlass,
+  clearLocalRootBreakGlass,
 } from './local-operator-session'
 
 describe('loopback browser origins', () => {
@@ -21,5 +24,14 @@ describe('loopback browser origins', () => {
     expect(isLoopbackLoginOrigin({ local: false }, '127.0.0.1')).toBe(true)
     expect(isLoopbackLoginOrigin({ local: false }, '::1')).toBe(true)
     expect(isLoopbackLoginOrigin({ local: false }, '192.168.1.9')).toBe(false)
+  })
+
+  it('stores local-root break-glass only in sessionStorage', () => {
+    clearLocalRootBreakGlass()
+    expect(readLocalRootBreakGlass()).toBe(false)
+    writeLocalRootBreakGlass()
+    expect(readLocalRootBreakGlass()).toBe(true)
+    clearLocalRootBreakGlass()
+    expect(readLocalRootBreakGlass()).toBe(false)
   })
 })

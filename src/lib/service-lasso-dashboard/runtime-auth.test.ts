@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   identityUnlocksUi,
   normalizeRuntimeIdentity,
+  resolveIdentityGateSurface,
   runtimeIdentityAuditContext,
 } from './runtime-auth'
 
@@ -9,7 +10,11 @@ type TestAuthPayload = {
   auth: {
     contractVersion: string
     request: { clientAddress: string; local: boolean }
-    policy: { remoteAuthRequired: boolean }
+    policy: {
+      remoteAuthRequired: boolean
+      firstRunPending?: boolean
+      credentialsAcknowledged?: boolean
+    }
     actor: {
       authenticated: boolean
       kind: string | null
@@ -54,14 +59,74 @@ describe('trusted runtime identity contract', () => {
       workspaceId: 'local',
       roles: ['serviceadmin.owner'],
       permissions: ['*'],
+      firstRunPending: false,
+      credentialsAcknowledged: true,
     })
     expect(runtimeIdentityAuditContext(identity)).toEqual({
       actorId: 'local-root',
       actorKind: 'local-root',
       workspaceId: 'local',
     })
-    expect(identityUnlocksUi(identity, '127.0.0.1')).toBe(true)
-    expect(identityUnlocksUi(identity, '192.168.1.9')).toBe(false)
+    expect(identityUnlocksUi(identity, '127.0.0.1')).toBe(false)
+    expect(
+      identityUnlocksUi(identity, '127.0.0.1', {
+        allowLocalRootBreakGlass: true,
+      })
+    ).toBe(true)
+    expect(
+      identityUnlocksUi(identity, '192.168.1.9', {
+        allowLocalRootBreakGlass: true,
+      })
+    ).toBe(false)
+  })
+
+  it('does not auto-unlock loopback local-root after first-run is acknowledged', () => {
+    const payload = authenticatedPayload()
+    payload.auth.policy = {
+      remoteAuthRequired: false,
+      firstRunPending: false,
+      credentialsAcknowledged: true,
+    }
+    const identity = normalizeRuntimeIdentity(payload)
+    expect(identity.firstRunPending).toBe(false)
+    expect(identity.credentialsAcknowledged).toBe(true)
+    expect(resolveIdentityGateSurface(identity, '127.0.0.1')).toBe('login')
+    expect(
+      resolveIdentityGateSurface(identity, '127.0.0.1', {
+        allowLocalRootBreakGlass: true,
+      })
+    ).toBe('unlocked')
+  })
+
+  it('keeps first-run pending on the first-run surface even with break-glass', () => {
+    const payload = authenticatedPayload()
+    payload.auth.policy = {
+      remoteAuthRequired: false,
+      firstRunPending: true,
+      credentialsAcknowledged: false,
+    }
+    const identity = normalizeRuntimeIdentity(payload)
+    expect(identity.firstRunPending).toBe(true)
+    expect(
+      identityUnlocksUi(identity, '127.0.0.1', {
+        allowLocalRootBreakGlass: true,
+      })
+    ).toBe(false)
+    expect(
+      resolveIdentityGateSurface(identity, '127.0.0.1', {
+        allowLocalRootBreakGlass: true,
+      })
+    ).toBe('first-run')
+  })
+
+  it('unlocks token login without local-root break-glass', () => {
+    const payload = authenticatedPayload()
+    payload.auth.actor.kind = 'local-token'
+    payload.auth.actor.actorId = 'local-admin-token'
+    payload.auth.mode = 'local-token'
+    const identity = normalizeRuntimeIdentity(payload)
+    expect(identityUnlocksUi(identity, '192.168.1.9')).toBe(true)
+    expect(resolveIdentityGateSurface(identity, '192.168.1.9')).toBe('unlocked')
   })
 
   it('preserves a typed unauthenticated state without inventing identity', () => {
@@ -101,5 +166,17 @@ describe('trusted runtime identity contract', () => {
     expect(() => normalizeRuntimeIdentity(payload)).toThrow(
       /forbidden credential material|trusted auth contract/i
     )
+  })
+
+  it('rejects first-run secrets if they appear on the security payload', () => {
+    expect(() =>
+      normalizeRuntimeIdentity({
+        ...authenticatedPayload(),
+        firstRun: {
+          token: 'test-local-admin-token',
+          password: 'test-local-operator-password',
+        },
+      })
+    ).toThrow(/forbidden credential material/i)
   })
 })

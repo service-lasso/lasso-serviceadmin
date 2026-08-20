@@ -23,6 +23,8 @@ function blockedIdentity(
     forceSso: false,
     localTokenConfigured: true,
     localOperatorConfigured: true,
+    firstRunPending: false,
+    credentialsAcknowledged: true,
     identityProviders: [],
     workspaceId: null,
     roles: [],
@@ -46,6 +48,9 @@ describe('LocalOperatorLoginForm', () => {
     expect(screen.getByText(/login with zitadel/i)).toBeVisible()
     expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
     expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /continue as local-root/i })
+    ).not.toBeInTheDocument()
   })
 
   it('hides local and token fields when FORCE_SSO is on for a remote origin', () => {
@@ -87,6 +92,9 @@ describe('LocalOperatorLoginForm', () => {
     expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
     expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
     expect(screen.queryByText(/FORCE_SSO is on/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /continue as local-root/i })
+    ).toBeVisible()
   })
 
   it('keeps local and token fields when the hostname is loopback even if Core local is false', () => {
@@ -103,5 +111,8 @@ describe('LocalOperatorLoginForm', () => {
     expect(screen.getByText(/login with zitadel/i)).toBeVisible()
     expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
     expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /continue as local-root/i })
+    ).toBeVisible()
   })
 })

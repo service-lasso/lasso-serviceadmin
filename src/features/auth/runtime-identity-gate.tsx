@@ -1,12 +1,14 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
-  identityUnlocksUi,
+  allowLocalRootBreakGlass,
+  resolveIdentityGateSurface,
   useRuntimeIdentity,
 } from '@/lib/service-lasso-dashboard/runtime-auth'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { FirstRunCredentialsPanel } from '@/features/auth/first-run-credentials-panel'
 import { LocalOperatorLoginForm } from '@/features/auth/local-operator-login-form'
 
 function IdentityBoundary({
@@ -47,7 +49,16 @@ export function RuntimeIdentityGate({
   const setUser = useAuthStore((state) => state.auth.setUser)
   const hostname = browserHostname()
   const identity = identityQuery.data
-  const unlocked = identity ? identityUnlocksUi(identity, hostname) : false
+  const surface = identity
+    ? resolveIdentityGateSurface(identity, hostname, {
+        allowLocalRootBreakGlass: allowLocalRootBreakGlass(),
+      })
+    : null
+  const unlocked = surface === 'unlocked'
+  const refetchIdentity = identityQuery.refetch
+  const onAuthenticated = useCallback(() => {
+    void refetchIdentity()
+  }, [refetchIdentity])
 
   useEffect(() => {
     if (!identity || !unlocked || !identity.actorKind || !identity.actorId) {
@@ -83,15 +94,21 @@ export function RuntimeIdentityGate({
     )
   }
 
-  if (!unlocked && identity) {
+  if (surface === 'first-run' && identity) {
+    return (
+      <main className='mx-auto flex min-h-svh w-full max-w-lg items-center px-4 py-8'>
+        <FirstRunCredentialsPanel onAcknowledged={onAuthenticated} />
+      </main>
+    )
+  }
+
+  if (surface === 'login' && identity) {
     return (
       <main className='mx-auto flex min-h-svh w-full max-w-lg items-center px-4 py-8'>
         <LocalOperatorLoginForm
           identity={identity}
           hostname={hostname}
-          onAuthenticated={() => {
-            void identityQuery.refetch()
-          }}
+          onAuthenticated={onAuthenticated}
         />
       </main>
     )

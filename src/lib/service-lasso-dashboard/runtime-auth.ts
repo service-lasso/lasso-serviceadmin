@@ -3,7 +3,11 @@ import {
   fetchRuntimeJson,
   serviceLassoStubDataEnabled,
 } from './broker-operator-client'
-import { isLoopbackHostname } from './local-operator-session'
+import {
+  isLoopbackHostname,
+  isLoopbackLoginOrigin,
+  readLocalRootBreakGlass,
+} from './local-operator-session'
 
 export type RuntimeActorKind = 'local-root' | 'zitadel' | 'local-token'
 
@@ -24,6 +28,8 @@ export type RuntimeIdentity = {
   forceSso: boolean
   localTokenConfigured: boolean
   localOperatorConfigured: boolean
+  firstRunPending: boolean
+  credentialsAcknowledged: boolean
   identityProviders: RuntimeIdentityProvider[]
   workspaceId: string | null
   roles: string[]
@@ -127,6 +133,8 @@ export function normalizeRuntimeIdentity(payload: unknown): RuntimeIdentity {
     forceSso: policy.forceSso === true,
     localTokenConfigured: policy.localTokenConfigured === true,
     localOperatorConfigured: policy.localOperatorConfigured === true,
+    firstRunPending: policy.firstRunPending === true,
+    credentialsAcknowledged: policy.credentialsAcknowledged !== false,
     identityProviders,
     workspaceId,
     roles,
@@ -159,13 +167,18 @@ function parseIdentityProviders(value: unknown): RuntimeIdentityProvider[] {
 }
 
 /**
- * local-root is trusted only on loopback browser origins. LAN/hostname needs
- * local-token or zitadel, even if Core still reports local-root via a proxy.
+ * Token/SSO unlock the UI. local-root on loopback is break-glass only.
+ * First-run pending always stays locked until the operator copies and
+ * acknowledges the token.
  */
 export function identityUnlocksUi(
   identity: RuntimeIdentity,
-  hostname: string
+  hostname: string,
+  options?: { allowLocalRootBreakGlass?: boolean }
 ): boolean {
+  if (identity.firstRunPending) {
+    return false
+  }
   if (!identity.authenticated || !identity.actorKind || !identity.actorId) {
     return false
   }
@@ -175,7 +188,43 @@ export function identityUnlocksUi(
   ) {
     return true
   }
-  return identity.actorKind === 'local-root' && isLoopbackHostname(hostname)
+  return (
+    identity.actorKind === 'local-root' &&
+    isLoopbackHostname(hostname) &&
+    options?.allowLocalRootBreakGlass === true
+  )
+}
+
+export type IdentityGateSurface = 'first-run' | 'login' | 'unlocked'
+
+/**
+ * Choose the identity-gate surface. First-run is loopback-only and wins over
+ * local-root break-glass so the copy/save screen cannot be skipped.
+ */
+export function resolveIdentityGateSurface(
+  identity: RuntimeIdentity,
+  hostname: string,
+  options?: { allowLocalRootBreakGlass?: boolean }
+): IdentityGateSurface {
+  if (identity.firstRunPending && isLoopbackLoginOrigin(identity, hostname)) {
+    return 'first-run'
+  }
+  if (identityUnlocksUi(identity, hostname, options)) {
+    return 'unlocked'
+  }
+  return 'login'
+}
+
+/** True when stub dashboards or Vitest may use fixture local-root unlock. */
+export function shouldUseFixtureIdentity() {
+  return serviceLassoStubDataEnabled || import.meta.env.MODE === 'test'
+}
+
+/**
+ * Session break-glass, or fixture identity used by Vitest screens.
+ */
+export function allowLocalRootBreakGlass(): boolean {
+  return readLocalRootBreakGlass() || shouldUseFixtureIdentity()
 }
 
 /** Trusted local-root identity used by stub dashboards and Vitest screens. */
@@ -189,20 +238,13 @@ const fixtureRuntimeIdentity: RuntimeIdentity = {
   forceSso: false,
   localTokenConfigured: true,
   localOperatorConfigured: true,
+  firstRunPending: false,
+  credentialsAcknowledged: true,
   identityProviders: [],
   workspaceId: 'local',
   roles: ['serviceadmin.owner'],
   permissions: ['*'],
   blockers: [],
-}
-
-/**
- * Returns true when the identity gate should skip a live `/api/runtime/security` fetch.
- * Vitest screens use fixture identity without enabling global stub dashboard data,
- * so live Broker client tests can still exercise the real HTTP client.
- */
-function shouldUseFixtureIdentity() {
-  return serviceLassoStubDataEnabled || import.meta.env.MODE === 'test'
 }
 
 export async function fetchRuntimeIdentity(): Promise<RuntimeIdentity> {
