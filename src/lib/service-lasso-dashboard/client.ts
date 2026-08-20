@@ -454,7 +454,8 @@ async function mutateRuntimeInbox(
       throw error
     }
     throw new Error(
-      unavailableInboxList().unavailableReason ?? 'Inbox mutation failed.'
+      unavailableInboxList().unavailableReason ?? 'Inbox mutation failed.',
+      { cause: error }
     )
   }
 }
