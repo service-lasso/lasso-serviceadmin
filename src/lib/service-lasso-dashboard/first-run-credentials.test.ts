@@ -16,6 +16,12 @@ describe('first-run credential parser', () => {
       username: 'local-operator',
       token: 'test-local-admin-token',
       password: 'test-local-operator-password',
+      vaultPath: 'runtime/local-operator',
+      vaultFieldNames: [
+        'LOCAL_OPERATOR_USERNAME',
+        'LOCAL_ADMIN_TOKEN',
+        'LOCAL_OPERATOR_PASSWORD',
+      ],
     })
     expect(
       parseFirstRunCredentials({

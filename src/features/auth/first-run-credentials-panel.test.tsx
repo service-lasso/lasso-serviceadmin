@@ -53,6 +53,12 @@ describe('FirstRunCredentialsPanel', () => {
     expect(screen.getByDisplayValue(TOKEN_SENTINEL)).toBeInTheDocument()
     expect(screen.getByDisplayValue(PASSWORD_SENTINEL)).toBeInTheDocument()
 
+    expect(
+      await screen.findByText(
+        /already stored in Secrets Broker at runtime\/local-operator/i
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText(/LOCAL_ADMIN_TOKEN/)).toBeInTheDocument()
     const acknowledge = screen.getByRole('button', {
       name: /continue after saving/i,
     })
@@ -102,5 +108,45 @@ describe('FirstRunCredentialsPanel', () => {
       await screen.findByRole('button', { name: /continue after saving/i })
     ).toBeDisabled()
     expect(onAcknowledged).not.toHaveBeenCalled()
+  })
+
+  it('retries when Broker ingest is not ready instead of skipping INIT', async () => {
+    const onAcknowledged = vi.fn()
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: 'first_run_vault_not_ready' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          firstRun: {
+            pending: true,
+            username: 'local-operator',
+            token: TOKEN_SENTINEL,
+            password: PASSWORD_SENTINEL,
+            vaultPath: 'runtime/local-operator',
+          },
+        }),
+      })
+
+    render(<FirstRunCredentialsPanel onAcknowledged={onAcknowledged} />)
+
+    expect(
+      await screen.findByText(
+        /waiting for secrets broker to store first-run credentials/i
+      )
+    ).toBeInTheDocument()
+    expect(onAcknowledged).not.toHaveBeenCalled()
+
+    expect(
+      await screen.findByDisplayValue('local-operator', {}, { timeout: 3000 })
+    ).toBeInTheDocument()
+    expect(onAcknowledged).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', { name: /continue after saving/i })
+    ).toBeDisabled()
   })
 })

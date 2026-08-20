@@ -3,6 +3,9 @@ import { Check, Copy, Loader2 } from 'lucide-react'
 import {
   acknowledgeFirstRunCredentials,
   fetchFirstRunCredentials,
+  FIRST_RUN_VAULT_FIELD_NAMES,
+  FIRST_RUN_VAULT_NOT_READY,
+  FIRST_RUN_VAULT_PATH,
   type FirstRunCredentials,
 } from '@/lib/service-lasso-dashboard/first-run-credentials'
 import { Button } from '@/components/ui/button'
@@ -12,11 +15,19 @@ import { Label } from '@/components/ui/label'
 
 type CopiedField = 'token' | 'password'
 
+const VAULT_RETRY_MS = 1000
+
 async function copySecret(value: string): Promise<void> {
   if (!navigator.clipboard?.writeText) {
     throw new Error('clipboard_unavailable')
   }
   await navigator.clipboard.writeText(value)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
 }
 
 export function FirstRunCredentialsPanel({
@@ -33,27 +44,47 @@ export function FirstRunCredentialsPanel({
   const [copiedPassword, setCopiedPassword] = useState(false)
   const [savedConfirmed, setSavedConfirmed] = useState(false)
   const [pending, setPending] = useState(false)
+  const [waitingForVault, setWaitingForVault] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void fetchFirstRunCredentials()
-      .then((result) => {
-        if (cancelled) {
+
+    async function loadUntilReady(): Promise<void> {
+      while (!cancelled) {
+        try {
+          const result = await fetchFirstRunCredentials()
+          if (cancelled) {
+            return
+          }
+          if (!result) {
+            onAcknowledged()
+            return
+          }
+          setWaitingForVault(false)
+          setCredentials(result)
           return
-        }
-        if (!result) {
-          onAcknowledged()
-          return
-        }
-        setCredentials(result)
-      })
-      .catch(() => {
-        if (!cancelled) {
+        } catch (error) {
+          if (cancelled) {
+            return
+          }
+          if (
+            error instanceof Error &&
+            error.message === FIRST_RUN_VAULT_NOT_READY
+          ) {
+            setWaitingForVault(true)
+            setLoadError(null)
+            await delay(VAULT_RETRY_MS)
+            continue
+          }
           setLoadError(
             'Could not load first-run credentials. Open Service Admin on 127.0.0.1 and retry.'
           )
+          return
         }
-      })
+      }
+    }
+
+    void loadUntilReady()
     return () => {
       cancelled = true
     }
@@ -98,6 +129,10 @@ export function FirstRunCredentialsPanel({
 
   const canAcknowledge =
     copiedToken && copiedPassword && savedConfirmed && !pending
+  const vaultPath = credentials?.vaultPath ?? FIRST_RUN_VAULT_PATH
+  const vaultFieldNames = (
+    credentials?.vaultFieldNames ?? [...FIRST_RUN_VAULT_FIELD_NAMES]
+  ).join(', ')
 
   if (loadError) {
     return <p className='text-sm text-destructive'>{loadError}</p>
@@ -107,7 +142,9 @@ export function FirstRunCredentialsPanel({
     return (
       <div className='flex items-center gap-2 text-sm text-muted-foreground'>
         <Loader2 className='size-4 animate-spin' />
-        Loading first-run credentials
+        {waitingForVault
+          ? 'Waiting for Secrets Broker to store first-run credentials'
+          : 'Loading first-run credentials'}
       </div>
     )
   }
@@ -117,8 +154,10 @@ export function FirstRunCredentialsPanel({
       <div className='space-y-1'>
         <p className='text-sm font-medium'>Save your local-operator token</p>
         <p className='text-sm text-muted-foreground'>
-          Copy both values now. Later visits require this token or the
-          local-operator password. This screen will not dismiss itself.
+          These three values are already stored in Secrets Broker at {vaultPath}{' '}
+          ({vaultFieldNames}). Copy them now as your backup. Later visits
+          require this token or the local-operator password. This screen will
+          not dismiss itself.
         </p>
       </div>
       <div className='space-y-2'>
