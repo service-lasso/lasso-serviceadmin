@@ -4,49 +4,54 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
-  useServices: () => ({
-    data: [
-      {
-        id: '@serviceadmin',
-        name: 'Service Admin',
-        environmentVariables: [
-          {
-            key: 'SERVICE_LASSO_API_BASE_URL',
-            value: 'http://127.0.0.1:17883',
-            templateValue: '${runtime.API_BASE_URL}',
-            scope: 'service',
-            secret: false,
-            source: '@serviceadmin/service.json',
-          },
-          {
-            key: 'SERVICE_LASSO_SESSION_SECRET',
-            value: 'super-secret-session-value',
-            templateValue: '${serviceadmin.SESSION_SECRET}',
-            scope: 'service',
-            secret: true,
-            source: '@serviceadmin/service.json',
-          },
-        ],
-      },
-      {
-        id: '@worker',
-        name: 'Worker Service',
-        environmentVariables: [
-          {
-            key: 'WORKER_QUEUE_URL',
-            value: 'https://queue.internal/jobs',
-            templateValue: undefined,
-            scope: 'global',
-            secret: false,
-            source: 'workspace/env',
-          },
-        ],
-      },
-    ],
-    isLoading: false,
-  }),
-}))
+vi.mock('@/lib/service-lasso-dashboard/hooks', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/service-lasso-dashboard/hooks')>()
+  return {
+    ...actual,
+    useServices: () => ({
+      data: [
+        {
+          id: '@serviceadmin',
+          name: 'Service Admin',
+          environmentVariables: [
+            {
+              key: 'SERVICE_LASSO_API_BASE_URL',
+              value: 'http://127.0.0.1:17883',
+              templateValue: '${runtime.API_BASE_URL}',
+              scope: 'service',
+              secret: false,
+              source: '@serviceadmin/service.json',
+            },
+            {
+              key: 'SERVICE_LASSO_SESSION_SECRET',
+              value: 'super-secret-session-value',
+              templateValue: '${serviceadmin.SESSION_SECRET}',
+              scope: 'service',
+              secret: true,
+              source: '@serviceadmin/service.json',
+            },
+          ],
+        },
+        {
+          id: '@worker',
+          name: 'Worker Service',
+          environmentVariables: [
+            {
+              key: 'WORKER_QUEUE_URL',
+              value: 'https://queue.internal/jobs',
+              templateValue: undefined,
+              scope: 'global',
+              secret: false,
+              source: 'workspace/env',
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+    }),
+  }
+})
 
 describe('variables page', () => {
   it('renders the variables table without a nested environment card wrapper', async () => {

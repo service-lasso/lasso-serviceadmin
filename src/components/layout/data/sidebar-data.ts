@@ -7,6 +7,7 @@ import {
   FileChartColumn,
   GitBranch,
   Globe,
+  Inbox,
   Network,
   SlidersHorizontal,
   HardDrive,
@@ -87,6 +88,11 @@ export const sidebarData: SidebarData = {
     {
       title: 'Operations',
       items: [
+        {
+          title: 'Inbox',
+          url: '/inbox',
+          icon: Inbox,
+        },
         {
           title: 'Telemetry',
           url: '/operations/telemetry',

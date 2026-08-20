@@ -195,6 +195,126 @@ export type AuditEventsResult = AuditEventsResponse & {
   unavailableReason: string | null
 }
 
+export type OperatorInboxType =
+  | 'system'
+  | 'workflow'
+  | 'service'
+  | 'update'
+  | 'security'
+  | 'help'
+  | 'error'
+
+export type OperatorInboxSeverity =
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'error'
+  | 'critical'
+
+export type OperatorInboxSource =
+  | 'runtime'
+  | 'service'
+  | 'workflow'
+  | 'updater'
+  | 'broker'
+  | 'admin-ui'
+  | 'system'
+
+export type OperatorInboxState = 'unread' | 'read'
+export type OperatorInboxVisibility = 'visible' | 'hidden'
+export type OperatorInboxActionKind = 'link' | 'api' | 'command'
+export type OperatorInboxActionAvailability =
+  | 'available'
+  | 'disabled'
+  | 'expired'
+export type OperatorInboxFilter =
+  | 'all'
+  | 'unread'
+  | 'updates'
+  | 'system'
+  | 'workflow'
+  | 'service'
+  | 'errors'
+  | 'hidden'
+
+export type OperatorInboxRelatedTarget = {
+  serviceId?: string
+  workflowId?: string
+  updateId?: string
+  auditId?: string
+  backupExportId?: string
+  route?: string
+}
+
+export type OperatorInboxActionMetadata = {
+  label: string
+  target: string
+  kind: OperatorInboxActionKind
+  availability: OperatorInboxActionAvailability
+}
+
+export type OperatorInboxItem = {
+  id: string
+  dedupeKey: string
+  title: string
+  summary: string
+  details: string | null
+  type: OperatorInboxType
+  severity: OperatorInboxSeverity
+  source: OperatorInboxSource
+  state: OperatorInboxState
+  visibility: OperatorInboxVisibility
+  createdAt: string
+  updatedAt: string
+  readAt: string | null
+  hiddenAt: string | null
+  relatedTarget: OperatorInboxRelatedTarget | null
+  action: OperatorInboxActionMetadata | null
+}
+
+export type OperatorInboxCounts = {
+  total: number
+  unread: number
+  read: number
+  visible: number
+  hidden: number
+  byType: Record<OperatorInboxType, number>
+  bySeverity: Record<OperatorInboxSeverity, number>
+  bySource: Record<OperatorInboxSource, number>
+  byFilter: Record<OperatorInboxFilter, number>
+}
+
+export type OperatorInboxListResult = {
+  items: OperatorInboxItem[]
+  pagination: {
+    limit: number
+    nextCursor: string | null
+    total: number
+  }
+}
+
+export type InboxQuery = {
+  filter?: OperatorInboxFilter
+  limit?: number
+  cursor?: string
+}
+
+export type InboxListResult = {
+  status: 'available' | 'unavailable'
+  stubMode: boolean
+  unavailableReason: string | null
+  items: OperatorInboxItem[]
+  pagination: OperatorInboxListResult['pagination']
+}
+
+export type InboxCountsResult = {
+  status: 'available' | 'unavailable'
+  stubMode: boolean
+  unavailableReason: string | null
+  unread: number
+  counts: OperatorInboxCounts | null
+}
+
 export type ServiceConfigRevision = {
   id: string
   createdAt: string

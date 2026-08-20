@@ -63,6 +63,15 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
     articleId: 'help/operations-audit-operator-guide.md',
   },
   {
+    route: '/inbox',
+    exception: {
+      kind: 'article-planned',
+      issue: 'service-lasso/lasso-serviceadmin#375',
+      reason:
+        'Operator Inbox UI is landing here; a dedicated operator article will follow.',
+    },
+  },
+  {
     route: '/secrets-broker/secrets',
     articleId: 'help/variables-and-secrets-broker-safety-guide.md',
   },
