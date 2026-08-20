@@ -35,6 +35,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -108,21 +109,20 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
 
 function DependenciesLoading() {
   return (
-    <div className='space-y-4'>
-      <div className='grid gap-4 md:grid-cols-4'>
-        <Skeleton className='h-28 w-full' />
-        <Skeleton className='h-28 w-full' />
-        <Skeleton className='h-28 w-full' />
-        <Skeleton className='h-28 w-full' />
-      </div>
-      <div className='grid gap-4 lg:grid-cols-3'>
-        <Skeleton className='h-[620px] w-full lg:col-span-2' />
-        <Skeleton className='h-[620px] w-full' />
+    <div className='flex min-h-0 flex-1 flex-col gap-4'>
+      <Skeleton className='h-28 w-full shrink-0' />
+      <div className='grid min-h-0 flex-1 gap-4 lg:grid-cols-3'>
+        <Skeleton className='min-h-0 w-full flex-1 lg:col-span-2' />
+        <Skeleton className='min-h-0 w-full flex-1' />
       </div>
     </div>
   )
 }
 
+/**
+ * Dependencies page: graph controls stay compact; the graph and selected
+ * service details fill remaining viewport height under those controls.
+ */
 export function Dependencies() {
   usePageMetadata({
     title: 'Service Admin - Dependencies',
@@ -473,12 +473,12 @@ export function Dependencies() {
         </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+      <Main id='content' fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <DependenciesLoading />
         ) : (
           <>
-            <Card>
+            <Card className='shrink-0'>
               <CardHeader>
                 <CardTitle className='flex items-center gap-2'>
                   <GitBranch className='size-4' /> Graph controls
@@ -582,103 +582,112 @@ export function Dependencies() {
               </CardContent>
             </Card>
 
-            <div className='grid gap-4 lg:grid-cols-3'>
-              <div className='lg:col-span-2'>
-                <DependencyGraphPanel
-                  title='Dependency graph'
-                  description='Relationship map of the currently visible services.'
-                  actions={
-                    <>
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='outline'
-                        className='size-8'
-                        title={`Switch graph to ${graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
-                        onClick={toggleGraphOrientation}
-                      >
-                        {graphOrientation === 'horizontal' ? (
-                          <ArrowDown className='size-4' />
-                        ) : (
-                          <ArrowRight className='size-4' />
-                        )}
-                        <span className='sr-only'>
-                          Switch graph to{' '}
-                          {graphOrientation === 'horizontal'
-                            ? 'vertical'
-                            : 'horizontal'}{' '}
-                          layout
-                        </span>
-                      </Button>
-                      <Separator orientation='vertical' className='h-6' />
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='outline'
-                        className='size-8'
-                        title='Discard unsaved graph layout changes'
-                        disabled={!isLayoutDirty}
-                        onClick={discardLayoutChanges}
-                      >
-                        <Undo2 className='size-4' />
-                        <span className='sr-only'>Discard layout changes</span>
-                      </Button>
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='outline'
-                        className='size-8'
-                        title='Save graph layout to service meta'
-                        disabled={!isLayoutDirty}
-                        onClick={() => void saveLayoutToMeta()}
-                      >
-                        <Save className='size-4' />
-                        <span className='sr-only'>Save layout changes</span>
-                      </Button>
-                    </>
-                  }
-                  graph={
-                    <DependencyGraphCanvas
-                      nodes={nodes}
-                      edges={edges}
-                      onNodesChange={onNodesChange}
-                      onEdgesChange={onEdgesChange}
-                      onNodeDragStop={onNodeDragStop}
-                      onNodeClick={selectService}
-                      legendItems={[
-                        {
-                          label: 'Structural dependency',
-                          color: '#cbd5e1',
-                        },
-                        {
-                          label: 'Selected-path dependency',
-                          color: '#22c55e',
-                        },
-                        {
-                          label: 'Inferred API usage',
-                          color: '#38bdf8',
-                          dashed: true,
-                        },
-                      ]}
-                      miniMapNodeColor={(node) => {
-                        const service = byId.get(node.id)
-                        return service
-                          ? categoryNodeColor(getCategory(service))
-                          : '#6b7280'
-                      }}
-                    />
-                  }
-                />
-              </div>
+            <div className='grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-3'>
+              <DependencyGraphPanel
+                title='Dependency graph'
+                description='Relationship map of the currently visible services.'
+                fill
+                className='h-full min-h-0 lg:col-span-2'
+                cardTestId='dependency-graph-card'
+                actions={
+                  <>
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='outline'
+                      className='size-8'
+                      title={`Switch graph to ${graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+                      onClick={toggleGraphOrientation}
+                    >
+                      {graphOrientation === 'horizontal' ? (
+                        <ArrowDown className='size-4' />
+                      ) : (
+                        <ArrowRight className='size-4' />
+                      )}
+                      <span className='sr-only'>
+                        Switch graph to{' '}
+                        {graphOrientation === 'horizontal'
+                          ? 'vertical'
+                          : 'horizontal'}{' '}
+                        layout
+                      </span>
+                    </Button>
+                    <Separator orientation='vertical' className='h-6' />
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='outline'
+                      className='size-8'
+                      title='Discard unsaved graph layout changes'
+                      disabled={!isLayoutDirty}
+                      onClick={discardLayoutChanges}
+                    >
+                      <Undo2 className='size-4' />
+                      <span className='sr-only'>Discard layout changes</span>
+                    </Button>
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='outline'
+                      className='size-8'
+                      title='Save graph layout to service meta'
+                      disabled={!isLayoutDirty}
+                      onClick={() => void saveLayoutToMeta()}
+                    >
+                      <Save className='size-4' />
+                      <span className='sr-only'>Save layout changes</span>
+                    </Button>
+                  </>
+                }
+                graph={
+                  <DependencyGraphCanvas
+                    nodes={nodes}
+                    edges={edges}
+                    fill
+                    paneTestId='dependency-graph-pane'
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onNodeDragStop={onNodeDragStop}
+                    onNodeClick={selectService}
+                    legendItems={[
+                      {
+                        label: 'Structural dependency',
+                        color: '#cbd5e1',
+                      },
+                      {
+                        label: 'Selected-path dependency',
+                        color: '#22c55e',
+                      },
+                      {
+                        label: 'Inferred API usage',
+                        color: '#38bdf8',
+                        dashed: true,
+                      },
+                    ]}
+                    miniMapNodeColor={(node) => {
+                      const service = byId.get(node.id)
+                      return service
+                        ? categoryNodeColor(getCategory(service))
+                        : '#6b7280'
+                    }}
+                  />
+                }
+              />
 
-              <Card>
-                <CardHeader>
+              <Card
+                className='flex h-full min-h-0 min-w-0 flex-col overflow-hidden'
+                data-testid='selected-service-details'
+              >
+                <CardHeader className='shrink-0'>
                   <CardTitle>Selected service details</CardTitle>
                   <CardDescription>
                     Relationship context and quick actions.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className='space-y-4'>
+                <CardContent
+                  className='min-h-0 flex-1 space-y-4 overflow-auto'
+                  data-testid='selected-service-details-scroll'
+                >
                   {selectedService ? (
                     <>
                       <div className='rounded-lg border p-3'>
@@ -753,25 +762,6 @@ export function Dependencies() {
                           </div>
                         )}
                       </div>
-
-                      <div className='flex flex-wrap gap-2'>
-                        <Button variant='outline' size='sm' asChild>
-                          <Link
-                            to='/services/$serviceId'
-                            params={{ serviceId: selectedService.id }}
-                          >
-                            Open service details
-                          </Link>
-                        </Button>
-                        <Button variant='outline' size='sm' asChild>
-                          <Link
-                            to='/logs'
-                            search={{ service: selectedService.id }}
-                          >
-                            Open logs
-                          </Link>
-                        </Button>
-                      </div>
                     </>
                   ) : (
                     <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
@@ -779,6 +769,23 @@ export function Dependencies() {
                     </div>
                   )}
                 </CardContent>
+                {selectedService ? (
+                  <CardFooter className='shrink-0 flex-wrap gap-2'>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link
+                        to='/services/$serviceId'
+                        params={{ serviceId: selectedService.id }}
+                      >
+                        Open service details
+                      </Link>
+                    </Button>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/logs' search={{ service: selectedService.id }}>
+                        Open logs
+                      </Link>
+                    </Button>
+                  </CardFooter>
+                ) : null}
               </Card>
             </div>
           </>

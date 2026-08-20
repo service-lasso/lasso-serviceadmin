@@ -423,3 +423,51 @@ test('help center, logs, tables, and providers chrome', async ({ page }) => {
   await expect(page.getByText('Live provider source metadata')).toHaveCount(0)
   await expect(page.getByTestId('data-table-scroll-region')).toBeVisible()
 })
+
+test('dependencies graph and details fill remaining viewport height', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1080 })
+  await page.goto('/dependencies')
+
+  await expectActivePageIdentity(page, 'Dependencies')
+  await expect(
+    page.getByText('Dependency graph', { exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByText('Selected service details', { exact: true })
+  ).toBeVisible()
+
+  const graphCard = page.getByTestId('dependency-graph-card')
+  const detailsCard = page.getByTestId('selected-service-details')
+  const graphPane = page.getByTestId('dependency-graph-pane')
+  await expect(graphCard).toBeVisible()
+  await expect(detailsCard).toBeVisible()
+  await expect(graphPane).toBeVisible()
+
+  const viewport = page.viewportSize()
+  expect(viewport).not.toBeNull()
+  if (viewport === null) {
+    return
+  }
+
+  const graphBox = await graphCard.boundingBox()
+  const detailsBox = await detailsCard.boundingBox()
+  const paneBox = await graphPane.boundingBox()
+  expect(graphBox).not.toBeNull()
+  expect(detailsBox).not.toBeNull()
+  expect(paneBox).not.toBeNull()
+  if (graphBox === null || detailsBox === null || paneBox === null) {
+    return
+  }
+
+  const bottomGapLimit = 48
+  expect(viewport.height - (graphBox.y + graphBox.height)).toBeLessThan(
+    bottomGapLimit
+  )
+  expect(viewport.height - (detailsBox.y + detailsBox.height)).toBeLessThan(
+    bottomGapLimit
+  )
+  expect(Math.abs(graphBox.height - detailsBox.height)).toBeLessThan(8)
+  expect(paneBox.height).toBeGreaterThan(520)
+})
