@@ -27,7 +27,10 @@ test('dashboard renders and starts stopped services', async ({ page }) => {
 
   await expect(page.getByText('3/4')).toBeVisible()
   await expect(
-    page.getByRole('link', { name: /dagu add favorite running/i })
+    page
+      .getByRole('link')
+      .filter({ hasText: 'Dagu' })
+      .filter({ hasText: 'Running' })
   ).toBeVisible()
 })
 
