@@ -47,7 +47,7 @@
     "@tanstack/react-router": "^1.168.4",
     "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.10.2",
-    "axios": "^1.16.0",
+    "axios": "1.19.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
@@ -101,7 +101,7 @@
     "start-server-and-test": "^3.0.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.57.2",
-    "vite": "^8.0.10",
+    "vite": "8.0.16",
     "vitest": "^4.1.4"
   },
   "description": "Service Lasso Service Admin UI",
