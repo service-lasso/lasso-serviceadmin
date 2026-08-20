@@ -68,17 +68,46 @@ Common log types are:
 
 Service details Logs uses the same viewer as the Logs page for the current
 service only. Choose a log from the service's source list, or toggle STDOUT and
-STDERR. An empty resolved stderr file still uses the file editor.
+STDERR. An empty resolved stderr file still uses the file editor. An advertised
+source whose file is missing or unreadable uses the same empty view (file editor
+when a path is resolved, or the empty-stream one-liner when it is not). It is
+not a special unavailable card.
 
 Not every service exposes every log type. Missing `access` or `error` logs can
 be normal for a service that does not have an HTTP server or separate web
 server log contract. Missing `stdout` or `stderr` can also be normal when the
-runtime does not capture process streams for that service.
+runtime does not capture process streams for that service. Provider services
+such as `@java` still advertise builtin `logs/runtime/` paths after install and
+config; those files exist only after a supervised process start writes them.
+
+## Where setup and lifecycle logs go
+
+`{serviceId}:install` and `{serviceId}:config` labels (for example
+`@java:install`) are lifecycle action-history markers. They are not Combined/All
+log lines, not Inbox items, and not a dedicated provider install log.
+
+- Combined/All (`type=default`) reads `{serviceRoot}/logs/runtime/service.log`
+  NDJSON captured from a supervised process. Stdout and stderr are sibling
+  `stdout.log` / `stderr.log` files in the same directory.
+- When `service.log` has no NDJSON lines, Core may still return synthetic
+  overview `entries` built from `actionHistory`. Service Admin Logs does not
+  render those as a fake tail. They are leftover diagnostics, not the selected
+  source.
+- Manifest setup steps (when `setup.steps` exist) write
+  `{serviceRoot}/logs/setup/{stepId}/{runId}/setup.log` plus stdout/stderr.
+  `@java` has no setup steps, so install/config do not create those files.
+- Named service actions write `{serviceRoot}/logs/actions/{actionId}/{runId}/`.
+- Inbox is for operator notices (updates, security, and similar), not install
+  or config command output.
+
+Do not expect setup or install/config output in Combined/All unless a setup
+step or discovered file under `{serviceRoot}/logs/` (outside `logs/runtime/`)
+actually exists.
 
 ## When Logs Are Missing
 
-When Logs shows no sources, no lines, or an unavailable state, check in this
-order:
+When Logs shows no sources, no lines, or an empty advertised source, check in
+this order:
 
 - confirm Runtime is reachable and not reporting API or proxy failures
 - confirm the service id exists in Services and service details
