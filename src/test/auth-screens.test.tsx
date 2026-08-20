@@ -28,13 +28,18 @@ describe('auth screens', () => {
 })
 
 describe('trusted Service Lasso sign-in boundary', () => {
-  it('does not collect a password or create a browser-owned access token', async () => {
+  it('offers loopback local-root plus Lasso-local methods without collecting an OS password', async () => {
     await renderRoute('/sign-in')
 
     expect(
       await screen.findByText(/^Trusted Service Lasso access$/i)
     ).toBeVisible()
-    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: /continue to service admin/i })
+    ).toBeVisible()
+    expect(screen.getByLabelText(/lasso-local password/i)).toBeVisible()
+    expect(screen.getByLabelText(/local-admin token/i)).toBeVisible()
+    expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
     expect(document.cookie).not.toContain('thisisjustarandomstring')
     expect(window.localStorage.length).toBe(0)

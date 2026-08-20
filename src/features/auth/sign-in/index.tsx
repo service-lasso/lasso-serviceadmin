@@ -1,5 +1,6 @@
 import { Link, useSearch } from '@tanstack/react-router'
 import { Loader2, ShieldCheck, ShieldX } from 'lucide-react'
+import { isLoopbackLoginOrigin } from '@/lib/service-lasso-dashboard/local-operator-session'
 import {
   identityUnlocksUi,
   useRuntimeIdentity,
@@ -16,6 +17,10 @@ import {
 import { LocalOperatorLoginForm } from '@/features/auth/local-operator-login-form'
 import { AuthLayout } from '../auth-layout'
 
+/**
+ * Loopback `/sign-in` always offers local-root Continue plus Local, Token,
+ * and provider buttons. FORCE_SSO hides Local/Token only on remote origins.
+ */
 export function SignIn() {
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
   const identity = useRuntimeIdentity()
@@ -23,6 +28,11 @@ export function SignIn() {
   const unlocked = identity.data
     ? identityUnlocksUi(identity.data, hostname)
     : false
+  const loopbackOrigin = identity.data
+    ? isLoopbackLoginOrigin(identity.data, hostname)
+    : isLoopbackLoginOrigin({ local: false }, hostname)
+  const showLoginMethods =
+    Boolean(identity.data) && (!unlocked || loopbackOrigin)
 
   return (
     <AuthLayout>
@@ -33,8 +43,9 @@ export function SignIn() {
             Trusted Service Lasso access
           </CardTitle>
           <CardDescription>
-            Loopback 127.0.0.1 stays local-root without a password. Remote
-            browsers prove a Lasso-local credential, vault token, or SSO.
+            Loopback always offers local-root, Lasso-local password, vault
+            token, and SSO when configured. FORCE_SSO hides Local and Token only
+            on remote origins.
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-4 text-sm'>
@@ -42,24 +53,29 @@ export function SignIn() {
             <div className='flex items-center gap-2 text-muted-foreground'>
               <Loader2 className='size-4 animate-spin' /> Verifying identity
             </div>
-          ) : unlocked ? (
-            <>
-              <p>
-                Authenticated as <strong>{identity.data?.actorId}</strong>{' '}
-                through {identity.data?.actorKind}.
-              </p>
-              <Button asChild className='w-full'>
-                <Link to={redirect || '/'}>Continue to Service Admin</Link>
-              </Button>
-            </>
           ) : identity.data ? (
-            <LocalOperatorLoginForm
-              identity={identity.data}
-              hostname={hostname}
-              onAuthenticated={() => {
-                void identity.refetch()
-              }}
-            />
+            <>
+              {unlocked ? (
+                <>
+                  <p>
+                    Authenticated as <strong>{identity.data.actorId}</strong>{' '}
+                    through {identity.data.actorKind}.
+                  </p>
+                  <Button asChild className='w-full'>
+                    <Link to={redirect || '/'}>Continue to Service Admin</Link>
+                  </Button>
+                </>
+              ) : null}
+              {showLoginMethods ? (
+                <LocalOperatorLoginForm
+                  identity={identity.data}
+                  hostname={hostname}
+                  onAuthenticated={() => {
+                    void identity.refetch()
+                  }}
+                />
+              ) : null}
+            </>
           ) : (
             <Button
               type='button'
