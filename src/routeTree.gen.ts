@@ -9,94 +9,75 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ClerkRouteRouteImport } from './routes/clerk/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
-import { Route as authOtpRouteImport } from './routes/(auth)/otp'
-import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
-import { Route as authSignIn2RouteImport } from './routes/(auth)/sign-in-2'
-import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
-import { Route as errors401RouteImport } from './routes/(errors)/401'
-import { Route as errors403RouteImport } from './routes/(errors)/403'
-import { Route as errors404RouteImport } from './routes/(errors)/404'
-import { Route as errors500RouteImport } from './routes/(errors)/500'
-import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as errors503RouteImport } from './routes/(errors)/503'
+import { Route as errors500RouteImport } from './routes/(errors)/500'
+import { Route as errors404RouteImport } from './routes/(errors)/404'
+import { Route as errors403RouteImport } from './routes/(errors)/403'
+import { Route as errors401RouteImport } from './routes/(errors)/401'
+import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
+import { Route as authSignIn2RouteImport } from './routes/(auth)/sign-in-2'
+import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
+import { Route as authOtpRouteImport } from './routes/(auth)/otp'
+import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
+import { Route as ClerkAuthenticatedRouteRouteImport } from './routes/clerk/_authenticated/route'
+import { Route as ClerkauthRouteRouteImport } from './routes/clerk/(auth)/route'
 import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authenticated/settings/route'
-import { Route as AuthenticatedAppsIndexRouteImport } from './routes/_authenticated/apps/index'
-import { Route as AuthenticatedChatsIndexRouteImport } from './routes/_authenticated/chats/index'
-import { Route as AuthenticatedDependenciesIndexRouteImport } from './routes/_authenticated/dependencies/index'
-import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
-import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
-import { Route as AuthenticatedInboxIndexRouteImport } from './routes/_authenticated/inbox/index'
-import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authenticated/installed/index'
-import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
-import { Route as AuthenticatedMcpIndexRouteImport } from './routes/_authenticated/mcp/index'
-import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
-import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authenticated/runtime/index'
-import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
-import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
-import { Route as AuthenticatedServicesServiceIdRouteImport } from './routes/_authenticated/services.$serviceId'
-import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
-import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
-import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
-import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_authenticated/settings/display'
-import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
-import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index'
-import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedVariablesIndexRouteImport } from './routes/_authenticated/variables/index'
+import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
+import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index'
+import { Route as AuthenticatedSupportBundleIndexRouteImport } from './routes/_authenticated/support-bundle/index'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
+import { Route as AuthenticatedServiceRoutesIndexRouteImport } from './routes/_authenticated/service-routes/index'
+import { Route as AuthenticatedSecretsBrokerIndexRouteImport } from './routes/_authenticated/secrets-broker/index'
+import { Route as AuthenticatedRuntimeIndexRouteImport } from './routes/_authenticated/runtime/index'
+import { Route as AuthenticatedNetworkIndexRouteImport } from './routes/_authenticated/network/index'
+import { Route as AuthenticatedLogsIndexRouteImport } from './routes/_authenticated/logs/index'
+import { Route as AuthenticatedInstalledIndexRouteImport } from './routes/_authenticated/installed/index'
+import { Route as AuthenticatedInboxIndexRouteImport } from './routes/_authenticated/inbox/index'
+import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
+import { Route as AuthenticatedFleetOverviewIndexRouteImport } from './routes/_authenticated/fleet-overview/index'
+import { Route as AuthenticatedDependenciesIndexRouteImport } from './routes/_authenticated/dependencies/index'
+import { Route as AuthenticatedChatsIndexRouteImport } from './routes/_authenticated/chats/index'
+import { Route as AuthenticatedAuthSessionIndexRouteImport } from './routes/_authenticated/auth-session/index'
+import { Route as AuthenticatedAppsIndexRouteImport } from './routes/_authenticated/apps/index'
+import { Route as ClerkAuthenticatedUserManagementRouteImport } from './routes/clerk/_authenticated/user-management'
+import { Route as ClerkauthSignUpRouteImport } from './routes/clerk/(auth)/sign-up'
+import { Route as ClerkauthSignInRouteImport } from './routes/clerk/(auth)/sign-in'
+import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
+import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_authenticated/settings/display'
+import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
+import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
+import { Route as AuthenticatedServicesServiceIdRouteImport } from './routes/_authenticated/services.$serviceId'
+import { Route as AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport } from './routes/_authenticated/secrets-broker/workflow-boundaries'
+import { Route as AuthenticatedSecretsBrokerTopologyRouteImport } from './routes/_authenticated/secrets-broker/topology'
+import { Route as AuthenticatedSecretsBrokerSourcesRouteImport } from './routes/_authenticated/secrets-broker/sources'
+import { Route as AuthenticatedSecretsBrokerSingleRevealRouteImport } from './routes/_authenticated/secrets-broker/single-reveal'
+import { Route as AuthenticatedSecretsBrokerSecretsRouteImport } from './routes/_authenticated/secrets-broker/secrets'
+import { Route as AuthenticatedSecretsBrokerSecretInventoryRouteImport } from './routes/_authenticated/secrets-broker/secret-inventory'
+import { Route as AuthenticatedSecretsBrokerReviewRouteImport } from './routes/_authenticated/secrets-broker/review'
+import { Route as AuthenticatedSecretsBrokerProviderConnectionsRouteImport } from './routes/_authenticated/secrets-broker/provider-connections'
+import { Route as AuthenticatedSecretsBrokerPolicySimulationRouteImport } from './routes/_authenticated/secrets-broker/policy-simulation'
+import { Route as AuthenticatedSecretsBrokerOperationalControlsRouteImport } from './routes/_authenticated/secrets-broker/operational-controls'
+import { Route as AuthenticatedSecretsBrokerDiagnosticsRouteImport } from './routes/_authenticated/secrets-broker/diagnostics'
+import { Route as AuthenticatedSecretsBrokerConfigurationRouteImport } from './routes/_authenticated/secrets-broker/configuration'
+import { Route as AuthenticatedSecretsBrokerBackupKeysRouteImport } from './routes/_authenticated/secrets-broker/backup-keys'
+import { Route as AuthenticatedSecretsBrokerAuditEventsRouteImport } from './routes/_authenticated/secrets-broker/audit-events'
+import { Route as AuthenticatedSecretsBrokerConnectionIdRouteImport } from './routes/_authenticated/secrets-broker.$connectionId'
+import { Route as AuthenticatedOperationsTelemetryRouteImport } from './routes/_authenticated/operations/telemetry'
+import { Route as AuthenticatedOperationsAuditLoggingRouteImport } from './routes/_authenticated/operations/audit-logging'
+import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 
+const ClerkRouteRoute = ClerkRouteRouteImport.update({
+  id: '/clerk',
+  path: '/clerk',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
-  id: '/(auth)/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authOtpRoute = authOtpRouteImport.update({
-  id: '/(auth)/otp',
-  path: '/otp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignInRoute = authSignInRouteImport.update({
-  id: '/(auth)/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignIn2Route = authSignIn2RouteImport.update({
-  id: '/(auth)/sign-in-2',
-  path: '/sign-in-2',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignUpRoute = authSignUpRouteImport.update({
-  id: '/(auth)/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const errors401Route = errors401RouteImport.update({
-  id: '/(errors)/401',
-  path: '/401',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const errors403Route = errors403RouteImport.update({
-  id: '/(errors)/403',
-  path: '/403',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const errors404Route = errors404RouteImport.update({
-  id: '/(errors)/404',
-  path: '/404',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const errors500Route = errors500RouteImport.update({
-  id: '/(errors)/500',
-  path: '/500',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const errors503Route = errors503RouteImport.update({
-  id: '/(errors)/503',
-  path: '/503',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
@@ -104,89 +85,90 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const errors503Route = errors503RouteImport.update({
+  id: '/(errors)/503',
+  path: '/503',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const errors500Route = errors500RouteImport.update({
+  id: '/(errors)/500',
+  path: '/500',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const errors404Route = errors404RouteImport.update({
+  id: '/(errors)/404',
+  path: '/404',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const errors403Route = errors403RouteImport.update({
+  id: '/(errors)/403',
+  path: '/403',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const errors401Route = errors401RouteImport.update({
+  id: '/(errors)/401',
+  path: '/401',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authSignUpRoute = authSignUpRouteImport.update({
+  id: '/(auth)/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authSignIn2Route = authSignIn2RouteImport.update({
+  id: '/(auth)/sign-in-2',
+  path: '/sign-in-2',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authSignInRoute = authSignInRouteImport.update({
+  id: '/(auth)/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authOtpRoute = authOtpRouteImport.update({
+  id: '/(auth)/otp',
+  path: '/otp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
+  id: '/(auth)/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClerkAuthenticatedRouteRoute = ClerkAuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => ClerkRouteRoute,
+} as any)
+const ClerkauthRouteRoute = ClerkauthRouteRouteImport.update({
+  id: '/(auth)',
+  getParentRoute: () => ClerkRouteRoute,
+} as any)
 const AuthenticatedSettingsRouteRoute =
   AuthenticatedSettingsRouteRouteImport.update({
     id: '/settings',
     path: '/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedAppsIndexRoute = AuthenticatedAppsIndexRouteImport.update({
-  id: '/apps/',
-  path: '/apps/',
+const AuthenticatedVariablesIndexRoute =
+  AuthenticatedVariablesIndexRouteImport.update({
+    id: '/variables/',
+    path: '/variables/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedUsersIndexRoute = AuthenticatedUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedChatsIndexRoute = AuthenticatedChatsIndexRouteImport.update({
-  id: '/chats/',
-  path: '/chats/',
+const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
+  id: '/tasks/',
+  path: '/tasks/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedDependenciesIndexRoute =
-  AuthenticatedDependenciesIndexRouteImport.update({
-    id: '/dependencies/',
-    path: '/dependencies/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedErrorsErrorRoute =
-  AuthenticatedErrorsErrorRouteImport.update({
-    id: '/errors/$error',
-    path: '/errors/$error',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedHelpCenterIndexRoute =
-  AuthenticatedHelpCenterIndexRouteImport.update({
-    id: '/help-center/',
-    path: '/help-center/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedInboxIndexRoute = AuthenticatedInboxIndexRouteImport.update({
-  id: '/inbox/',
-  path: '/inbox/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedInstalledIndexRoute =
-  AuthenticatedInstalledIndexRouteImport.update({
-    id: '/installed/',
-    path: '/installed/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedLogsIndexRoute = AuthenticatedLogsIndexRouteImport.update({
-  id: '/logs/',
-  path: '/logs/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMcpIndexRoute = AuthenticatedMcpIndexRouteImport.update({
-  id: '/mcp/',
-  path: '/mcp/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedNetworkIndexRoute =
-  AuthenticatedNetworkIndexRouteImport.update({
-    id: '/network/',
-    path: '/network/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedRuntimeIndexRoute =
-  AuthenticatedRuntimeIndexRouteImport.update({
-    id: '/runtime/',
-    path: '/runtime/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedSecurityIndexRoute =
-  AuthenticatedSecurityIndexRouteImport.update({
-    id: '/security/',
-    path: '/security/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedServicesIndexRoute =
-  AuthenticatedServicesIndexRouteImport.update({
-    id: '/services/',
-    path: '/services/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedServicesServiceIdRoute =
-  AuthenticatedServicesServiceIdRouteImport.update({
-    id: '/services/$serviceId',
-    path: '/services/$serviceId',
+const AuthenticatedSupportBundleIndexRoute =
+  AuthenticatedSupportBundleIndexRouteImport.update({
+    id: '/support-bundle/',
+    path: '/support-bundle/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSettingsIndexRoute =
@@ -195,16 +177,106 @@ const AuthenticatedSettingsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
-const AuthenticatedSettingsAccountRoute =
-  AuthenticatedSettingsAccountRouteImport.update({
-    id: '/account',
-    path: '/account',
-    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+const AuthenticatedServicesIndexRoute =
+  AuthenticatedServicesIndexRouteImport.update({
+    id: '/services/',
+    path: '/services/',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSettingsAppearanceRoute =
-  AuthenticatedSettingsAppearanceRouteImport.update({
-    id: '/appearance',
-    path: '/appearance',
+const AuthenticatedServiceRoutesIndexRoute =
+  AuthenticatedServiceRoutesIndexRouteImport.update({
+    id: '/service-routes/',
+    path: '/service-routes/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerIndexRoute =
+  AuthenticatedSecretsBrokerIndexRouteImport.update({
+    id: '/secrets-broker/',
+    path: '/secrets-broker/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRuntimeIndexRoute =
+  AuthenticatedRuntimeIndexRouteImport.update({
+    id: '/runtime/',
+    path: '/runtime/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedNetworkIndexRoute =
+  AuthenticatedNetworkIndexRouteImport.update({
+    id: '/network/',
+    path: '/network/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedLogsIndexRoute = AuthenticatedLogsIndexRouteImport.update({
+  id: '/logs/',
+  path: '/logs/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedInstalledIndexRoute =
+  AuthenticatedInstalledIndexRouteImport.update({
+    id: '/installed/',
+    path: '/installed/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedInboxIndexRoute = AuthenticatedInboxIndexRouteImport.update({
+  id: '/inbox/',
+  path: '/inbox/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHelpCenterIndexRoute =
+  AuthenticatedHelpCenterIndexRouteImport.update({
+    id: '/help-center/',
+    path: '/help-center/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedFleetOverviewIndexRoute =
+  AuthenticatedFleetOverviewIndexRouteImport.update({
+    id: '/fleet-overview/',
+    path: '/fleet-overview/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDependenciesIndexRoute =
+  AuthenticatedDependenciesIndexRouteImport.update({
+    id: '/dependencies/',
+    path: '/dependencies/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedChatsIndexRoute = AuthenticatedChatsIndexRouteImport.update({
+  id: '/chats/',
+  path: '/chats/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAuthSessionIndexRoute =
+  AuthenticatedAuthSessionIndexRouteImport.update({
+    id: '/auth-session/',
+    path: '/auth-session/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAppsIndexRoute = AuthenticatedAppsIndexRouteImport.update({
+  id: '/apps/',
+  path: '/apps/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ClerkAuthenticatedUserManagementRoute =
+  ClerkAuthenticatedUserManagementRouteImport.update({
+    id: '/user-management',
+    path: '/user-management',
+    getParentRoute: () => ClerkAuthenticatedRouteRoute,
+  } as any)
+const ClerkauthSignUpRoute = ClerkauthSignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => ClerkauthRouteRoute,
+} as any)
+const ClerkauthSignInRoute = ClerkauthSignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => ClerkauthRouteRoute,
+} as any)
+const AuthenticatedSettingsNotificationsRoute =
+  AuthenticatedSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
 const AuthenticatedSettingsDisplayRoute =
@@ -213,31 +285,136 @@ const AuthenticatedSettingsDisplayRoute =
     path: '/display',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
-const AuthenticatedSettingsNotificationsRoute =
-  AuthenticatedSettingsNotificationsRouteImport.update({
-    id: '/notifications',
-    path: '/notifications',
+const AuthenticatedSettingsAppearanceRoute =
+  AuthenticatedSettingsAppearanceRouteImport.update({
+    id: '/appearance',
+    path: '/appearance',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
-const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
-  id: '/tasks/',
-  path: '/tasks/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedUsersIndexRoute = AuthenticatedUsersIndexRouteImport.update({
-  id: '/users/',
-  path: '/users/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedVariablesIndexRoute =
-  AuthenticatedVariablesIndexRouteImport.update({
-    id: '/variables/',
-    path: '/variables/',
+const AuthenticatedSettingsAccountRoute =
+  AuthenticatedSettingsAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedServicesServiceIdRoute =
+  AuthenticatedServicesServiceIdRouteImport.update({
+    id: '/services/$serviceId',
+    path: '/services/$serviceId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerWorkflowBoundariesRoute =
+  AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport.update({
+    id: '/secrets-broker/workflow-boundaries',
+    path: '/secrets-broker/workflow-boundaries',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerTopologyRoute =
+  AuthenticatedSecretsBrokerTopologyRouteImport.update({
+    id: '/secrets-broker/topology',
+    path: '/secrets-broker/topology',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerSourcesRoute =
+  AuthenticatedSecretsBrokerSourcesRouteImport.update({
+    id: '/secrets-broker/sources',
+    path: '/secrets-broker/sources',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerSingleRevealRoute =
+  AuthenticatedSecretsBrokerSingleRevealRouteImport.update({
+    id: '/secrets-broker/single-reveal',
+    path: '/secrets-broker/single-reveal',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerSecretsRoute =
+  AuthenticatedSecretsBrokerSecretsRouteImport.update({
+    id: '/secrets-broker/secrets',
+    path: '/secrets-broker/secrets',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerSecretInventoryRoute =
+  AuthenticatedSecretsBrokerSecretInventoryRouteImport.update({
+    id: '/secrets-broker/secret-inventory',
+    path: '/secrets-broker/secret-inventory',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerReviewRoute =
+  AuthenticatedSecretsBrokerReviewRouteImport.update({
+    id: '/secrets-broker/review',
+    path: '/secrets-broker/review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerProviderConnectionsRoute =
+  AuthenticatedSecretsBrokerProviderConnectionsRouteImport.update({
+    id: '/secrets-broker/provider-connections',
+    path: '/secrets-broker/provider-connections',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerPolicySimulationRoute =
+  AuthenticatedSecretsBrokerPolicySimulationRouteImport.update({
+    id: '/secrets-broker/policy-simulation',
+    path: '/secrets-broker/policy-simulation',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerOperationalControlsRoute =
+  AuthenticatedSecretsBrokerOperationalControlsRouteImport.update({
+    id: '/secrets-broker/operational-controls',
+    path: '/secrets-broker/operational-controls',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerDiagnosticsRoute =
+  AuthenticatedSecretsBrokerDiagnosticsRouteImport.update({
+    id: '/secrets-broker/diagnostics',
+    path: '/secrets-broker/diagnostics',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerConfigurationRoute =
+  AuthenticatedSecretsBrokerConfigurationRouteImport.update({
+    id: '/secrets-broker/configuration',
+    path: '/secrets-broker/configuration',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerBackupKeysRoute =
+  AuthenticatedSecretsBrokerBackupKeysRouteImport.update({
+    id: '/secrets-broker/backup-keys',
+    path: '/secrets-broker/backup-keys',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerAuditEventsRoute =
+  AuthenticatedSecretsBrokerAuditEventsRouteImport.update({
+    id: '/secrets-broker/audit-events',
+    path: '/secrets-broker/audit-events',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSecretsBrokerConnectionIdRoute =
+  AuthenticatedSecretsBrokerConnectionIdRouteImport.update({
+    id: '/secrets-broker/$connectionId',
+    path: '/secrets-broker/$connectionId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOperationsTelemetryRoute =
+  AuthenticatedOperationsTelemetryRouteImport.update({
+    id: '/operations/telemetry',
+    path: '/operations/telemetry',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOperationsAuditLoggingRoute =
+  AuthenticatedOperationsAuditLoggingRouteImport.update({
+    id: '/operations/audit-logging',
+    path: '/operations/audit-logging',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedErrorsErrorRoute =
+  AuthenticatedErrorsErrorRouteImport.update({
+    id: '/errors/$error',
+    path: '/errors/$error',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
+  '/clerk': typeof ClerkAuthenticatedRouteRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
   '/otp': typeof authOtpRoute
@@ -250,29 +427,53 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/operations/audit-logging': typeof AuthenticatedOperationsAuditLoggingRoute
+  '/operations/telemetry': typeof AuthenticatedOperationsTelemetryRoute
+  '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
+  '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
+  '/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/secrets-broker/operational-controls': typeof AuthenticatedSecretsBrokerOperationalControlsRoute
+  '/secrets-broker/policy-simulation': typeof AuthenticatedSecretsBrokerPolicySimulationRoute
+  '/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
+  '/secrets-broker/review': typeof AuthenticatedSecretsBrokerReviewRoute
+  '/secrets-broker/secret-inventory': typeof AuthenticatedSecretsBrokerSecretInventoryRoute
+  '/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
+  '/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  '/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
+  '/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
+  '/clerk/sign-in': typeof ClerkauthSignInRoute
+  '/clerk/sign-up': typeof ClerkauthSignUpRoute
+  '/clerk/user-management': typeof ClerkAuthenticatedUserManagementRoute
   '/apps/': typeof AuthenticatedAppsIndexRoute
+  '/auth-session/': typeof AuthenticatedAuthSessionIndexRoute
   '/chats/': typeof AuthenticatedChatsIndexRoute
   '/dependencies/': typeof AuthenticatedDependenciesIndexRoute
+  '/fleet-overview/': typeof AuthenticatedFleetOverviewIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/inbox/': typeof AuthenticatedInboxIndexRoute
   '/installed/': typeof AuthenticatedInstalledIndexRoute
   '/logs/': typeof AuthenticatedLogsIndexRoute
-  '/mcp/': typeof AuthenticatedMcpIndexRoute
   '/network/': typeof AuthenticatedNetworkIndexRoute
   '/runtime/': typeof AuthenticatedRuntimeIndexRoute
-  '/security/': typeof AuthenticatedSecurityIndexRoute
+  '/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
+  '/service-routes/': typeof AuthenticatedServiceRoutesIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/support-bundle/': typeof AuthenticatedSupportBundleIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/variables/': typeof AuthenticatedVariablesIndexRoute
 }
 export interface FileRoutesByTo {
+  '/clerk': typeof ClerkAuthenticatedRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
   '/otp': typeof authOtpRoute
   '/sign-in': typeof authSignInRoute
@@ -285,24 +486,47 @@ export interface FileRoutesByTo {
   '/503': typeof errors503Route
   '/': typeof AuthenticatedIndexRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/operations/audit-logging': typeof AuthenticatedOperationsAuditLoggingRoute
+  '/operations/telemetry': typeof AuthenticatedOperationsTelemetryRoute
+  '/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  '/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
+  '/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
+  '/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/secrets-broker/operational-controls': typeof AuthenticatedSecretsBrokerOperationalControlsRoute
+  '/secrets-broker/policy-simulation': typeof AuthenticatedSecretsBrokerPolicySimulationRoute
+  '/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
+  '/secrets-broker/review': typeof AuthenticatedSecretsBrokerReviewRoute
+  '/secrets-broker/secret-inventory': typeof AuthenticatedSecretsBrokerSecretInventoryRoute
+  '/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
+  '/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  '/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
+  '/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
+  '/clerk/sign-in': typeof ClerkauthSignInRoute
+  '/clerk/sign-up': typeof ClerkauthSignUpRoute
+  '/clerk/user-management': typeof ClerkAuthenticatedUserManagementRoute
   '/apps': typeof AuthenticatedAppsIndexRoute
+  '/auth-session': typeof AuthenticatedAuthSessionIndexRoute
   '/chats': typeof AuthenticatedChatsIndexRoute
   '/dependencies': typeof AuthenticatedDependenciesIndexRoute
+  '/fleet-overview': typeof AuthenticatedFleetOverviewIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
   '/inbox': typeof AuthenticatedInboxIndexRoute
   '/installed': typeof AuthenticatedInstalledIndexRoute
   '/logs': typeof AuthenticatedLogsIndexRoute
-  '/mcp': typeof AuthenticatedMcpIndexRoute
   '/network': typeof AuthenticatedNetworkIndexRoute
   '/runtime': typeof AuthenticatedRuntimeIndexRoute
-  '/security': typeof AuthenticatedSecurityIndexRoute
+  '/secrets-broker': typeof AuthenticatedSecretsBrokerIndexRoute
+  '/service-routes': typeof AuthenticatedServiceRoutesIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/support-bundle': typeof AuthenticatedSupportBundleIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
   '/variables': typeof AuthenticatedVariablesIndexRoute
@@ -310,7 +534,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/clerk': typeof ClerkRouteRouteWithChildren
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
+  '/clerk/(auth)': typeof ClerkauthRouteRouteWithChildren
+  '/clerk/_authenticated': typeof ClerkAuthenticatedRouteRouteWithChildren
   '/(auth)/forgot-password': typeof authForgotPasswordRoute
   '/(auth)/otp': typeof authOtpRoute
   '/(auth)/sign-in': typeof authSignInRoute
@@ -323,24 +550,47 @@ export interface FileRoutesById {
   '/(errors)/503': typeof errors503Route
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/_authenticated/operations/audit-logging': typeof AuthenticatedOperationsAuditLoggingRoute
+  '/_authenticated/operations/telemetry': typeof AuthenticatedOperationsTelemetryRoute
+  '/_authenticated/secrets-broker/$connectionId': typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  '/_authenticated/secrets-broker/audit-events': typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  '/_authenticated/secrets-broker/backup-keys': typeof AuthenticatedSecretsBrokerBackupKeysRoute
+  '/_authenticated/secrets-broker/configuration': typeof AuthenticatedSecretsBrokerConfigurationRoute
+  '/_authenticated/secrets-broker/diagnostics': typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  '/_authenticated/secrets-broker/operational-controls': typeof AuthenticatedSecretsBrokerOperationalControlsRoute
+  '/_authenticated/secrets-broker/policy-simulation': typeof AuthenticatedSecretsBrokerPolicySimulationRoute
+  '/_authenticated/secrets-broker/provider-connections': typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
+  '/_authenticated/secrets-broker/review': typeof AuthenticatedSecretsBrokerReviewRoute
+  '/_authenticated/secrets-broker/secret-inventory': typeof AuthenticatedSecretsBrokerSecretInventoryRoute
+  '/_authenticated/secrets-broker/secrets': typeof AuthenticatedSecretsBrokerSecretsRoute
+  '/_authenticated/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  '/_authenticated/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
+  '/_authenticated/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/_authenticated/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/_authenticated/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
+  '/clerk/(auth)/sign-in': typeof ClerkauthSignInRoute
+  '/clerk/(auth)/sign-up': typeof ClerkauthSignUpRoute
+  '/clerk/_authenticated/user-management': typeof ClerkAuthenticatedUserManagementRoute
   '/_authenticated/apps/': typeof AuthenticatedAppsIndexRoute
+  '/_authenticated/auth-session/': typeof AuthenticatedAuthSessionIndexRoute
   '/_authenticated/chats/': typeof AuthenticatedChatsIndexRoute
   '/_authenticated/dependencies/': typeof AuthenticatedDependenciesIndexRoute
+  '/_authenticated/fleet-overview/': typeof AuthenticatedFleetOverviewIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/_authenticated/inbox/': typeof AuthenticatedInboxIndexRoute
   '/_authenticated/installed/': typeof AuthenticatedInstalledIndexRoute
   '/_authenticated/logs/': typeof AuthenticatedLogsIndexRoute
-  '/_authenticated/mcp/': typeof AuthenticatedMcpIndexRoute
   '/_authenticated/network/': typeof AuthenticatedNetworkIndexRoute
   '/_authenticated/runtime/': typeof AuthenticatedRuntimeIndexRoute
-  '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
+  '/_authenticated/secrets-broker/': typeof AuthenticatedSecretsBrokerIndexRoute
+  '/_authenticated/service-routes/': typeof AuthenticatedServiceRoutesIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/support-bundle/': typeof AuthenticatedSupportBundleIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/variables/': typeof AuthenticatedVariablesIndexRoute
@@ -349,6 +599,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/clerk'
     | '/settings'
     | '/forgot-password'
     | '/otp'
@@ -361,29 +612,53 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/errors/$error'
+    | '/operations/audit-logging'
+    | '/operations/telemetry'
+    | '/secrets-broker/$connectionId'
+    | '/secrets-broker/audit-events'
+    | '/secrets-broker/backup-keys'
+    | '/secrets-broker/configuration'
+    | '/secrets-broker/diagnostics'
+    | '/secrets-broker/operational-controls'
+    | '/secrets-broker/policy-simulation'
+    | '/secrets-broker/provider-connections'
+    | '/secrets-broker/review'
+    | '/secrets-broker/secret-inventory'
+    | '/secrets-broker/secrets'
+    | '/secrets-broker/single-reveal'
+    | '/secrets-broker/sources'
+    | '/secrets-broker/topology'
+    | '/secrets-broker/workflow-boundaries'
     | '/services/$serviceId'
     | '/settings/account'
     | '/settings/appearance'
     | '/settings/display'
     | '/settings/notifications'
+    | '/clerk/sign-in'
+    | '/clerk/sign-up'
+    | '/clerk/user-management'
     | '/apps/'
+    | '/auth-session/'
     | '/chats/'
     | '/dependencies/'
+    | '/fleet-overview/'
     | '/help-center/'
     | '/inbox/'
     | '/installed/'
     | '/logs/'
-    | '/mcp/'
     | '/network/'
     | '/runtime/'
-    | '/security/'
+    | '/secrets-broker/'
+    | '/service-routes/'
     | '/services/'
     | '/settings/'
+    | '/support-bundle/'
     | '/tasks/'
     | '/users/'
     | '/variables/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/clerk'
     | '/forgot-password'
     | '/otp'
     | '/sign-in'
@@ -396,31 +671,57 @@ export interface FileRouteTypes {
     | '/503'
     | '/'
     | '/errors/$error'
+    | '/operations/audit-logging'
+    | '/operations/telemetry'
+    | '/secrets-broker/$connectionId'
+    | '/secrets-broker/audit-events'
+    | '/secrets-broker/backup-keys'
+    | '/secrets-broker/configuration'
+    | '/secrets-broker/diagnostics'
+    | '/secrets-broker/operational-controls'
+    | '/secrets-broker/policy-simulation'
+    | '/secrets-broker/provider-connections'
+    | '/secrets-broker/review'
+    | '/secrets-broker/secret-inventory'
+    | '/secrets-broker/secrets'
+    | '/secrets-broker/single-reveal'
+    | '/secrets-broker/sources'
+    | '/secrets-broker/topology'
+    | '/secrets-broker/workflow-boundaries'
     | '/services/$serviceId'
     | '/settings/account'
     | '/settings/appearance'
     | '/settings/display'
     | '/settings/notifications'
+    | '/clerk/sign-in'
+    | '/clerk/sign-up'
+    | '/clerk/user-management'
     | '/apps'
+    | '/auth-session'
     | '/chats'
     | '/dependencies'
+    | '/fleet-overview'
     | '/help-center'
     | '/inbox'
     | '/installed'
     | '/logs'
-    | '/mcp'
     | '/network'
     | '/runtime'
-    | '/security'
+    | '/secrets-broker'
+    | '/service-routes'
     | '/services'
     | '/settings'
+    | '/support-bundle'
     | '/tasks'
     | '/users'
     | '/variables'
   id:
     | '__root__'
     | '/_authenticated'
+    | '/clerk'
     | '/_authenticated/settings'
+    | '/clerk/(auth)'
+    | '/clerk/_authenticated'
     | '/(auth)/forgot-password'
     | '/(auth)/otp'
     | '/(auth)/sign-in'
@@ -433,24 +734,47 @@ export interface FileRouteTypes {
     | '/(errors)/503'
     | '/_authenticated/'
     | '/_authenticated/errors/$error'
+    | '/_authenticated/operations/audit-logging'
+    | '/_authenticated/operations/telemetry'
+    | '/_authenticated/secrets-broker/$connectionId'
+    | '/_authenticated/secrets-broker/audit-events'
+    | '/_authenticated/secrets-broker/backup-keys'
+    | '/_authenticated/secrets-broker/configuration'
+    | '/_authenticated/secrets-broker/diagnostics'
+    | '/_authenticated/secrets-broker/operational-controls'
+    | '/_authenticated/secrets-broker/policy-simulation'
+    | '/_authenticated/secrets-broker/provider-connections'
+    | '/_authenticated/secrets-broker/review'
+    | '/_authenticated/secrets-broker/secret-inventory'
+    | '/_authenticated/secrets-broker/secrets'
+    | '/_authenticated/secrets-broker/single-reveal'
+    | '/_authenticated/secrets-broker/sources'
+    | '/_authenticated/secrets-broker/topology'
+    | '/_authenticated/secrets-broker/workflow-boundaries'
     | '/_authenticated/services/$serviceId'
     | '/_authenticated/settings/account'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/settings/display'
     | '/_authenticated/settings/notifications'
+    | '/clerk/(auth)/sign-in'
+    | '/clerk/(auth)/sign-up'
+    | '/clerk/_authenticated/user-management'
     | '/_authenticated/apps/'
+    | '/_authenticated/auth-session/'
     | '/_authenticated/chats/'
     | '/_authenticated/dependencies/'
+    | '/_authenticated/fleet-overview/'
     | '/_authenticated/help-center/'
     | '/_authenticated/inbox/'
     | '/_authenticated/installed/'
     | '/_authenticated/logs/'
-    | '/_authenticated/mcp/'
     | '/_authenticated/network/'
     | '/_authenticated/runtime/'
-    | '/_authenticated/security/'
+    | '/_authenticated/secrets-broker/'
+    | '/_authenticated/service-routes/'
     | '/_authenticated/services/'
     | '/_authenticated/settings/'
+    | '/_authenticated/support-bundle/'
     | '/_authenticated/tasks/'
     | '/_authenticated/users/'
     | '/_authenticated/variables/'
@@ -458,6 +782,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  ClerkRouteRoute: typeof ClerkRouteRouteWithChildren
   authForgotPasswordRoute: typeof authForgotPasswordRoute
   authOtpRoute: typeof authOtpRoute
   authSignInRoute: typeof authSignInRoute
@@ -472,81 +797,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/clerk': {
+      id: '/clerk'
+      path: '/clerk'
+      fullPath: '/clerk'
+      preLoaderRoute: typeof ClerkRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/forgot-password': {
-      id: '/(auth)/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof authForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/otp': {
-      id: '/(auth)/otp'
-      path: '/otp'
-      fullPath: '/otp'
-      preLoaderRoute: typeof authOtpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-in': {
-      id: '/(auth)/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof authSignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-in-2': {
-      id: '/(auth)/sign-in-2'
-      path: '/sign-in-2'
-      fullPath: '/sign-in-2'
-      preLoaderRoute: typeof authSignIn2RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-up': {
-      id: '/(auth)/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof authSignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(errors)/401': {
-      id: '/(errors)/401'
-      path: '/401'
-      fullPath: '/401'
-      preLoaderRoute: typeof errors401RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(errors)/403': {
-      id: '/(errors)/403'
-      path: '/403'
-      fullPath: '/403'
-      preLoaderRoute: typeof errors403RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(errors)/404': {
-      id: '/(errors)/404'
-      path: '/404'
-      fullPath: '/404'
-      preLoaderRoute: typeof errors404RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(errors)/500': {
-      id: '/(errors)/500'
-      path: '/500'
-      fullPath: '/500'
-      preLoaderRoute: typeof errors500RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(errors)/503': {
-      id: '/(errors)/503'
-      path: '/503'
-      fullPath: '/503'
-      preLoaderRoute: typeof errors503RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -556,6 +818,90 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/(errors)/503': {
+      id: '/(errors)/503'
+      path: '/503'
+      fullPath: '/503'
+      preLoaderRoute: typeof errors503RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(errors)/500': {
+      id: '/(errors)/500'
+      path: '/500'
+      fullPath: '/500'
+      preLoaderRoute: typeof errors500RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(errors)/404': {
+      id: '/(errors)/404'
+      path: '/404'
+      fullPath: '/404'
+      preLoaderRoute: typeof errors404RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(errors)/403': {
+      id: '/(errors)/403'
+      path: '/403'
+      fullPath: '/403'
+      preLoaderRoute: typeof errors403RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(errors)/401': {
+      id: '/(errors)/401'
+      path: '/401'
+      fullPath: '/401'
+      preLoaderRoute: typeof errors401RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/sign-up': {
+      id: '/(auth)/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof authSignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/sign-in-2': {
+      id: '/(auth)/sign-in-2'
+      path: '/sign-in-2'
+      fullPath: '/sign-in-2'
+      preLoaderRoute: typeof authSignIn2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/sign-in': {
+      id: '/(auth)/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof authSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/otp': {
+      id: '/(auth)/otp'
+      path: '/otp'
+      fullPath: '/otp'
+      preLoaderRoute: typeof authOtpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/forgot-password': {
+      id: '/(auth)/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof authForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clerk/_authenticated': {
+      id: '/clerk/_authenticated'
+      path: ''
+      fullPath: '/clerk'
+      preLoaderRoute: typeof ClerkAuthenticatedRouteRouteImport
+      parentRoute: typeof ClerkRouteRoute
+    }
+    '/clerk/(auth)': {
+      id: '/clerk/(auth)'
+      path: ''
+      fullPath: '/clerk'
+      preLoaderRoute: typeof ClerkauthRouteRouteImport
+      parentRoute: typeof ClerkRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
@@ -563,144 +909,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/apps/': {
-      id: '/_authenticated/apps/'
-      path: '/apps'
-      fullPath: '/apps/'
-      preLoaderRoute: typeof AuthenticatedAppsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/chats/': {
-      id: '/_authenticated/chats/'
-      path: '/chats'
-      fullPath: '/chats/'
-      preLoaderRoute: typeof AuthenticatedChatsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/dependencies/': {
-      id: '/_authenticated/dependencies/'
-      path: '/dependencies'
-      fullPath: '/dependencies/'
-      preLoaderRoute: typeof AuthenticatedDependenciesIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/errors/$error': {
-      id: '/_authenticated/errors/$error'
-      path: '/errors/$error'
-      fullPath: '/errors/$error'
-      preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/help-center/': {
-      id: '/_authenticated/help-center/'
-      path: '/help-center'
-      fullPath: '/help-center/'
-      preLoaderRoute: typeof AuthenticatedHelpCenterIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/inbox/': {
-      id: '/_authenticated/inbox/'
-      path: '/inbox'
-      fullPath: '/inbox/'
-      preLoaderRoute: typeof AuthenticatedInboxIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/installed/': {
-      id: '/_authenticated/installed/'
-      path: '/installed'
-      fullPath: '/installed/'
-      preLoaderRoute: typeof AuthenticatedInstalledIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/logs/': {
-      id: '/_authenticated/logs/'
-      path: '/logs'
-      fullPath: '/logs/'
-      preLoaderRoute: typeof AuthenticatedLogsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/mcp/': {
-      id: '/_authenticated/mcp/'
-      path: '/mcp'
-      fullPath: '/mcp/'
-      preLoaderRoute: typeof AuthenticatedMcpIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/network/': {
-      id: '/_authenticated/network/'
-      path: '/network'
-      fullPath: '/network/'
-      preLoaderRoute: typeof AuthenticatedNetworkIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/runtime/': {
-      id: '/_authenticated/runtime/'
-      path: '/runtime'
-      fullPath: '/runtime/'
-      preLoaderRoute: typeof AuthenticatedRuntimeIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/security/': {
-      id: '/_authenticated/security/'
-      path: '/security'
-      fullPath: '/security/'
-      preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/services/': {
-      id: '/_authenticated/services/'
-      path: '/services'
-      fullPath: '/services/'
-      preLoaderRoute: typeof AuthenticatedServicesIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/services/$serviceId': {
-      id: '/_authenticated/services/$serviceId'
-      path: '/services/$serviceId'
-      fullPath: '/services/$serviceId'
-      preLoaderRoute: typeof AuthenticatedServicesServiceIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/settings/': {
-      id: '/_authenticated/settings/'
-      path: '/'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
-    }
-    '/_authenticated/settings/account': {
-      id: '/_authenticated/settings/account'
-      path: '/account'
-      fullPath: '/settings/account'
-      preLoaderRoute: typeof AuthenticatedSettingsAccountRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
-    }
-    '/_authenticated/settings/appearance': {
-      id: '/_authenticated/settings/appearance'
-      path: '/appearance'
-      fullPath: '/settings/appearance'
-      preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
-    }
-    '/_authenticated/settings/display': {
-      id: '/_authenticated/settings/display'
-      path: '/display'
-      fullPath: '/settings/display'
-      preLoaderRoute: typeof AuthenticatedSettingsDisplayRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
-    }
-    '/_authenticated/settings/notifications': {
-      id: '/_authenticated/settings/notifications'
-      path: '/notifications'
-      fullPath: '/settings/notifications'
-      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
-      parentRoute: typeof AuthenticatedSettingsRouteRoute
-    }
-    '/_authenticated/tasks/': {
-      id: '/_authenticated/tasks/'
-      path: '/tasks'
-      fullPath: '/tasks/'
-      preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
+    '/_authenticated/variables/': {
+      id: '/_authenticated/variables/'
+      path: '/variables'
+      fullPath: '/variables/'
+      preLoaderRoute: typeof AuthenticatedVariablesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/users/': {
@@ -710,11 +923,305 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/variables/': {
-      id: '/_authenticated/variables/'
-      path: '/variables'
-      fullPath: '/variables/'
-      preLoaderRoute: typeof AuthenticatedVariablesIndexRouteImport
+    '/_authenticated/tasks/': {
+      id: '/_authenticated/tasks/'
+      path: '/tasks'
+      fullPath: '/tasks/'
+      preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/support-bundle/': {
+      id: '/_authenticated/support-bundle/'
+      path: '/support-bundle'
+      fullPath: '/support-bundle/'
+      preLoaderRoute: typeof AuthenticatedSupportBundleIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/services/': {
+      id: '/_authenticated/services/'
+      path: '/services'
+      fullPath: '/services/'
+      preLoaderRoute: typeof AuthenticatedServicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/service-routes/': {
+      id: '/_authenticated/service-routes/'
+      path: '/service-routes'
+      fullPath: '/service-routes/'
+      preLoaderRoute: typeof AuthenticatedServiceRoutesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/': {
+      id: '/_authenticated/secrets-broker/'
+      path: '/secrets-broker'
+      fullPath: '/secrets-broker/'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/runtime/': {
+      id: '/_authenticated/runtime/'
+      path: '/runtime'
+      fullPath: '/runtime/'
+      preLoaderRoute: typeof AuthenticatedRuntimeIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/network/': {
+      id: '/_authenticated/network/'
+      path: '/network'
+      fullPath: '/network/'
+      preLoaderRoute: typeof AuthenticatedNetworkIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/logs/': {
+      id: '/_authenticated/logs/'
+      path: '/logs'
+      fullPath: '/logs/'
+      preLoaderRoute: typeof AuthenticatedLogsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/installed/': {
+      id: '/_authenticated/installed/'
+      path: '/installed'
+      fullPath: '/installed/'
+      preLoaderRoute: typeof AuthenticatedInstalledIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/inbox/': {
+      id: '/_authenticated/inbox/'
+      path: '/inbox'
+      fullPath: '/inbox/'
+      preLoaderRoute: typeof AuthenticatedInboxIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/help-center/': {
+      id: '/_authenticated/help-center/'
+      path: '/help-center'
+      fullPath: '/help-center/'
+      preLoaderRoute: typeof AuthenticatedHelpCenterIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/fleet-overview/': {
+      id: '/_authenticated/fleet-overview/'
+      path: '/fleet-overview'
+      fullPath: '/fleet-overview/'
+      preLoaderRoute: typeof AuthenticatedFleetOverviewIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dependencies/': {
+      id: '/_authenticated/dependencies/'
+      path: '/dependencies'
+      fullPath: '/dependencies/'
+      preLoaderRoute: typeof AuthenticatedDependenciesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/chats/': {
+      id: '/_authenticated/chats/'
+      path: '/chats'
+      fullPath: '/chats/'
+      preLoaderRoute: typeof AuthenticatedChatsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/auth-session/': {
+      id: '/_authenticated/auth-session/'
+      path: '/auth-session'
+      fullPath: '/auth-session/'
+      preLoaderRoute: typeof AuthenticatedAuthSessionIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/apps/': {
+      id: '/_authenticated/apps/'
+      path: '/apps'
+      fullPath: '/apps/'
+      preLoaderRoute: typeof AuthenticatedAppsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/clerk/_authenticated/user-management': {
+      id: '/clerk/_authenticated/user-management'
+      path: '/user-management'
+      fullPath: '/clerk/user-management'
+      preLoaderRoute: typeof ClerkAuthenticatedUserManagementRouteImport
+      parentRoute: typeof ClerkAuthenticatedRouteRoute
+    }
+    '/clerk/(auth)/sign-up': {
+      id: '/clerk/(auth)/sign-up'
+      path: '/sign-up'
+      fullPath: '/clerk/sign-up'
+      preLoaderRoute: typeof ClerkauthSignUpRouteImport
+      parentRoute: typeof ClerkauthRouteRoute
+    }
+    '/clerk/(auth)/sign-in': {
+      id: '/clerk/(auth)/sign-in'
+      path: '/sign-in'
+      fullPath: '/clerk/sign-in'
+      preLoaderRoute: typeof ClerkauthSignInRouteImport
+      parentRoute: typeof ClerkauthRouteRoute
+    }
+    '/_authenticated/settings/notifications': {
+      id: '/_authenticated/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/settings/display': {
+      id: '/_authenticated/settings/display'
+      path: '/display'
+      fullPath: '/settings/display'
+      preLoaderRoute: typeof AuthenticatedSettingsDisplayRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/settings/appearance': {
+      id: '/_authenticated/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/settings/account': {
+      id: '/_authenticated/settings/account'
+      path: '/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof AuthenticatedSettingsAccountRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/services/$serviceId': {
+      id: '/_authenticated/services/$serviceId'
+      path: '/services/$serviceId'
+      fullPath: '/services/$serviceId'
+      preLoaderRoute: typeof AuthenticatedServicesServiceIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/workflow-boundaries': {
+      id: '/_authenticated/secrets-broker/workflow-boundaries'
+      path: '/secrets-broker/workflow-boundaries'
+      fullPath: '/secrets-broker/workflow-boundaries'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/topology': {
+      id: '/_authenticated/secrets-broker/topology'
+      path: '/secrets-broker/topology'
+      fullPath: '/secrets-broker/topology'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerTopologyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/sources': {
+      id: '/_authenticated/secrets-broker/sources'
+      path: '/secrets-broker/sources'
+      fullPath: '/secrets-broker/sources'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerSourcesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/single-reveal': {
+      id: '/_authenticated/secrets-broker/single-reveal'
+      path: '/secrets-broker/single-reveal'
+      fullPath: '/secrets-broker/single-reveal'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerSingleRevealRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/secrets': {
+      id: '/_authenticated/secrets-broker/secrets'
+      path: '/secrets-broker/secrets'
+      fullPath: '/secrets-broker/secrets'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerSecretsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/secret-inventory': {
+      id: '/_authenticated/secrets-broker/secret-inventory'
+      path: '/secrets-broker/secret-inventory'
+      fullPath: '/secrets-broker/secret-inventory'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerSecretInventoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/review': {
+      id: '/_authenticated/secrets-broker/review'
+      path: '/secrets-broker/review'
+      fullPath: '/secrets-broker/review'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/provider-connections': {
+      id: '/_authenticated/secrets-broker/provider-connections'
+      path: '/secrets-broker/provider-connections'
+      fullPath: '/secrets-broker/provider-connections'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerProviderConnectionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/policy-simulation': {
+      id: '/_authenticated/secrets-broker/policy-simulation'
+      path: '/secrets-broker/policy-simulation'
+      fullPath: '/secrets-broker/policy-simulation'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerPolicySimulationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/operational-controls': {
+      id: '/_authenticated/secrets-broker/operational-controls'
+      path: '/secrets-broker/operational-controls'
+      fullPath: '/secrets-broker/operational-controls'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerOperationalControlsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/diagnostics': {
+      id: '/_authenticated/secrets-broker/diagnostics'
+      path: '/secrets-broker/diagnostics'
+      fullPath: '/secrets-broker/diagnostics'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerDiagnosticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/configuration': {
+      id: '/_authenticated/secrets-broker/configuration'
+      path: '/secrets-broker/configuration'
+      fullPath: '/secrets-broker/configuration'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerConfigurationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/backup-keys': {
+      id: '/_authenticated/secrets-broker/backup-keys'
+      path: '/secrets-broker/backup-keys'
+      fullPath: '/secrets-broker/backup-keys'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerBackupKeysRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/audit-events': {
+      id: '/_authenticated/secrets-broker/audit-events'
+      path: '/secrets-broker/audit-events'
+      fullPath: '/secrets-broker/audit-events'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerAuditEventsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/secrets-broker/$connectionId': {
+      id: '/_authenticated/secrets-broker/$connectionId'
+      path: '/secrets-broker/$connectionId'
+      fullPath: '/secrets-broker/$connectionId'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerConnectionIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/operations/telemetry': {
+      id: '/_authenticated/operations/telemetry'
+      path: '/operations/telemetry'
+      fullPath: '/operations/telemetry'
+      preLoaderRoute: typeof AuthenticatedOperationsTelemetryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/operations/audit-logging': {
+      id: '/_authenticated/operations/audit-logging'
+      path: '/operations/audit-logging'
+      fullPath: '/operations/audit-logging'
+      preLoaderRoute: typeof AuthenticatedOperationsAuditLoggingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/errors/$error': {
+      id: '/_authenticated/errors/$error'
+      path: '/errors/$error'
+      fullPath: '/errors/$error'
+      preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
   }
@@ -747,19 +1254,39 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
+  AuthenticatedOperationsAuditLoggingRoute: typeof AuthenticatedOperationsAuditLoggingRoute
+  AuthenticatedOperationsTelemetryRoute: typeof AuthenticatedOperationsTelemetryRoute
+  AuthenticatedSecretsBrokerConnectionIdRoute: typeof AuthenticatedSecretsBrokerConnectionIdRoute
+  AuthenticatedSecretsBrokerAuditEventsRoute: typeof AuthenticatedSecretsBrokerAuditEventsRoute
+  AuthenticatedSecretsBrokerBackupKeysRoute: typeof AuthenticatedSecretsBrokerBackupKeysRoute
+  AuthenticatedSecretsBrokerConfigurationRoute: typeof AuthenticatedSecretsBrokerConfigurationRoute
+  AuthenticatedSecretsBrokerDiagnosticsRoute: typeof AuthenticatedSecretsBrokerDiagnosticsRoute
+  AuthenticatedSecretsBrokerOperationalControlsRoute: typeof AuthenticatedSecretsBrokerOperationalControlsRoute
+  AuthenticatedSecretsBrokerPolicySimulationRoute: typeof AuthenticatedSecretsBrokerPolicySimulationRoute
+  AuthenticatedSecretsBrokerProviderConnectionsRoute: typeof AuthenticatedSecretsBrokerProviderConnectionsRoute
+  AuthenticatedSecretsBrokerReviewRoute: typeof AuthenticatedSecretsBrokerReviewRoute
+  AuthenticatedSecretsBrokerSecretInventoryRoute: typeof AuthenticatedSecretsBrokerSecretInventoryRoute
+  AuthenticatedSecretsBrokerSecretsRoute: typeof AuthenticatedSecretsBrokerSecretsRoute
+  AuthenticatedSecretsBrokerSingleRevealRoute: typeof AuthenticatedSecretsBrokerSingleRevealRoute
+  AuthenticatedSecretsBrokerSourcesRoute: typeof AuthenticatedSecretsBrokerSourcesRoute
+  AuthenticatedSecretsBrokerTopologyRoute: typeof AuthenticatedSecretsBrokerTopologyRoute
+  AuthenticatedSecretsBrokerWorkflowBoundariesRoute: typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   AuthenticatedServicesServiceIdRoute: typeof AuthenticatedServicesServiceIdRoute
   AuthenticatedAppsIndexRoute: typeof AuthenticatedAppsIndexRoute
+  AuthenticatedAuthSessionIndexRoute: typeof AuthenticatedAuthSessionIndexRoute
   AuthenticatedChatsIndexRoute: typeof AuthenticatedChatsIndexRoute
   AuthenticatedDependenciesIndexRoute: typeof AuthenticatedDependenciesIndexRoute
+  AuthenticatedFleetOverviewIndexRoute: typeof AuthenticatedFleetOverviewIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
   AuthenticatedInboxIndexRoute: typeof AuthenticatedInboxIndexRoute
   AuthenticatedInstalledIndexRoute: typeof AuthenticatedInstalledIndexRoute
   AuthenticatedLogsIndexRoute: typeof AuthenticatedLogsIndexRoute
-  AuthenticatedMcpIndexRoute: typeof AuthenticatedMcpIndexRoute
   AuthenticatedNetworkIndexRoute: typeof AuthenticatedNetworkIndexRoute
   AuthenticatedRuntimeIndexRoute: typeof AuthenticatedRuntimeIndexRoute
-  AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
+  AuthenticatedSecretsBrokerIndexRoute: typeof AuthenticatedSecretsBrokerIndexRoute
+  AuthenticatedServiceRoutesIndexRoute: typeof AuthenticatedServiceRoutesIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
+  AuthenticatedSupportBundleIndexRoute: typeof AuthenticatedSupportBundleIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedVariablesIndexRoute: typeof AuthenticatedVariablesIndexRoute
@@ -769,19 +1296,54 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
+  AuthenticatedOperationsAuditLoggingRoute:
+    AuthenticatedOperationsAuditLoggingRoute,
+  AuthenticatedOperationsTelemetryRoute: AuthenticatedOperationsTelemetryRoute,
+  AuthenticatedSecretsBrokerConnectionIdRoute:
+    AuthenticatedSecretsBrokerConnectionIdRoute,
+  AuthenticatedSecretsBrokerAuditEventsRoute:
+    AuthenticatedSecretsBrokerAuditEventsRoute,
+  AuthenticatedSecretsBrokerBackupKeysRoute:
+    AuthenticatedSecretsBrokerBackupKeysRoute,
+  AuthenticatedSecretsBrokerConfigurationRoute:
+    AuthenticatedSecretsBrokerConfigurationRoute,
+  AuthenticatedSecretsBrokerDiagnosticsRoute:
+    AuthenticatedSecretsBrokerDiagnosticsRoute,
+  AuthenticatedSecretsBrokerOperationalControlsRoute:
+    AuthenticatedSecretsBrokerOperationalControlsRoute,
+  AuthenticatedSecretsBrokerPolicySimulationRoute:
+    AuthenticatedSecretsBrokerPolicySimulationRoute,
+  AuthenticatedSecretsBrokerProviderConnectionsRoute:
+    AuthenticatedSecretsBrokerProviderConnectionsRoute,
+  AuthenticatedSecretsBrokerReviewRoute: AuthenticatedSecretsBrokerReviewRoute,
+  AuthenticatedSecretsBrokerSecretInventoryRoute:
+    AuthenticatedSecretsBrokerSecretInventoryRoute,
+  AuthenticatedSecretsBrokerSecretsRoute:
+    AuthenticatedSecretsBrokerSecretsRoute,
+  AuthenticatedSecretsBrokerSingleRevealRoute:
+    AuthenticatedSecretsBrokerSingleRevealRoute,
+  AuthenticatedSecretsBrokerSourcesRoute:
+    AuthenticatedSecretsBrokerSourcesRoute,
+  AuthenticatedSecretsBrokerTopologyRoute:
+    AuthenticatedSecretsBrokerTopologyRoute,
+  AuthenticatedSecretsBrokerWorkflowBoundariesRoute:
+    AuthenticatedSecretsBrokerWorkflowBoundariesRoute,
   AuthenticatedServicesServiceIdRoute: AuthenticatedServicesServiceIdRoute,
   AuthenticatedAppsIndexRoute: AuthenticatedAppsIndexRoute,
+  AuthenticatedAuthSessionIndexRoute: AuthenticatedAuthSessionIndexRoute,
   AuthenticatedChatsIndexRoute: AuthenticatedChatsIndexRoute,
   AuthenticatedDependenciesIndexRoute: AuthenticatedDependenciesIndexRoute,
+  AuthenticatedFleetOverviewIndexRoute: AuthenticatedFleetOverviewIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
   AuthenticatedInboxIndexRoute: AuthenticatedInboxIndexRoute,
   AuthenticatedInstalledIndexRoute: AuthenticatedInstalledIndexRoute,
   AuthenticatedLogsIndexRoute: AuthenticatedLogsIndexRoute,
-  AuthenticatedMcpIndexRoute: AuthenticatedMcpIndexRoute,
   AuthenticatedNetworkIndexRoute: AuthenticatedNetworkIndexRoute,
   AuthenticatedRuntimeIndexRoute: AuthenticatedRuntimeIndexRoute,
-  AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
+  AuthenticatedSecretsBrokerIndexRoute: AuthenticatedSecretsBrokerIndexRoute,
+  AuthenticatedServiceRoutesIndexRoute: AuthenticatedServiceRoutesIndexRoute,
   AuthenticatedServicesIndexRoute: AuthenticatedServicesIndexRoute,
+  AuthenticatedSupportBundleIndexRoute: AuthenticatedSupportBundleIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedVariablesIndexRoute: AuthenticatedVariablesIndexRoute,
@@ -790,8 +1352,52 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ClerkauthRouteRouteChildren {
+  ClerkauthSignInRoute: typeof ClerkauthSignInRoute
+  ClerkauthSignUpRoute: typeof ClerkauthSignUpRoute
+}
+
+const ClerkauthRouteRouteChildren: ClerkauthRouteRouteChildren = {
+  ClerkauthSignInRoute: ClerkauthSignInRoute,
+  ClerkauthSignUpRoute: ClerkauthSignUpRoute,
+}
+
+const ClerkauthRouteRouteWithChildren = ClerkauthRouteRoute._addFileChildren(
+  ClerkauthRouteRouteChildren,
+)
+
+interface ClerkAuthenticatedRouteRouteChildren {
+  ClerkAuthenticatedUserManagementRoute: typeof ClerkAuthenticatedUserManagementRoute
+}
+
+const ClerkAuthenticatedRouteRouteChildren: ClerkAuthenticatedRouteRouteChildren =
+  {
+    ClerkAuthenticatedUserManagementRoute:
+      ClerkAuthenticatedUserManagementRoute,
+  }
+
+const ClerkAuthenticatedRouteRouteWithChildren =
+  ClerkAuthenticatedRouteRoute._addFileChildren(
+    ClerkAuthenticatedRouteRouteChildren,
+  )
+
+interface ClerkRouteRouteChildren {
+  ClerkauthRouteRoute: typeof ClerkauthRouteRouteWithChildren
+  ClerkAuthenticatedRouteRoute: typeof ClerkAuthenticatedRouteRouteWithChildren
+}
+
+const ClerkRouteRouteChildren: ClerkRouteRouteChildren = {
+  ClerkauthRouteRoute: ClerkauthRouteRouteWithChildren,
+  ClerkAuthenticatedRouteRoute: ClerkAuthenticatedRouteRouteWithChildren,
+}
+
+const ClerkRouteRouteWithChildren = ClerkRouteRoute._addFileChildren(
+  ClerkRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  ClerkRouteRoute: ClerkRouteRouteWithChildren,
   authForgotPasswordRoute: authForgotPasswordRoute,
   authOtpRoute: authOtpRoute,
   authSignInRoute: authSignInRoute,

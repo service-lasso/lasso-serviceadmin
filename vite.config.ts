@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { promises as fs } from 'fs'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'http'
+import {
+  resolveRuntimeProxyTarget,
+  shouldEnableStubLogMiddleware,
+} from './src/lib/service-lasso-dashboard/runtime-proxy-target'
 
 const DEFAULT_LOG_READ_LIMIT = 100
 const MAX_LOG_READ_LIMIT = 1000
@@ -120,9 +124,65 @@ function normalizeLogReadBefore(value: string | null, totalLines: number) {
 function attachLogMiddlewares(middlewares: {
   use: (
     path: string,
-    handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+    handler: (
+      req: IncomingMessage,
+      res: ServerResponse,
+      next?: () => void
+    ) => void | Promise<void>
   ) => void
 }) {
+  middlewares.use('/api/services', async (req, res, next) => {
+    try {
+      const requestUrl = new URL(req.url ?? '', 'http://localhost')
+      const match = requestUrl.pathname.match(/^\/([^/]+)\/logs$/)
+      if (!match) {
+        next?.()
+        return
+      }
+
+      const serviceId = decodeURIComponent(match[1])
+      const logInfo = await resolveStubServiceLogInfo(serviceId, 'default')
+      if (!logInfo?.path) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Unknown service log target' }))
+        return
+      }
+
+      const logData = await readResolvedLogLines(logInfo.path)
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(
+        JSON.stringify({
+          logs: {
+            serviceId,
+            logPath: logInfo.path,
+            stdoutPath: logInfo.path,
+            stderrPath: logInfo.path,
+            entries: logData.lines.slice(-20).map((line) => ({
+              level: 'info',
+              message: line,
+            })),
+            archives: [],
+            retention: { maxArchives: 3 },
+          },
+        })
+      )
+    } catch (error) {
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to read service log overview',
+        })
+      )
+    }
+  })
+
   middlewares.use('/api/services/log-info', async (req, res) => {
     try {
       const requestUrl = new URL(req.url ?? '', 'http://localhost')
@@ -277,8 +337,30 @@ function createLogReadEndpointPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: resolveRuntimeProxyTarget(
+          process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET
+        ),
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      '/api': {
+        target: resolveRuntimeProxyTarget(
+          process.env.SERVICE_LASSO_RUNTIME_PROXY_TARGET
+        ),
+        changeOrigin: true,
+      },
+    },
+  },
   plugins: [
-    createLogReadEndpointPlugin(),
+    ...(shouldEnableStubLogMiddleware(process.env.SERVICE_ADMIN_STUB_LOGS)
+      ? [createLogReadEndpointPlugin()]
+      : []),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: process.env.VITEST !== 'true',

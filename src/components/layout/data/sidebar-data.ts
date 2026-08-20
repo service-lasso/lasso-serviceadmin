@@ -1,17 +1,22 @@
 import {
+  Blocks,
+  BookKey,
   Boxes,
+  ClipboardList,
   Command,
+  FileChartColumn,
   GitBranch,
   Globe,
+  Inbox,
+  Network,
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
-  Inbox,
   LayoutDashboard,
   Palette,
+  Route,
   ScrollText,
   Settings,
-  ShieldCheck,
   TimerReset,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
@@ -31,7 +36,7 @@ export const sidebarData: SidebarData = {
   ],
   navGroups: [
     {
-      title: 'Operations',
+      title: 'Service Admin',
       items: [
         {
           title: 'Dashboard',
@@ -49,24 +54,19 @@ export const sidebarData: SidebarData = {
           icon: GitBranch,
         },
         {
+          title: 'Routes',
+          url: '/service-routes',
+          icon: Route,
+        },
+        {
           title: 'Logs',
           url: '/logs',
           icon: ScrollText,
         },
         {
-          title: 'Inbox',
-          url: '/inbox',
-          icon: Inbox,
-        },
-        {
           title: 'Runtime',
           url: '/runtime',
           icon: TimerReset,
-        },
-        {
-          title: 'MCP',
-          url: '/mcp',
-          icon: Command,
         },
         {
           title: 'Installed',
@@ -83,10 +83,50 @@ export const sidebarData: SidebarData = {
           url: '/network',
           icon: Globe,
         },
+      ],
+    },
+    {
+      title: 'Operations',
+      items: [
         {
-          title: 'Security',
-          url: '/security',
-          icon: ShieldCheck,
+          title: 'Inbox',
+          url: '/inbox',
+          icon: Inbox,
+        },
+        {
+          title: 'Telemetry',
+          url: '/operations/telemetry',
+          icon: FileChartColumn,
+        },
+        {
+          title: 'Audit',
+          url: '/operations/audit-logging',
+          icon: ScrollText,
+        },
+      ],
+    },
+    {
+      title: 'Secrets Broker',
+      items: [
+        {
+          title: 'Secrets',
+          url: '/secrets-broker/secrets',
+          icon: BookKey,
+        },
+        {
+          title: 'Providers',
+          url: '/secrets-broker/sources',
+          icon: Blocks,
+        },
+        {
+          title: 'Topology',
+          url: '/secrets-broker/topology',
+          icon: Network,
+        },
+        {
+          title: 'Review',
+          url: '/secrets-broker/review',
+          icon: ClipboardList,
         },
       ],
     },

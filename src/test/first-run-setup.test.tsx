@@ -17,10 +17,7 @@ describe('first-run setup gate', () => {
       state: 'setup_required',
       setupMode: true,
       vault: { required: true, ready: false },
-      operator: {
-        osUsername: 'local-operator',
-        identitySource: 'vault',
-      },
+      operator: { osUsername: 'local-operator', identitySource: 'vault' },
       trustBoundary: {
         bindHost: '127.0.0.1',
         localOnly: true,
@@ -58,9 +55,7 @@ describe('first-run setup gate', () => {
         })
       ).not.toBeInTheDocument()
     })
-    expect(
-      await screen.findByRole('heading', { name: /^Dashboard$/i })
-    ).toBeVisible()
+    expect(await screen.findByText('Runtime health')).toBeVisible()
   })
 
   it('requires a transient token for an authorized remote bootstrap', async () => {
@@ -80,7 +75,6 @@ describe('first-run setup gate', () => {
     })
 
     await renderRoute('/')
-
     const submit = await screen.findByRole('button', {
       name: /Initialize Secrets Broker/i,
     })
@@ -98,7 +92,7 @@ describe('first-run setup gate', () => {
     expect(document.body.textContent).not.toContain('fixture-setup-token')
   })
 
-  it('renders a retryable error when protected bootstrap fails', async () => {
+  it('renders a retryable error without leaking the bootstrap failure', async () => {
     const user = userEvent.setup()
     setFirstRunSetupFixtureForTests({
       state: 'setup_required',
@@ -125,9 +119,6 @@ describe('first-run setup gate', () => {
     )
 
     expect(await screen.findByText(/Bootstrap did not complete/i)).toBeVisible()
-    expect(
-      screen.getByRole('heading', { name: /Service Lasso first-run setup/i })
-    ).toBeVisible()
     expect(document.body.textContent).not.toContain('safe fixture failure')
   })
 
@@ -147,10 +138,25 @@ describe('first-run setup gate', () => {
     })
 
     await renderRoute('/')
-
     expect(await screen.findByText(/Bootstrap blocked/i)).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Initialize Secrets Broker/i })
     ).toBeDisabled()
+  })
+
+  it('fails closed visibly when the setup-status contract is unavailable', async () => {
+    vi.spyOn(dashboardStub, 'fetchFirstRunSetupState').mockRejectedValueOnce(
+      new Error('fixture runtime response must not be rendered')
+    )
+
+    const { queryClient } = await renderRoute('/')
+    await queryClient.invalidateQueries({
+      queryKey: ['service-lasso-first-run-setup'],
+    })
+
+    expect(
+      await screen.findByText(/First-run setup status unavailable/i)
+    ).toBeVisible()
+    expect(document.body.textContent).not.toContain('fixture runtime response')
   })
 })

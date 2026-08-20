@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Activity,
   AlertTriangle,
@@ -6,18 +7,15 @@ import {
   PackageOpen,
   Play,
   RefreshCcw,
-  ShieldCheck,
   ShieldAlert,
-  Star,
+  ShieldCheck,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
+  useBrokerTelemetry,
   useDashboardAction,
   useDashboardSummary,
-  useFavoriteFeatureState,
-  useToggleFavorite,
 } from '@/lib/service-lasso-dashboard/hooks'
-import { getRuntimeApiUnavailableCopy } from '@/lib/service-lasso-dashboard/stub'
 import type {
   DashboardService,
   ServiceStatus,
@@ -35,23 +33,27 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { HeaderActions } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
-import {
-  getServiceRecoveryDescription,
-  ServiceRecoveryBadge,
-} from '@/components/service-recovery-status'
-import {
-  getServiceUpdateDescription,
-  ServiceUpdateBadge,
-} from '@/components/service-update-status'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { FavoriteToggle } from '@/features/services/components/favorite-toggle'
+import {
+  brokerReadyLabel,
+  deriveBrokerReadyState,
+  findSecretsBrokerService,
+  formatBrokerLockoutCount,
+} from './broker-home-posture'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
     return (
       <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
     )
+  }
+
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
   }
 
   if (status === 'degraded') {
@@ -67,12 +69,14 @@ function SummaryCard({
   description,
   icon: Icon,
   action,
+  valueAriaLabel,
 }: {
   title: string
   value: string
   description: string
   icon: React.ElementType
   action?: React.ReactNode
+  valueAriaLabel?: string
 }) {
   return (
     <Card>
@@ -82,7 +86,9 @@ function SummaryCard({
       </CardHeader>
       <CardContent className='space-y-3'>
         <div>
-          <div className='text-2xl font-bold'>{value}</div>
+          <div className='text-2xl font-bold' aria-label={valueAriaLabel}>
+            {value}
+          </div>
           <p className='text-xs text-muted-foreground'>{description}</p>
         </div>
         {action ? <div>{action}</div> : null}
@@ -92,9 +98,6 @@ function SummaryCard({
 }
 
 function ServiceCard({ service }: { service: DashboardService }) {
-  const toggleFavorite = useToggleFavorite()
-  const favoriteFeature = useFavoriteFeatureState()
-
   const openDetail = () => {
     window.location.href = `/services/${service.id}`
   }
@@ -118,48 +121,9 @@ function ServiceCard({ service }: { service: DashboardService }) {
             <div className='truncate text-sm font-medium'>{service.name}</div>
           </div>
           <div className='flex items-center gap-2'>
-            <button
-              type='button'
-              aria-label={service.favorite ? 'Remove favorite' : 'Add favorite'}
-              title={
-                favoriteFeature.enabled
-                  ? service.favorite
-                    ? 'Remove favorite'
-                    : 'Add favorite'
-                  : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-              }
-              disabled={!favoriteFeature.enabled}
-              className='inline-flex items-center rounded-md border p-1.5 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
-              onClick={(event) => {
-                event.stopPropagation()
-                if (!favoriteFeature.enabled) return
-                void toggleFavorite.mutateAsync(service.id)
-              }}
-            >
-              <Star
-                className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
-              />
-            </button>
+            <FavoriteToggle service={service} />
             <StatusBadge status={service.status} />
           </div>
-        </div>
-        <div className='rounded-md border border-blue-500/20 bg-blue-500/5 p-2 text-xs'>
-          <div className='flex items-center justify-between gap-2'>
-            <span className='font-medium'>Updates</span>
-            <ServiceUpdateBadge updates={service.updates} />
-          </div>
-          <p className='mt-1 text-muted-foreground'>
-            {getServiceUpdateDescription(service.updates)}
-          </p>
-        </div>
-        <div className='rounded-md border border-emerald-500/20 bg-emerald-500/5 p-2 text-xs'>
-          <div className='flex items-center justify-between gap-2'>
-            <span className='font-medium'>Recovery</span>
-            <ServiceRecoveryBadge recovery={service.recovery} />
-          </div>
-          <p className='mt-1 text-muted-foreground'>
-            {getServiceRecoveryDescription(service.recovery)}
-          </p>
         </div>
         <div className='flex flex-wrap gap-2'>
           {service.links.slice(0, 2).map((link) => (
@@ -191,25 +155,16 @@ function DashboardLoading() {
     <>
       <Header>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
-            <p className='text-muted-foreground'>
-              Monitor runtime health, launch service actions, and jump to the
-              services you use most.
-            </p>
-          </div>
-        </div>
-        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5'>
-          {Array.from({ length: 4 }).map((_, index) => (
+        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+          {Array.from({ length: 6 }).map((_, index) => (
             <Card key={index}>
               <CardHeader>
                 <Skeleton className='h-4 w-24' />
@@ -249,65 +204,43 @@ function DashboardLoading() {
 }
 
 function DashboardUnavailable({ error }: { error: unknown }) {
-  const copy = getRuntimeApiUnavailableCopy(error)
-  const details = [
-    ['Requested path', copy.details.path],
-    ['Requested endpoint', copy.details.endpoint ?? 'Not configured'],
-    [
-      'HTTP status',
-      copy.details.status == null ? 'No response' : String(copy.details.status),
-    ],
-    ['Content type', copy.details.contentType ?? 'Unknown'],
-    [
-      'Packaged proxy',
-      copy.details.packagedProxyConfigured ? 'Configured' : 'Not configured',
-    ],
-  ]
+  const message =
+    error instanceof Error
+      ? error.message
+      : 'Service Lasso runtime API is unavailable.'
 
   return (
     <>
       <Header fixed>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
-            <p className='text-muted-foreground'>
-              Monitor runtime health, launch service actions, and jump to the
-              services you use most.
-            </p>
-          </div>
-        </div>
-        <Card className='border-amber-500/30 bg-amber-500/5'>
+        <Card className='border-amber-500/40'>
           <CardHeader>
             <CardTitle className='flex items-center gap-2'>
-              <AlertTriangle className='size-4 text-amber-600' />
-              {copy.title}
+              <AlertTriangle className='h-4 w-4' />
+              Runtime API unavailable
             </CardTitle>
-            <CardDescription>{copy.description}</CardDescription>
+            <CardDescription>
+              No sample service data is loaded by default. Connect Service Admin
+              to Service Lasso or explicitly enable the dev fixture mode.
+            </CardDescription>
           </CardHeader>
-          <CardContent className='space-y-4'>
-            <p className='text-sm'>{copy.guidance}</p>
-            <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
-              {details.map(([label, value]) => (
-                <div
-                  key={label}
-                  className='rounded-md border bg-background p-3'
-                >
-                  <div className='text-xs text-muted-foreground'>{label}</div>
-                  <div className='mt-1 text-sm font-medium break-words'>
-                    {value}
-                  </div>
-                </div>
-              ))}
+          <CardContent className='space-y-3 text-sm'>
+            <div className='rounded-md border bg-muted/40 p-3 font-mono text-xs'>
+              {message}
             </div>
+            <p className='text-muted-foreground'>
+              Set VITE_SERVICE_LASSO_API_BASE_URL for a separate runtime, or set
+              VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true only for local UI fixture
+              development.
+            </p>
           </CardContent>
         </Card>
       </Main>
@@ -323,90 +256,56 @@ export function Dashboard() {
   })
 
   const summaryQuery = useDashboardSummary()
+  const brokerTelemetry = useBrokerTelemetry()
   const actionMutation = useDashboardAction()
 
-  if (summaryQuery.isError) {
-    return <DashboardUnavailable error={summaryQuery.error} />
-  }
-
-  if (summaryQuery.isLoading || !summaryQuery.data) {
+  if (summaryQuery.isLoading) {
     return <DashboardLoading />
   }
 
+  if (summaryQuery.isError || !summaryQuery.data) {
+    return <DashboardUnavailable error={summaryQuery.error} />
+  }
+
   const summary = summaryQuery.data
+  const brokerService = findSecretsBrokerService(summary)
+  const brokerReadyState = deriveBrokerReadyState(brokerService)
+  const brokerReadyDisplay = brokerReadyLabel(brokerReadyState)
+  const brokerLockoutDisplay = formatBrokerLockoutCount(
+    brokerTelemetry.isError || brokerTelemetry.isLoading
+      ? null
+      : (brokerTelemetry.data?.counters.activeLockouts ?? null)
+  )
+  const isReloadingRuntime =
+    actionMutation.isPending && actionMutation.variables === 'reload-runtime'
+  const isStartingServices =
+    actionMutation.isPending && actionMutation.variables === 'start-services'
+  const openSecretsAction = (
+    <Button
+      asChild
+      size='sm'
+      variant='outline'
+      className='w-full justify-start'
+    >
+      <Link to='/secrets-broker/secrets'>Open Secrets</Link>
+    </Button>
+  )
 
   return (
     <>
       {/* ===== Top Heading ===== */}
       <Header fixed>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
       {/* ===== Main ===== */}
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Dashboard</h2>
-            <p className='text-muted-foreground'>
-              Monitor runtime health, launch service actions, and jump to the
-              services you use most.
-            </p>
-          </div>
-        </div>
-        {summary.updateNotifications.messages.length > 0 ? (
-          <Card className='border-blue-500/30 bg-blue-500/5'>
-            <CardHeader className='pb-3'>
-              <CardTitle className='flex items-center gap-2 text-base'>
-                <ShieldAlert className='size-4 text-blue-600' />
-                Service updates need attention
-              </CardTitle>
-              <CardDescription>
-                These messages come from the Service Lasso update API/state and
-                match the CLI update states.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
-              {summary.updateNotifications.messages.map((message) => (
-                <div
-                  key={message}
-                  className='rounded-lg border bg-background p-3 text-sm'
-                >
-                  {message}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
-        {summary.recoveryNotifications.messages.length > 0 ? (
-          <Card className='border-emerald-500/30 bg-emerald-500/5'>
-            <CardHeader className='pb-3'>
-              <CardTitle className='flex items-center gap-2 text-base'>
-                <ShieldCheck className='size-4 text-emerald-600' />
-                Recovery events need review
-              </CardTitle>
-              <CardDescription>
-                These messages come from Service Lasso recovery history and
-                match doctor, monitor, restart, and hook state.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
-              {summary.recoveryNotifications.messages.map((message) => (
-                <div
-                  key={message}
-                  className='rounded-lg border bg-background p-3 text-sm'
-                >
-                  {message}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
-        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5'>
+        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
           <SummaryCard
             title='Runtime health'
             value={summary.runtime.status === 'healthy' ? 'Healthy' : 'Warning'}
@@ -420,15 +319,17 @@ export function Dashboard() {
                 disabled={actionMutation.isPending}
                 className='w-full justify-start'
               >
-                <RefreshCcw className='mr-2 h-4 w-4' />
-                Reload runtime
+                <RefreshCcw
+                  className={`mr-2 h-4 w-4 ${isReloadingRuntime ? 'animate-spin' : ''}`}
+                />
+                {isReloadingRuntime ? 'Reloading runtime...' : 'Reload runtime'}
               </Button>
             }
           />
           <SummaryCard
             title='Services'
             value={`${summary.servicesRunning}/${summary.servicesTotal}`}
-            description={`${summary.servicesStopped} stopped, ${summary.servicesDegraded} degraded`}
+            description={`${summary.servicesAvailable ?? 0} available, ${summary.servicesStopped} stopped, ${summary.servicesDegraded} degraded`}
             icon={Boxes}
             action={
               <Button
@@ -438,7 +339,7 @@ export function Dashboard() {
                 className='w-full justify-start'
               >
                 <Play className='mr-2 h-4 w-4' />
-                Start services
+                {isStartingServices ? 'Starting services...' : 'Start services'}
               </Button>
             }
           />
@@ -451,29 +352,28 @@ export function Dashboard() {
           <SummaryCard
             title='Installed'
             value={String(summary.installedCount)}
-            description='Installed services tracked by runtime data'
+            description='Installed services tracked by Service Lasso'
             icon={PackageOpen}
           />
           <SummaryCard
-            title='Updates'
-            value={String(
-              summary.updateNotifications.availableCount +
-                summary.updateNotifications.downloadedCount +
-                summary.updateNotifications.deferredCount
-            )}
-            description={`${summary.updateNotifications.failedCount} failed check(s)`}
-            icon={ShieldAlert}
+            title='Broker ready'
+            value={brokerReadyDisplay}
+            valueAriaLabel={`Broker ready ${brokerReadyDisplay}`}
+            description={
+              brokerService
+                ? `${brokerService.name} process is ${brokerService.status}`
+                : '@secretsbroker is not on this runtime'
+            }
+            icon={ShieldCheck}
+            action={openSecretsAction}
           />
           <SummaryCard
-            title='Recovery'
-            value={String(
-              summary.recoveryNotifications.monitorAttentionCount +
-                summary.recoveryNotifications.doctorBlockedCount +
-                summary.recoveryNotifications.hookBlockedCount +
-                summary.recoveryNotifications.restartFailureCount
-            )}
-            description='Monitor, doctor, restart, and hook events needing review'
-            icon={ShieldCheck}
+            title='Broker lockouts'
+            value={brokerLockoutDisplay}
+            valueAriaLabel={`Broker lockout count ${brokerLockoutDisplay}`}
+            description='Active lockout count from Broker telemetry'
+            icon={ShieldAlert}
+            action={openSecretsAction}
           />
         </div>
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>
@@ -485,9 +385,16 @@ export function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className='grid gap-4 sm:grid-cols-2 xl:grid-cols-3'>
-              {summary.favorites.map((service) => (
-                <ServiceCard key={service.id} service={service} />
-              ))}
+              {summary.favorites.length === 0 ? (
+                <p className='text-sm text-muted-foreground sm:col-span-2 xl:col-span-3'>
+                  Star a service here, in the services list, or on service
+                  details to pin it for quick access.
+                </p>
+              ) : (
+                summary.favorites.map((service) => (
+                  <ServiceCard key={service.id} service={service} />
+                ))
+              )}
             </CardContent>
           </Card>
           <Card className='col-span-1 lg:col-span-3'>
@@ -497,8 +404,7 @@ export function Dashboard() {
                 Warnings and problem services
               </CardTitle>
               <CardDescription>
-                Current runtime warnings surfaced from Service Lasso runtime
-                data.
+                Current runtime warnings surfaced from Service Lasso.
               </CardDescription>
             </CardHeader>
             <CardContent>

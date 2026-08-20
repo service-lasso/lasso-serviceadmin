@@ -1,31 +1,38 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Link } from '@tanstack/react-router'
 import { type ColumnDef } from '@tanstack/react-table'
-import { ExternalLink, Search, Star } from 'lucide-react'
 import {
-  useFavoriteFeatureState,
-  useToggleFavorite,
-} from '@/lib/service-lasso-dashboard/hooks'
+  ExternalLink,
+  Play,
+  RotateCcw,
+  Search,
+  ScrollText,
+  Square,
+} from 'lucide-react'
+import { renderServiceLinkUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
+import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
+import { useDashboardAction } from '@/lib/service-lasso-dashboard/hooks'
+import {
+  hasLifecycleAction,
+  isLifecycleActionEnabled,
+} from '@/lib/service-lasso-dashboard/lifecycle-actions'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { LongText } from '@/components/long-text'
-import {
-  getServiceRecoveryDescription,
-  ServiceRecoveryBadge,
-} from '@/components/service-recovery-status'
-import {
-  getServiceUpdateDescription,
-  ServiceUpdateBadge,
-} from '@/components/service-update-status'
 import { DataTableRowActions } from './data-table-row-actions'
+import { FavoriteToggle } from './favorite-toggle'
 
 function renderStatusBadge(status: DashboardService['status']) {
   if (status === 'running') {
     return (
       <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
     )
+  }
+
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
   }
 
   if (status === 'degraded') {
@@ -36,39 +43,107 @@ function renderStatusBadge(status: DashboardService['status']) {
 }
 
 function FavoriteCell({ service }: { service: DashboardService }) {
-  const toggleFavorite = useToggleFavorite()
-  const favoriteFeature = useFavoriteFeatureState()
+  return (
+    <FavoriteToggle
+      service={service}
+      className='inline-flex items-center rounded-md border p-2 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
+    />
+  )
+}
+
+export { hasLifecycleAction, isLifecycleActionEnabled }
+
+function ServiceLifecycleControls({ service }: { service: DashboardService }) {
+  const actionMutation = useDashboardAction()
+  const pending = actionMutation.isPending
+  const canStart = hasLifecycleAction(service, 'start')
+  const canStop = hasLifecycleAction(service, 'stop')
+  const canRestart = hasLifecycleAction(service, 'restart')
+  const startEnabled = isLifecycleActionEnabled(service, 'start')
+  const stopEnabled = isLifecycleActionEnabled(service, 'stop')
+  const restartEnabled = isLifecycleActionEnabled(service, 'restart')
+
+  const runAction = (action: 'start' | 'stop' | 'restart') => {
+    actionMutation.mutate({
+      kind: 'service-lifecycle',
+      serviceId: service.id,
+      action,
+    })
+  }
+
+  if (!canStart && !canStop && !canRestart) {
+    return (
+      <Badge
+        variant='outline'
+        title='Provider services are installed/configured but are not daemon-started'
+      >
+        Provider
+      </Badge>
+    )
+  }
 
   return (
-    <button
-      type='button'
-      aria-label={service.favorite ? 'Remove favorite' : 'Add favorite'}
-      title={
-        favoriteFeature.enabled
-          ? service.favorite
-            ? 'Remove favorite'
-            : 'Add favorite'
-          : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-      }
-      disabled={!favoriteFeature.enabled}
-      className='inline-flex items-center rounded-md border p-2 hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50'
-      onClick={(event) => {
-        event.stopPropagation()
-        if (!favoriteFeature.enabled) return
-        void toggleFavorite.mutateAsync(service.id)
-      }}
-    >
-      <Star
-        className={`size-4 ${service.favorite ? 'fill-amber-500 text-amber-500' : 'text-muted-foreground'}`}
-      />
-    </button>
+    <div className='flex items-center gap-1'>
+      {canStart ? (
+        <Button
+          type='button'
+          size='icon'
+          variant='outline'
+          className={lifecycleActionButtonClass('start', 'size-8')}
+          aria-label={`Start ${service.name}`}
+          title={`Start ${service.name}`}
+          disabled={pending || !startEnabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            runAction('start')
+          }}
+        >
+          <Play className='size-3.5' />
+        </Button>
+      ) : null}
+      {canStop ? (
+        <Button
+          type='button'
+          size='icon'
+          variant='outline'
+          className={lifecycleActionButtonClass('stop', 'size-8')}
+          aria-label={`Stop ${service.name}`}
+          title={`Stop ${service.name}`}
+          disabled={pending || !stopEnabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            runAction('stop')
+          }}
+        >
+          <Square className='size-3.5' />
+        </Button>
+      ) : null}
+      {canRestart ? (
+        <Button
+          type='button'
+          size='icon'
+          variant='outline'
+          className={lifecycleActionButtonClass('restart', 'size-8')}
+          aria-label={`Restart ${service.name}`}
+          title={`Restart ${service.name}`}
+          disabled={pending || !restartEnabled}
+          onClick={(event) => {
+            event.stopPropagation()
+            runAction('restart')
+          }}
+        >
+          <RotateCcw className='size-3.5' />
+        </Button>
+      ) : null}
+    </div>
   )
 }
 
 const statusSortRank: Record<DashboardService['status'], number> = {
   degraded: 0,
   stopped: 1,
-  running: 2,
+  available: 2,
+  running: 3,
 }
 
 export const servicesColumns: ColumnDef<DashboardService>[] = [
@@ -112,45 +187,6 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
     },
   },
   {
-    id: 'updates',
-    accessorFn: (row) => row.updates?.state ?? 'unknown',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Updates' />
-    ),
-    cell: ({ row }) => {
-      const service = row.original
-      return (
-        <div className='flex max-w-[220px] flex-col gap-1'>
-          <ServiceUpdateBadge updates={service.updates} />
-          <span className='line-clamp-2 text-xs text-muted-foreground'>
-            {getServiceUpdateDescription(service.updates)}
-          </span>
-        </div>
-      )
-    },
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-  },
-  {
-    id: 'recovery',
-    accessorFn: (row) =>
-      row.recovery?.events[row.recovery.events.length - 1]?.kind ?? 'none',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Recovery' />
-    ),
-    cell: ({ row }) => {
-      const service = row.original
-      return (
-        <div className='flex max-w-[220px] flex-col gap-1'>
-          <ServiceRecoveryBadge recovery={service.recovery} />
-          <span className='line-clamp-2 text-xs text-muted-foreground'>
-            {getServiceRecoveryDescription(service.recovery)}
-          </span>
-        </div>
-      )
-    },
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-  },
-  {
     id: 'favorite',
     accessorFn: (row) => (row.favorite ? 'favorite' : 'standard'),
     header: ({ column }) => (
@@ -171,19 +207,23 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
       const service = row.original
       return (
         <div className='flex flex-wrap items-center gap-2'>
-          {service.links.slice(0, 2).map((link) => (
-            <Button
-              key={`${service.id}-${link.label}`}
-              asChild
-              size='sm'
-              variant='outline'
-            >
-              <a href={link.url} target='_blank' rel='noreferrer'>
-                {link.label}
-                <ExternalLink className='ml-2 size-3.5' />
-              </a>
-            </Button>
-          ))}
+          {service.links.slice(0, 2).map((link) => {
+            const url = renderServiceLinkUrl(link)
+
+            return (
+              <Button
+                key={`${service.id}-${link.label}`}
+                asChild
+                size='sm'
+                variant='outline'
+              >
+                <a href={url} target='_blank' rel='noreferrer'>
+                  {link.label}
+                  <ExternalLink className='ml-2 size-3.5' />
+                </a>
+              </Button>
+            )
+          })}
           {service.links.length > 2 ? (
             <span className='text-xs text-muted-foreground'>
               +{service.links.length - 2} more
@@ -195,16 +235,35 @@ export const servicesColumns: ColumnDef<DashboardService>[] = [
     enableSorting: false,
   },
   {
+    id: 'controls',
+    header: 'Controls',
+    cell: ({ row }) => <ServiceLifecycleControls service={row.original} />,
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
     id: 'open',
     header: 'Open',
-    cell: ({ row }) => (
-      <Button size='sm' variant='outline' asChild>
-        <Link to='/services/$serviceId' params={{ serviceId: row.original.id }}>
-          <Search className='mr-2 size-3.5' />
-          Details
-        </Link>
-      </Button>
-    ),
+    cell: ({ row }) => {
+      const service = row.original
+
+      return (
+        <div className='flex flex-wrap gap-2'>
+          <Button size='sm' variant='outline' asChild>
+            <Link to='/logs' search={{ service: service.id }}>
+              <ScrollText className='mr-2 size-3.5' />
+              Logs
+            </Link>
+          </Button>
+          <Button size='sm' variant='outline' asChild>
+            <Link to='/services/$serviceId' params={{ serviceId: service.id }}>
+              <Search className='mr-2 size-3.5' />
+              Details
+            </Link>
+          </Button>
+        </div>
+      )
+    },
     enableSorting: false,
   },
   {

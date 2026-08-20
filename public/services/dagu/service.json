@@ -54,7 +54,7 @@
       "DAGU_HOME": "./workflows"
     },
     "depend_on": [
-      "traefik"
+      "@traefik"
     ],
     "healthchecks": [
       {

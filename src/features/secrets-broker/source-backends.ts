@@ -1,0 +1,807 @@
+export type SecretsBrokerSourceType =
+  | 'local'
+  | 'env'
+  | 'file'
+  | 'exec'
+  | 'vault-cli'
+  | 'aws-secrets-manager-cli'
+  | 'onepassword-cli'
+  | 'bitwarden-bws-cli'
+  | 'mounted-secrets'
+
+export type SecretsBrokerSourceState =
+  | 'configured'
+  | 'not-configured'
+  | 'reachable'
+  | 'failing'
+  | 'untested'
+
+export type SecretsBrokerSourceWarning = {
+  code:
+    | 'broad_env_allowlist'
+    | 'symlink_command_allowed'
+    | 'insecure_path_override'
+    | 'untrusted_command_path'
+    | 'missing_timeout_output_limits'
+    | 'auth_required'
+  title: string
+  severity: 'info' | 'warning' | 'critical'
+  description: string
+}
+
+export type SecretsBrokerProviderLifecycle =
+  | 'setup-needed'
+  | 'locked'
+  | 'unlocked'
+  | 'auth-required'
+  | 'invalid'
+  | 'ready'
+
+export type SecretsBrokerSourceTestResult = {
+  outcome: 'success' | 'failure' | 'not-run'
+  checkedAt: string
+  metadata: string[]
+}
+
+export type SecretsBrokerSourceBackend = {
+  id: string
+  title: string
+  type: SecretsBrokerSourceType
+  provider: string
+  source: string
+  sourceId?: string
+  kind?: string
+  brokerState?: string
+  critical?: boolean
+  capabilities?: string[]
+  lifecycleDetail?: {
+    state: string
+    outcome: string
+    nextAction: string
+    retryable: boolean
+  }
+  connection: string
+  configured: boolean
+  enabled: boolean
+  priority: number | null
+  namespaces: string[]
+  defaultRole: 'default' | 'fallback' | 'addable'
+  lifecycle: SecretsBrokerProviderLifecycle
+  nextAction: string
+  state: SecretsBrokerSourceState
+  mode: string
+  lastCheckedAt: string
+  summary: string
+  warnings: SecretsBrokerSourceWarning[]
+  testResult: SecretsBrokerSourceTestResult
+  exampleRefs: string[]
+  exampleConfig: string[]
+  supportedActions: Array<
+    'test-source' | 'view-diagnostics' | 'edit-configuration' | 'view-examples'
+  >
+}
+
+export const secretsBrokerSourceBackends: SecretsBrokerSourceBackend[] = [
+  {
+    id: 'local-encrypted-store',
+    title: 'Local encrypted store',
+    type: 'local',
+    provider: 'local',
+    source: 'local',
+    sourceId: 'local',
+    kind: 'local-encrypted-store',
+    brokerState: 'setup_needed',
+    critical: true,
+    capabilities: [
+      'read',
+      'reveal',
+      'write/update',
+      'rotate/reset',
+      'audit',
+      'migration',
+      'health',
+    ],
+    lifecycleDetail: {
+      state: 'reconnect_required',
+      outcome: 'locked',
+      nextAction: 'unlock_or_unseal_source',
+      retryable: false,
+    },
+    connection: 'Local encrypted vault',
+    configured: true,
+    enabled: true,
+    priority: 0,
+    namespaces: ['*'],
+    defaultRole: 'default',
+    lifecycle: 'locked',
+    nextAction: 'unlock_or_unseal_source',
+    state: 'configured',
+    mode: 'local-first encrypted store',
+    lastCheckedAt: '2026-06-18T13:35:00Z',
+    summary:
+      'Built-in local encrypted Secrets Broker store for this Service Lasso instance; currently setup-needed and locked in the demo.',
+    warnings: [],
+    testResult: {
+      outcome: 'failure',
+      checkedAt: '2026-06-18T13:35:00Z',
+      metadata: [
+        'broker healthy',
+        'state setup_needed',
+        'outcome locked',
+        'next action unlock_or_unseal_source',
+      ],
+    },
+    exampleRefs: [
+      'secret://local/default/@serviceadmin/SESSION_SECRET',
+      'secret://local/default/postgres/ADMIN_PASSWORD',
+    ],
+    exampleConfig: ['source=local', 'namespace=default', 'value=hidden'],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+  {
+    id: 'env-provider',
+    title: 'Environment provider',
+    type: 'env',
+    provider: 'env',
+    source: 'addable:env',
+    sourceId: 'env-provider',
+    kind: 'env',
+    brokerState: 'configured_metadata',
+    critical: false,
+    capabilities: ['read', 'reveal by policy', 'metadata test', 'audit'],
+    lifecycleDetail: {
+      state: 'ready',
+      outcome: 'configured',
+      nextAction: 'narrow_allowlist_before_production',
+      retryable: true,
+    },
+    connection: 'Add provider to choose allowlisted environment keys',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, define an explicit allowlist, then test metadata only.',
+    state: 'reachable',
+    mode: 'read-only allowlist',
+    lastCheckedAt: '2026-05-07T18:31:15Z',
+    summary:
+      'Reads only explicitly allowlisted environment keys and reports metadata without values.',
+    warnings: [
+      {
+        code: 'broad_env_allowlist',
+        title: 'Broad env allowlist',
+        severity: 'warning',
+        description:
+          'Allowlist includes a wildcard-like prefix; narrow it before enabling production reads.',
+      },
+    ],
+    testResult: {
+      outcome: 'success',
+      checkedAt: '2026-05-07T18:31:15Z',
+      metadata: [
+        '3 keys matched allowlist',
+        'values redacted',
+        'readonly mode',
+      ],
+    },
+    exampleRefs: ['env://service-lasso/OPENCLAW_TOKEN'],
+    exampleConfig: ['allow=SERVICE_LASSO_*', 'deny=*_PASSWORD', 'value=hidden'],
+    supportedActions: ['test-source', 'view-diagnostics', 'edit-configuration'],
+  },
+  {
+    id: 'file-provider',
+    title: 'File provider',
+    type: 'file',
+    provider: 'file',
+    source: 'addable:file',
+    sourceId: 'file-provider',
+    kind: 'file',
+    brokerState: 'policy_denied',
+    critical: false,
+    capabilities: ['read', 'field mapping', 'path policy', 'audit'],
+    lifecycleDetail: {
+      state: 'invalid',
+      outcome: 'blocked',
+      nextAction: 'fix_path_scope_and_symlink_policy',
+      retryable: true,
+    },
+    connection: 'Add provider to choose scoped file paths',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, restrict root paths, then run path/symlink validation.',
+    state: 'failing',
+    mode: 'read-only file path',
+    lastCheckedAt: '2026-05-07T18:30:40Z',
+    summary:
+      'Reads refs from a scoped secrets file path after sandbox and symlink checks pass.',
+    warnings: [
+      {
+        code: 'insecure_path_override',
+        title: 'Insecure path override',
+        severity: 'critical',
+        description:
+          'Configured override escapes the approved service-lasso secrets directory.',
+      },
+    ],
+    testResult: {
+      outcome: 'failure',
+      checkedAt: '2026-05-07T18:30:40Z',
+      metadata: [
+        'path policy denied',
+        '0 values read',
+        'sandbox escape blocked',
+      ],
+    },
+    exampleRefs: ['file://C:/service-lasso/secrets/runtime.env#SESSION_SECRET'],
+    exampleConfig: [
+      'path=C:/service-lasso/secrets/runtime.env',
+      'followSymlinks=false',
+      'value=hidden',
+    ],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+  {
+    id: 'exec-provider',
+    title: 'Exec provider',
+    type: 'exec',
+    provider: 'exec',
+    source: 'addable:exec',
+    sourceId: 'exec-provider',
+    kind: 'exec',
+    brokerState: 'not_configured',
+    critical: false,
+    capabilities: ['read', 'protocol validation', 'bounded execution', 'audit'],
+    lifecycleDetail: {
+      state: 'setup_needed',
+      outcome: 'not_configured',
+      nextAction: 'configure_trusted_command_timeout_and_output_limits',
+      retryable: true,
+    },
+    connection: 'Add provider to choose a trusted resolver command',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, pin trusted command paths, timeout, and output limits.',
+    state: 'untested',
+    mode: 'allowlisted command',
+    lastCheckedAt: '2026-05-07T18:30:05Z',
+    summary:
+      'Runs an allowlisted resolver command with bounded timeout and scrubbed output metadata.',
+    warnings: [
+      {
+        code: 'untrusted_command_path',
+        title: 'Untrusted command path',
+        severity: 'critical',
+        description:
+          'Resolver command path is outside the trusted Service Lasso tool directory.',
+      },
+      {
+        code: 'missing_timeout_output_limits',
+        title: 'Missing timeout/output limits',
+        severity: 'warning',
+        description:
+          'Source tests must define timeout and output byte limits before execution.',
+      },
+    ],
+    testResult: {
+      outcome: 'failure',
+      checkedAt: '2026-05-07T18:30:05Z',
+      metadata: [
+        'command not executed',
+        'policy denied',
+        'output scrubber ready',
+      ],
+    },
+    exampleRefs: ['exec://openclaw/service-lasso/SESSION_TOKEN'],
+    exampleConfig: [
+      'command=openclaw secrets resolve',
+      'timeoutMs=5000',
+      'maxOutputBytes=2048',
+      'value=hidden',
+    ],
+    supportedActions: ['test-source', 'view-diagnostics', 'edit-configuration'],
+  },
+  {
+    id: 'vault-cli',
+    title: 'HashiCorp Vault CLI / Vault/OpenBao',
+    type: 'vault-cli',
+    provider: 'vault-openbao',
+    source: 'addable:vault',
+    sourceId: 'vault-cli',
+    kind: 'vault/openbao',
+    brokerState: 'auth_required',
+    critical: false,
+    capabilities: [
+      'read',
+      'kv path mapping',
+      'metadata test',
+      'seal state',
+      'policy state',
+      'audit',
+    ],
+    lifecycleDetail: {
+      state: 'auth_required',
+      outcome: 'not_configured',
+      nextAction: 'configure_vault_address_mount_auth_ref_and_policy',
+      retryable: true,
+    },
+    connection: 'Add provider to configure Vault/OpenBao metadata',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, capture safe address/mount metadata, and test auth state.',
+    state: 'not-configured',
+    mode: 'external cli read',
+    lastCheckedAt: '2026-05-07T18:29:40Z',
+    summary:
+      'External Vault-backed source for ops-managed refs; authentication status is shown without token values.',
+    warnings: [
+      {
+        code: 'auth_required',
+        title: 'Authentication required',
+        severity: 'warning',
+        description:
+          'Vault/OpenBao auth is missing; configure an operator auth identity reference before testing refs.',
+      },
+    ],
+    testResult: {
+      outcome: 'failure',
+      checkedAt: '2026-05-07T18:29:40Z',
+      metadata: [
+        'auth required',
+        'seal state unknown',
+        'policy state not evaluated',
+        'values not requested',
+      ],
+    },
+    exampleRefs: [
+      'secret://providers/vault/payments/STRIPE_KEY',
+      'vault://kv/service-lasso/payments/STRIPE_KEY',
+    ],
+    exampleConfig: [
+      'address=https://vault.service-lasso.local',
+      'mount=kv/service-lasso',
+      'tokenEnv=VAULT_TOKEN',
+      'authRef=secret://providers/vault/operator-session',
+      'value=hidden',
+    ],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+  {
+    id: 'aws-secrets-manager-cli',
+    title: 'AWS Secrets Manager CLI',
+    type: 'aws-secrets-manager-cli',
+    provider: 'aws',
+    source: 'addable:aws-secrets-manager',
+    sourceId: 'aws-secrets-manager-cli',
+    kind: 'aws-secrets-manager',
+    brokerState: 'auth_required',
+    critical: false,
+    capabilities: [
+      'read',
+      'region mapping',
+      'profile/account metadata',
+      'secret id/path mapping',
+      'metadata test',
+      'iam state',
+      'audit',
+    ],
+    lifecycleDetail: {
+      state: 'auth_required',
+      outcome: 'not_configured',
+      nextAction: 'configure_region_profile_token_env_and_secret_mappings',
+      retryable: true,
+    },
+    connection: 'Add provider to configure AWS region/profile metadata',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, choose safe region/profile metadata, then run metadata-only tests.',
+    state: 'untested',
+    mode: 'external cli metadata probe',
+    lastCheckedAt: 'never',
+    summary:
+      'AWS Secrets Manager source for cloud-managed refs with region, account/profile, secret-id, field, and endpoint metadata only.',
+    warnings: [
+      {
+        code: 'auth_required',
+        title: 'AWS auth reference required',
+        severity: 'warning',
+        description:
+          'AWS credentials and session tokens must stay outside Service Admin; configure only profile/token-env handles and metadata-only tests.',
+      },
+    ],
+    testResult: {
+      outcome: 'not-run',
+      checkedAt: 'never',
+      metadata: [
+        'auth required',
+        'region mapping pending',
+        'SecretString values not requested',
+        'metadata-only probe pending',
+      ],
+    },
+    exampleRefs: [
+      'secret://providers/aws/default/backup-worker',
+      'aws-secrets-manager://service-lasso/backup-worker',
+    ],
+    exampleConfig: [
+      'region=ap-southeast-2',
+      'profile=service-lasso',
+      'tokenEnv=AWS_SESSION_TOKEN',
+      'secretId=/service-lasso/{service}/{ref}',
+      'field=runtime_token',
+      'endpointOverride=http://127.0.0.1:4566',
+      'value=hidden',
+    ],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+  {
+    id: 'onepassword-cli',
+    title: '1Password CLI',
+    type: 'onepassword-cli',
+    provider: 'onepassword',
+    source: 'addable:onepassword',
+    sourceId: 'onepassword-cli',
+    kind: 'onepassword-cli',
+    brokerState: 'auth_required',
+    critical: false,
+    capabilities: [
+      'read',
+      'field mapping',
+      'metadata test',
+      'auth state',
+      'audit',
+    ],
+    lifecycleDetail: {
+      state: 'auth_required',
+      outcome: 'not_configured',
+      nextAction: 'sign_in_and_map_item_fields',
+      retryable: true,
+    },
+    connection: 'Add provider to configure 1Password item mappings',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, map vault/item metadata, and verify sign-in state.',
+    state: 'not-configured',
+    mode: 'external cli metadata probe',
+    lastCheckedAt: '2026-05-07T18:28:30Z',
+    summary:
+      'Password-manager source for operator-managed service refs with item metadata only.',
+    warnings: [
+      {
+        code: 'auth_required',
+        title: 'Sign-in required',
+        severity: 'warning',
+        description:
+          '1Password CLI status is shown as auth-required until an operator signs in outside Service Admin.',
+      },
+    ],
+    testResult: {
+      outcome: 'failure',
+      checkedAt: '2026-05-07T18:28:30Z',
+      metadata: [
+        'sign-in required',
+        '2 item handles configured as metadata',
+        'values not requested',
+      ],
+    },
+    exampleRefs: ['op://Service Lasso/OpenClaw/anthropic api key'],
+    exampleConfig: [
+      'account=service-lasso.1password.com',
+      'vault=Service Lasso',
+      'itemPath=OpenClaw/anthropic api key',
+      'field=credential',
+      'auth=operator-required',
+      'value=hidden',
+    ],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+  {
+    id: 'bitwarden-bws-cli',
+    title: 'Bitwarden / BWS CLI',
+    type: 'bitwarden-bws-cli',
+    provider: 'bitwarden',
+    source: 'addable:bitwarden-bws',
+    sourceId: 'bitwarden-bws-cli',
+    kind: 'bitwarden-bws',
+    brokerState: 'auth_required',
+    critical: false,
+    capabilities: [
+      'read',
+      'project mapping',
+      'secret selector',
+      'metadata test',
+      'auth state',
+      'audit',
+    ],
+    lifecycleDetail: {
+      state: 'auth_required',
+      outcome: 'not_configured',
+      nextAction: 'add_bws_project_mappings_and_token_ref',
+      retryable: true,
+    },
+    connection: 'Add provider to configure BWS project mappings',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, map project/secret ids, and keep tokens as refs only.',
+    state: 'not-configured',
+    mode: 'external cli metadata probe',
+    lastCheckedAt: 'never',
+    summary:
+      'Bitwarden Secrets Manager source for managed refs with project, secret, selector, and token-handle metadata only.',
+    warnings: [
+      {
+        code: 'auth_required',
+        title: 'BWS token reference required',
+        severity: 'warning',
+        description:
+          'BWS access tokens must be supplied through a broker-managed SecretRef handle, not Service Admin input.',
+      },
+    ],
+    testResult: {
+      outcome: 'not-run',
+      checkedAt: 'never',
+      metadata: [
+        'auth required',
+        'project mapping pending',
+        'values not requested',
+      ],
+    },
+    exampleRefs: [
+      'secret://providers/bitwarden/default/OPENCLAW_API_KEY',
+      'bws://project/service-lasso/openclaw-api-key',
+    ],
+    exampleConfig: [
+      'projectId=service-lasso-platform',
+      'tokenRef=secret://providers/bitwarden/bws-access-token',
+      'selector=value',
+      'value=hidden',
+    ],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+  {
+    id: 'mounted-secrets',
+    title: 'Docker/Kubernetes mounted secrets',
+    type: 'mounted-secrets',
+    provider: 'mounted-file',
+    source: 'addable:mounted-secrets',
+    sourceId: 'mounted-secrets',
+    kind: 'mounted-secrets',
+    brokerState: 'not_configured',
+    critical: false,
+    capabilities: [
+      'read',
+      'file mapping',
+      'path policy',
+      'symlink policy',
+      'metadata test',
+      'audit',
+    ],
+    lifecycleDetail: {
+      state: 'setup_needed',
+      outcome: 'not_configured',
+      nextAction: 'configure_mount_root_allowed_paths_and_file_mappings',
+      retryable: true,
+    },
+    connection: 'Add provider to configure mounted path metadata',
+    configured: false,
+    enabled: false,
+    priority: null,
+    namespaces: [],
+    defaultRole: 'addable',
+    lifecycle: 'setup-needed',
+    nextAction:
+      'Add provider, restrict root path and symlink policy, then test metadata only.',
+    state: 'not-configured',
+    mode: 'read-only mounted path',
+    lastCheckedAt: '2026-05-07T18:27:20Z',
+    summary:
+      'Container-orchestrator mounted secret files exposed as refs with path scope checks.',
+    warnings: [
+      {
+        code: 'symlink_command_allowed',
+        title: 'Symlink traversal blocked',
+        severity: 'info',
+        description:
+          'Symlink targets are rejected unless explicitly allowed by the source policy.',
+      },
+    ],
+    testResult: {
+      outcome: 'success',
+      checkedAt: '2026-05-07T18:27:20Z',
+      metadata: [
+        'mount root reachable',
+        '2 file mappings available as metadata',
+        'symlink check passed',
+        'values redacted',
+      ],
+    },
+    exampleRefs: ['mounted://run-secrets/postgres-password'],
+    exampleConfig: [
+      'root=/run/secrets',
+      'allowedPath=/run/secrets/postgres-password',
+      'followSymlinks=false',
+      'maxBytes=4096',
+      'value=hidden',
+    ],
+    supportedActions: [
+      'test-source',
+      'view-diagnostics',
+      'edit-configuration',
+      'view-examples',
+    ],
+  },
+]
+
+export function countSourceBackendsByState(
+  sources: SecretsBrokerSourceBackend[]
+) {
+  return sources.reduce<Record<SecretsBrokerSourceState, number>>(
+    (counts, source) => {
+      counts[source.state] += 1
+      return counts
+    },
+    {
+      configured: 0,
+      'not-configured': 0,
+      reachable: 0,
+      failing: 0,
+      untested: 0,
+    }
+  )
+}
+
+export function getConfiguredSecretsBrokerProviders(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  return sources
+    .filter((source) => source.configured)
+    .sort((left, right) => (left.priority ?? 999) - (right.priority ?? 999))
+}
+
+export function getLocalEncryptedStoreProvider(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  return sources.find((source) => source.id === 'local-encrypted-store')
+}
+
+export function getAddableSecretsBrokerProviders(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  return sources
+    .filter((source) => !source.configured)
+    .sort((left, right) => left.title.localeCompare(right.title))
+}
+
+export function buildProvidersManagementSummary(
+  sources: SecretsBrokerSourceBackend[] = secretsBrokerSourceBackends
+) {
+  const configured = getConfiguredSecretsBrokerProviders(sources)
+  const addable = getAddableSecretsBrokerProviders(sources)
+  const ready = configured.filter(
+    (source) =>
+      source.enabled &&
+      ['reachable', 'configured'].includes(source.state) &&
+      ['ready', 'unlocked'].includes(source.lifecycle)
+  )
+  const needsAction = configured.filter(
+    (source) =>
+      !source.enabled ||
+      ['failing', 'untested'].includes(source.state) ||
+      !['ready', 'unlocked'].includes(source.lifecycle)
+  )
+  const defaultProvider =
+    configured.find((source) => source.defaultRole === 'default') ??
+    configured[0]
+
+  return {
+    configuredCount: configured.length,
+    addableCount: addable.length,
+    readyCount: ready.length,
+    needsActionCount: needsAction.length,
+    defaultProvider: defaultProvider?.title ?? 'None',
+  }
+}
+
+export function filterProviderManagementRows(
+  sources: SecretsBrokerSourceBackend[],
+  query: string
+) {
+  const normalizedQuery = query.trim().toLowerCase()
+
+  if (!normalizedQuery) return sources
+
+  return sources.filter((source) =>
+    [
+      source.title,
+      source.type,
+      source.provider,
+      source.source,
+      source.connection,
+      source.state,
+      source.lifecycle,
+      source.namespaces.join(' '),
+      source.defaultRole,
+      source.nextAction,
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedQuery)
+  )
+}
+
+export function sourceBackendHasSecretValue(
+  source: SecretsBrokerSourceBackend
+) {
+  const joined = [
+    source.summary,
+    ...source.testResult.metadata,
+    ...source.exampleRefs,
+    ...source.exampleConfig,
+  ].join(' ')
+
+  return /hunter2|correct-horse|plain\s*text\s*secret|sk-[a-z0-9_-]{12,}|ghp_[a-z0-9_]{12,}|AKIA[0-9A-Z]{16}/i.test(
+    joined
+  )
+}

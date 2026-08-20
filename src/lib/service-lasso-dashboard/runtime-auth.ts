@@ -1,4 +1,8 @@
-import { fetchRuntimeJson, serviceLassoStubDataEnabled } from './stub'
+import { useQuery } from '@tanstack/react-query'
+import {
+  fetchRuntimeJson,
+  serviceLassoStubDataEnabled,
+} from './broker-operator-client'
 
 export type RuntimeActorKind = 'local-root' | 'zitadel' | 'local-token'
 
@@ -114,20 +118,32 @@ export function normalizeRuntimeIdentity(payload: unknown): RuntimeIdentity {
   }
 }
 
+/** Trusted local-root identity used by stub dashboards and Vitest screens. */
+const fixtureRuntimeIdentity: RuntimeIdentity = {
+  contractVersion: 'service-lasso.auth-status.v1',
+  authenticated: true,
+  actorKind: 'local-root',
+  actorId: 'local-root',
+  local: true,
+  remoteAuthRequired: false,
+  workspaceId: 'local',
+  roles: ['serviceadmin.owner'],
+  permissions: ['*'],
+  blockers: [],
+}
+
+/**
+ * Returns true when the identity gate should skip a live `/api/runtime/security` fetch.
+ * Vitest screens use fixture identity without enabling global stub dashboard data,
+ * so live Broker client tests can still exercise the real HTTP client.
+ */
+function shouldUseFixtureIdentity() {
+  return serviceLassoStubDataEnabled || import.meta.env.MODE === 'test'
+}
+
 export async function fetchRuntimeIdentity(): Promise<RuntimeIdentity> {
-  if (serviceLassoStubDataEnabled) {
-    return {
-      contractVersion: 'service-lasso.auth-status.v1',
-      authenticated: true,
-      actorKind: 'local-root',
-      actorId: 'local-root',
-      local: true,
-      remoteAuthRequired: false,
-      workspaceId: 'local',
-      roles: ['serviceadmin.owner'],
-      permissions: ['*'],
-      blockers: [],
-    }
+  if (shouldUseFixtureIdentity()) {
+    return fixtureRuntimeIdentity
   }
 
   return normalizeRuntimeIdentity(
@@ -145,4 +161,22 @@ export function runtimeIdentityAuditContext(identity: RuntimeIdentity) {
     actorKind: identity.actorKind,
     ...(identity.workspaceId ? { workspaceId: identity.workspaceId } : {}),
   }
+}
+
+export const runtimeIdentityQueryKey = ['service-lasso-runtime-identity']
+
+/**
+ * Loads the trusted Service Lasso runtime identity for gated UI.
+ * Lives outside the dashboard hooks barrel so tests can mock that barrel
+ * without disabling the identity gate.
+ */
+export function useRuntimeIdentity() {
+  const useFixture = shouldUseFixtureIdentity()
+  return useQuery({
+    queryKey: runtimeIdentityQueryKey,
+    queryFn: fetchRuntimeIdentity,
+    retry: false,
+    staleTime: 5_000,
+    ...(useFixture ? { initialData: fixtureRuntimeIdentity } : {}),
+  })
 }

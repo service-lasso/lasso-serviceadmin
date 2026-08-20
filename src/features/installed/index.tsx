@@ -20,13 +20,6 @@ import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -40,23 +33,32 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
 function PathCell({ icon, value }: { icon: ElementType; value?: string }) {
   const Icon = icon
+  const displayValue = value ?? 'Not recorded'
 
   return (
-    <div className='flex items-start gap-2'>
+    <div className='flex min-w-0 items-start gap-2'>
       <Icon className='mt-1 size-4 shrink-0 text-muted-foreground' />
-      <span className='max-w-[280px] text-sm break-all text-muted-foreground'>
-        {value ?? 'Not recorded'}
-      </span>
+      <div className='min-w-0 flex-1'>
+        <span
+          className='block truncate text-sm text-muted-foreground'
+          title={displayValue}
+        >
+          {displayValue}
+        </span>
+      </div>
       <Button
         type='button'
         variant='outline'
@@ -77,15 +79,11 @@ function PathCell({ icon, value }: { icon: ElementType; value?: string }) {
 
 function InstalledLoading() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className='h-6 w-40' />
-        <Skeleton className='h-4 w-80' />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className='h-[420px] w-full' />
-      </CardContent>
-    </Card>
+    <div className='flex flex-1 flex-col gap-4'>
+      <Skeleton className='h-10 w-full max-w-xl' />
+      <Skeleton className='h-[420px] w-full' />
+      <Skeleton className='mt-auto h-9 w-full max-w-md' />
+    </div>
   )
 }
 
@@ -184,6 +182,12 @@ export function Installed() {
     title: 'Service Admin - Installed',
     description: 'Service Admin installed services and paths view.',
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'network', label: 'Network', to: '/network' },
+    ],
+  })
 
   const servicesQuery = useServices()
   const [sorting, setSorting] = useState<SortingState>([
@@ -192,6 +196,7 @@ export function Installed() {
   ])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: servicesQuery.data ?? [],
     columns,
@@ -223,118 +228,90 @@ export function Installed() {
     <>
       <Header fixed>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Installed</h2>
-            <p className='text-muted-foreground'>
-              Installed services and paths in the standard operator table.
-            </p>
-          </div>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/network'>Network</Link>
-            </Button>
-          </div>
-        </div>
-
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <InstalledLoading />
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center gap-2'>
-                <PackageCheck className='size-4' /> Installed services
-              </CardTitle>
-              <CardDescription>
-                {table.getFilteredRowModel().rows.length} services shown with
-                package, version, and path details.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <DataTableToolbar
-                table={table}
-                searchPlaceholder='Search services, packages, versions, or paths...'
-                searchKey='name'
-                filters={[
-                  {
-                    columnId: 'installed',
-                    title: 'Installed',
-                    options: [
-                      { label: 'Installed', value: 'installed' },
-                      { label: 'Missing', value: 'missing' },
-                    ],
-                  },
-                  {
-                    columnId: 'runtime',
-                    title: 'Runtime',
-                    options: runtimes.map((runtime) => ({
-                      label: runtime,
-                      value: runtime,
-                    })),
-                  },
-                ]}
-              />
+          <div className='flex min-h-0 flex-1 flex-col gap-4'>
+            <DataTableToolbar
+              table={table}
+              searchPlaceholder='Search services, packages, versions, or paths...'
+              searchKey='name'
+              filters={[
+                {
+                  columnId: 'installed',
+                  title: 'Installed',
+                  options: [
+                    { label: 'Installed', value: 'installed' },
+                    { label: 'Missing', value: 'missing' },
+                  ],
+                },
+                {
+                  columnId: 'runtime',
+                  title: 'Runtime',
+                  options: runtimes.map((runtime) => ({
+                    label: runtime,
+                    value: runtime,
+                  })),
+                },
+              ]}
+            />
 
-              <div className='overflow-hidden rounded-md border'>
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id} colSpan={header.colSpan}>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
-                          </TableHead>
+            <DataTableScrollRegion>
+              <Table contained={false}>
+                <TableHeader className={dataTableStickyHeaderClassName}>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} colSpan={header.colSpan}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </TableCell>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow key={row.id}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className='h-24 text-center'
-                        >
-                          No installed services match the current filters.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className='h-24 text-center'
+                      >
+                        No installed services match the current filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DataTableScrollRegion>
 
-              <DataTablePagination table={table} className='mt-auto' />
-            </CardContent>
-          </Card>
+            <DataTablePagination table={table} className='mt-auto' />
+          </div>
         )}
       </Main>
     </>

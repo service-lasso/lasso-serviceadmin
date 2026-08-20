@@ -38,7 +38,8 @@ describe('packaged Service Admin first-run Secrets Broker enrollment', () => {
       'not.exist'
     )
     cy.contains('Trusted identity verified', { timeout: 30_000 }).should('exist')
-    cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 30_000 }).click()
+    cy.visit('/secrets-broker/secrets?path=services%2Fsample-service')
+    cy.contains('KV store', { timeout: 30_000 }).should('be.visible')
     cy.contains(expectedRef, { timeout: 60_000 }).should('be.visible')
 
     cy.request({

@@ -27,9 +27,7 @@ function StatusBadge({ setup }: { setup: FirstRunSetupState }) {
   if (setup.state === 'setup_in_progress') {
     return <Badge variant='secondary'>In progress</Badge>
   }
-  if (setup.vault.ready) {
-    return <Badge>Broker ready</Badge>
-  }
+  if (setup.vault.ready) return <Badge>Broker ready</Badge>
   return (
     <Badge className='bg-amber-600 hover:bg-amber-600'>Setup required</Badge>
   )
@@ -56,10 +54,9 @@ function MetadataItem({
 }
 
 function blockerCopy(blocker: string) {
-  if (blocker === 'setup_token_required_for_remote_bind') {
-    return 'Remote setup requires an operator-configured one-time setup token.'
-  }
-  return 'The runtime trust policy is not ready for setup.'
+  return blocker === 'setup_token_required_for_remote_bind'
+    ? 'Remote setup requires an operator-configured one-time setup token.'
+    : 'The runtime trust policy is not ready for setup.'
 }
 
 function BootstrapControl({ setup }: { setup: FirstRunSetupState }) {
@@ -77,7 +74,7 @@ function BootstrapControl({ setup }: { setup: FirstRunSetupState }) {
         remoteTokenRequired ? setupToken.trim() : undefined
       )
     } catch {
-      // The mutation owns the safe, retryable error state rendered below.
+      // The mutation exposes only the safe retry state rendered below.
     } finally {
       setSetupToken('')
     }
@@ -104,6 +101,7 @@ function BootstrapControl({ setup }: { setup: FirstRunSetupState }) {
           <Input
             id='service-lasso-setup-token'
             type='password'
+            maxLength={4096}
             value={setupToken}
             autoComplete='off'
             spellCheck={false}
@@ -189,8 +187,7 @@ function FirstRunSetupContent({ setup }: { setup: FirstRunSetupState }) {
             <AlertTriangle className='size-4' />
             <AlertTitle>Setup requires recovery</AlertTitle>
             <AlertDescription>
-              The runtime reported a failed setup state. Review the runtime
-              audit trail and broker health before retrying.
+              Review the runtime audit trail and broker health before retrying.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -264,13 +261,8 @@ function FirstRunSetupUnavailable() {
 export function FirstRunSetupGate({ children }: { children: React.ReactNode }) {
   const setupQuery = useFirstRunSetupState()
 
-  if (setupQuery.isLoading || !setupQuery.data) {
-    return <FirstRunSetupLoading />
-  }
-
-  if (setupQuery.isError) {
-    return <FirstRunSetupUnavailable />
-  }
+  if (setupQuery.isError) return <FirstRunSetupUnavailable />
+  if (setupQuery.isLoading || !setupQuery.data) return <FirstRunSetupLoading />
 
   const setup = setupQuery.data
   const setupComplete =
@@ -278,9 +270,9 @@ export function FirstRunSetupGate({ children }: { children: React.ReactNode }) {
     !setup.setupMode &&
     (setup.state === 'not_required' || setup.state === 'setup_complete')
 
-  if (!setupComplete) {
-    return <FirstRunSetupContent setup={setup} />
-  }
-
-  return <>{children}</>
+  return setupComplete ? (
+    <>{children}</>
+  ) : (
+    <FirstRunSetupContent setup={setup} />
+  )
 }

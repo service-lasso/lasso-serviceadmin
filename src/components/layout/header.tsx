@@ -1,15 +1,115 @@
-import { useEffect, useState } from 'react'
+import {
+  Children,
+  isValidElement,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
+import { useRouterState } from '@tanstack/react-router'
+import { Settings, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { sidebarData } from './data/sidebar-data'
+import { InboxHeaderChip } from './inbox-header-chip'
+import { type NavItem } from './types'
+
+const HEADER_ACTIONS_DISPLAY_NAME = 'HeaderActions'
+
+/**
+ * Detect the HeaderActions cluster without importing page-toolbar
+ * (that import cycle previously hung the unit suite).
+ */
+function isHeaderActionsChild(child: ReactNode): boolean {
+  if (!isValidElement(child) || typeof child.type === 'string') {
+    return false
+  }
+
+  const type = child.type as { displayName?: string }
+  return type.displayName === HEADER_ACTIONS_DISPLAY_NAME
+}
+
+/**
+ * Split Header children into the left extras (Search) and the right
+ * Actions/Links/Theme cluster so the title can sit in the empty middle.
+ */
+function splitHeaderChildren(children: ReactNode): {
+  leading: ReactNode[]
+  actions: ReactNode[]
+} {
+  const leading: ReactNode[] = []
+  const actions: ReactNode[] = []
+
+  Children.forEach(children, (child) => {
+    if (isHeaderActionsChild(child)) {
+      actions.push(child)
+      return
+    }
+    leading.push(child)
+  })
+
+  return { leading, actions }
+}
 
 type HeaderProps = React.HTMLAttributes<HTMLElement> & {
   fixed?: boolean
   ref?: React.Ref<HTMLElement>
 }
 
+type ActivePageIdentity = Pick<NavItem, 'title' | 'icon'>
+
+const headerRouteFallbacks = {
+  '/settings': {
+    title: 'Settings',
+    icon: Settings,
+  },
+  '/secrets-broker/configuration': {
+    title: 'Configuration',
+    icon: Wrench,
+  },
+} satisfies Record<string, ActivePageIdentity>
+
+function findActiveNavItem(pathname: string): ActivePageIdentity | undefined {
+  const normalizedPath =
+    pathname === '/' ? pathname : pathname.replace(/\/$/, '')
+
+  for (const group of sidebarData.navGroups) {
+    for (const item of group.items) {
+      if (Array.isArray(item.items)) {
+        const activeChild = item.items.find((child) => {
+          return child.url === normalizedPath
+        })
+
+        if (activeChild) {
+          return activeChild
+        }
+
+        continue
+      }
+
+      if (item.url === normalizedPath) {
+        return item
+      }
+    }
+  }
+
+  if (normalizedPath in headerRouteFallbacks) {
+    return headerRouteFallbacks[
+      normalizedPath as keyof typeof headerRouteFallbacks
+    ]
+  }
+
+  return undefined
+}
+
 export function Header({ className, fixed, children, ...props }: HeaderProps) {
   const [offset, setOffset] = useState(0)
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
+  const activeNavItem = findActiveNavItem(pathname)
+  const ActiveIcon = activeNavItem?.icon
+  const { leading, actions } = splitHeaderChildren(children)
 
   useEffect(() => {
     const onScroll = () => {
@@ -35,15 +135,31 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
     >
       <div
         className={cn(
-          'relative flex h-full items-center gap-3 p-4 sm:gap-4',
+          'relative grid h-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 sm:gap-4',
           offset > 10 &&
             fixed &&
             'after:absolute after:inset-0 after:-z-10 after:bg-background/20 after:backdrop-blur-lg'
         )}
       >
-        <SidebarTrigger variant='outline' className='max-md:scale-125' />
-        <Separator orientation='vertical' className='h-6' />
-        {children}
+        <div className='flex min-w-0 items-center gap-3 sm:gap-4'>
+          <SidebarTrigger variant='outline' className='max-md:scale-125' />
+          <Separator orientation='vertical' className='h-6' />
+          <InboxHeaderChip />
+          {leading}
+        </div>
+        <div className='flex min-w-0 items-center justify-center'>
+          {activeNavItem && ActiveIcon ? (
+            <div
+              aria-label={`Current page: ${activeNavItem.title}`}
+              className='flex max-w-full items-center gap-2 truncate text-sm font-semibold text-foreground'
+              data-testid='active-page-identity'
+            >
+              <ActiveIcon aria-hidden='true' className='size-4 shrink-0' />
+              <span className='truncate'>{activeNavItem.title}</span>
+            </div>
+          ) : null}
+        </div>
+        <div className='flex min-w-0 items-center justify-end'>{actions}</div>
       </div>
     </header>
   )

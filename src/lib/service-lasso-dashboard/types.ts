@@ -1,4 +1,12 @@
-export type ServiceStatus = 'running' | 'stopped' | 'degraded'
+export type ServiceStatus = 'running' | 'available' | 'stopped' | 'degraded'
+
+export type ServiceLogType =
+  | 'default'
+  | 'stdout'
+  | 'stderr'
+  | 'access'
+  | 'error'
+  | (string & {})
 
 export type ServiceLink = {
   label: string
@@ -13,44 +21,467 @@ export type ServiceRuntimeHealth = {
   lastCheckAt: string
   lastRestartAt?: string
   summary: string
+  pid?: number | null
+  runId?: string | null
 }
 
 export type ServiceEndpoint = {
-  id?: string
-  kind?: string
   label: string
-  direction?: string
-  transport?: string
-  protocol?: 'http' | 'https' | 'tcp' | 'udp' | string
-  bind?: string
-  port?: number
-  portDefault?: number
-  portStrategy?: string
-  target?: string
-  url?: string
-  exposure?: 'local' | 'lan' | 'public' | string
-  required?: boolean
-  primary?: boolean
-  source?: string
-  health?: 'healthy' | 'warning' | 'critical' | 'unknown' | string
-  readiness?: 'ready' | 'blocked' | 'unknown' | string
-  resolution?: {
-    status?: 'resolved' | 'failed' | 'conflict' | 'warning' | string
-    message?: string
-    errors?: string[]
-    conflicts?: string[]
-  }
-  error?: string
-  errors?: string[]
-  conflicts?: string[]
+  url: string
+  bind: string
+  port: number
+  protocol: 'http' | 'https' | 'tcp'
+  exposure: 'local' | 'lan' | 'public'
 }
 
 export type ServiceEnvironmentVariable = {
   key: string
   value: string
+  templateValue?: string
   scope: 'global' | 'service'
   secret?: boolean
   source?: string
+}
+
+export type ServiceMetadata = {
+  serviceType: string
+  runtime: string
+  version: string
+  build: string
+  packageId?: string
+  installPath?: string
+  configPath?: string
+  dataPath?: string
+  logPath?: string
+  workPath?: string
+  profile?: string
+  imageUrl?: string
+}
+
+export type ServiceDependency = {
+  id: string
+  name: string
+  status: ServiceStatus
+  relation: 'depends_on' | 'dependent'
+  note?: string
+}
+
+export type ServiceLogPreviewEntry = {
+  timestamp: string
+  level: 'info' | 'warn' | 'error'
+  source: 'supervisor' | 'healthcheck' | 'stdout' | 'stderr' | 'app'
+  message: string
+}
+
+export type ServiceAction = {
+  id: string
+  label: string
+  kind:
+    | 'start'
+    | 'stop'
+    | 'restart'
+    | 'reload'
+    | 'install'
+    | 'uninstall'
+    | 'open_logs'
+    | 'open_config'
+    | 'open_admin'
+}
+
+export type FirstRunSetupStatus =
+  | 'not_required'
+  | 'setup_required'
+  | 'setup_in_progress'
+  | 'setup_complete'
+  | 'setup_failed'
+
+export type FirstRunSetupState = {
+  contractVersion: 'service-lasso.setup-status.v1'
+  state: FirstRunSetupStatus
+  setupMode: boolean
+  vault: {
+    required: boolean
+    ready: boolean
+  }
+  operator: {
+    osUsername: string
+    identitySource: 'vault'
+  }
+  trustBoundary: {
+    bindHost: string
+    localOnly: boolean
+    localhostBootstrapAllowed: boolean
+    remoteBootstrapAllowed: boolean
+    setupTokenConfigured: boolean
+    blockers: string[]
+  }
+  auth: {
+    actor: {
+      authenticated: boolean
+      kind: 'local-root' | 'zitadel' | 'local-token' | null
+      actorId: string | null
+    }
+    mode: 'local-root' | 'zitadel' | 'local-token' | 'blocked'
+    blockers: string[]
+  }
+}
+
+export type FirstRunSetupActionResult = {
+  bootstrap: {
+    ok: true
+    state: 'setup_complete'
+    provisionedSecretCount: number
+  }
+  setup: FirstRunSetupState
+}
+
+export type DashboardService = {
+  id: string
+  name: string
+  status: ServiceStatus
+  favorite: boolean
+  note: string
+  links: ServiceLink[]
+  installed: boolean
+  role: string
+  runtimeHealth: ServiceRuntimeHealth
+  endpoints: ServiceEndpoint[]
+  metadata: ServiceMetadata
+  dependencies: ServiceDependency[]
+  dependents: ServiceDependency[]
+  environmentVariables: ServiceEnvironmentVariable[]
+  recentLogs: ServiceLogPreviewEntry[]
+  actions: ServiceAction[]
+}
+
+export type DashboardRuntime = {
+  status: 'healthy' | 'warning'
+  lastReloadedAt: string
+  warningCount: number
+}
+
+export type DashboardSummary = {
+  runtime: DashboardRuntime
+  servicesTotal: number
+  servicesRunning: number
+  servicesAvailable?: number
+  servicesStopped: number
+  servicesDegraded: number
+  networkExposureCount: number
+  installedCount: number
+  favorites: DashboardService[]
+  others: DashboardService[]
+  warnings: string[]
+  problemServices: DashboardService[]
+}
+
+export type DashboardAction =
+  | 'reload-runtime'
+  | 'start-services'
+  | 'stop-services'
+  | 'restart-services'
+  | { kind: 'toggle-favorite'; serviceId: string }
+  | {
+      kind: 'service-lifecycle'
+      serviceId: string
+      action: 'start' | 'stop' | 'restart'
+    }
+
+export type AuditEventOutcome = 'success' | 'failure'
+
+export type AuditEvent = {
+  id: string
+  timestamp: string
+  source: string
+  action: string
+  actor: string
+  subject?: string
+  serviceId?: string
+  method?: string
+  routeTemplate?: string
+  outcome: AuditEventOutcome
+  statusCode: number
+  summary: string
+  reason: string | null
+  correlationId: string
+  relatedRevisionId: string | null
+  chainId: string
+  sequence: number
+  previousHash: string | null
+  eventHash: string
+  chainStatus: 'valid'
+}
+
+export type AuditEventsFilters = {
+  serviceId?: string
+  actor?: string
+  action?: string
+  outcome?: AuditEventOutcome
+  source?: string
+  since?: string
+  until?: string
+  query?: string
+  limit?: number
+  cursor?: string
+}
+
+export type AuditEventsPagination = {
+  limit: number
+  nextCursor: string | null
+  total: number
+}
+
+export type AuditEventsResponse = {
+  events: AuditEvent[]
+  pagination: AuditEventsPagination
+}
+
+export type AuditEventsResult = AuditEventsResponse & {
+  status: 'available' | 'unavailable'
+  stubMode: boolean
+  unavailableReason: string | null
+}
+
+export type OperatorInboxType =
+  | 'system'
+  | 'workflow'
+  | 'service'
+  | 'update'
+  | 'security'
+  | 'help'
+  | 'error'
+
+export type OperatorInboxSeverity =
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'error'
+  | 'critical'
+
+export type OperatorInboxSource =
+  | 'runtime'
+  | 'service'
+  | 'workflow'
+  | 'updater'
+  | 'broker'
+  | 'admin-ui'
+  | 'system'
+
+export type OperatorInboxState = 'unread' | 'read'
+export type OperatorInboxVisibility = 'visible' | 'hidden'
+export type OperatorInboxActionKind = 'link' | 'api' | 'command'
+export type OperatorInboxActionAvailability =
+  | 'available'
+  | 'disabled'
+  | 'expired'
+export type OperatorInboxFilter =
+  | 'all'
+  | 'unread'
+  | 'updates'
+  | 'system'
+  | 'workflow'
+  | 'service'
+  | 'errors'
+  | 'hidden'
+
+export type OperatorInboxRelatedTarget = {
+  serviceId?: string
+  workflowId?: string
+  updateId?: string
+  auditId?: string
+  backupExportId?: string
+  route?: string
+}
+
+export type OperatorInboxActionMetadata = {
+  label: string
+  target: string
+  kind: OperatorInboxActionKind
+  availability: OperatorInboxActionAvailability
+}
+
+export type OperatorInboxItem = {
+  id: string
+  dedupeKey: string
+  title: string
+  summary: string
+  details: string | null
+  type: OperatorInboxType
+  severity: OperatorInboxSeverity
+  source: OperatorInboxSource
+  state: OperatorInboxState
+  visibility: OperatorInboxVisibility
+  createdAt: string
+  updatedAt: string
+  readAt: string | null
+  hiddenAt: string | null
+  relatedTarget: OperatorInboxRelatedTarget | null
+  action: OperatorInboxActionMetadata | null
+}
+
+export type OperatorInboxCounts = {
+  total: number
+  unread: number
+  read: number
+  visible: number
+  hidden: number
+  byType: Record<OperatorInboxType, number>
+  bySeverity: Record<OperatorInboxSeverity, number>
+  bySource: Record<OperatorInboxSource, number>
+  byFilter: Record<OperatorInboxFilter, number>
+}
+
+export type OperatorInboxListResult = {
+  items: OperatorInboxItem[]
+  pagination: {
+    limit: number
+    nextCursor: string | null
+    total: number
+  }
+}
+
+export type InboxQuery = {
+  filter?: OperatorInboxFilter
+  limit?: number
+  cursor?: string
+}
+
+export type InboxListResult = {
+  status: 'available' | 'unavailable'
+  stubMode: boolean
+  unavailableReason: string | null
+  items: OperatorInboxItem[]
+  pagination: OperatorInboxListResult['pagination']
+}
+
+export type InboxCountsResult = {
+  status: 'available' | 'unavailable'
+  stubMode: boolean
+  unavailableReason: string | null
+  unread: number
+  counts: OperatorInboxCounts | null
+}
+
+export type ServiceConfigRevision = {
+  id: string
+  createdAt: string
+  actor: string
+  reason: string | null
+  path: string
+  previousHash: string
+  currentHash: string
+  validationStatus: 'valid'
+  content: string
+}
+
+export type ServiceConfigDocument = {
+  serviceId: string
+  fileName: 'server.json'
+  path: string
+  content: string
+  hash: string
+  updatedAt: string
+  backupCount: number
+  revisions: ServiceConfigRevision[]
+  safety: {
+    rawSecretValuesLoaded: false
+    omittedSensitiveFields: string[]
+  }
+}
+
+export type ServiceConfigSaveResult = {
+  serviceId: string
+  fileName: 'server.json'
+  path: string
+  hash: string
+  savedAt: string
+  backup: ServiceConfigRevision
+  validationStatus: 'valid'
+}
+
+export type TelemetryCountBucket = {
+  key: string
+  count: number
+}
+
+export type ServiceTelemetrySignal = {
+  kind: 'span' | 'metric' | 'log' | string
+  name: string
+  traceId?: string
+  spanId?: string
+  traceparent?: string
+  correlationId?: string
+  attributes: Record<string, string | number | boolean>
+}
+
+export type ServiceTelemetryPreview = {
+  serviceId: string
+  signals: ServiceTelemetrySignal[]
+}
+
+export type TelemetryPreview = {
+  contractVersion: string
+  exporter: {
+    status: 'disabled' | 'configured' | 'error' | string
+    protocol: string
+    endpointConfigured: boolean
+    endpointValueReturned: boolean
+    headersValueReturned: boolean
+    reason: string
+  }
+  resource: {
+    serviceName: string
+    serviceNamespace: string
+    serviceInstanceId: string
+  }
+  traceContext?: {
+    propagation: string
+    responseHeaders: {
+      correlationId: string
+      traceId: string
+      traceparent: string
+    }
+    traceparentSampled: boolean
+    incomingHeadersAccepted: boolean
+    incomingHeadersReturned: boolean
+    rawHeadersReturned: boolean
+    routeTemplateOnly: boolean
+  }
+  redaction: {
+    mode: string
+    allowedAttributes: string[]
+    forbiddenFieldClasses: string[]
+  }
+  exportPreview: {
+    mode: 'disabled' | 'dry_run' | string
+    status: 'not_sent' | 'ready' | string
+    signalCount: number
+    serviceCount: number
+    endpointConfigured: boolean
+    endpointValueReturned: boolean
+    headersValueReturned: boolean
+    bodyValueReturned: boolean
+    allowedAttributeCount: number
+    reason: string
+  }
+  apiRequestBuffer?: {
+    capacity: number
+    retainedCount: number
+    droppedCount: number
+    routeTemplateOnly: boolean
+    rawMaterialReturned: boolean
+  }
+  apiRequestSummary?: {
+    retainedCount: number
+    droppedCount: number
+    totalObservedCount: number
+    mutatingCount: number
+    routeGroups: TelemetryCountBucket[]
+    statusClasses: TelemetryCountBucket[]
+    outcomes: TelemetryCountBucket[]
+    routeTemplateOnly: boolean
+    rawMaterialReturned: boolean
+  }
 }
 
 export type SecretManagementRecord = {
@@ -740,6 +1171,13 @@ export type SecretRotationPreviewResult = {
   affectedServices: string[]
 }
 
+export type SecretRotationImpactServiceAction =
+  | 'restart'
+  | 'reload'
+  | 'action'
+  | 'manual'
+  | 'none'
+
 export type CoreSecretRotationImpactPlan = {
   ref: string
   planFingerprint: string
@@ -805,739 +1243,3 @@ export type CoreSecretRotationExecutionState = {
   updatedAt: string
   plan: CoreSecretRotationImpactPlan
 }
-
-export type ServiceMetadata = {
-  serviceType: string
-  runtime: string
-  version: string
-  build: string
-  packageId?: string
-  installPath?: string
-  configPath?: string
-  dataPath?: string
-  logPath?: string
-  workPath?: string
-  profile?: string
-  imageUrl?: string
-}
-
-export type ServiceDependency = {
-  id: string
-  name: string
-  status: ServiceStatus
-  relation: 'depends_on' | 'dependent'
-  note?: string
-}
-
-export type ServiceLogPreviewEntry = {
-  timestamp: string
-  level: 'info' | 'warn' | 'error'
-  source: 'supervisor' | 'healthcheck' | 'stdout' | 'stderr' | 'app'
-  message: string
-}
-
-export type ServiceSetupStepStatus =
-  | 'pending'
-  | 'succeeded'
-  | 'failed'
-  | 'timeout'
-  | 'skipped'
-
-export type ServiceSetupStepRun = {
-  runId: string
-  serviceId: string
-  stepId: string
-  status: ServiceSetupStepStatus
-  startedAt: string
-  finishedAt: string
-  durationMs: number
-  command?: string
-  exitCode: number | null
-  signal: string | null
-  message?: string
-  logs?: {
-    logPath?: string
-    stdoutPath?: string
-    stderrPath?: string
-  }
-}
-
-export type ServiceSetupStep = {
-  id: string
-  description?: string
-  rerun?: 'ifMissing' | 'manual' | 'always'
-  dependOn?: string[]
-  status: ServiceSetupStepStatus
-  lastRun: ServiceSetupStepRun | null
-  history: ServiceSetupStepRun[]
-  skipReason?: string
-}
-
-export type ServiceSetupState = {
-  serviceId: string
-  updatedAt: string | null
-  steps: ServiceSetupStep[]
-}
-
-export type ServiceSetupRunResult = {
-  action: 'setup'
-  serviceId: string
-  ok: boolean
-  setup: ServiceSetupState
-  runs: ServiceSetupStepRun[]
-  skipped: Array<{ stepId: string; reason: string }>
-  message: string
-}
-
-export type FirstRunSetupStatus =
-  | 'not_required'
-  | 'setup_required'
-  | 'setup_in_progress'
-  | 'setup_complete'
-  | 'setup_failed'
-
-export type FirstRunSetupState = {
-  contractVersion: 'service-lasso.setup-status.v1'
-  state: FirstRunSetupStatus
-  setupMode: boolean
-  vault: {
-    required: boolean
-    ready: boolean
-  }
-  operator: {
-    osUsername: string
-    identitySource: 'vault'
-  }
-  trustBoundary: {
-    bindHost: string
-    localOnly: boolean
-    localhostBootstrapAllowed: boolean
-    remoteBootstrapAllowed: boolean
-    setupTokenConfigured: boolean
-    blockers: string[]
-  }
-  auth: {
-    actor: {
-      authenticated: boolean
-      kind: 'local-root' | 'zitadel' | 'local-token' | null
-      actorId: string | null
-    }
-    mode: 'local-root' | 'zitadel' | 'local-token' | 'blocked'
-    blockers: string[]
-  }
-}
-
-export type FirstRunSetupActionResult = {
-  bootstrap: {
-    ok: true
-    state: 'setup_complete'
-    provisionedSecretCount: number
-  }
-  setup: FirstRunSetupState
-}
-
-export type ServiceAction = {
-  id: string
-  label: string
-  kind:
-    | 'start'
-    | 'stop'
-    | 'restart'
-    | 'reload'
-    | 'install'
-    | 'uninstall'
-    | 'open_logs'
-    | 'open_config'
-    | 'open_admin'
-  permission?: {
-    key?: string
-    allowed: boolean
-    actor?: string
-    mode?: 'local-root' | 'signed-in' | 'remote-anonymous' | 'setup'
-    reason?: string
-    requiresConfirmation?: boolean
-    confirmationLabel?: string
-  }
-}
-
-export type ServiceLifecycleActionKind =
-  | 'install'
-  | 'start'
-  | 'stop'
-  | 'restart'
-
-export type SecurityPermissionRisk = 'low' | 'medium' | 'high' | 'critical'
-
-export type SecurityPermissionCategory =
-  | 'Runtime'
-  | 'Services'
-  | 'Actions'
-  | 'Health / repair / validate'
-  | 'Backup / restore'
-  | 'Files / archive / export'
-  | 'SFTP / destinations'
-  | 'Broker / secrets'
-  | 'Security / groups / mappings'
-  | 'Audit'
-  | 'System / scheduler / supervisor'
-
-export type SecurityPermission = {
-  key: string
-  displayName: string
-  description: string
-  category: SecurityPermissionCategory
-  riskLevel: SecurityPermissionRisk
-  requiresConfirmation: boolean
-  usedBy: string[]
-}
-
-export type SecurityGroup = {
-  id: string
-  name: string
-  description: string
-  builtIn: boolean
-  ownerCapable: boolean
-  elevated: boolean
-  permissionKeys: string[]
-  actorCount: number
-  mappingCount: number
-  scopeRules: string[]
-  canEdit: boolean
-  canReset: boolean
-}
-
-export type SecurityActorAssignment = {
-  id: string
-  actor: string
-  groupId: string
-  source: 'local' | 'provider' | 'service-account'
-  self: boolean
-  lastOwner: boolean
-}
-
-export type SecurityProviderMapping = {
-  id: string
-  provider: string
-  claimType: 'group' | 'role' | 'org' | 'service-account' | string
-  claimValue: string
-  targetGroupId: string
-  enabled: boolean
-  priority: number
-  conflicts: string[]
-}
-
-export type SecurityAuditLink = {
-  label: string
-  url: string
-  count: number
-}
-
-export type SecretRotationImpactServiceAction =
-  | 'restart'
-  | 'reload'
-  | 'action'
-  | 'manual'
-  | 'none'
-
-export type SecretRotationReadinessState =
-  | 'ready'
-  | 'blocked'
-  | 'unsupported'
-  | 'requires_auth'
-  | 'denied'
-  | 'unavailable'
-
-export type SecretRotationServiceImpact = {
-  serviceId: string
-  serviceName: string
-  relation: 'direct' | 'dependent'
-  action: SecretRotationImpactServiceAction
-  actionLabel: string
-  order: number
-  rematerializeConfig: boolean
-  expectedHealthChecks: string[]
-  manualBlockers: string[]
-  estimatedDisruption: string
-  serviceHref: string
-  logsHref: string
-}
-
-export type SecretRotationImpactPlan = {
-  id: string
-  ref: string
-  planRevision: string
-  provider: string
-  store: string
-  capabilityStatus: SecretRotationReadinessState
-  authStatus: SecretRotationReadinessState
-  policyStatus: SecretRotationReadinessState
-  auditStatus: SecretRotationReadinessState
-  contractVersion: string
-  contractCompatible: boolean
-  applySupported: boolean
-  currentVersion: {
-    id: string
-    createdAt: string
-    activatedAt: string
-  }
-  candidateVersion: {
-    id: string
-    createdAt: string
-    stagedBy: string
-  }
-  services: SecretRotationServiceImpact[]
-  rollbackAvailable: boolean
-  rollbackReason: string
-  blockedReasons: string[]
-}
-
-export type SecretRotationOperationPhase =
-  | 'preflight'
-  | 'staged'
-  | 'activated'
-  | 'rematerialising'
-  | 'restarting'
-  | 'reloading'
-  | 'verifying'
-  | 'committed'
-  | 'rolling_back'
-  | 'rolled_back'
-  | 'failed'
-
-export type SecretRotationOperation = {
-  id: string
-  planId: string
-  phase: SecretRotationOperationPhase
-  phaseLabel: string
-  updatedAt: string
-  safeNextAction: string
-  rollbackAllowed: boolean
-}
-
-export type SecretBulkCampaignOperation =
-  | 'rotate_reset'
-  | 'update_edit'
-  | 'apply_policy'
-  | 'migrate_provider'
-  | 'mark_action_required'
-
-export type SecretBulkCampaignRisk = 'low' | 'medium' | 'high' | 'critical'
-
-export type SecretBulkCampaignItem = {
-  ref: string
-  ownerServiceId?: string
-  sourceProvider: string
-  targetProvider?: string
-  targetPolicy?: string
-  capabilityStatus: SecretRotationReadinessState
-  policyStatus: SecretRotationReadinessState
-  auditStatus: SecretRotationReadinessState
-  riskLevel: SecretBulkCampaignRisk
-  expectedAction: string
-  blockers: string[]
-}
-
-export type SecretBulkCampaignPlan = {
-  id: string
-  planRevision: string
-  operation: SecretBulkCampaignOperation
-  operationLabel: string
-  generatedAt: string
-  expiresAt: string
-  dryRunOnly: boolean
-  applySupported: boolean
-  auditReasonRequired: boolean
-  highRiskConfirmationRequired: boolean
-  selectedCount: number
-  applicableCount: number
-  deniedCount: number
-  unsupportedCount: number
-  highRiskCount: number
-  items: SecretBulkCampaignItem[]
-  safeNextAction: string
-}
-
-export type SecretRotationState = {
-  plans: SecretRotationImpactPlan[]
-  operations: SecretRotationOperation[]
-  bulkCampaigns?: SecretBulkCampaignPlan[]
-}
-
-export type ServiceSecurityState = {
-  updatedAt: string
-  currentActor: string
-  groups: SecurityGroup[]
-  permissions: SecurityPermission[]
-  actorAssignments: SecurityActorAssignment[]
-  providerMappings: SecurityProviderMapping[]
-  auditLinks: SecurityAuditLink[]
-  secretRotation?: SecretRotationState
-  safety: {
-    lastOwnerProtected: boolean
-    selfSecurityAccessProtected: boolean
-  }
-}
-
-export type McpRole =
-  | 'Observer'
-  | 'Operator'
-  | 'Maintainer'
-  | 'Administrator'
-  | string
-
-export type McpTransport = 'stdio' | 'streamable-http' | 'sse' | string
-
-export type McpExposureState = {
-  loopback: boolean
-  lan: boolean
-  remote: boolean
-}
-
-export type McpIdentityProvider = {
-  name: string
-  discoveryStatus: 'available' | 'unavailable' | 'not_configured' | string
-  issuer?: string | null
-}
-
-export type McpRolePermission = {
-  role: McpRole
-  mode: 'read-only' | 'guarded' | 'administrator' | 'denied' | string
-  scopes: string[]
-  deniedReason?: string | null
-}
-
-export type McpClient = {
-  id: string
-  name: string
-  transport: McpTransport
-  actor: string
-  lastSeenAt: string
-  remoteAddress?: string | null
-}
-
-export type McpOperation = {
-  id: string
-  tool: string
-  actor: string
-  clientId: string
-  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | string
-  startedAt: string
-  correlationId: string
-}
-
-export type McpConfirmation = {
-  id: string
-  actor: string
-  tool: string
-  target: string
-  parameterSummary: string
-  risk: SecurityPermissionRisk
-  status: 'pending' | 'approved' | 'denied' | 'expired' | string
-  expiresAt: string
-  correlationId: string
-  canApprove: boolean
-  canDeny: boolean
-}
-
-export type McpAuditLink = {
-  label: string
-  url: string
-  count: number
-}
-
-export type McpState = {
-  updatedAt: string
-  enabled: boolean
-  health: 'healthy' | 'warning' | 'critical' | 'unknown' | string
-  protocolVersion: string
-  sdkVersion: string
-  transports: McpTransport[]
-  operatingMode: 'read-only' | 'guarded' | 'administrator' | string
-  canonicalEndpoint: string
-  stdioCommand: string
-  lastSelfCheckAt: string | null
-  lastError: string | null
-  exposure: McpExposureState
-  identityProvider: McpIdentityProvider
-  allowedOrigins: string[]
-  rateLimit: {
-    limit: number
-    windowSeconds: number
-    remaining: number
-  } | null
-  permissions: McpRolePermission[]
-  clients: McpClient[]
-  operations: McpOperation[]
-  confirmations: McpConfirmation[]
-  auditLinks: McpAuditLink[]
-}
-
-export type ServicePermissionScope = {
-  kind:
-    | 'runtime'
-    | 'all-services'
-    | 'service'
-    | 'action'
-    | 'file-source'
-    | 'broker-namespace'
-    | 'export-destination'
-    | 'backup-area'
-  label: string
-  serviceId?: string
-  actionId?: string
-  resourceId?: string
-}
-
-export type ServiceAccessGroup = {
-  id: string
-  name: string
-  providerMappings: string[]
-}
-
-export type ServicePermissionGrant = {
-  id: string
-  groupId: string
-  groupName: string
-  permissionKey: string
-  permissionLabel: string
-  scope: ServicePermissionScope
-  sensitive?: boolean
-  elevated?: boolean
-  lastChangedAt: string
-  auditUrl?: string
-}
-
-export type ServiceAccessState = {
-  groups: ServiceAccessGroup[]
-  grants: ServicePermissionGrant[]
-  lastOwnerProtected: boolean
-}
-
-export type ServiceUpdateStateKind =
-  | 'installed'
-  | 'available'
-  | 'downloadedCandidate'
-  | 'installDeferred'
-  | 'failed'
-
-export type ServiceUpdateState = {
-  serviceId: string
-  state: ServiceUpdateStateKind
-  updatedAt: string
-  lastCheck: {
-    checkedAt: string
-    status:
-      | 'latest'
-      | 'update_available'
-      | 'pinned'
-      | 'unavailable'
-      | 'check_failed'
-    reason: string
-    sourceRepo: string | null
-    track: string | null
-    installedTag: string | null
-    manifestTag: string | null
-    latestTag: string | null
-  } | null
-  available: {
-    tag: string | null
-    version: string | null
-    releaseUrl: string | null
-    publishedAt: string | null
-    assetName: string | null
-    assetUrl: string | null
-  } | null
-  downloadedCandidate: {
-    tag: string
-    version: string | null
-    assetName: string
-    assetUrl: string
-    archivePath: string
-    extractedPath: string | null
-    downloadedAt: string
-  } | null
-  installDeferred: {
-    reason: string
-    deferredAt: string
-    nextEligibleAt: string | null
-  } | null
-  failed: {
-    reason: string
-    failedAt: string
-    sourceStatus: string | null
-  } | null
-}
-
-export type ServiceUpdateAction = 'check' | 'download' | 'install'
-
-export type ServiceRecoveryEventKind = 'monitor' | 'doctor' | 'restart' | 'hook'
-
-export type ServiceRecoveryStepResult = {
-  phase?: string
-  name: string
-  command: string
-  ok: boolean
-  exitCode: number | null
-  timedOut: boolean
-  failurePolicy: string
-  stdout: string
-  stderr: string
-  startedAt: string
-  finishedAt: string
-}
-
-export type ServiceRecoveryEvent = {
-  kind: ServiceRecoveryEventKind
-  serviceId: string
-  action?: 'restart' | 'skip' | 'healthy'
-  reason?: string
-  phase?: string
-  ok?: boolean
-  blocked?: boolean
-  message?: string
-  steps?: ServiceRecoveryStepResult[]
-  at: string
-}
-
-export type ServiceRecoveryHistoryState = {
-  serviceId: string
-  updatedAt: string
-  events: ServiceRecoveryEvent[]
-}
-
-export type ServiceRecoveryDoctorActionResult = {
-  serviceId: string
-  doctor: {
-    ok: boolean
-    blocked: boolean
-    steps: ServiceRecoveryStepResult[]
-  }
-  recovery: ServiceRecoveryHistoryState
-}
-
-export type DashboardService = {
-  id: string
-  name: string
-  status: ServiceStatus
-  favorite: boolean
-  note: string
-  links: ServiceLink[]
-  installed: boolean
-  role: string
-  runtimeHealth: ServiceRuntimeHealth
-  endpoints: ServiceEndpoint[]
-  metadata: ServiceMetadata
-  dependencies: ServiceDependency[]
-  dependents: ServiceDependency[]
-  environmentVariables: ServiceEnvironmentVariable[]
-  recentLogs: ServiceLogPreviewEntry[]
-  actions: ServiceAction[]
-  updates?: ServiceUpdateState
-  recovery?: ServiceRecoveryHistoryState
-  setup?: ServiceSetupState
-  access?: ServiceAccessState
-}
-
-export type DashboardRuntime = {
-  status: 'healthy' | 'warning'
-  lastReloadedAt: string
-  warningCount: number
-}
-
-export type DashboardSummary = {
-  runtime: DashboardRuntime
-  servicesTotal: number
-  servicesRunning: number
-  servicesStopped: number
-  servicesDegraded: number
-  networkExposureCount: number
-  installedCount: number
-  favorites: DashboardService[]
-  others: DashboardService[]
-  warnings: string[]
-  problemServices: DashboardService[]
-  updateNotifications: {
-    latestCount: number
-    availableCount: number
-    downloadedCount: number
-    deferredCount: number
-    failedCount: number
-    messages: string[]
-  }
-  recoveryNotifications: {
-    monitorAttentionCount: number
-    doctorBlockedCount: number
-    hookBlockedCount: number
-    restartFailureCount: number
-    messages: string[]
-  }
-}
-
-export type InboxMessageCategory = 'update' | 'system' | 'workflow' | 'error'
-
-export type InboxMessageSeverity = 'info' | 'warning' | 'critical'
-
-export type InboxMessageActionKind =
-  | 'open_service'
-  | 'open_logs'
-  | 'open_workflow'
-  | 'open_update'
-  | 'retry'
-  | 'view_audit'
-  | 'mark_read'
-  | 'mark_unread'
-  | 'hide'
-
-export type InboxMessageAction = {
-  id: string
-  label: string
-  kind: InboxMessageActionKind
-  target?: string
-  disabled?: boolean
-  reason?: string
-}
-
-export type InboxMessageTarget = {
-  label: string
-  href: string
-  kind: 'service' | 'logs' | 'workflow' | 'update' | 'audit'
-}
-
-export type InboxMessage = {
-  id: string
-  title: string
-  summary: string
-  details: string
-  category: InboxMessageCategory
-  severity: InboxMessageSeverity
-  createdAt: string
-  read: boolean
-  hidden: boolean
-  target?: InboxMessageTarget
-  actions: InboxMessageAction[]
-}
-
-export type InboxSummary = {
-  messages: InboxMessage[]
-  counts: {
-    total: number
-    unread: number
-    updates: number
-    system: number
-    workflow: number
-    errors: number
-    hidden: number
-  }
-  updatedAt: string
-}
-
-export type InboxMessageActionResult = {
-  ok: boolean
-  message: InboxMessage
-  inbox: InboxSummary
-}
-
-export type DashboardAction =
-  | 'reload-runtime'
-  | 'start-services'
-  | { kind: 'toggle-favorite'; serviceId: string }

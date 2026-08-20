@@ -1,0 +1,3 @@
+# Keep the pinned Secrets Broker contract fixture as LF so SHA-256 matches
+# the upstream Unix bytes on Windows checkouts and Release CI.
+src/lib/secrets-broker/fixtures/contract-states.json text eol=lf

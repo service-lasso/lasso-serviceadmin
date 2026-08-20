@@ -15,10 +15,7 @@ function setupEnvelope() {
         ready: false,
         path: 'C:\\sensitive\\workspace\\store.json',
       },
-      operator: {
-        osUsername: 'operator',
-        identitySource: 'vault',
-      },
+      operator: { osUsername: 'operator', identitySource: 'vault' },
       trustBoundary: {
         bindHost: '127.0.0.1',
         localOnly: true,
@@ -52,10 +49,10 @@ describe('first-run setup runtime contract', () => {
   it('rejects legacy key-reveal and incomplete setup payloads', () => {
     expect(() =>
       normalizeFirstRunSetupPayload({
-        status: 'generated_key_pending_ack',
+        ...setupEnvelope(),
         keyReveal: { value: 'fixture-secret' },
       })
-    ).toThrow(/setup status contract/i)
+    ).toThrow(/forbiddenMaterial/i)
     expect(() =>
       normalizeFirstRunSetupPayload({ setup: { contractVersion: 'v0' } })
     ).toThrow(/setup\.contractVersion/i)

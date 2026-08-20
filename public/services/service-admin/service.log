@@ -1,4 +1,0 @@
-2026-04-16T16:00:01.001Z INFO service-admin Service Admin boot sequence started
-2026-04-16T16:00:01.415Z INFO service-admin Route manifest loaded
-2026-04-16T16:00:01.922Z INFO service-admin Stub api middleware ready
-2026-04-16T16:00:02.203Z INFO service-admin Waiting for operator traffic

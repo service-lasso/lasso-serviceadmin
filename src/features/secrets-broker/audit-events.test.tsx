@@ -1,0 +1,75 @@
+import { expectActivePageIdentity } from '@/test/page-identity'
+import { renderRoute } from '@/test/render-route'
+import { describe, expect, it } from 'vitest'
+import {
+  auditEventsContainSecretMaterial,
+  filterSecretsBrokerAuditEvents,
+  secretsBrokerAuditEvents,
+} from './audit-events'
+
+describe('Secrets Broker audit event viewer', () => {
+  it('redirects the legacy Secrets Broker audit route to Operations Audit', async () => {
+    const { router } = await renderRoute('/secrets-broker/audit-events')
+
+    await expectActivePageIdentity('Audit')
+    expect(router.state.location.pathname).toBe('/operations/audit-logging')
+  })
+
+  it('filters by event type, outcome, provider, source, and tamper evidence', () => {
+    const filtered = filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+      type: 'migration_completed',
+      outcome: 'success',
+      provider: 'vault',
+      tamperEvidence: 'verified',
+      query: 'billing-worker',
+      since: '2026-05-07T18:00:00Z',
+      until: '2026-05-07T18:30:00Z',
+    })
+
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0]).toMatchObject({
+      type: 'migration_completed',
+      outcome: 'success',
+      provider: 'vault',
+      auditReason: 'approved backend migration',
+    })
+  })
+
+  it('models broken and unavailable tamper-evidence states without payloads', () => {
+    expect(
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        tamperEvidence: 'broken',
+      })[0].tamperEvidence.note
+    ).toMatch(/investigation required/i)
+
+    const unavailable = filterSecretsBrokerAuditEvents(
+      secretsBrokerAuditEvents,
+      {
+        tamperEvidence: 'unavailable',
+      }
+    )[0]
+    expect(unavailable.tamperEvidence.sequence).toBeNull()
+    expect(unavailable.tamperEvidence.note).toMatch(/auth-required/i)
+  })
+
+  it('keeps audit fixtures and rendered safe surface free of raw secret material', async () => {
+    expect(auditEventsContainSecretMaterial()).toBe(false)
+    expect(
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        tamperEvidence: 'verified',
+      })
+    ).toHaveLength(7)
+    expect(
+      filterSecretsBrokerAuditEvents(secretsBrokerAuditEvents, {
+        query: 'STRIPE_API_TOKEN',
+      })
+    ).toHaveLength(1)
+
+    const { container } = await renderRoute('/operations/audit-logging')
+    expect(container).not.toHaveTextContent(/DEMO_REVEAL_VALUE_42/i)
+    expect(container).not.toHaveTextContent(/ACTUAL_SECRET/i)
+    expect(container).not.toHaveTextContent(/BEGIN PRIVATE KEY/i)
+    expect(container).not.toHaveTextContent(/CLIENT_SECRET=/i)
+    expect(container).not.toHaveTextContent(/REFRESH_TOKEN=/i)
+  })
+})

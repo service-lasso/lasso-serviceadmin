@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -13,19 +13,10 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { Activity } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -39,25 +30,40 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import {
   DataTableColumnHeader,
   DataTablePagination,
+  DataTableScrollRegion,
   DataTableToolbar,
+  dataTableStickyHeaderClassName,
 } from '@/components/data-table'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 
+const route = getRouteApi('/_authenticated/runtime/')
+
+/**
+ * Keep only the service matching the Runtime `service` search param.
+ */
+function runtimeServicesForSearch(
+  services: DashboardService[],
+  serviceId: string | undefined
+): DashboardService[] {
+  const normalized = serviceId?.trim() ?? ''
+  if (!normalized) {
+    return services
+  }
+  return services.filter((service) => service.id === normalized)
+}
+
 function RuntimeLoading() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className='h-6 w-44' />
-        <Skeleton className='h-4 w-96' />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className='h-[420px] w-full' />
-      </CardContent>
-    </Card>
+    <div className='flex flex-1 flex-col gap-4'>
+      <Skeleton className='h-10 w-full max-w-xl' />
+      <Skeleton className='h-[420px] w-full' />
+      <Skeleton className='mt-auto h-9 w-full max-w-md' />
+    </div>
   )
 }
 
@@ -67,6 +73,9 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
       <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
     )
   }
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
 }
@@ -74,7 +83,8 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
 const statusSortRank: Record<DashboardService['status'], number> = {
   degraded: 0,
   stopped: 1,
-  running: 2,
+  available: 2,
+  running: 3,
 }
 
 const columns: ColumnDef<DashboardService>[] = [
@@ -194,16 +204,29 @@ export function Runtime() {
     title: 'Service Admin - Runtime',
     description: 'Service Admin runtime status and health view.',
   })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'logs', label: 'Logs', to: '/logs' },
+    ],
+  })
 
+  const searchState = route.useSearch()
   const servicesQuery = useServices()
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'status', desc: false },
     { id: 'name', desc: false },
   ])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const services = useMemo(
+    () =>
+      runtimeServicesForSearch(servicesQuery.data ?? [], searchState.service),
+    [searchState.service, servicesQuery.data]
+  )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: servicesQuery.data ?? [],
+    data: services,
     columns,
     state: {
       sorting,
@@ -219,140 +242,101 @@ export function Runtime() {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  const unhealthyCount = useMemo(
-    () =>
-      (servicesQuery.data ?? []).filter(
-        (service) => service.runtimeHealth.health !== 'healthy'
-      ).length,
-    [servicesQuery.data]
-  )
-
   const runtimes = useMemo(
-    () =>
-      Array.from(
-        new Set((servicesQuery.data ?? []).map((service) => service.role))
-      ).sort(),
-    [servicesQuery.data]
+    () => Array.from(new Set(services.map((service) => service.role))).sort(),
+    [services]
   )
 
   return (
     <>
       <Header fixed>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Runtime</h2>
-            <p className='text-muted-foreground'>
-              Runtime state, health, and check history in the standard operator
-              table.
-            </p>
-          </div>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/logs'>Logs</Link>
-            </Button>
-          </div>
-        </div>
-
+      <Main fixed className='min-h-0 gap-4 sm:gap-6'>
         {servicesQuery.isLoading ? (
           <RuntimeLoading />
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center gap-2'>
-                <Activity className='size-4' /> Runtime status
-              </CardTitle>
-              <CardDescription>
-                {table.getFilteredRowModel().rows.length} services shown,{' '}
-                {unhealthyCount} with warning or critical health.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <DataTableToolbar
-                table={table}
-                searchPlaceholder='Search services, summaries, checks, or runtime...'
-                searchKey='name'
-                filters={[
-                  {
-                    columnId: 'status',
-                    title: 'Status',
-                    options: [
-                      { label: 'Running', value: 'running' },
-                      { label: 'Degraded', value: 'degraded' },
-                      { label: 'Stopped', value: 'stopped' },
-                    ],
-                  },
-                  {
-                    columnId: 'runtime',
-                    title: 'Runtime',
-                    options: runtimes.map((runtime) => ({
-                      label: runtime,
-                      value: runtime,
-                    })),
-                  },
-                ]}
-              />
+          <div className='flex min-h-0 flex-1 flex-col gap-4'>
+            <DataTableToolbar
+              table={table}
+              searchPlaceholder='Search services, summaries, checks, or runtime...'
+              searchKey='name'
+              filters={[
+                {
+                  columnId: 'status',
+                  title: 'Status',
+                  options: [
+                    { label: 'Running', value: 'running' },
+                    { label: 'Available', value: 'available' },
+                    { label: 'Degraded', value: 'degraded' },
+                    { label: 'Stopped', value: 'stopped' },
+                  ],
+                },
+                {
+                  columnId: 'runtime',
+                  title: 'Runtime',
+                  options: runtimes.map((runtime) => ({
+                    label: runtime,
+                    value: runtime,
+                  })),
+                },
+              ]}
+            />
 
-              <div className='overflow-hidden rounded-md border'>
-                <Table className='table-fixed'>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id} colSpan={header.colSpan}>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
-                          </TableHead>
+            <DataTableScrollRegion>
+              <Table contained={false} className='table-fixed'>
+                <TableHeader className={dataTableStickyHeaderClassName}>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} colSpan={header.colSpan}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id} className='min-w-0'>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </TableCell>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow key={row.id}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id} className='min-w-0'>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className='h-24 text-center'
-                        >
-                          No runtime rows match the current filters.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className='h-24 text-center'
+                      >
+                        No runtime rows match the current filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DataTableScrollRegion>
 
-              <DataTablePagination table={table} className='mt-auto' />
-            </CardContent>
-          </Card>
+            <DataTablePagination table={table} className='mt-auto' />
+          </div>
         )}
       </Main>
     </>

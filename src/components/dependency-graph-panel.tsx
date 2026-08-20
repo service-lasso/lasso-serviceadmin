@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 import {
   Card,
   CardContent,
@@ -12,6 +13,13 @@ type DependencyGraphPanelProps = {
   description: string
   actions?: ReactNode
   graph: ReactNode
+  /**
+   * Grow with the parent pane (Dependencies page). Off keeps the
+   * service-detail neighborhood graph at its intrinsic canvas height.
+   */
+  fill?: boolean
+  className?: string
+  cardTestId?: string
 }
 
 export function DependencyGraphPanel({
@@ -19,10 +27,19 @@ export function DependencyGraphPanel({
   description,
   actions,
   graph,
+  fill = false,
+  className,
+  cardTestId,
 }: DependencyGraphPanelProps) {
   return (
-    <Card>
-      <CardHeader>
+    <Card
+      className={cn(
+        fill && 'flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+        className
+      )}
+      data-testid={cardTestId}
+    >
+      <CardHeader className={fill ? 'shrink-0' : undefined}>
         <div className='flex flex-wrap items-start justify-between gap-2'>
           <div>
             <CardTitle>{title}</CardTitle>
@@ -33,7 +50,13 @@ export function DependencyGraphPanel({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className='space-y-3'>{graph}</CardContent>
+      <CardContent
+        className={
+          fill ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'space-y-3'
+        }
+      >
+        {graph}
+      </CardContent>
     </Card>
   )
 }

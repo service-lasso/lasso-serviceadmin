@@ -1,169 +1,150 @@
-# Shadcn Admin Dashboard
+# Service Admin UI
 
-Admin Dashboard UI crafted with Shadcn and Vite. Built with responsiveness and accessibility in mind.
+Service Admin UI is the operator dashboard for inspecting and controlling Service Lasso services.
 
-## Service Lasso runtime API endpoint
+It is a Service Lasso service package for `@serviceadmin`, built as a Vite/React dashboard and packaged so the Service Lasso runtime can install, configure, start, stop, and verify it like any other managed service.
 
-This admin UI should discover the Service Lasso runtime/API endpoint from env, not from hardcoded localhost assumptions.
+![Service Admin UI](public/images/service-admin-ui.png)
+
+## Service identity
+
+| Field                | Value                                           |
+| -------------------- | ----------------------------------------------- |
+| Service id           | `@serviceadmin`                                 |
+| Service name         | Service Admin UI                                |
+| Repository           | `service-lasso/lasso-serviceadmin`              |
+| Local repo           | `C:\projects\service-lasso\lasso-@serviceadmin` |
+| Default service port | `17700`                                         |
+| Runtime command      | `NODE runtime/server.js`                        |
+| Service dependencies | `@node`, `@traefik`                             |
+| License              | Apache-2.0                                      |
+
+The canonical service manifest is `service.json`. Release packaging uploads `service.json` as a separate release asset and packages the deployable UI/runtime content separately.
+
+## Runtime API endpoint
+
+This admin UI discovers the Service Lasso runtime/API endpoint from environment, not from hardcoded localhost assumptions.
 
 Current env contract:
 
 - `VITE_SERVICE_LASSO_API_BASE_URL`
+- `VITE_SERVICE_LASSO_ENABLE_STUB_DATA`
 - `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
 - `VITE_SERVICE_LASSO_LOGS_DEBUG`
 
 Example:
 
-- `VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001`
-- `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
+```bash
+VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001
+# VITE_SERVICE_LASSO_FAVORITES_ENABLED=false
+```
 
 Current UI runtime behavior:
 
-- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, the dashboard stub layer can call the Service Lasso API for service metadata
-- favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
-- favorites are expected to load from `GET /api/services/meta`
+- dashboard service status, health, runtime actions, and logs are read from the live Service Lasso runtime API by default
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, API calls target that runtime URL
+- if `VITE_SERVICE_LASSO_API_BASE_URL` is missing, API calls use same-origin `/api/*` so packaged Service Admin can proxy to the runtime API
+- local dashboard, Secrets Broker preview, and Secret Inventory fixture data is available only in Vite development mode when `VITE_SERVICE_LASSO_ENABLE_STUB_DATA=true`
+- when that stub flag is absent or false, pages without a live API contract must render unavailable/setup-needed states instead of deterministic sample rows or stub controls
+- lifecycle and favorite changes are persisted in browser local storage during demo/stub development sessions
+- a missing, misconfigured, or unavailable runtime API is treated as an error instead of falling back to sample status
+- favorites editing is enabled by default against live Core and stub local state; set `VITE_SERVICE_LASSO_FAVORITES_ENABLED=false` to disable the star controls
+- favorites are expected to load from `GET /api/dashboard` / service `favorite` and `GET /api/services/meta`
 - favorites are expected to update through `PATCH /api/services/:serviceId/meta`
+- service status is expected to load from `GET /api/dashboard` and `GET /api/dashboard/services`
+- bulk start is expected to call `POST /api/runtime/actions/startAll`
+- reload is expected to call `POST /api/runtime/actions/reload`
 - set `VITE_SERVICE_LASSO_LOGS_DEBUG=true` to enable Logs screen debug output in the browser console outside dev mode
-- if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
+- favorite controls stay visible but disabled only when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=false`
 
-Service update UI contract:
+## Service Lasso UI migration rule
 
-- the dashboard, services table, and service detail page display update states from the Service Lasso runtime
-- the stub layer loads update state from `GET /api/updates`
-- the UI surfaces `installed`, `available`, `downloadedCandidate`, `installDeferred`, and `failed` states
-- the dashboard shows a global update message banner when updates are available, downloaded, deferred by install window, or failed
-- service detail actions call `POST /api/updates/check`, `POST /api/services/:serviceId/update/download`, and `POST /api/services/:serviceId/update/install`
-- when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, update actions are visible against the local stub data but do not call a runtime API
+The dashboard page shape is a hard invariant, not just inspiration.
 
-Recovery UI contract:
-
-- the dashboard, services table, and service detail page display recovery states from Service Lasso runtime history
-- the stub layer loads recovery state from `GET /api/recovery`
-- the dashboard shows a global recovery message banner when monitor, doctor, restart, or hook events need review
-- service detail exposes a bounded doctor/preflight action that calls `POST /api/services/:serviceId/recovery/doctor`
-- when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, recovery actions are visible against local stub data but do not call a runtime API
-
-![alt text](public/images/shadcn-admin.png)
-
-I've been creating dashboard UIs at work and for my personal projects. I always wanted to make a reusable collection of dashboard UI for future projects; and here it is now. While I've created a few custom components, some of the code is directly adapted from ShadcnUI examples.
-
-> This is not a starter project (template) though. I'll probably make one in the future.
-
-## Features
-
-- Light/dark mode
-- Responsive
-- Accessible
-- With built-in Sidebar component
-- Global search command
-- 10+ pages
-- Extra custom components
-- RTL support
-
-<details>
-<summary>Customized Components (click to expand)</summary>
-
-This project uses Shadcn UI components, but some have been slightly modified for better RTL (Right-to-Left) support and other improvements. These customized components differ from the original Shadcn UI versions.
-
-If you want to update components using the Shadcn CLI (e.g., `npx shadcn@latest add <component>`), it's generally safe for non-customized components. For the listed customized ones, you may need to manually merge changes to preserve the project's modifications and avoid overwriting RTL support or other updates.
-
-> If you don't require RTL support, you can safely update the 'RTL Updated Components' via the Shadcn CLI, as these changes are primarily for RTL compatibility. The 'Modified Components' may have other customizations to consider.
-
-### Modified Components
-
-- scroll-area
-- sonner
-- separator
-
-### RTL Updated Components
-
-- alert-dialog
-- calendar
-- command
-- dialog
-- dropdown-menu
-- select
-- table
-- sheet
-- sidebar
-- switch
-
-**Notes:**
-
-- **Modified Components**: These have general updates, potentially including RTL adjustments.
-- **RTL Updated Components**: These have specific changes for RTL language support (e.g., layout, positioning).
-- For implementation details, check the source files in `src/components/ui/`.
-- All other Shadcn UI components in the project are standard and can be safely updated via the CLI.
-
-</details>
-
-## Tech Stack
-
-**UI:** [ShadcnUI](https://ui.shadcn.com) (TailwindCSS + RadixUI)
-
-**Build Tool:** [Vite](https://vitejs.dev/)
-
-**Routing:** [TanStack Router](https://tanstack.com/router/latest)
-
-**Type Checking:** [TypeScript](https://www.typescriptlang.org/)
-
-**Linting/Formatting:** [ESLint](https://eslint.org/) & [Prettier](https://prettier.io/)
-
-**Icons:** [Lucide Icons](https://lucide.dev/icons/), [Tabler Icons](https://tabler.io/icons) (Brand icons only)
-
-**Auth:** Service Lasso runtime identity, authenticated by the loopback-only Service Admin proxy.
-
-## Service Lasso migration rule
-
-For this repo, the `shadcn-admin` page shape is a hard invariant, not just inspiration.
-
-Every Service Lasso page must keep the shared template structure:
+Every Service Lasso page must keep the shared dashboard structure:
 
 - template `Header`
 - template `Main` content container
 - consistent content spacing and section rhythm
-- template-native patterns for cards, tables, forms, dialogs, drawers, and empty/loading/error states
+- native patterns for cards, tables, forms, dialogs, drawers, and empty/loading/error states
 
-Do not cut a route down to a bare card or ad-hoc layout just because the feature slice is small. If a page exists, it must fit the same proper template content space as the other pages.
+Do not cut a route down to a bare card or ad-hoc layout just because the feature slice is small. If a page exists, it must fit the same proper Service Admin content space as the other pages.
 
 See `docs/reference/MIGRATION-REPORT.md` for the stricter migration rules.
 
-## Run Locally
+## Local development
 
-Clone the project
-
-```bash
-  git clone https://github.com/satnaing/shadcn-admin.git
-```
-
-Go to the project directory
+Install dependencies:
 
 ```bash
-  cd shadcn-admin
+npm ci --legacy-peer-deps
 ```
 
-Install dependencies
+For editable local installs, use:
 
 ```bash
-  pnpm install --frozen-lockfile
+npm install --legacy-peer-deps
 ```
 
-Start the server
+`npm run test:dev-server` requires the `@service-lasso/service-lasso` devDependency from `node_modules`; run one of the install commands above after a fresh clone or pull.
+
+Start the Vite dev server:
 
 ```bash
-  pnpm run dev
+npm run dev
 ```
 
-## Sponsoring this project ❤️
+Run the service-package dev server verification:
 
-If you find this project helpful or use this in your own work, consider [sponsoring me](https://github.com/sponsors/satnaing) to support development and maintenance. You can [buy me a coffee](https://buymeacoffee.com/satnaing) as well. Don’t worry, every penny helps. Thank you! 🙏
+```bash
+npm run test:dev-server
+```
 
-For questions or sponsorship inquiries, feel free to reach out at [satnaingdev@gmail.com](mailto:satnaingdev@gmail.com).
+Preview on the fixed LAN-test port:
 
-## Author
+```bash
+npm run preview:lan-test
+```
 
-Crafted with 🤍 by [@satnaing](https://github.com/satnaing)
+## Validation commands
 
-## License
+Use the smallest gate that proves the slice, and prefer the full local gate before claiming release readiness:
 
-Licensed under the [MIT License](https://choosealicense.com/licenses/mit/)
+```bash
+npm run format:check
+npm run lint
+npm run test
+npm run build
+npm run test:dev-server
+npm audit --audit-level=moderate
+```
+
+For UI/browser behavior, use the relevant Playwright/Cypress target in addition to the build/test gate.
+
+## Packaging and release
+
+The release workflow packages platform artifacts for the UI/runtime and uploads `service.json` separately.
+
+Expected release artifact shape:
+
+- package archives contain deployable app/runtime content
+- `service.json` is a separate release asset
+- archives do not embed `service.json`
+- generated build/package output is not committed to the repo
+
+## Important docs
+
+| Document                                               | Purpose                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| `service.json`                                         | Canonical Service Lasso service manifest.                |
+| `docs/reference/MIGRATION-REPORT.md`                   | Migration/layout constraints and page-shape rules.       |
+| `docs/reference/DEPENDENCY-GRAPH-SPEC.md`              | Dependency graph UI behavior and validation notes.       |
+| `docs/openspec-drafts/OPENSPEC-TRACKER.md`             | Draft spec tracker for ongoing Service Admin contracts.  |
+| `docs/openspec-drafts/SPEC-CI-SECURITY-MAINTENANCE.md` | CI/runtime and dependency-security maintenance contract. |
+
+## Notes for agents
+
+- Keep this repo branded as Service Admin UI / Service Lasso.
+- Do not restore donor dashboard README prose, package names, metadata, screenshots, sponsorship copy, or links.
+- Keep work scoped to one issue/branch/PR where possible.
+- Leave issue comments for meaningful state changes, validation, blockers, and final outcome.

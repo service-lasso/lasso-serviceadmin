@@ -33,14 +33,14 @@ This keeps the admin UI portable across local dev, demo, and real runtime deploy
 
 ## Current baseline status
 
-The repo has been reset back to the chosen `shadcn-admin` template baseline so the app now reflects the template look and feel first.
+The repo has been reset back to the chosen `Service Admin` template baseline so the app now reflects the template look and feel first.
 
 This means the current app is primarily a **template-faithful baseline**, not yet a full Service Lasso-adapted admin UI.
 
 ## What from the provided references is currently present
 
 ### 1. Template shell and look/feel
-Present now, from the chosen `shadcn-admin` template baseline:
+Present now, from the chosen `Service Admin` template baseline:
 - sidebar shell
 - header/topbar shell
 - dashboard layout structure
@@ -296,9 +296,9 @@ Goal: relationship data becomes visible and navigable.
 Logs should be treated as a dedicated flow, not just a paragraph on the detail page.
 
 Execution shape:
-- dedicated Logs page owns the live stream surface
+- dedicated Logs page owns the fleet-wide live stream surface
 - Services table and Service Details page should both be able to open the selected service log stream
-- Service Details may show a small recent-log preview, but not the full stream surface
+- Service Details Logs reuses the same LazyLog viewer, scoped to the current service
 - frontend log viewer design is now specified in `docs/reference/LOG-STREAMING-SPEC.md`
 
 Recommended first backend contract:

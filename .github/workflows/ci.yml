@@ -14,21 +14,28 @@ on:
 jobs:
   install-lint-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+        uses: actions/checkout@v6
 
       - name: Install pnpm
-        run: npm install -g pnpm@10.34.5
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
 
       - name: Lint the code
         run: pnpm lint
@@ -39,5 +46,26 @@ jobs:
       - name: Run Prettier check
         run: pnpm format:check
 
+      - name: Run unit tests
+        run: pnpm test:unit
+
       - name: Build the project
         run: pnpm build
+
+      - name: Verify packaged runtime
+        run: pnpm test:runtime
+
+      - name: Verify hosted Chrome
+        run: google-chrome --version
+
+      - name: Run browser UI tests
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
+        run: pnpm test:ui
+
+      - name: Build and verify release artifact
+        timeout-minutes: 15
+        run: |
+          pnpm package:artifact -- linux
+          pnpm package:verify -- linux

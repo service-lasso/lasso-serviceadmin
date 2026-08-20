@@ -23,7 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DataTablePagination, DataTableToolbar } from '@/components/data-table'
+import {
+  DataTablePagination,
+  DataTableScrollRegion,
+  DataTableToolbar,
+  dataTableStickyHeaderClassName,
+} from '@/components/data-table'
 import { servicesColumns as columns } from './services-columns'
 
 type ServicesTableProps = {
@@ -84,7 +89,7 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
   }, [table, ensurePageInRange])
 
   return (
-    <div className={cn('flex flex-1 flex-col gap-4')}>
+    <div className={cn('flex min-h-0 flex-1 flex-col gap-4')}>
       <DataTableToolbar
         table={table}
         searchPlaceholder='Search services and open details from the matching row...'
@@ -95,6 +100,7 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
             title: 'Status',
             options: [
               { label: 'Running', value: 'running' },
+              { label: 'Available', value: 'available' },
               { label: 'Degraded', value: 'degraded' },
               { label: 'Stopped', value: 'stopped' },
             ],
@@ -109,9 +115,9 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
           },
         ]}
       />
-      <div className='overflow-hidden rounded-md border'>
-        <Table>
-          <TableHeader>
+      <DataTableScrollRegion>
+        <Table contained={false}>
+          <TableHeader className={dataTableStickyHeaderClassName}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row'>
                 {headerGroup.headers.map((header) => (
@@ -183,7 +189,7 @@ export function ServicesTable({ data, search, navigate }: ServicesTableProps) {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableScrollRegion>
       <DataTablePagination table={table} className='mt-auto' />
     </div>
   )
