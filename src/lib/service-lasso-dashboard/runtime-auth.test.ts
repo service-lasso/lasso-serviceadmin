@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  identityUnlocksUi,
   normalizeRuntimeIdentity,
   runtimeIdentityAuditContext,
 } from './runtime-auth'
@@ -59,6 +60,8 @@ describe('trusted runtime identity contract', () => {
       actorKind: 'local-root',
       workspaceId: 'local',
     })
+    expect(identityUnlocksUi(identity, '127.0.0.1')).toBe(true)
+    expect(identityUnlocksUi(identity, '192.168.1.9')).toBe(false)
   })
 
   it('preserves a typed unauthenticated state without inventing identity', () => {

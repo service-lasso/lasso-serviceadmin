@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyOriginalClientAddressHeader,
   DEFAULT_RUNTIME_PROXY_TARGET,
+  ORIGINAL_CLIENT_ADDRESS_HEADER,
   resolveRuntimeProxyTarget,
   shouldEnableStubLogMiddleware,
 } from './runtime-proxy-target'
@@ -27,5 +29,21 @@ describe('Service Admin runtime API proxy target', () => {
 
   it('allows explicit Vite stub log middleware opt-in', () => {
     expect(shouldEnableStubLogMiddleware('true')).toBe(true)
+  })
+
+  it('overwrites a spoofed original-client header with the socket peer', () => {
+    const headers = new Map<string, string>([
+      [ORIGINAL_CLIENT_ADDRESS_HEADER, '127.0.0.1'],
+    ])
+    applyOriginalClientAddressHeader(
+      (name, value) => {
+        headers.set(name, value)
+      },
+      (name) => {
+        headers.delete(name)
+      },
+      '192.168.1.41'
+    )
+    expect(headers.get(ORIGINAL_CLIENT_ADDRESS_HEADER)).toBe('192.168.1.41')
   })
 })

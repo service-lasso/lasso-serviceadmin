@@ -80,11 +80,16 @@ async function proxyRuntimeApi(request, response) {
   const headers = new Headers()
   for (const [key, value] of Object.entries(request.headers)) {
     if (value === undefined || key.toLowerCase() === 'host') continue
+    if (key.toLowerCase() === 'x-service-lasso-client-address') continue
     if (Array.isArray(value)) {
       for (const entry of value) headers.append(key, entry)
     } else {
       headers.set(key, value)
     }
+  }
+  const originalClient = request.socket.remoteAddress
+  if (originalClient) {
+    headers.set('x-service-lasso-client-address', originalClient)
   }
 
   try {
