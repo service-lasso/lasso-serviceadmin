@@ -28,6 +28,10 @@ vi.mock('@/lib/service-lasso-dashboard/client', async () => {
     runDashboardAction: stub.runDashboardAction,
     saveServiceConfigDocument: stub.saveServiceConfigDocument,
     serviceLassoApiBaseUrl: stub.serviceLassoApiBaseUrl,
+    fetchInbox: stub.fetchInbox,
+    fetchInboxCounts: stub.fetchInboxCounts,
+    markInboxRead: stub.markInboxRead,
+    markInboxItemsRead: stub.markInboxItemsRead,
   }
 })
 

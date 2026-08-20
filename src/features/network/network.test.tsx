@@ -3,81 +3,86 @@ import { renderRoute } from '@/test/render-route'
 import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
-  useServices: () => ({
-    data: [
-      {
-        id: '@serviceadmin',
-        name: 'Service Admin',
-        endpoints: [
-          {
-            label: 'ui',
-            url: 'http://127.0.0.1:17700',
-            bind: '0.0.0.0',
-            port: 17700,
-            protocol: 'http',
-            exposure: 'local',
-          },
-          {
-            label: 'api',
-            url: 'http://127.0.0.1:17883/api',
-            bind: '127.0.0.1',
-            port: 17883,
-            protocol: 'http',
-            exposure: 'local',
-          },
-          {
-            label: 'health',
-            url: 'http://127.0.0.1:17883/api/health',
-            bind: '127.0.0.1',
-            port: 17883,
-            protocol: 'http',
-            exposure: 'local',
-          },
-        ],
-      },
-      {
-        id: '@archive',
-        name: 'Archive',
-        endpoints: [
-          {
-            label: 'vendor download',
-            url: 'https://www.7-zip.org/download.html',
-            bind: 'metadata',
-            port: 443,
-            protocol: 'https',
-            exposure: 'public',
-          },
-          {
-            label: 'release asset',
-            url: 'https://github.com/ip7z/7zip/releases/download/24.09/7z2409-x64.exe',
-            bind: 'metadata',
-            port: 443,
-            protocol: 'https',
-            exposure: 'public',
-          },
-          {
-            label: 'docs',
-            url: 'https://www.7-zip.org/',
-            bind: 'metadata',
-            port: 443,
-            protocol: 'https',
-            exposure: 'public',
-          },
-          {
-            label: 'route',
-            url: 'https://archive.service-lasso.local',
-            bind: '0.0.0.0',
-            port: 443,
-            protocol: 'https',
-            exposure: 'lan',
-          },
-        ],
-      },
-    ],
-    isLoading: false,
-  }),
-}))
+vi.mock('@/lib/service-lasso-dashboard/hooks', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/service-lasso-dashboard/hooks')>()
+  return {
+    ...actual,
+    useServices: () => ({
+      data: [
+        {
+          id: '@serviceadmin',
+          name: 'Service Admin',
+          endpoints: [
+            {
+              label: 'ui',
+              url: 'http://127.0.0.1:17700',
+              bind: '0.0.0.0',
+              port: 17700,
+              protocol: 'http',
+              exposure: 'local',
+            },
+            {
+              label: 'api',
+              url: 'http://127.0.0.1:17883/api',
+              bind: '127.0.0.1',
+              port: 17883,
+              protocol: 'http',
+              exposure: 'local',
+            },
+            {
+              label: 'health',
+              url: 'http://127.0.0.1:17883/api/health',
+              bind: '127.0.0.1',
+              port: 17883,
+              protocol: 'http',
+              exposure: 'local',
+            },
+          ],
+        },
+        {
+          id: '@archive',
+          name: 'Archive',
+          endpoints: [
+            {
+              label: 'vendor download',
+              url: 'https://www.7-zip.org/download.html',
+              bind: 'metadata',
+              port: 443,
+              protocol: 'https',
+              exposure: 'public',
+            },
+            {
+              label: 'release asset',
+              url: 'https://github.com/ip7z/7zip/releases/download/24.09/7z2409-x64.exe',
+              bind: 'metadata',
+              port: 443,
+              protocol: 'https',
+              exposure: 'public',
+            },
+            {
+              label: 'docs',
+              url: 'https://www.7-zip.org/',
+              bind: 'metadata',
+              port: 443,
+              protocol: 'https',
+              exposure: 'public',
+            },
+            {
+              label: 'route',
+              url: 'https://archive.service-lasso.local',
+              bind: '0.0.0.0',
+              port: 443,
+              protocol: 'https',
+              exposure: 'lan',
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+    }),
+  }
+})
 
 describe('network page', () => {
   it('renders the network table without a nested endpoints card wrapper', async () => {

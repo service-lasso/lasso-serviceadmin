@@ -1,9 +1,14 @@
 import { renderRoute } from '@/test/render-route'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { resetStubInbox } from '@/lib/service-lasso-dashboard/stub'
 
 describe('operator Inbox page', () => {
+  beforeEach(() => {
+    resetStubInbox()
+  })
+
   it('lists unread fixture notices and deep-links to a service', async () => {
     const user = userEvent.setup()
     const { router } = await renderRoute('/inbox')

@@ -3,39 +3,44 @@ import { renderRoute } from '@/test/render-route'
 import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
-  useServices: () => ({
-    data: [
-      {
-        id: '@serviceadmin',
-        name: 'Service Admin',
-        role: '@node',
-        status: 'running',
-        runtimeHealth: {
-          health: 'healthy',
-          summary: 'Managed Service Admin runtime is healthy.',
-          uptime: '14m',
-          lastCheckAt: '2026-06-05 21:40',
-          lastRestartAt: '2026-06-05 21:26',
+vi.mock('@/lib/service-lasso-dashboard/hooks', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/service-lasso-dashboard/hooks')>()
+  return {
+    ...actual,
+    useServices: () => ({
+      data: [
+        {
+          id: '@serviceadmin',
+          name: 'Service Admin',
+          role: '@node',
+          status: 'running',
+          runtimeHealth: {
+            health: 'healthy',
+            summary: 'Managed Service Admin runtime is healthy.',
+            uptime: '14m',
+            lastCheckAt: '2026-06-05 21:40',
+            lastRestartAt: '2026-06-05 21:26',
+          },
         },
-      },
-      {
-        id: '@archive',
-        name: 'Archive',
-        role: '@archive',
-        status: 'available',
-        runtimeHealth: {
-          health: 'healthy',
-          summary: 'Archive runtime is healthy.',
-          uptime: '3h',
-          lastCheckAt: '2026-06-05 21:40',
-          lastRestartAt: '2026-06-05 18:00',
+        {
+          id: '@archive',
+          name: 'Archive',
+          role: '@archive',
+          status: 'available',
+          runtimeHealth: {
+            health: 'healthy',
+            summary: 'Archive runtime is healthy.',
+            uptime: '3h',
+            lastCheckAt: '2026-06-05 21:40',
+            lastRestartAt: '2026-06-05 18:00',
+          },
         },
-      },
-    ],
-    isLoading: false,
-  }),
-}))
+      ],
+      isLoading: false,
+    }),
+  }
+})
 
 describe('runtime page', () => {
   it('renders the runtime table without a nested status card wrapper', async () => {

@@ -18,15 +18,20 @@ const hookMocks = vi.hoisted(() => ({
   useToggleFavorite: vi.fn(),
 }))
 
-vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
-  useDashboardAction: hookMocks.useDashboardAction,
-  useDashboardService: hookMocks.useDashboardService,
-  useDashboardSummary: hookMocks.useDashboardSummary,
-  useBrokerTelemetry: hookMocks.useBrokerTelemetry,
-  useServices: hookMocks.useServices,
-  useFavoriteFeatureState: hookMocks.useFavoriteFeatureState,
-  useToggleFavorite: hookMocks.useToggleFavorite,
-}))
+vi.mock('@/lib/service-lasso-dashboard/hooks', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/service-lasso-dashboard/hooks')>()
+  return {
+    ...actual,
+    useDashboardAction: hookMocks.useDashboardAction,
+    useDashboardService: hookMocks.useDashboardService,
+    useDashboardSummary: hookMocks.useDashboardSummary,
+    useBrokerTelemetry: hookMocks.useBrokerTelemetry,
+    useServices: hookMocks.useServices,
+    useFavoriteFeatureState: hookMocks.useFavoriteFeatureState,
+    useToggleFavorite: hookMocks.useToggleFavorite,
+  }
+})
 
 function echoService(): DashboardService {
   return {

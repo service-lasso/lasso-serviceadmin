@@ -58,12 +58,17 @@ const mockState = vi.hoisted(() => ({
   services: [] as DashboardService[],
 }))
 
-vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
-  useServices: () => ({
-    data: mockState.services,
-    isLoading: false,
-  }),
-}))
+vi.mock('@/lib/service-lasso-dashboard/hooks', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/service-lasso-dashboard/hooks')>()
+  return {
+    ...actual,
+    useServices: () => ({
+      data: mockState.services,
+      isLoading: false,
+    }),
+  }
+})
 
 describe('service routes page', () => {
   beforeEach(() => {

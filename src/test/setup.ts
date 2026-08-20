@@ -2,7 +2,6 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth-store'
-import { resetStubInbox } from '@/lib/service-lasso-dashboard/stub'
 
 class ResizeObserverMock {
   observe() {}
@@ -65,7 +64,6 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  resetStubInbox()
   vi.spyOn(console, 'error').mockImplementation((...args) => {
     const first = args[0]
     if (typeof first === 'string' && first.includes('not wrapped in act')) {
