@@ -1,3 +1,4 @@
+import { fetchRuntimeJson } from './broker-operator-client'
 import { countOperatorInboxItems, unreadBadgeCount } from './inbox'
 import type {
   AuditEventsFilters,
@@ -5,6 +6,9 @@ import type {
   DashboardAction,
   DashboardService,
   DashboardSummary,
+  FirstRunSetupActionResult,
+  FirstRunSetupState,
+  FirstRunSetupStatus,
   InboxCountsResult,
   InboxListResult,
   InboxQuery,
@@ -20,6 +24,39 @@ import type {
 } from './types'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const firstRunSetupStatuses = new Set<FirstRunSetupStatus>([
+  'not_required',
+  'setup_required',
+  'setup_in_progress',
+  'setup_complete',
+  'setup_failed',
+])
+
+function createDefaultFirstRunSetupState(): FirstRunSetupState {
+  return {
+    contractVersion: 'service-lasso.setup-status.v1',
+    state: 'not_required',
+    setupMode: false,
+    vault: { required: true, ready: true },
+    operator: { osUsername: 'local-operator', identitySource: 'vault' },
+    trustBoundary: {
+      bindHost: '127.0.0.1',
+      localOnly: true,
+      localhostBootstrapAllowed: false,
+      remoteBootstrapAllowed: false,
+      setupTokenConfigured: false,
+      blockers: [],
+    },
+    auth: {
+      actor: { authenticated: true, kind: 'local-root', actorId: 'local-root' },
+      mode: 'local-root',
+      blockers: [],
+    },
+  }
+}
+
+let firstRunSetupFixture = createDefaultFirstRunSetupState()
 
 const configuredServiceLassoApiBaseUrl =
   import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '')
@@ -846,6 +883,288 @@ async function updateFavoriteViaApi(serviceId: string, favorite: boolean) {
   } catch {
     return false
   }
+}
+
+function setupContractError(field: string): never {
+  throw new Error(`Invalid Service Lasso setup status contract: ${field}.`)
+}
+
+function requireSetupRecord(
+  input: unknown,
+  field: string
+): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    setupContractError(field)
+  }
+  return input as Record<string, unknown>
+}
+
+function requireSetupString(input: unknown, field: string, max = 256) {
+  const containsControlCharacter =
+    typeof input === 'string' &&
+    Array.from(input).some((character) => {
+      const code = character.charCodeAt(0)
+      return code <= 31 || code === 127
+    })
+  if (
+    typeof input !== 'string' ||
+    input.length === 0 ||
+    input.length > max ||
+    containsControlCharacter
+  ) {
+    setupContractError(field)
+  }
+  return input
+}
+
+function requireSetupBoolean(input: unknown, field: string) {
+  if (typeof input !== 'boolean') setupContractError(field)
+  return input
+}
+
+function requireSetupBlockers(input: unknown, field: string) {
+  if (!Array.isArray(input) || input.length > 32) setupContractError(field)
+  return input.map((item, index) =>
+    requireSetupString(item, `${field}[${index}]`, 128)
+  )
+}
+
+const forbiddenSetupMaterialKeys = new Set([
+  'credential',
+  'credentials',
+  'keyreveal',
+  'masterkey',
+  'password',
+  'privatekey',
+  'recoverykey',
+  'secret',
+  'setuptoken',
+  'token',
+  'value',
+])
+
+function rejectForbiddenSetupMaterial(input: unknown) {
+  const pending: unknown[] = [input]
+  let inspected = 0
+
+  while (pending.length > 0) {
+    const current = pending.pop()
+    inspected += 1
+    if (inspected > 1024) setupContractError('response.size')
+    if (!current || typeof current !== 'object') continue
+
+    if (Array.isArray(current)) {
+      pending.push(...current)
+      continue
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      const normalizedKey = key.replace(/[-_]/g, '').toLowerCase()
+      if (forbiddenSetupMaterialKeys.has(normalizedKey)) {
+        setupContractError('response.forbiddenMaterial')
+      }
+      pending.push(value)
+    }
+  }
+}
+
+export function normalizeFirstRunSetupPayload(
+  payload: unknown
+): FirstRunSetupState {
+  rejectForbiddenSetupMaterial(payload)
+  const envelope = requireSetupRecord(payload, 'response')
+  const setup = requireSetupRecord(envelope.setup, 'setup')
+  if (setup.contractVersion !== 'service-lasso.setup-status.v1') {
+    setupContractError('setup.contractVersion')
+  }
+  if (
+    typeof setup.state !== 'string' ||
+    !firstRunSetupStatuses.has(setup.state as FirstRunSetupStatus)
+  ) {
+    setupContractError('setup.state')
+  }
+
+  const vault = requireSetupRecord(setup.vault, 'setup.vault')
+  const operator = requireSetupRecord(setup.operator, 'setup.operator')
+  const trust = requireSetupRecord(setup.trustBoundary, 'setup.trustBoundary')
+  const auth = requireSetupRecord(setup.auth, 'setup.auth')
+  const actor = requireSetupRecord(auth.actor, 'setup.auth.actor')
+  const actorKinds = new Set(['local-root', 'zitadel', 'local-token'])
+  const authModes = new Set(['local-root', 'zitadel', 'local-token', 'blocked'])
+  const actorKind =
+    actor.kind === null
+      ? null
+      : actorKinds.has(String(actor.kind))
+        ? (actor.kind as 'local-root' | 'zitadel' | 'local-token')
+        : setupContractError('setup.auth.actor.kind')
+  const actorId =
+    actor.actorId === null
+      ? null
+      : requireSetupString(actor.actorId, 'setup.auth.actor.actorId')
+  const mode = authModes.has(String(auth.mode))
+    ? (auth.mode as FirstRunSetupState['auth']['mode'])
+    : setupContractError('setup.auth.mode')
+
+  if (operator.identitySource !== 'vault') {
+    setupContractError('setup.operator.identitySource')
+  }
+
+  return {
+    contractVersion: 'service-lasso.setup-status.v1',
+    state: setup.state as FirstRunSetupStatus,
+    setupMode: requireSetupBoolean(setup.setupMode, 'setup.setupMode'),
+    vault: {
+      required: requireSetupBoolean(vault.required, 'setup.vault.required'),
+      ready: requireSetupBoolean(vault.ready, 'setup.vault.ready'),
+    },
+    operator: {
+      osUsername: requireSetupString(
+        operator.osUsername,
+        'setup.operator.osUsername'
+      ),
+      identitySource: 'vault',
+    },
+    trustBoundary: {
+      bindHost: requireSetupString(
+        trust.bindHost,
+        'setup.trustBoundary.bindHost'
+      ),
+      localOnly: requireSetupBoolean(
+        trust.localOnly,
+        'setup.trustBoundary.localOnly'
+      ),
+      localhostBootstrapAllowed: requireSetupBoolean(
+        trust.localhostBootstrapAllowed,
+        'setup.trustBoundary.localhostBootstrapAllowed'
+      ),
+      remoteBootstrapAllowed: requireSetupBoolean(
+        trust.remoteBootstrapAllowed,
+        'setup.trustBoundary.remoteBootstrapAllowed'
+      ),
+      setupTokenConfigured: requireSetupBoolean(
+        trust.setupTokenConfigured,
+        'setup.trustBoundary.setupTokenConfigured'
+      ),
+      blockers: requireSetupBlockers(
+        trust.blockers,
+        'setup.trustBoundary.blockers'
+      ),
+    },
+    auth: {
+      actor: {
+        authenticated: requireSetupBoolean(
+          actor.authenticated,
+          'setup.auth.actor.authenticated'
+        ),
+        kind: actorKind,
+        actorId,
+      },
+      mode,
+      blockers: requireSetupBlockers(auth.blockers, 'setup.auth.blockers'),
+    },
+  }
+}
+
+export function normalizeFirstRunSetupBootstrapPayload(
+  payload: unknown
+): FirstRunSetupActionResult {
+  const envelope = requireSetupRecord(payload, 'response')
+  const bootstrap = requireSetupRecord(envelope.bootstrap, 'bootstrap')
+  if (bootstrap.ok !== true) setupContractError('bootstrap.ok')
+  if (bootstrap.state !== 'setup_complete') {
+    setupContractError('bootstrap.state')
+  }
+  if (
+    typeof bootstrap.provisionedSecretCount !== 'number' ||
+    !Number.isSafeInteger(bootstrap.provisionedSecretCount) ||
+    bootstrap.provisionedSecretCount < 0 ||
+    bootstrap.provisionedSecretCount > 10_000
+  ) {
+    setupContractError('bootstrap.provisionedSecretCount')
+  }
+
+  return {
+    bootstrap: {
+      ok: true,
+      state: 'setup_complete',
+      provisionedSecretCount: bootstrap.provisionedSecretCount,
+    },
+    setup: normalizeFirstRunSetupPayload(payload),
+  }
+}
+
+export function setFirstRunSetupFixtureForTests(
+  fixture: Partial<FirstRunSetupState> | null
+) {
+  const defaults = createDefaultFirstRunSetupState()
+  firstRunSetupFixture = fixture
+    ? {
+        ...defaults,
+        ...fixture,
+        vault: { ...defaults.vault, ...fixture.vault },
+        operator: { ...defaults.operator, ...fixture.operator },
+        trustBoundary: {
+          ...defaults.trustBoundary,
+          ...fixture.trustBoundary,
+        },
+        auth: {
+          ...defaults.auth,
+          ...fixture.auth,
+          actor: { ...defaults.auth.actor, ...fixture.auth?.actor },
+        },
+      }
+    : defaults
+}
+
+/** Deterministic gate state for component tests without enabling all stubs. */
+export function getFirstRunSetupFixtureForTests() {
+  return structuredClone(firstRunSetupFixture)
+}
+
+export async function fetchFirstRunSetupState() {
+  await wait(120)
+
+  if (!isServiceAdminStubModeEnabled()) {
+    const payload = await fetchRuntimeJson<unknown>('/api/setup/status')
+    return normalizeFirstRunSetupPayload(payload)
+  }
+
+  return structuredClone(firstRunSetupFixture)
+}
+
+export async function bootstrapFirstRunSetup(setupToken?: string) {
+  await wait(120)
+
+  if (!isServiceAdminStubModeEnabled()) {
+    const response = await fetchRuntimeJson<unknown>('/api/setup/bootstrap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(setupToken ? { setupToken } : {}),
+    })
+    return normalizeFirstRunSetupBootstrapPayload(response)
+  }
+
+  firstRunSetupFixture = {
+    ...firstRunSetupFixture,
+    state: 'not_required',
+    setupMode: false,
+    vault: { ...firstRunSetupFixture.vault, ready: true },
+    trustBoundary: {
+      ...firstRunSetupFixture.trustBoundary,
+      localhostBootstrapAllowed: false,
+      remoteBootstrapAllowed: false,
+      blockers: [],
+    },
+  }
+
+  return structuredClone({
+    bootstrap: {
+      ok: true,
+      state: 'setup_complete',
+      provisionedSecretCount: 3,
+    },
+    setup: firstRunSetupFixture,
+  } satisfies FirstRunSetupActionResult)
 }
 
 export async function fetchDashboardSummary() {

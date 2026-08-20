@@ -88,6 +88,53 @@ export type ServiceAction = {
     | 'open_admin'
 }
 
+export type FirstRunSetupStatus =
+  | 'not_required'
+  | 'setup_required'
+  | 'setup_in_progress'
+  | 'setup_complete'
+  | 'setup_failed'
+
+export type FirstRunSetupState = {
+  contractVersion: 'service-lasso.setup-status.v1'
+  state: FirstRunSetupStatus
+  setupMode: boolean
+  vault: {
+    required: boolean
+    ready: boolean
+  }
+  operator: {
+    osUsername: string
+    identitySource: 'vault'
+  }
+  trustBoundary: {
+    bindHost: string
+    localOnly: boolean
+    localhostBootstrapAllowed: boolean
+    remoteBootstrapAllowed: boolean
+    setupTokenConfigured: boolean
+    blockers: string[]
+  }
+  auth: {
+    actor: {
+      authenticated: boolean
+      kind: 'local-root' | 'zitadel' | 'local-token' | null
+      actorId: string | null
+    }
+    mode: 'local-root' | 'zitadel' | 'local-token' | 'blocked'
+    blockers: string[]
+  }
+}
+
+export type FirstRunSetupActionResult = {
+  bootstrap: {
+    ok: true
+    state: 'setup_complete'
+    provisionedSecretCount: number
+  }
+  setup: FirstRunSetupState
+}
+
 export type DashboardService = {
   id: string
   name: string

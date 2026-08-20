@@ -51,7 +51,12 @@ import {
   runDashboardAction,
 } from './client'
 import { runtimeIdentityAuditContext, useRuntimeIdentity } from './runtime-auth'
-import { isFavoritesFeatureEnabled } from './stub'
+import {
+  bootstrapFirstRunSetup,
+  fetchFirstRunSetupState,
+  getFirstRunSetupFixtureForTests,
+  isFavoritesFeatureEnabled,
+} from './stub'
 import type {
   AuditEventsFilters,
   BrokerBulkCampaignRequest,
@@ -74,6 +79,38 @@ import type {
 } from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
+const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
+
+export function useFirstRunSetupState() {
+  const useFixture = import.meta.env.MODE === 'test'
+  return useQuery({
+    queryKey: firstRunSetupQueryKey,
+    queryFn: fetchFirstRunSetupState,
+    refetchInterval: (query) =>
+      query.state.data?.state === 'setup_in_progress' ? 1_000 : false,
+    ...(useFixture
+      ? {
+          initialData: getFirstRunSetupFixtureForTests(),
+          staleTime: 5_000,
+        }
+      : {}),
+  })
+}
+
+export function useFirstRunSetupBootstrap() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (setupToken?: string) => bootstrapFirstRunSetup(setupToken),
+    onSuccess: (result) => {
+      queryClient.setQueryData(firstRunSetupQueryKey, result.setup)
+      void queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: firstRunSetupQueryKey })
+    },
+  })
+}
 
 export function useDashboardSummary() {
   return useQuery({
