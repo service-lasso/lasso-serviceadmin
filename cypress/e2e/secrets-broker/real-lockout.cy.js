@@ -17,10 +17,11 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
     cy.reload()
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.visit('/services/%40secretsbroker')
-    cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
     cy.contains('[data-slot="card"]', 'Operational controls', {
       timeout: 30_000,
-    }).should('be.visible')
+    })
+      .scrollIntoView()
+      .should('be.visible')
 
     cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
       expect(controlUrl).to.match(
