@@ -12,6 +12,10 @@ import {
 import { renderServiceLinkUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
 import { useDashboardAction } from '@/lib/service-lasso-dashboard/hooks'
+import {
+  hasLifecycleAction,
+  isLifecycleActionEnabled,
+} from '@/lib/service-lasso-dashboard/lifecycle-actions'
 import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -47,37 +51,7 @@ function FavoriteCell({ service }: { service: DashboardService }) {
   )
 }
 
-export function hasLifecycleAction(
-  service: DashboardService,
-  action: 'start' | 'stop' | 'restart'
-) {
-  const isProvider =
-    service.role === 'provider' || service.metadata.serviceType === 'provider'
-
-  return (
-    !isProvider &&
-    service.actions.some((candidate) => candidate.kind === action)
-  )
-}
-
-/**
- * Start is available only while stopped; stop and restart only while running.
- */
-export function isLifecycleActionEnabled(
-  service: DashboardService,
-  action: 'start' | 'stop' | 'restart'
-) {
-  if (!hasLifecycleAction(service, action)) {
-    return false
-  }
-
-  const running = service.status === 'running' || service.status === 'degraded'
-  if (action === 'start') {
-    return !running
-  }
-
-  return running
-}
+export { hasLifecycleAction, isLifecycleActionEnabled }
 
 function ServiceLifecycleControls({ service }: { service: DashboardService }) {
   const actionMutation = useDashboardAction()

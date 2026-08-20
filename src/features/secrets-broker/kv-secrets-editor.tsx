@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, FileKey2, Folder, Plus, Trash2 } from 'lucide-react'
 import type { SecretsBrokerOverview } from '@/lib/secrets-broker/client'
@@ -60,6 +60,11 @@ type KvSecretsEditorProps = {
   overview: SecretsBrokerOverview | null | undefined
   pathFilter?: string
   onPathFilterChange?: (value: string) => void
+  /**
+   * KV bucket or leaf from the page `path` search param.
+   * Hydrates folder browse (trailing slash) via paste-to-navigate.
+   */
+  initialPath?: string
 }
 
 function parentPrefix(path: string): string {
@@ -373,6 +378,7 @@ export function KvSecretsEditor({
   overview,
   pathFilter: pathFilterProp,
   onPathFilterChange,
+  initialPath,
 }: KvSecretsEditorProps) {
   const queryClient = useQueryClient()
   const sources = useMemo(() => kvSourceOptions(overview), [overview])
@@ -398,13 +404,16 @@ export function KvSecretsEditor({
    * Keep URL-backed path filters when the page supplies them; otherwise
    * store the filter locally for isolated editor tests.
    */
-  const setPathFilter = (value: string) => {
-    if (onPathFilterChange) {
-      onPathFilterChange(value)
-      return
-    }
-    setUncontrolledPathFilter(value)
-  }
+  const setPathFilter = useCallback(
+    (value: string) => {
+      if (onPathFilterChange) {
+        onPathFilterChange(value)
+        return
+      }
+      setUncontrolledPathFilter(value)
+    },
+    [onPathFilterChange]
+  )
 
   const source: KvSourceOption = sources.find(
     (item) => item.id === sourceId
@@ -433,11 +442,52 @@ export function KvSecretsEditor({
   const writeCas =
     cas ?? (currentVersion && currentVersion > 0 ? currentVersion : undefined)
 
-  const resetStoredReveal = () => {
+  const resetStoredReveal = useCallback(() => {
     setRevealedKey('')
     setLoadedFields({})
     setRevealPrompt(null)
-  }
+  }, [])
+
+  const applyPathNavigation = useCallback(
+    (raw: string) => {
+      const next = parseKvPathNavigation(raw)
+      setPathFilter('')
+      setKeyFilter('')
+      setCreatePath('')
+      resetStoredReveal()
+      setCas(undefined)
+      setSelectedVersion(undefined)
+      if (!next.selectedPath && !next.prefix) {
+        setPrefix('')
+        setSelectedPath('')
+        setRows(emptyCreateRow())
+        setStatus('')
+        setPathDraft('')
+        return
+      }
+      if (next.folder || !next.selectedPath) {
+        setPrefix(next.prefix)
+        setSelectedPath('')
+        setRows(emptyCreateRow())
+        setStatus(next.prefix ? `Browsing ${next.prefix}.` : '')
+        setPathDraft(kvPathBoxValue(next.prefix, ''))
+        return
+      }
+      setPrefix(next.prefix)
+      setSelectedPath(next.selectedPath)
+      setRows([{ key: '', value: '' }])
+      setPathDraft(next.selectedPath)
+    },
+    [resetStoredReveal, setPathFilter]
+  )
+
+  useEffect(() => {
+    const trimmed = (initialPath ?? '').trim()
+    if (!trimmed) {
+      return
+    }
+    applyPathNavigation(trimmed.endsWith('/') ? trimmed : `${trimmed}/`)
+  }, [applyPathNavigation, initialPath])
 
   useEffect(() => {
     setPathDraft(kvPathBoxValue(prefix, selectedPath))
@@ -489,36 +539,6 @@ export function KvSecretsEditor({
       cancelled = true
     }
   }, [selectedPath, selectedVersion, source.id])
-
-  const applyPathNavigation = (raw: string) => {
-    const next = parseKvPathNavigation(raw)
-    setPathFilter('')
-    setKeyFilter('')
-    setCreatePath('')
-    resetStoredReveal()
-    setCas(undefined)
-    setSelectedVersion(undefined)
-    if (!next.selectedPath && !next.prefix) {
-      setPrefix('')
-      setSelectedPath('')
-      setRows(emptyCreateRow())
-      setStatus('')
-      setPathDraft('')
-      return
-    }
-    if (next.folder || !next.selectedPath) {
-      setPrefix(next.prefix)
-      setSelectedPath('')
-      setRows(emptyCreateRow())
-      setStatus(next.prefix ? `Browsing ${next.prefix}.` : '')
-      setPathDraft(kvPathBoxValue(next.prefix, ''))
-      return
-    }
-    setPrefix(next.prefix)
-    setSelectedPath(next.selectedPath)
-    setRows([{ key: '', value: '' }])
-    setPathDraft(next.selectedPath)
-  }
 
   const revealMutation = useMutation({
     mutationFn: async ({ fieldKey, reason }: RevealRequest) => {

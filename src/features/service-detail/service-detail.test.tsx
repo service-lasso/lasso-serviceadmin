@@ -65,7 +65,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function buildNodeSampleService(): DashboardService {
+function buildNodeSampleService(
+  overrides: Partial<DashboardService> = {}
+): DashboardService {
   return {
     id: 'node-sample-service',
     name: 'Node Sample Service',
@@ -127,6 +129,7 @@ function buildNodeSampleService(): DashboardService {
       { id: 'restart', label: 'Restart service', kind: 'restart' },
       { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
     ],
+    ...overrides,
   }
 }
 
@@ -231,7 +234,7 @@ describe('service detail overview metadata table', () => {
 })
 
 describe('service detail quick actions', () => {
-  it('puts primary lifecycle controls in the header without duplicate overview actions', async () => {
+  it('keeps stop/restart in the header and shows Start on Overview Actions', async () => {
     const user = userEvent.setup()
 
     await renderRoute('/services/@serviceadmin')
@@ -245,9 +248,15 @@ describe('service detail quick actions', () => {
     const lifecycleControls = within(
       screen.getByTestId('service-detail-lifecycle-controls')
     )
+    const overviewActions = within(
+      screen.getByTestId('service-detail-overview-actions')
+    )
 
     expect(
       lifecycleControls.getByRole('button', { name: 'Start service' })
+    ).toBeDisabled()
+    expect(
+      overviewActions.getByRole('button', { name: 'Start service' })
     ).toBeDisabled()
     expect(
       lifecycleControls.getByRole('button', { name: 'Stop service' })
@@ -258,7 +267,7 @@ describe('service detail quick actions', () => {
 
     expect(
       screen.getAllByRole('button', { name: 'Start service' })
-    ).toHaveLength(1)
+    ).toHaveLength(2)
     expect(
       screen.getAllByRole('button', { name: 'Stop service' })
     ).toHaveLength(1)
@@ -273,6 +282,74 @@ describe('service detail quick actions', () => {
     await waitFor(() => {
       expect(screen.getByText('Stopped')).toBeVisible()
     })
+  })
+
+  it('enables header and Overview Start when the services list would', async () => {
+    __setStubServicesForTest([
+      buildNodeSampleService({
+        status: 'stopped',
+        installed: false,
+        note: 'Managed process is stopped.',
+        runtimeHealth: {
+          state: 'stopped',
+          health: 'critical',
+          uptime: '0m',
+          lastCheckAt: '2026-07-02T08:25:00Z',
+          lastRestartAt: '2026-07-02T08:22:00Z',
+          summary: 'Required healthcheck(s) failed: http-health. Uptime: 0m.',
+          pid: null,
+          runId: null,
+        },
+      }),
+    ])
+
+    await renderRoute('/services/node-sample-service')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Node Sample Service$/i })
+      ).toBeVisible()
+    })
+
+    const lifecycleControls = within(
+      screen.getByTestId('service-detail-lifecycle-controls')
+    )
+    const overviewActions = within(
+      screen.getByTestId('service-detail-overview-actions')
+    )
+
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Start service' })
+    ).toBeEnabled()
+    expect(
+      overviewActions.getByRole('button', { name: 'Start service' })
+    ).toBeEnabled()
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Stop service' })
+    ).toBeDisabled()
+  })
+
+  it('omits the redundant config-path copy from Overview Actions', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const overviewActions = within(
+      screen.getByTestId('service-detail-overview-actions')
+    )
+    const metadataTable = screen.getByTestId('service-detail-metadata-table')
+
+    expect(
+      overviewActions.queryByRole('button', { name: 'Open config' })
+    ).toBeNull()
+    expect(
+      within(metadataTable).getByRole('button', { name: 'Copy Config path' })
+    ).toBeEnabled()
+    expect(screen.getByRole('tab', { name: /config/i })).toBeVisible()
   })
 
   it('exposes an enabled favorite toggle on the service heading', async () => {
@@ -315,7 +392,10 @@ describe('service detail quick actions', () => {
     ).toHaveAttribute('href', '/variables?service=%40serviceadmin')
     expect(
       quickActions.getByRole('link', { name: /open secrets/i })
-    ).toHaveAttribute('href', '/secrets-broker/secrets?secret=%40serviceadmin')
+    ).toHaveAttribute(
+      'href',
+      '/secrets-broker/secrets?path=services%2F%40serviceadmin'
+    )
     expect(
       quickActions.getByRole('link', { name: /open network/i })
     ).toHaveAttribute('href', '/network?service=%40serviceadmin')
@@ -359,7 +439,7 @@ describe('service detail quick actions', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('links service details Secrets to the KV page filtered by this service id', async () => {
+  it('links service details Secrets to the KV bucket path for this service', async () => {
     __setStubServicesForTest([buildNodeSampleService()])
 
     await renderRoute('/services/node-sample-service')
@@ -378,7 +458,7 @@ describe('service detail quick actions', () => {
       quickActions.getByRole('link', { name: /open secrets/i })
     ).toHaveAttribute(
       'href',
-      '/secrets-broker/secrets?secret=node-sample-service'
+      '/secrets-broker/secrets?path=services%2Fnode-sample-service'
     )
   })
 

@@ -54,6 +54,13 @@ import {
   useDashboardAction,
   useDashboardService,
 } from '@/lib/service-lasso-dashboard/hooks'
+import {
+  hasLifecycleAction,
+  isLifecycleAction,
+  isLifecycleActionEnabled,
+  type LifecycleActionKind,
+} from '@/lib/service-lasso-dashboard/lifecycle-actions'
+import { serviceSecretsKvBucketPath } from '@/lib/service-lasso-dashboard/service-secrets-kv-path'
 import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
 import type {
   DashboardService,
@@ -1043,11 +1050,6 @@ function ServiceDetailQuickAction({
   )
 }
 
-type LifecycleActionKind = Extract<
-  ServiceAction['kind'],
-  'start' | 'stop' | 'restart'
->
-
 const lifecycleHeaderActions: Array<{
   kind: LifecycleActionKind
   label: string
@@ -1062,27 +1064,12 @@ const lifecycleHeaderActions: Array<{
   },
 ]
 
-function isLifecycleAction(action: ServiceAction): action is ServiceAction & {
-  kind: LifecycleActionKind
-} {
-  return (
-    action.kind === 'start' ||
-    action.kind === 'stop' ||
-    action.kind === 'restart'
-  )
-}
-
 function ServiceLifecycleHeaderControls({
   service,
 }: {
   service: DashboardService
 }) {
   const actionMutation = useDashboardAction()
-  const isProvider =
-    service.role === 'provider' || service.metadata.serviceType === 'provider'
-  const availableActions = new Set(
-    service.actions.filter(isLifecycleAction).map((action) => action.kind)
-  )
   const pendingAction =
     typeof actionMutation.variables === 'object' &&
     actionMutation.variables?.kind === 'service-lifecycle'
@@ -1103,16 +1090,7 @@ function ServiceLifecycleHeaderControls({
       data-testid='service-detail-lifecycle-controls'
     >
       {lifecycleHeaderActions.map((action) => {
-        const running =
-          service.status === 'running' || service.status === 'degraded'
-        const isBlockedByState =
-          (action.kind === 'start' && running) ||
-          (action.kind !== 'start' && !running)
-        const isAvailable =
-          availableActions.has(action.kind) &&
-          !isProvider &&
-          service.installed &&
-          !isBlockedByState
+        const isAvailable = isLifecycleActionEnabled(service, action.kind)
         const isPending =
           actionMutation.isPending && pendingAction === action.kind
         const disabled = actionMutation.isPending || !isAvailable
@@ -1174,13 +1152,7 @@ function ServiceActionButton({
   }
 
   if (action.kind === 'open_config') {
-    return (
-      <CopyValueButton
-        key={key}
-        value={service.metadata.configPath}
-        label={action.label}
-      />
-    )
+    return null
   }
 
   if (action.kind === 'open_admin') {
@@ -1211,9 +1183,7 @@ function ServiceActionButton({
     }
 
     const lifecycleAction = action.kind
-    const running =
-      service.status === 'running' || service.status === 'degraded'
-    const enabled = lifecycleAction === 'start' ? !running : running
+    const enabled = isLifecycleActionEnabled(service, lifecycleAction)
 
     return (
       <Button
@@ -1230,6 +1200,7 @@ function ServiceActionButton({
           })
         }
       >
+        {lifecycleAction === 'start' ? <Play className='size-4' /> : null}
         {action.label}
       </Button>
     )
@@ -1357,9 +1328,15 @@ export function ServiceDetail({
         ) : (
           (() => {
             const service = serviceQuery.data
-            const secondaryActions = service.actions.filter(
-              (action) => !isLifecycleAction(action)
-            )
+            const overviewActions = service.actions.filter((action) => {
+              if (action.kind === 'open_config') {
+                return false
+              }
+              if (action.kind === 'start') {
+                return hasLifecycleAction(service, 'start')
+              }
+              return !isLifecycleAction(action)
+            })
 
             return (
               <div className='flex min-h-0 flex-1 flex-col gap-4 sm:gap-6'>
@@ -1422,7 +1399,9 @@ export function ServiceDetail({
                     <ServiceDetailQuickAction label='Secrets'>
                       <Link
                         to='/secrets-broker/secrets'
-                        search={{ secret: service.id }}
+                        search={{
+                          path: serviceSecretsKvBucketPath(service.id),
+                        }}
                         aria-label='Open secrets'
                       >
                         <KeyRound className='size-4' />
@@ -1525,9 +1504,12 @@ export function ServiceDetail({
                             <Wrench className='size-4' /> Actions
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className='flex flex-wrap gap-2'>
-                          {secondaryActions.length ? (
-                            secondaryActions.map((action) => (
+                        <CardContent
+                          className='flex flex-wrap gap-2'
+                          data-testid='service-detail-overview-actions'
+                        >
+                          {overviewActions.length ? (
+                            overviewActions.map((action) => (
                               <ServiceActionButton
                                 key={action.id}
                                 action={action}

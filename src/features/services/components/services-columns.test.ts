@@ -81,4 +81,14 @@ describe('services table lifecycle controls', () => {
     expect(isLifecycleActionEnabled(stopped, 'stop')).toBe(false)
     expect(isLifecycleActionEnabled(stopped, 'restart')).toBe(false)
   })
+
+  it('enables start when stopped even if the service is not installed', () => {
+    const stoppedUninstalled = service({
+      status: 'stopped',
+      installed: false,
+    })
+
+    expect(isLifecycleActionEnabled(stoppedUninstalled, 'start')).toBe(true)
+    expect(isLifecycleActionEnabled(stoppedUninstalled, 'stop')).toBe(false)
+  })
 })
