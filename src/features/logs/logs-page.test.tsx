@@ -4,6 +4,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import { emptyLogEntriesMessage } from '@/features/logs/service-log-viewer'
 
 function service(
   id: string,
@@ -54,6 +55,15 @@ const logPageServices = [
       build: 'test',
     },
   }),
+  service('@java', 'Java Runtime', 'available', {
+    role: 'provider',
+    metadata: {
+      serviceType: 'provider',
+      runtime: 'package',
+      version: '17',
+      build: 'test',
+    },
+  }),
   service('@serviceadmin', 'Service Admin UI', 'running'),
   service('@traefik', 'Traefik', 'running'),
 ]
@@ -78,7 +88,19 @@ describe('logs page operator states', () => {
     vi.unstubAllGlobals()
   })
 
-  it('explains an empty current log while still showing runtime overview entries', async () => {
+  it('uses the same empty-stream copy for Combined and named sources', () => {
+    expect(emptyLogEntriesMessage('All')).toBe(
+      'No log entries are recorded for the current tail window.'
+    )
+    expect(emptyLogEntriesMessage('stdout')).toBe(
+      'No stdout entries are recorded for the current tail window.'
+    )
+    expect(emptyLogEntriesMessage('Error log')).toBe(
+      'No error log entries are recorded for the current tail window.'
+    )
+  })
+
+  it('shows an empty file editor without leftover overview diagnostics', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
@@ -160,6 +182,11 @@ describe('logs page operator states', () => {
     expect(
       screen.queryByText('No current log entries yet')
     ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Selected log source is unavailable')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Recent runtime event')).not.toBeInTheDocument()
+    expect(screen.queryByText(/token=hidden-value/i)).not.toBeInTheDocument()
     expect(
       screen.queryByText('Unable to load log content right now.')
     ).not.toBeInTheDocument()
@@ -264,9 +291,7 @@ describe('logs page operator states', () => {
     const { router } = await renderRoute('/logs?service=%40python')
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Provider service has no daemon log entries')
-      ).toBeVisible()
+      expect(screen.getByText(emptyLogEntriesMessage('All'))).toBeVisible()
     })
 
     await user.click(screen.getByText('Service Admin UI'))
@@ -287,9 +312,8 @@ describe('logs page operator states', () => {
       })
     })
 
-    expect(
-      screen.getByText('Provider service has no daemon log entries')
-    ).toBeVisible()
+    expect(screen.getByText(emptyLogEntriesMessage('All'))).toBeVisible()
+    expect(screen.queryByText('Recent runtime event')).not.toBeInTheDocument()
     expect(screen.queryByText(/token=hidden-value/i)).not.toBeInTheDocument()
   })
 
@@ -470,7 +494,7 @@ describe('logs page operator states', () => {
     })
   })
 
-  it('shows unavailable and failed log source states explicitly', async () => {
+  it('shows empty advertised sources without an unavailable card or leftover events', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
@@ -550,10 +574,13 @@ describe('logs page operator states', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Selected log source is unavailable')
+        screen.getByText(emptyLogEntriesMessage('Error log'))
       ).toBeVisible()
     })
-    expect(screen.getByText(/Selected source:/)).toBeVisible()
+    expect(
+      screen.queryByText('Selected log source is unavailable')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Recent runtime event')).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Error log' })).toBeVisible()
 
     vi.restoreAllMocks()
@@ -604,6 +631,118 @@ describe('logs page operator states', () => {
         screen.getByText('Unable to load log content right now.')
       ).toBeVisible()
     })
+  })
+
+  it('keeps the file editor for advertised missing stdout without leftover setup events', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? ''
+        const type = parsed.searchParams.get('type') ?? 'default'
+        const stdoutPath =
+          'D:\\projects\\service-lasso\\service-lasso\\workspace\\canonical-services-root\\@java\\logs\\runtime\\stdout.log'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'default',
+              path: stdoutPath.replace('stdout.log', 'service.log'),
+              available: false,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              sources: [
+                {
+                  id: 'stdout',
+                  label: 'stdout',
+                  stream: 'stdout',
+                  path: stdoutPath,
+                  available: false,
+                },
+                {
+                  id: 'stderr',
+                  label: 'stderr',
+                  stream: 'stderr',
+                  path: stdoutPath.replace('stdout.log', 'stderr.log'),
+                  available: false,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path:
+                type === 'stderr'
+                  ? stdoutPath.replace('stdout.log', 'stderr.log')
+                  : stdoutPath,
+              available: false,
+              totalLines: 0,
+              start: 0,
+              end: 0,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 100,
+              lines: [],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/services/%40java/logs') {
+          return new Response(
+            JSON.stringify({
+              logs: {
+                serviceId: '@java',
+                logPath: stdoutPath.replace('stdout.log', 'service.log'),
+                stdoutPath,
+                stderrPath: stdoutPath.replace('stdout.log', 'stderr.log'),
+                entries: [
+                  { level: 'info', message: '@java:install' },
+                  { level: 'info', message: '@java:config' },
+                ],
+                archives: [],
+                retention: { maxArchives: 3 },
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/logs?service=%40java&source=stdout')
+
+    await waitFor(() => {
+      expect(screen.getByText('0 loaded lines')).toBeVisible()
+    })
+
+    expect(
+      screen.queryByText('Selected log source is unavailable')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Recent runtime event')).not.toBeInTheDocument()
+    expect(screen.queryByText('@java:install')).not.toBeInTheDocument()
+    expect(screen.queryByText('@java:config')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(emptyLogEntriesMessage('stdout'))
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'stdout' })).toBeVisible()
   })
 
   it('keeps the file editor for empty stderr and treats combined as All', async () => {

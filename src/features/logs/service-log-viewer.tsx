@@ -303,51 +303,29 @@ function RealServiceLogViewer({
   )
 }
 
-function buildLogEmptyState(
-  service: DashboardService,
-  logInfo: ServiceLogInfo | null
-) {
-  if (!service.installed) {
-    return {
-      title: 'No logs because the service is not installed yet',
-      description:
-        'The runtime knows about this service, but install/config/start has not produced a current log file in this environment.',
-    }
+/**
+ * True when Core advertised a concrete log path, even if the file is missing.
+ */
+function hasResolvedLogPath(path: string | null | undefined): boolean {
+  return typeof path === 'string' && path.trim().length > 0
+}
+
+/**
+ * Empty-tail copy shared with service-detail stdout/stderr empty streams.
+ * Combined/All uses a generic "log entries" phrase instead of "all entries".
+ */
+export function emptyLogEntriesMessage(sourceLabel: string): string {
+  const normalized = sourceLabel.trim().toLowerCase()
+  if (
+    normalized.length === 0 ||
+    normalized === 'all' ||
+    normalized === 'default' ||
+    normalized === 'combined'
+  ) {
+    return 'No log entries are recorded for the current tail window.'
   }
 
-  const isProvider =
-    service.role === 'provider' || service.metadata.serviceType === 'provider'
-
-  if (logInfo?.available === false) {
-    return {
-      title: 'Selected log source is unavailable',
-      description:
-        'The runtime reported this source, but it is not readable in the current environment.',
-    }
-  }
-
-  if (isProvider) {
-    return {
-      title: 'Provider service has no daemon log entries',
-      description:
-        'Provider-role services may only emit install or configuration events. They can be valid even when no long-running process writes stdout or stderr.',
-    }
-  }
-
-  if (service.status === 'stopped') {
-    return {
-      title: 'No current logs because the service is stopped',
-      description:
-        'Start or restart the service to create new runtime output. Existing archived logs appear when the runtime reports them.',
-    }
-  }
-
-  return {
-    title: 'No current log entries yet',
-    description: logInfo?.path
-      ? 'The runtime resolved a log file, but there are no entries in the selected tail window yet.'
-      : 'The runtime has not resolved a current log source for this service yet.',
-  }
+  return `No ${normalized} entries are recorded for the current tail window.`
 }
 
 function ServiceLogsOverviewPanel({
@@ -369,7 +347,6 @@ function ServiceLogsOverviewPanel({
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <div className='font-medium'>Runtime log overview</div>
         <div className='text-xs text-muted-foreground'>
-          {overview.entries.length.toLocaleString()} current entries ·{' '}
           {archiveCount.toLocaleString()} archives
         </div>
       </div>
@@ -389,55 +366,13 @@ function ServiceLogsOverviewPanel({
   )
 }
 
-function ServiceLogEmptyState({
-  service,
-  logInfo,
-  overview,
-  sourceLabel,
-}: {
-  service: DashboardService
-  logInfo: ServiceLogInfo | null
-  overview: ServiceLogOverview | null
-  sourceLabel: string
-}) {
-  const state = buildLogEmptyState(service, logInfo)
-  const entries = overview?.entries.slice(0, 5) ?? []
-
+/**
+ * Uniform empty log tail. Does not render leftover overview diagnostics.
+ */
+function ServiceLogEmptyState({ sourceLabel }: { sourceLabel: string }) {
   return (
-    <div className='space-y-3'>
-      <div className='rounded-md border border-dashed bg-muted/20 p-6'>
-        <div className='font-medium'>{state.title}</div>
-        <p className='mt-1 text-sm text-muted-foreground'>
-          {state.description}
-        </p>
-        <p className='mt-3 text-xs text-muted-foreground'>
-          Selected source: <span className='font-medium'>{sourceLabel}</span>
-        </p>
-      </div>
-      {entries.length ? (
-        <div className='overflow-hidden rounded-md border'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Level</TableHead>
-                <TableHead>Recent runtime event</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries.map((entry, index) => (
-                <TableRow key={`${entry.level}-${index}`}>
-                  <TableCell className='w-28'>
-                    <Badge variant='outline'>{entry.level}</Badge>
-                  </TableCell>
-                  <TableCell className='text-sm text-muted-foreground'>
-                    {entry.message}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : null}
+    <div className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>
+      {emptyLogEntriesMessage(sourceLabel)}
     </div>
   )
 }
@@ -594,6 +529,9 @@ export function ServiceLazyLogViewer({
           ),
           fetchServiceLogsOverview(service).catch(() => null),
         ])
+        const selectedSourceMeta = defaultInfo.sources?.find(
+          (source) => sourceIdFor(source) === selectedSource
+        )
         const sourceInfo =
           selectedSource === ALL_LOG_SOURCE
             ? defaultInfo
@@ -601,22 +539,9 @@ export function ServiceLazyLogViewer({
                 ...defaultInfo,
                 type: selectedSource,
                 available:
-                  chunk.available ??
-                  defaultInfo.sources?.find(
-                    (source) => sourceIdFor(source) === selectedSource
-                  )?.available ??
-                  defaultInfo.available,
-                path:
-                  chunk.path ??
-                  defaultInfo.sources?.find(
-                    (source) => sourceIdFor(source) === selectedSource
-                  )?.path ??
-                  defaultInfo.path,
-                source:
-                  chunk.source ??
-                  defaultInfo.sources?.find(
-                    (source) => sourceIdFor(source) === selectedSource
-                  ),
+                  chunk.available ?? selectedSourceMeta?.available ?? false,
+                path: chunk.path ?? selectedSourceMeta?.path ?? null,
+                source: chunk.source ?? selectedSourceMeta,
               }
 
         if (cancelled) return
@@ -774,8 +699,7 @@ export function ServiceLazyLogViewer({
     sourceOptions.find((source) => source.id === selectedSource) ??
     sourceOptions[0]
   const sourceLabel = activeSource?.label ?? labelForLogSource(selectedSource)
-  const showFileEditor =
-    lines.length > 0 || (Boolean(logInfo?.path) && logInfo?.available !== false)
+  const showFileEditor = lines.length > 0 || hasResolvedLogPath(logInfo?.path)
 
   const viewerBody = !service ? (
     <div className='flex min-h-[240px] flex-1 items-center justify-center rounded-md border bg-muted/30 text-sm text-muted-foreground'>
@@ -826,12 +750,7 @@ export function ServiceLazyLogViewer({
           />
         </div>
       ) : (
-        <ServiceLogEmptyState
-          service={service}
-          logInfo={logInfo}
-          overview={logOverview}
-          sourceLabel={sourceLabel}
-        />
+        <ServiceLogEmptyState sourceLabel={sourceLabel} />
       )}
     </>
   )
