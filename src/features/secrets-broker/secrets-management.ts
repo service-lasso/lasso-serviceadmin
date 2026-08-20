@@ -2638,7 +2638,7 @@ export function buildSingleSecretLeakEvidence(
     allowedRouteParams: [
       'ref=<managed secret ref>',
       actionParam,
-      'secret=<metadata table search>',
+      'path=<kv bucket path>',
       'provider=<provider filter>',
       'state=<state filter>',
       'page/pageSize=<table pagination>',

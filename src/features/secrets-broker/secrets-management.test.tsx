@@ -188,13 +188,17 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
     expect(screen.queryByText(/SESSION_SIGNING_KEY/i)).not.toBeInTheDocument()
   })
 
-  it('reads the secret search param into the KV path filter', async () => {
+  it('reads the path search param as a KV folder browse', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
         return new Response(
           JSON.stringify({
             data: {
-              keys: ['apps/', 'db', 'services/@serviceadmin/'],
+              keys: url.includes('/kv/metadata/services/node-sample-service')
+                ? ['sample.GENERATED_TOKEN']
+                : url.includes('/kv/metadata/services')
+                  ? ['node-sample-service/']
+                  : ['apps/', 'db', 'services/'],
             },
           }),
           { headers: { 'Content-Type': 'application/json' } }
@@ -206,12 +210,17 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    await renderRoute('/secrets-broker/secrets?secret=%40serviceadmin')
+    await renderRoute(
+      '/secrets-broker/secrets?path=services%2Fnode-sample-service'
+    )
 
     await expectActivePageIdentity('Secrets')
-    expect(screen.getByLabelText('Filter paths')).toHaveValue('@serviceadmin')
+    expect(screen.getByLabelText('Filter paths')).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'KV path' })).toHaveValue(
+      'services/node-sample-service/'
+    )
     expect(
-      await screen.findByRole('button', { name: 'services/@serviceadmin/' })
+      await screen.findByRole('button', { name: 'sample.GENERATED_TOKEN' })
     ).toBeVisible()
     expect(screen.queryByRole('button', { name: 'db' })).not.toBeInTheDocument()
   })
@@ -622,7 +631,7 @@ describe('Secrets Broker secrets management page', { timeout: 60_000 }, () => {
       expect.arrayContaining([
         'ref=<managed secret ref>',
         'action=reset',
-        'secret=<metadata table search>',
+        'path=<kv bucket path>',
         'page/pageSize=<table pagination>',
       ])
     )

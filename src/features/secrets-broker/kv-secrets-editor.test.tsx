@@ -37,7 +37,7 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function renderEditor(pathFilter?: string) {
+function renderEditor(options?: { pathFilter?: string; initialPath?: string }) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -46,7 +46,11 @@ function renderEditor(pathFilter?: string) {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <KvSecretsEditor overview={null} pathFilter={pathFilter} />
+      <KvSecretsEditor
+        overview={null}
+        pathFilter={options?.pathFilter}
+        initialPath={options?.initialPath}
+      />
     </QueryClientProvider>
   )
 }
@@ -626,12 +630,12 @@ describe('KV secrets editor', () => {
     ).toEqual([KV_LOAD_FIELD_NAMES_REASON])
   })
 
-  it('seeds the path filter from the supplied service identity', async () => {
+  it('hydrates a service bucket path as folder browse instead of Filter paths', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/kv/metadata/') && url.includes('list=true')) {
         return jsonResponse({
           data: {
-            keys: ['apps/', 'db', 'services/@serviceadmin/'],
+            keys: listKeysForUrl(url),
           },
         })
       }
@@ -639,11 +643,14 @@ describe('KV secrets editor', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderEditor('@serviceadmin')
+    renderEditor({ initialPath: 'services/node-sample-service' })
 
-    expect(screen.getByLabelText('Filter paths')).toHaveValue('@serviceadmin')
+    expect(screen.getByLabelText('Filter paths')).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'KV path' })).toHaveValue(
+      'services/node-sample-service/'
+    )
     expect(
-      await screen.findByRole('button', { name: 'services/@serviceadmin/' })
+      await screen.findByRole('button', { name: 'sample.GENERATED_TOKEN' })
     ).toBeVisible()
     expect(screen.queryByRole('button', { name: 'db' })).not.toBeInTheDocument()
     expect(
