@@ -111,6 +111,17 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
   })
 }
 
+/**
+ * Matches fetch RequestInit after withLocalOperatorRequestInit attaches
+ * same-origin credentials and a Headers object.
+ */
+function sameOriginInit(init: RequestInit = {}) {
+  return expect.objectContaining({
+    ...init,
+    credentials: 'same-origin',
+  })
+}
+
 describe('service lasso dashboard runtime client', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -220,7 +231,7 @@ describe('service lasso dashboard runtime client', () => {
     ).resolves.toEqual(telemetry)
     expect(fetchMock).toHaveBeenCalledWith(
       'http://runtime.test/api/services/%40secretsbroker/telemetry',
-      undefined
+      sameOriginInit()
     )
   })
 
@@ -242,7 +253,7 @@ describe('service lasso dashboard runtime client', () => {
 
     expect(runtimeSummary.servicesTotal).toBe(1)
     expect(runtimeSummary.servicesAvailable).toBe(1)
-    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard', undefined)
+    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard', sameOriginInit())
   })
 
   it('uses dashboard stubs only when the explicit dev flag is enabled', async () => {
@@ -412,12 +423,12 @@ describe('service lasso dashboard runtime client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://runtime.test/api/runtime/actions/startAll',
-      { method: 'POST' }
+      sameOriginInit({ method: 'POST' })
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       'http://runtime.test/api/dashboard',
-      undefined
+      sameOriginInit()
     )
     expect(runtimeSummary.servicesRunning).toBe(3)
     expect(runtimeSummary.problemServices).toEqual([])
@@ -463,12 +474,12 @@ describe('service lasso dashboard runtime client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://runtime.test/api/runtime/actions/reload',
-      { method: 'POST' }
+      sameOriginInit({ method: 'POST' })
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       'http://runtime.test/api/dashboard',
-      undefined
+      sameOriginInit()
     )
     expect(runtimeSummary.runtime.status).toBe('healthy')
     expect(runtimeSummary.problemServices).toEqual([])
@@ -557,17 +568,17 @@ describe('service lasso dashboard runtime client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://runtime.test/api/runtime/actions/stopAll',
-      { method: 'POST' }
+      sameOriginInit({ method: 'POST' })
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       'http://runtime.test/api/runtime/actions/stopAll',
-      { method: 'POST' }
+      sameOriginInit({ method: 'POST' })
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       'http://runtime.test/api/runtime/actions/startAll',
-      { method: 'POST' }
+      sameOriginInit({ method: 'POST' })
     )
     expect(stoppedSummary.servicesStopped).toBe(3)
     expect(restartedSummary.servicesRunning).toBe(3)
@@ -606,7 +617,7 @@ describe('service lasso dashboard runtime client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://runtime.test/api/services/%40traefik/restart',
-      { method: 'POST' }
+      sameOriginInit({ method: 'POST' })
     )
     expect(runtimeSummary.servicesRunning).toBe(3)
   })
