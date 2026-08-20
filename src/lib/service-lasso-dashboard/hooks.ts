@@ -41,6 +41,9 @@ import {
   fetchDashboardSummary,
   fetchInbox,
   fetchInboxCounts,
+  fetchFleetMetrics,
+  fetchRuntimeInstanceHome,
+  fetchNetworkHome,
   fetchServiceTelemetryPreview,
   fetchServices,
   fetchTelemetryPreview,
@@ -130,6 +133,43 @@ export function useInboxCounts() {
   return useQuery({
     queryKey: inboxCountsQueryKey,
     queryFn: fetchInboxCounts,
+    refetchInterval: 30_000,
+  })
+}
+
+const fleetMetricsQueryKey = [...dashboardQueryKey, 'fleet-metrics']
+const runtimeInstanceHomeQueryKey = [...dashboardQueryKey, 'runtime-instance']
+const networkHomeQueryKey = [...dashboardQueryKey, 'network-home']
+
+/**
+ * Loads GET /api/metrics for crash and log-volume chips on Dashboard home.
+ */
+export function useFleetMetrics() {
+  return useQuery({
+    queryKey: fleetMetricsQueryKey,
+    queryFn: fetchFleetMetrics,
+    refetchInterval: 30_000,
+  })
+}
+
+/**
+ * Loads GET /api/runtime/instance for the generation-lane chip.
+ */
+export function useRuntimeInstanceHome() {
+  return useQuery({
+    queryKey: runtimeInstanceHomeQueryKey,
+    queryFn: fetchRuntimeInstanceHome,
+    refetchInterval: 30_000,
+  })
+}
+
+/**
+ * Loads GET /api/network for Traefik reserved-route counting on home.
+ */
+export function useNetworkHome() {
+  return useQuery({
+    queryKey: networkHomeQueryKey,
+    queryFn: fetchNetworkHome,
     refetchInterval: 30_000,
   })
 }

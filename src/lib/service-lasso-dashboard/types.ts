@@ -128,6 +128,48 @@ export type DashboardSummary = {
   problemServices: DashboardService[]
 }
 
+export type FleetProcessTermination = 'stopped' | 'exited' | 'crashed'
+
+export type FleetServiceMetrics = {
+  serviceId: string
+  running: boolean
+  crashCount: number
+  lastTermination: FleetProcessTermination | null
+  stdoutLines: number
+  stderrLines: number
+}
+
+export type RuntimeLaneClassification =
+  | 'selected'
+  | 'not_found'
+  | 'stale'
+  | 'ambiguous'
+  | 'wrong_lane'
+  | 'unknown_owner'
+
+export type RuntimeGenerationPhase =
+  | 'starting'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'failed'
+  | 'superseded'
+
+export type RuntimeInstanceHome = {
+  phase: RuntimeGenerationPhase | null
+  activeGenerationId: string | null
+  classification: RuntimeLaneClassification | null
+  staleCount: number
+}
+
+export type NetworkHomeEndpoint = {
+  serviceId: string
+  label: string
+  port: number | null
+  bind: string | null
+  kind: string | null
+}
+
 export type DashboardAction =
   | 'reload-runtime'
   | 'start-services'

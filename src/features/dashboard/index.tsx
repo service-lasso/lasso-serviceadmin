@@ -3,18 +3,25 @@ import {
   Activity,
   AlertTriangle,
   Boxes,
+  FileText,
   Globe,
-  PackageOpen,
+  Inbox,
   Play,
   RefreshCcw,
+  Route,
   ShieldAlert,
   ShieldCheck,
+  Waypoints,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import {
   useBrokerTelemetry,
   useDashboardAction,
   useDashboardSummary,
+  useFleetMetrics,
+  useInboxCounts,
+  useNetworkHome,
+  useRuntimeInstanceHome,
 } from '@/lib/service-lasso-dashboard/hooks'
 import type {
   DashboardService,
@@ -44,6 +51,20 @@ import {
   findSecretsBrokerService,
   formatBrokerLockoutCount,
 } from './broker-home-posture'
+import {
+  deriveFleetMix,
+  deriveGenerationLane,
+  deriveLogVolume,
+  deriveProblemRows,
+  deriveTraefikStrip,
+  formatFleetMixDescription,
+  formatGenerationId,
+  formatInboxUnread,
+  formatListenPortSummary,
+  formatOperatorInstant,
+  primaryListenPort,
+  uniqueListenPorts,
+} from './dashboard-home-metrics'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
@@ -101,6 +122,8 @@ function ServiceCard({ service }: { service: DashboardService }) {
   const openDetail = () => {
     window.location.href = `/services/${service.id}`
   }
+  const lastStart = formatOperatorInstant(service.runtimeHealth.lastRestartAt)
+  const listen = primaryListenPort(service)
 
   return (
     <div
@@ -119,6 +142,14 @@ function ServiceCard({ service }: { service: DashboardService }) {
         <div className='flex items-start justify-between gap-3'>
           <div className='min-w-0'>
             <div className='truncate text-sm font-medium'>{service.name}</div>
+            <p className='mt-1 text-xs text-muted-foreground'>
+              {[
+                lastStart ? `Last start ${lastStart}` : null,
+                listen ? `:${listen.port}` : null,
+              ]
+                .filter((entry): entry is string => entry !== null)
+                .join(' · ') || 'No last start or listen port'}
+            </p>
           </div>
           <div className='flex items-center gap-2'>
             <FavoriteToggle service={service} />
@@ -164,7 +195,7 @@ function DashboardLoading() {
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
         <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-          {Array.from({ length: 6 }).map((_, index) => (
+          {Array.from({ length: 9 }).map((_, index) => (
             <Card key={index}>
               <CardHeader>
                 <Skeleton className='h-4 w-24' />
@@ -257,6 +288,10 @@ export function Dashboard() {
 
   const summaryQuery = useDashboardSummary()
   const brokerTelemetry = useBrokerTelemetry()
+  const inboxCounts = useInboxCounts()
+  const fleetMetrics = useFleetMetrics()
+  const instanceHome = useRuntimeInstanceHome()
+  const networkHome = useNetworkHome()
   const actionMutation = useDashboardAction()
 
   if (summaryQuery.isLoading) {
@@ -268,6 +303,21 @@ export function Dashboard() {
   }
 
   const summary = summaryQuery.data
+  const metrics = fleetMetrics.data ?? null
+  const mix = deriveFleetMix(summary, metrics)
+  const listenPorts = uniqueListenPorts([
+    ...summary.favorites,
+    ...summary.others,
+    ...summary.problemServices,
+  ])
+  const problems = deriveProblemRows(summary, metrics)
+  const generation = deriveGenerationLane(instanceHome.data ?? null)
+  const traefik = deriveTraefikStrip(summary, networkHome.data ?? null)
+  const logs = deriveLogVolume(metrics)
+  const inboxUnread =
+    inboxCounts.isError || inboxCounts.isLoading
+      ? null
+      : (inboxCounts.data?.unread ?? null)
   const brokerService = findSecretsBrokerService(summary)
   const brokerReadyState = deriveBrokerReadyState(brokerService)
   const brokerReadyDisplay = brokerReadyLabel(brokerReadyState)
@@ -293,7 +343,6 @@ export function Dashboard() {
 
   return (
     <>
-      {/* ===== Top Heading ===== */}
       <Header fixed>
         <Search />
         <HeaderActions>
@@ -303,7 +352,6 @@ export function Dashboard() {
         </HeaderActions>
       </Header>
 
-      {/* ===== Main ===== */}
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
         <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
           <SummaryCard
@@ -328,8 +376,8 @@ export function Dashboard() {
           />
           <SummaryCard
             title='Services'
-            value={`${summary.servicesRunning}/${summary.servicesTotal}`}
-            description={`${summary.servicesAvailable ?? 0} available, ${summary.servicesStopped} stopped, ${summary.servicesDegraded} degraded`}
+            value={`${mix.running}/${mix.total}`}
+            description={formatFleetMixDescription(mix)}
             icon={Boxes}
             action={
               <Button
@@ -344,16 +392,38 @@ export function Dashboard() {
             }
           />
           <SummaryCard
-            title='Network exposure'
-            value={String(summary.networkExposureCount)}
-            description='Reachable links across managed services'
+            title='Listen ports'
+            value={String(listenPorts.length)}
+            valueAriaLabel={`Listen ports ${listenPorts.length}`}
+            description={formatListenPortSummary(listenPorts)}
             icon={Globe}
+            action={
+              <Button
+                asChild
+                size='sm'
+                variant='outline'
+                className='w-full justify-start'
+              >
+                <Link to='/network'>Open Network</Link>
+              </Button>
+            }
           />
           <SummaryCard
-            title='Installed'
-            value={String(summary.installedCount)}
-            description='Installed services tracked by Service Lasso'
-            icon={PackageOpen}
+            title='Inbox unread'
+            value={formatInboxUnread(inboxUnread)}
+            valueAriaLabel={`Inbox unread ${formatInboxUnread(inboxUnread)}`}
+            description='Durable operator attention queue'
+            icon={Inbox}
+            action={
+              <Button
+                asChild
+                size='sm'
+                variant='outline'
+                className='w-full justify-start'
+              >
+                <Link to='/inbox'>Open Inbox</Link>
+              </Button>
+            }
           />
           <SummaryCard
             title='Broker ready'
@@ -374,6 +444,45 @@ export function Dashboard() {
             description='Active lockout count from Broker telemetry'
             icon={ShieldAlert}
             action={openSecretsAction}
+          />
+          <SummaryCard
+            title='Generation lane'
+            value={generation.available ? generation.phase : '—'}
+            valueAriaLabel={`Generation lane ${generation.available ? generation.phase : 'unavailable'}`}
+            description={
+              generation.available
+                ? `${formatGenerationId(generation.activeGenerationId)} · ${generation.classification} · ${generation.staleCount} stale`
+                : 'Runtime instance snapshot unavailable'
+            }
+            icon={Waypoints}
+          />
+          <SummaryCard
+            title='Traefik'
+            value={
+              traefik.available
+                ? traefik.status === 'running'
+                  ? 'Up'
+                  : traefik.status
+                : '—'
+            }
+            valueAriaLabel={`Traefik ${traefik.available ? traefik.status : 'missing'}`}
+            description={
+              traefik.available
+                ? `${traefik.entrypoints.join(', ') || 'no entrypoints'} · ${traefik.liveBackendCount} live · ${traefik.reservedEmptyCount} reserved empty`
+                : '@traefik is not on this runtime'
+            }
+            icon={Route}
+          />
+          <SummaryCard
+            title='Log volume'
+            value={logs.available ? String(logs.stderrLines) : '—'}
+            valueAriaLabel={`Log stderr lines ${logs.available ? logs.stderrLines : 'unavailable'}`}
+            description={
+              logs.available
+                ? `${logs.stdoutLines} stdout · ${logs.stderrLines} stderr · ${logs.servicesWithStderr} with stderr (not always an app error)`
+                : 'Metrics snapshot unavailable'
+            }
+            icon={FileText}
           />
         </div>
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>
@@ -404,7 +513,7 @@ export function Dashboard() {
                 Warnings and problem services
               </CardTitle>
               <CardDescription>
-                Current runtime warnings surfaced from Service Lasso.
+                Named failures with last start and install state.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -417,12 +526,31 @@ export function Dashboard() {
                     {warning}
                   </div>
                 ))}
-                {summary.problemServices.map((service) => (
+                {problems.map((service) => (
                   <div key={service.id} className='rounded-lg border p-3'>
                     <div className='flex items-center gap-2'>
                       <div className='font-medium'>{service.name}</div>
-                      <StatusBadge status={service.status} />
+                      {service.crashed ? (
+                        <Badge variant='destructive'>Crashed</Badge>
+                      ) : (
+                        <StatusBadge status={service.status} />
+                      )}
                     </div>
+                    {service.note ? (
+                      <p className='mt-1 text-sm text-muted-foreground'>
+                        {service.note}
+                      </p>
+                    ) : null}
+                    <p className='mt-1 text-xs text-muted-foreground'>
+                      {[
+                        service.lastStart
+                          ? `Last start ${service.lastStart}`
+                          : 'Never started',
+                        service.installed ? null : 'Not installed',
+                      ]
+                        .filter((entry): entry is string => entry !== null)
+                        .join(' · ')}
+                    </p>
                   </div>
                 ))}
               </div>
