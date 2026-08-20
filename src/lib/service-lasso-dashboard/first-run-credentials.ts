@@ -4,14 +4,37 @@
  * password/token-shaped payloads.
  */
 
+export const FIRST_RUN_VAULT_NOT_READY = 'first_run_vault_not_ready'
+
+export const FIRST_RUN_VAULT_PATH = 'runtime/local-operator'
+
+export const FIRST_RUN_VAULT_FIELD_NAMES = [
+  'LOCAL_OPERATOR_USERNAME',
+  'LOCAL_ADMIN_TOKEN',
+  'LOCAL_OPERATOR_PASSWORD',
+] as const
+
 export type FirstRunCredentials = {
   username: string
   token: string
   password: string
+  vaultPath: string
+  vaultFieldNames: string[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readVaultFieldNames(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [...FIRST_RUN_VAULT_FIELD_NAMES]
+  }
+  const names = value.filter(
+    (entry): entry is string =>
+      typeof entry === 'string' && entry.trim().length > 0
+  )
+  return names.length > 0 ? names : [...FIRST_RUN_VAULT_FIELD_NAMES]
 }
 
 /**
@@ -38,22 +61,33 @@ export function parseFirstRunCredentials(
   ) {
     return null
   }
+  const vaultPath =
+    typeof firstRun.vaultPath === 'string' &&
+    firstRun.vaultPath.trim().length > 0
+      ? firstRun.vaultPath.trim()
+      : FIRST_RUN_VAULT_PATH
   return {
     username: firstRun.username.trim(),
     token: firstRun.token,
     password: firstRun.password,
+    vaultPath,
+    vaultFieldNames: readVaultFieldNames(firstRun.vaultFieldNames),
   }
 }
 
 /**
  * Fetch one-time loopback credentials. Returns null when Core reports
- * not-pending (404) so the login form can take over.
+ * not-pending (404) so the login form can take over. 503 means Broker ingest
+ * is still in progress; callers should retry without dismissing INIT.
  */
 export async function fetchFirstRunCredentials(): Promise<FirstRunCredentials | null> {
   const response = await fetch('/api/runtime/auth/first-run')
   const payload: unknown = await response.json().catch(() => null)
   if (response.status === 404) {
     return null
+  }
+  if (response.status === 503) {
+    throw new Error(FIRST_RUN_VAULT_NOT_READY)
   }
   if (!response.ok) {
     const error =
