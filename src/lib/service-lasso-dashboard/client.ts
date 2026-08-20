@@ -453,10 +453,11 @@ async function mutateRuntimeInbox(
     if (error instanceof Error) {
       throw error
     }
-    throw new Error(
-      unavailableInboxList().unavailableReason ?? 'Inbox mutation failed.',
-      { cause: error }
+    const wrapped = new Error(
+      unavailableInboxList().unavailableReason ?? 'Inbox mutation failed.'
     )
+    Object.assign(wrapped, { cause: error })
+    throw wrapped
   }
 }
 
