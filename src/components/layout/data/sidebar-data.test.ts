@@ -134,6 +134,17 @@ describe('Help Center navigation coverage', () => {
     expect(coverageByRoute.get('/service-routes')?.articleId).toBe(routesGuide)
   })
 
+  it('maps Operations Inbox to the Inbox operator guide', () => {
+    const coverageByRoute = new Map(
+      helpCenterNavigationCoverage.map((entry) => [entry.route, entry])
+    )
+
+    expect(coverageByRoute.get('/inbox')?.articleId).toBe(
+      'help/operations-inbox-operator-guide.md'
+    )
+    expect(coverageByRoute.get('/inbox')?.exception).toBeUndefined()
+  })
+
   it('maps Operations telemetry to the telemetry operator guide', () => {
     const coverageByRoute = new Map(
       helpCenterNavigationCoverage.map((entry) => [entry.route, entry])

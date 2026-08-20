@@ -77,6 +77,24 @@ describe('operator inbox helpers', () => {
 
     expect(unreadBadgeCount(counts)).toBe(1)
     expect(filterInboxItemsForView([sampleItem()], 'unread')).toHaveLength(1)
+    expect(
+      filterInboxItemsForView(
+        [
+          sampleItem(),
+          sampleItem({
+            id: 'hidden',
+            visibility: 'hidden',
+            hiddenAt: '2026-08-20T02:00:00.000Z',
+          }),
+        ],
+        'hidden'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        id: 'hidden',
+        visibility: 'hidden',
+      }),
+    ])
   })
 
   it('parses Core Inbox list and counts envelopes', () => {

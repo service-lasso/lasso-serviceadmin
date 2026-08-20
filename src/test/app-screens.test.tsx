@@ -439,6 +439,11 @@ describe('app screens', () => {
       '/help-center?doc=help%2Fnetwork-and-service-routes-operator-guide.md',
     ],
     [
+      '/inbox',
+      'Open Help Center: Inbox guide',
+      '/help-center?doc=help%2Foperations-inbox-operator-guide.md',
+    ],
+    [
       '/operations/telemetry',
       'Open Help Center: Telemetry guide',
       '/help-center?doc=help%2Foperations-telemetry-operator-guide.md',

@@ -23,6 +23,7 @@ Service Admin must not imply that a page is live or durable unless the runtime o
 | Installed | Review installed service metadata, manifest paths, and local availability. Do not treat it as an installer unless a specific action provides that contract. | [Service install and setup config](service-install-and-setup-config.md) |
 | Variables | Review global and service-local environment variable posture and secret-ref usage without exposing raw values. | [Environment Variables: Global and Service Reuse](environment-variables-global-and-service-reuse.md) |
 | Network | Review endpoint, host, port, and exposure metadata for local services. Use it with Routes when a service is healthy but unreachable. | [Product status and safety](product-status-and-safety.md) |
+| Operations / Inbox | Review durable operator notices from the runtime Inbox API, mark them read, hide or restore them, and open safe in-app targets. Toasts are not the durable record. | [Operations Inbox Operator Guide](operations-inbox-operator-guide.md) |
 | Operations / Telemetry | Inspect runtime and Secrets Broker telemetry status metadata. This page does not configure exporters or reveal telemetry headers or tokens. | [Operations Telemetry Operator Guide](operations-telemetry-operator-guide.md), [Product status and safety](product-status-and-safety.md) |
 | Operations / Audit | Inspect safe operation and broker audit metadata where exposed. Use operation ids, audit ids, timestamps, and outcomes as evidence. | [Product status and safety](product-status-and-safety.md) |
 | Secrets Broker | Review local KV secrets, providers, topology, and guarded secret-management workflows. Broker ready and lockout counts live on Dashboard. Raw secret values and provider credentials stay out of the UI. | [Variables and Secrets Broker Safety Guide](variables-and-secrets-broker-safety-guide.md), [Product status and safety](product-status-and-safety.md) |
@@ -41,5 +42,6 @@ When something looks wrong, start with the narrowest evidence that can prove whe
 6. Open Variables and Secrets Broker when the failure mentions environment variables, secret refs, provider state, setup, policy, or reveal/rotation workflows.
 7. Open Routes and Network when the service is healthy but an endpoint, host, or port is not reachable.
 8. Open Operations / Audit when you need a trail of actions, outcomes, audit reasons, operation ids, or broker events.
+9. Open Operations / Inbox when a toast or banner is gone and you still need the durable operator notice.
 
 Keep support evidence metadata-only. Do not paste raw secrets, provider credentials, tokens, cookies, private keys, request bodies, response bodies, recovery material, or environment values into tickets, logs, or Help Center examples.

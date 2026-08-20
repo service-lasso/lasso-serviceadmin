@@ -63,3 +63,30 @@ test('inbox deep-links workflow notices to the service log viewer', async ({
   await expect(page).toHaveURL(/\/logs\?service=(%40|@)serviceadmin/)
   await expectActivePageIdentity(page, 'Logs')
 })
+
+test('inbox hides a notice and restores it from Hidden', async ({ page }) => {
+  await page.goto('/inbox')
+
+  await expectActivePageIdentity(page, 'Inbox')
+  const runtimeCard = page.getByTestId('inbox-item-inbox-system-startup')
+  await runtimeCard.getByRole('button', { name: 'Hide' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Runtime startup' })
+  ).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Hidden (1)' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Runtime startup' })
+  ).toBeVisible()
+
+  const hiddenCard = page.getByTestId('inbox-item-inbox-system-startup')
+  await hiddenCard.getByRole('button', { name: 'Restore' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Runtime startup' })
+  ).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Unread', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Runtime startup' })
+  ).toBeVisible()
+})

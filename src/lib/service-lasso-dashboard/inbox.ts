@@ -560,13 +560,19 @@ export function resolveInboxDeepLink(
   return null
 }
 
+export type InboxViewFilter = 'unread' | 'read' | 'all' | 'hidden'
+
 /**
- * Filters visible Inbox items for the Unread / Read / All operator view.
+ * Filters Inbox items for the Unread / Read / All / Hidden operator view.
  */
 export function filterInboxItemsForView(
   items: OperatorInboxItem[],
-  view: 'unread' | 'read' | 'all'
+  view: InboxViewFilter
 ): OperatorInboxItem[] {
+  if (view === 'hidden') {
+    return items.filter((item) => item.visibility === 'hidden')
+  }
+
   const visible = items.filter((item) => item.visibility === 'visible')
   if (view === 'unread') {
     return visible.filter((item) => item.state === 'unread')

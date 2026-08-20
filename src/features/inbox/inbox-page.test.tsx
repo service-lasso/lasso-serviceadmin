@@ -72,6 +72,53 @@ describe('operator Inbox page', () => {
     })
   })
 
+  it('hides a notice and restores it from Hidden', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/inbox')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Runtime startup' })
+      ).toBeVisible()
+    })
+
+    const runtimeCard = screen.getByTestId('inbox-item-inbox-system-startup')
+    await user.click(within(runtimeCard).getByRole('button', { name: 'Hide' }))
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'Runtime startup' })
+      ).not.toBeInTheDocument()
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Hidden (1)' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Runtime startup' })
+      ).toBeVisible()
+    })
+
+    const hiddenCard = screen.getByTestId('inbox-item-inbox-system-startup')
+    await user.click(
+      within(hiddenCard).getByRole('button', { name: 'Restore' })
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'Runtime startup' })
+      ).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Unread' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Runtime startup' })
+      ).toBeVisible()
+    })
+  })
+
   it('shows an honest unavailable state when the runtime Inbox API is missing', async () => {
     await renderRoute('/inbox', { stubData: false })
 

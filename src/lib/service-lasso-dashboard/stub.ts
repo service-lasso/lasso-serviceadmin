@@ -1455,6 +1455,48 @@ export async function markInboxItemsRead(
   return listStubInboxItems({ filter: 'all', limit: 200 })
 }
 
+/**
+ * Hides one fixture Inbox item while keeping it restorable.
+ */
+export async function hideInboxItem(itemId: string): Promise<InboxListResult> {
+  await wait(40)
+  const now = '2026-08-20T02:00:00.000Z'
+  stubInboxItems = stubInboxItems.map((item) => {
+    if (item.id !== itemId) {
+      return item
+    }
+    return {
+      ...item,
+      visibility: 'hidden',
+      updatedAt: now,
+      hiddenAt: now,
+    }
+  })
+  return listStubInboxItems({ filter: 'all', limit: 200 })
+}
+
+/**
+ * Restores one hidden fixture Inbox item to the visible list.
+ */
+export async function unhideInboxItem(
+  itemId: string
+): Promise<InboxListResult> {
+  await wait(40)
+  const now = '2026-08-20T02:00:00.000Z'
+  stubInboxItems = stubInboxItems.map((item) => {
+    if (item.id !== itemId) {
+      return item
+    }
+    return {
+      ...item,
+      visibility: 'visible',
+      updatedAt: now,
+      hiddenAt: null,
+    }
+  })
+  return listStubInboxItems({ filter: 'all', limit: 200 })
+}
+
 export async function fetchDashboardService(serviceId: string) {
   await wait(120)
   await syncFavoriteStateFromApi()
