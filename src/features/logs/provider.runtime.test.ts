@@ -130,6 +130,58 @@ describe('logs provider configured api mode', () => {
     )
   })
 
+  it('requests advertised file tabs with source instead of an invalid Core type', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: 'http://api.test',
+    }))
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          serviceId: '@nginx',
+          type: 'default',
+          path: 'C:\\runtime\\logs\\access.log',
+          available: true,
+          availableTypes: ['default', 'stdout', 'stderr'],
+          totalLines: 1,
+          start: 0,
+          end: 1,
+          hasMore: false,
+          nextBefore: 0,
+          limit: 100,
+          lines: ['127.0.0.1 - GET /health'],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const nginxService = { id: '@nginx' }
+    const { advertisedLogSourceId, fetchServiceLogChunk, resolveServiceLogReadType } =
+      await import('./provider')
+
+    expect(advertisedLogSourceId('discovered:logs/access.log')).toBe(
+      'discovered:logs/access.log'
+    )
+    expect(resolveServiceLogReadType('discovered:logs/access.log')).toBe(
+      'default'
+    )
+    expect(advertisedLogSourceId('stderr')).toBeNull()
+
+    await fetchServiceLogChunk(
+      nginxService as never,
+      'discovered:logs/access.log'
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/api/logs/read?service=%40nginx&type=default&limit=100&source=discovered%3Alogs%2Faccess.log'
+    )
+  })
+
   it('fails cleanly when the runtime api returns non-json content', async () => {
     vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
       serviceLassoApiBaseUrl: 'http://api.test',
