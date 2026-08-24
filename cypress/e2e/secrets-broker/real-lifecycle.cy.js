@@ -156,6 +156,17 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         'be.visible'
       )
       cy.contains('1 consumer actions completed').should('be.visible')
+      cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
+        expect(response?.statusCode).to.equal(200)
+        expect(response?.body?.providers).to.satisfy((providers) =>
+          Array.isArray(providers) &&
+          providers.some(
+            (provider) =>
+              provider?.providerId !== 'generated:sample-service' &&
+              provider?.outcome === 'ready'
+          )
+        )
+      })
       cy.get('#secret-rotation-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
