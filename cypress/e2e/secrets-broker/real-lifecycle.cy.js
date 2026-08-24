@@ -556,6 +556,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    waitForBrokerProviderStatusReadiness()
+    cy.reload()
+    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    openSecrets()
     cy.contains('button', 'Bulk provider migration').click()
     dialog('Bulk provider migration').within(() => {
       cy.get('#bulk-migration-target-provider').select('vault-browser')
@@ -565,7 +569,35 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#bulk-migration-audit-reason').type(
         'Release browser verified bulk Vault migration'
       )
+      cy.intercept('POST', '**/secrets/campaigns/create').as(
+        'createBulkMigrationCampaign'
+      )
+      cy.intercept('POST', '**/secrets/campaigns/revalidate').as(
+        'revalidateBulkMigrationCampaign'
+      )
       cy.contains('button', 'Create and revalidate campaign').click()
+      cy.wait('@createBulkMigrationCampaign', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresRevalidation: true,
+            auditStatus: 'audit_recorded',
+          })
+        }
+      )
+      cy.wait('@revalidateBulkMigrationCampaign', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresRevalidation: false,
+            auditStatus: 'audit_recorded',
+          })
+        }
+      )
       cy.contains('Durable campaign ready', { timeout: 20_000 }).should(
         'be.visible'
       )
