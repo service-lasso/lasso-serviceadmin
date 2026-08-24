@@ -21,7 +21,18 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
     expect(expectedRef).to.be.a('string').and.not.be.empty
-    cy.intercept('GET', '**/providers/config/status').as('providerStatus')
+    const providerStatusResponses = []
+    cy.intercept('GET', '**/providers/config/status', (request) => {
+      request.on('response', (response) => {
+        providerStatusResponses.push({
+          statusCode: response.statusCode,
+          outcome:
+            typeof response.body?.outcome === 'string'
+              ? response.body.outcome
+              : null,
+        })
+      })
+    }).as('providerStatus')
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.request({
@@ -320,6 +331,16 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    cy.then(() => {
+      const failedResponses = providerStatusResponses.filter(
+        ({ statusCode }) => statusCode < 200 || statusCode >= 300
+      )
+      if (failedResponses.length > 0) {
+        throw new Error(
+          `Provider status request failed: ${JSON.stringify(failedResponses)}`
+        )
+      }
+    })
     cy.contains('Provider status is unavailable; migration remains disabled.', {
       timeout: 20_000,
     }).should('not.exist')
