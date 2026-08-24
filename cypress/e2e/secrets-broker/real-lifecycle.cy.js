@@ -384,7 +384,20 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#migration-audit-reason').type(
         'Release browser remote policy denial qualification'
       )
+      cy.intercept('POST', '**/providers/migration/dry-run').as(
+        'policyDeniedMigrationPreview'
+      )
       cy.contains('button', 'Preview migration').click()
+      cy.wait('@policyDeniedMigrationPreview', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'dry_run_ready',
+            applied: false,
+            auditStatus: 'audit_recorded',
+          })
+        }
+      )
       cy.contains('Migration dry run ready', { timeout: 20_000 }).should(
         'be.visible'
       )
@@ -423,7 +436,20 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#migration-audit-reason').type(
         'Release browser unavailable remote provider qualification'
       )
+      cy.intercept('POST', '**/providers/migration/dry-run').as(
+        'unavailableMigrationPreview'
+      )
       cy.contains('button', 'Preview migration').click()
+      cy.wait('@unavailableMigrationPreview', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'dry_run_ready',
+            applied: false,
+            auditStatus: 'audit_recorded',
+          })
+        }
+      )
       cy.contains('Migration dry run ready', { timeout: 20_000 }).should(
         'be.visible'
       )
