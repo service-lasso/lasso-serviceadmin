@@ -40,6 +40,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             ? provider.operations.length
             : null,
         })
+        const firstResponse = providerStatusResponses.length === 0
         providerStatusResponses.push({
           statusCode: response.statusCode,
           outcome:
@@ -50,6 +51,27 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
           providers: Array.isArray(body.providers)
             ? body.providers.map(summarizeProvider)
             : null,
+          operationMetadata:
+            firstResponse && Array.isArray(body.currentProvider?.operations)
+              ? body.currentProvider.operations.map((operation) => ({
+                  operationId: operation?.operationId ?? null,
+                  method: operation?.method ?? null,
+                  path: operation?.path ?? null,
+                  maturity: operation?.maturity ?? null,
+                  classification: operation?.classification ?? null,
+                  authenticationRequired:
+                    typeof operation?.authenticationRequired === 'boolean',
+                  policyRequired:
+                    typeof operation?.policyRequired === 'boolean',
+                  auditRequired:
+                    typeof operation?.auditRequired === 'boolean',
+                  scope: operation?.scope ?? null,
+                  completionMode: operation?.completionMode ?? null,
+                  limitationCode: operation?.limitationCode ?? null,
+                  reasonCode: operation?.reasonCode ?? null,
+                  nextAction: operation?.nextAction ?? null,
+                }))
+              : null,
         })
       })
     }).as('providerStatus')
