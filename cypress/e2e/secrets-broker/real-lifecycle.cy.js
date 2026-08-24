@@ -124,14 +124,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
 
     cy.contains('Operational controls').should('be.visible')
-    cy.contains('Active lockouts')
-      .parent()
-      .find('p', { timeout: 20_000 })
-      .should('not.contain', '—')
-    cy.contains('Local API auth failures')
-      .parent()
-      .find('p', { timeout: 20_000 })
-      .should('not.contain', '—')
     cy.intercept('GET', '**/operations/telemetry').as('brokerTelemetry')
     cy.intercept('GET', '**/operations/events*').as('brokerEvents')
     cy.contains('button', 'Refresh').click()
@@ -150,6 +142,14 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         valueMaterialIncluded: false,
       })
     })
+    cy.contains('Active lockouts')
+      .parent()
+      .find('p', { timeout: 20_000 })
+      .should('not.contain', '—')
+    cy.contains('Local API auth failures')
+      .parent()
+      .find('p', { timeout: 20_000 })
+      .should('not.contain', '—')
 
     cy.get('#broker-lockout-scope').type(
       'management:browser-release-qualification'
