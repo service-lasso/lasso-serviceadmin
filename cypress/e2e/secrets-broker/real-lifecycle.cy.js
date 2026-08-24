@@ -18,6 +18,34 @@ function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
 }
 
+function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
+  cy.request({
+    method: 'GET',
+    url: `/api/services/${encodeURIComponent(serviceId)}`,
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    const service = body?.service
+    if (
+      status === 200 &&
+      service?.lifecycle?.running === true &&
+      service?.health?.healthy === true
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        `Managed service ${serviceId} did not become healthy before the linked rotation.`
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForManagedServiceReadiness(serviceId, remainingAttempts - 1)
+    )
+  })
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -34,6 +62,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       body: { confirm: false },
       timeout: 120_000,
     }).its('status').should('equal', 200)
+    waitForManagedServiceReadiness('sample-service')
     cy.visit('/services/%40secretsbroker')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
