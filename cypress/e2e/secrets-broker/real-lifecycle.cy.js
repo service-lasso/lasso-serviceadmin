@@ -46,7 +46,10 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
   })
 }
 
-function waitForBrokerProviderStatusReadiness(remainingAttempts = 60) {
+function waitForBrokerProviderStatusReadiness(
+  targetProviderId = 'vault-browser',
+  remainingAttempts = 60
+) {
   cy.request({
     method: 'GET',
     url: '/api/services/%40secretsbroker/providers/config/status',
@@ -57,10 +60,15 @@ function waitForBrokerProviderStatusReadiness(remainingAttempts = 60) {
     if (
       status === 200 &&
       Array.isArray(providers) &&
-      providers.some(
-        (provider) =>
-          provider?.providerId !== 'generated:sample-service' &&
-          provider?.outcome === 'ready'
+      providers.some((provider) =>
+        provider?.providerId === targetProviderId &&
+        provider?.outcome === 'ready' &&
+        provider?.operations?.some(
+          (operation) =>
+            operation?.path === '/v1/providers/migration/apply' &&
+            (operation?.maturity === 'validated' ||
+              operation?.maturity === 'executable')
+        )
       )
     ) {
       return
@@ -73,7 +81,10 @@ function waitForBrokerProviderStatusReadiness(remainingAttempts = 60) {
     }
 
     cy.wait(1_000).then(() =>
-      waitForBrokerProviderStatusReadiness(remainingAttempts - 1)
+      waitForBrokerProviderStatusReadiness(
+        targetProviderId,
+        remainingAttempts - 1
+      )
     )
   })
 }
