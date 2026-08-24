@@ -1,4 +1,5 @@
 import {
+  containsUnsafeBrokerText,
   requireSafeBrokerIdentifier,
   sanitizeBrokerDisplayText,
   validateBrokerSearchInput,
@@ -3228,6 +3229,26 @@ function requireIdentifierArray(
   )
 }
 
+function requireSafeBrokerOperationPath(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new Error(
+      'Secrets Broker returned an invalid provider operation path.'
+    )
+  }
+  const normalized = value.trim()
+  if (
+    !/^\/(?:[a-z0-9@._:+~-]+|\{[a-z][a-z0-9_]{0,63}\})(?:\/(?:[a-z0-9@._:+~-]+|\{[a-z][a-z0-9_]{0,63}\}))*$/i.test(
+      normalized
+    ) ||
+    containsUnsafeBrokerText(normalized)
+  ) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider operation path.'
+    )
+  }
+  return normalized
+}
+
 export function normalizeSecretsManagementState(
   payload: unknown
 ): SecretsManagementState {
@@ -3988,7 +4009,7 @@ function normalizeBrokerOperationCapability(
       'provider operation id'
     ),
     method: requireSafeBrokerIdentifier(input.method, 'provider method'),
-    path: requireSafeBrokerIdentifier(input.path, 'provider operation path'),
+    path: requireSafeBrokerOperationPath(input.path),
     maturity: requireSafeBrokerIdentifier(
       input.maturity,
       'provider operation maturity'
