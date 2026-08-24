@@ -578,7 +578,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.reload()
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
-    cy.contains('button', 'Bulk provider migration').click()
+    cy.contains('button', 'Bulk provider migration')
+      .should('not.be.disabled')
+      .click({ waitForAnimations: false })
     dialog('Bulk provider migration').within(() => {
       cy.get('#bulk-migration-target-provider').select('vault-browser')
       cy.get(
