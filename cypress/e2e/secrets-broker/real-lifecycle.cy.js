@@ -21,6 +21,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
     expect(expectedRef).to.be.a('string').and.not.be.empty
+    cy.intercept('GET', '**/providers/config/status').as('providerStatus')
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.request({
@@ -32,6 +33,17 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.visit('/services/%40secretsbroker')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
+    cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
+      expect(response?.statusCode).to.equal(200)
+      expect(response?.body?.providers).to.satisfy((providers) =>
+        Array.isArray(providers) &&
+        providers.some(
+          (provider) =>
+            provider?.providerId !== 'generated:sample-service' &&
+            provider?.outcome === 'ready'
+        )
+      )
+    })
     cy.contains('tr', 'vault-auth-required').within(() => {
       cy.contains('source_auth_required').should('be.visible')
       cy.contains('metadata').should('exist')
