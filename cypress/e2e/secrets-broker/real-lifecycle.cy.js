@@ -24,12 +24,32 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     const providerStatusResponses = []
     cy.intercept('GET', '**/providers/config/status', (request) => {
       request.on('response', (response) => {
+        const body = response.body ?? {}
+        const summarizeProvider = (provider) => ({
+          providerId:
+            typeof provider?.providerId === 'string'
+              ? provider.providerId
+              : null,
+          providerKind:
+            typeof provider?.providerKind === 'string'
+              ? provider.providerKind
+              : null,
+          outcome:
+            typeof provider?.outcome === 'string' ? provider.outcome : null,
+          operations: Array.isArray(provider?.operations)
+            ? provider.operations.length
+            : null,
+        })
         providerStatusResponses.push({
           statusCode: response.statusCode,
           outcome:
-            typeof response.body?.outcome === 'string'
-              ? response.body.outcome
+            typeof body.outcome === 'string'
+              ? body.outcome
               : null,
+          currentProvider: summarizeProvider(body.currentProvider),
+          providers: Array.isArray(body.providers)
+            ? body.providers.map(summarizeProvider)
+            : null,
         })
       })
     }).as('providerStatus')
@@ -338,6 +358,19 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       if (failedResponses.length > 0) {
         throw new Error(
           `Provider status request failed: ${JSON.stringify(failedResponses)}`
+        )
+      }
+    })
+    cy.get('body').then(($body) => {
+      if (
+        $body
+          .text()
+          .includes(
+            'Provider status is unavailable; migration remains disabled.'
+          )
+      ) {
+        throw new Error(
+          `Provider status response was rejected by the Admin client: ${JSON.stringify(providerStatusResponses)}`
         )
       }
     })
