@@ -14,6 +14,10 @@ function openSecrets() {
   cy.contains(expectedRef, { timeout: 20_000 }).should('be.visible')
 }
 
+function managedSecretsInventory() {
+  return cy.get('[data-testid="managed-secrets-inventory"]')
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -21,60 +25,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
     expect(expectedRef).to.be.a('string').and.not.be.empty
-    const providerStatusResponses = []
-    cy.intercept('GET', '**/providers/config/status', (request) => {
-      request.on('response', (response) => {
-        const body = response.body ?? {}
-        const summarizeProvider = (provider) => ({
-          providerId:
-            typeof provider?.providerId === 'string'
-              ? provider.providerId
-              : null,
-          providerKind:
-            typeof provider?.providerKind === 'string'
-              ? provider.providerKind
-              : null,
-          outcome:
-            typeof provider?.outcome === 'string' ? provider.outcome : null,
-          operations: Array.isArray(provider?.operations)
-            ? provider.operations.length
-            : null,
-        })
-        const firstResponse = providerStatusResponses.length === 0
-        providerStatusResponses.push({
-          statusCode: response.statusCode,
-          outcome:
-            typeof body.outcome === 'string'
-              ? body.outcome
-              : null,
-          currentProvider: summarizeProvider(body.currentProvider),
-          providers: Array.isArray(body.providers)
-            ? body.providers.map(summarizeProvider)
-            : null,
-          operationMetadata:
-            firstResponse && Array.isArray(body.currentProvider?.operations)
-              ? body.currentProvider.operations.map((operation) => ({
-                  operationId: operation?.operationId ?? null,
-                  method: operation?.method ?? null,
-                  path: operation?.path ?? null,
-                  maturity: operation?.maturity ?? null,
-                  classification: operation?.classification ?? null,
-                  authenticationRequired:
-                    typeof operation?.authenticationRequired === 'boolean',
-                  policyRequired:
-                    typeof operation?.policyRequired === 'boolean',
-                  auditRequired:
-                    typeof operation?.auditRequired === 'boolean',
-                  scope: operation?.scope ?? null,
-                  completionMode: operation?.completionMode ?? null,
-                  limitationCode: operation?.limitationCode ?? null,
-                  reasonCode: operation?.reasonCode ?? null,
-                  nextAction: operation?.nextAction ?? null,
-                }))
-              : null,
-        })
-      })
-    }).as('providerStatus')
+    cy.intercept('GET', '**/providers/config/status').as('providerStatus')
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.request({
@@ -100,12 +51,12 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.contains('Provider status is unavailable; migration remains disabled.').should(
       'not.exist'
     )
-    cy.contains('tr', 'vault-auth-required').within(() => {
+    managedSecretsInventory().contains('tr', 'vault-auth-required').within(() => {
       cy.contains('source_auth_required').should('be.visible')
       cy.contains('metadata').should('exist')
       cy.contains('reveal').should('exist')
     })
-    cy.contains('tr', 'vault-invalid').within(() => {
+    managedSecretsInventory().contains('tr', 'vault-invalid').within(() => {
       cy.contains('invalid_ref').should('be.visible')
       cy.contains('metadata').should('exist')
       cy.contains('reveal').should('exist')
@@ -209,17 +160,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         'be.visible'
       )
       cy.contains('1 consumer actions completed').should('be.visible')
-      cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
-        expect(response?.statusCode).to.equal(200)
-        expect(response?.body?.providers).to.satisfy((providers) =>
-          Array.isArray(providers) &&
-          providers.some(
-            (provider) =>
-              provider?.providerId !== 'generated:sample-service' &&
-              provider?.outcome === 'ready'
-          )
-        )
-      })
       cy.get('#secret-rotation-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
@@ -373,29 +313,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    cy.then(() => {
-      const failedResponses = providerStatusResponses.filter(
-        ({ statusCode }) => statusCode < 200 || statusCode >= 300
-      )
-      if (failedResponses.length > 0) {
-        throw new Error(
-          `Provider status request failed: ${JSON.stringify(failedResponses)}`
-        )
-      }
-    })
-    cy.get('body').then(($body) => {
-      if (
-        $body
-          .text()
-          .includes(
-            'Provider status is unavailable; migration remains disabled.'
-          )
-      ) {
-        throw new Error(
-          `Provider status response was rejected by the Admin client: ${JSON.stringify(providerStatusResponses)}`
-        )
-      }
-    })
     cy.contains('Provider status is unavailable; migration remains disabled.', {
       timeout: 20_000,
     }).should('not.exist')

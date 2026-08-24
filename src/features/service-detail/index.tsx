@@ -2461,7 +2461,7 @@ function SecretsBrokerSecretsPanel() {
             </div>
           </div>
           <div className='overflow-x-auto rounded-md border'>
-            <Table>
+            <Table data-testid='managed-secrets-inventory'>
               <TableHeader>
                 <TableRow>
                   <TableHead>Ref</TableHead>
