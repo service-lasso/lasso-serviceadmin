@@ -44,6 +44,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         )
       )
     })
+    cy.contains('Provider status is unavailable; migration remains disabled.').should(
+      'not.exist'
+    )
     cy.contains('tr', 'vault-auth-required').within(() => {
       cy.contains('source_auth_required').should('be.visible')
       cy.contains('metadata').should('exist')
