@@ -46,6 +46,38 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
   })
 }
 
+function waitForBrokerProviderStatusReadiness(remainingAttempts = 60) {
+  cy.request({
+    method: 'GET',
+    url: '/api/services/%40secretsbroker/providers/config/status',
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    const providers = body?.providers
+    if (
+      status === 200 &&
+      Array.isArray(providers) &&
+      providers.some(
+        (provider) =>
+          provider?.providerId !== 'generated:sample-service' &&
+          provider?.outcome === 'ready'
+      )
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        'Broker provider status did not become ready after the linked rotation.'
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForBrokerProviderStatusReadiness(remainingAttempts - 1)
+    )
+  })
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -193,6 +225,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
     waitForManagedServiceReadiness('sample-service')
+    waitForBrokerProviderStatusReadiness()
     cy.reload()
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
