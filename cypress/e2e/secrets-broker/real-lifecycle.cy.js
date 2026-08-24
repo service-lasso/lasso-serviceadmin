@@ -658,6 +658,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    waitForBrokerProviderStatusReadiness()
     cy.reload()
     openSecrets()
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
@@ -668,7 +669,21 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     dialog('Restore secret').within(() => {
       cy.get('#secret-decommission-reason').type('Release browser qualification')
       cy.get('[aria-label="Confirm secret restore"]').click()
+      cy.intercept('POST', '**/secrets/decommission/restore').as(
+        'restoreSecretDecommission'
+      )
       cy.contains('button', /^Restore secret$/).click()
+      cy.wait('@restoreSecretDecommission', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'applied',
+            applied: true,
+            auditStatus: 'audit_recorded',
+          })
+          expect(response?.body?.tombstone?.state).to.equal('restored')
+        }
+      )
       cy.contains('Secret restored and audit recorded', { timeout: 20_000 }).should(
         'be.visible'
       )
