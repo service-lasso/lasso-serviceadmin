@@ -163,6 +163,17 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
+    cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
+      expect(response?.statusCode).to.equal(200)
+      expect(response?.body?.providers).to.satisfy((providers) =>
+        Array.isArray(providers) &&
+        providers.some(
+          (provider) =>
+            provider?.providerId !== 'generated:sample-service' &&
+            provider?.outcome === 'ready'
+        )
+      )
+    })
 
     cy.contains('button', /^Create secret$/).click()
     dialog('Create local secret').within(() => {

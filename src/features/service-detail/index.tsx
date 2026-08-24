@@ -949,9 +949,12 @@ function SecretsBrokerSecretsPanel() {
   const [inventoryOutcome, setInventoryOutcome] = useState('all')
   const [inventoryPage, setInventoryPage] = useState(1)
   const [inventoryPageSize, setInventoryPageSize] = useState(5)
+  const [providerStatusRevalidating, setProviderStatusRevalidating] =
+    useState(false)
   const secretsQuery = useSecretsManagement(inventorySearch.trim())
   const providerQuery = useBrokerProviderStatus()
-  const providerStatusUnavailable = providerQuery.isError && !providerQuery.data
+  const providerStatusUnavailable =
+    providerStatusRevalidating || providerQuery.isError
   const validateProvider = useBrokerProviderValidation()
   const previewMigration = useBrokerMigrationPreview()
   const applyMigration = useBrokerMigrationApply()
@@ -2035,6 +2038,12 @@ function SecretsBrokerSecretsPanel() {
         setRotationValue('')
         setRotationConfirmed(false)
         setRotationExecution(operation)
+        setProviderStatusRevalidating(true)
+        try {
+          await providerQuery.refetch()
+        } finally {
+          setProviderStatusRevalidating(false)
+        }
         if (operation.outcome !== 'committed') {
           setRotationError(
             operation.outcome === 'rolled_back'
