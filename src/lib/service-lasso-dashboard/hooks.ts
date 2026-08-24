@@ -204,6 +204,7 @@ export function useBrokerProviderStatus() {
   return useQuery({
     queryKey: brokerProviderQueryKey,
     queryFn: fetchBrokerProviderStatus,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
