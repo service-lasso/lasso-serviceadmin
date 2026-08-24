@@ -309,8 +309,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    cy.contains('Provider status is unavailable; migration remains disabled.').should(
+      'not.exist'
+    )
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
-      cy.contains('button', /^Migrate\b/).click()
+      cy.contains('button', /^Migrate\b/).should('not.be.disabled').click()
     })
     dialog('Migrate secret provider').within(() => {
       cy.get('#migration-target-provider').select('vault-browser')
