@@ -52,12 +52,16 @@ test('packaged proxy binds loopback and normalizes only safe ingress identity', 
         'X-Service-Lasso-Roles': 'operator, VIEWER, invalid role,operator',
         'X-Service-Lasso-Zitadel-User-Id': 'spoofed-normalized-user',
         'X-Service-Lasso-Client-Address': '127.0.0.1',
+        'X-Service-Lasso-Proxy': 'spoofed-browser-proxy',
+        'X-Service-Lasso-Trusted-Ingress': 'spoofed-browser-ingress',
       },
     })
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), { auth: 'safe' })
     assert.equal(observed.url, '/api/runtime/security')
     assert.equal(observed.headers['x-service-lasso-internal-proxy'], 'serviceadmin')
+    assert.equal(observed.headers['x-service-lasso-proxy'], 'serviceadmin')
+    assert.equal(observed.headers['x-service-lasso-trusted-ingress'], 'serviceadmin-loopback')
     assert.equal(observed.headers['x-service-lasso-client-address'], '192.0.2.40')
     assert.equal(observed.headers['x-service-lasso-zitadel-user-id'], 'usr_trusted_operator')
     assert.equal(observed.headers['x-service-lasso-workspace-id'], 'workspace-a')
@@ -66,6 +70,47 @@ test('packaged proxy binds loopback and normalizes only safe ingress identity', 
     assert.equal(observed.headers.cookie, undefined)
     assert.equal(JSON.stringify(observed).includes('browser-token-must-not-forward'), false)
     assert.equal(JSON.stringify(observed).includes('spoofed-normalized-user'), false)
+    assert.equal(JSON.stringify(observed).includes('spoofed-browser-proxy'), false)
+    assert.equal(JSON.stringify(observed).includes('spoofed-browser-ingress'), false)
+  } finally {
+    await close(serviceAdmin)
+    await close(upstream)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('packaged proxy does not manufacture a trusted ingress marker from incomplete identity', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'serviceadmin-runtime-'))
+  await writeFile(path.join(root, 'index.html'), '<h1>Service Admin</h1>')
+  const observed = []
+  const upstream = http.createServer((request, response) => {
+    observed.push(request.headers)
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end(JSON.stringify({ auth: 'safe' }))
+  })
+  const upstreamUrl = await listen(upstream)
+  const serviceAdmin = await startServiceAdminServer({
+    host: '127.0.0.1',
+    port: 0,
+    distDir: root,
+    runtimeApiBaseUrl: upstreamUrl,
+  })
+  const address = serviceAdmin.address()
+  assert.ok(address && typeof address === 'object')
+
+  try {
+    for (const headers of [
+      { 'X-Service-Lasso-User': 'usr_missing_client' },
+      { 'X-Forwarded-For': '192.0.2.41' },
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/runtime/security`, { headers })
+      assert.equal(response.status, 200)
+    }
+    assert.equal(observed.length, 2)
+    for (const headers of observed) {
+      assert.equal(headers['x-service-lasso-trusted-ingress'], undefined)
+      assert.equal(headers['x-service-lasso-proxy'], 'serviceadmin')
+    }
   } finally {
     await close(serviceAdmin)
     await close(upstream)
