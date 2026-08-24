@@ -324,6 +324,12 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       timeout: 20_000,
     }).should('not.exist')
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
+      cy.get('td')
+        .eq(2)
+        .invoke('text')
+        .then((outcome) => {
+          expect(outcome.trim()).to.equal('ready')
+        })
       cy.contains('button', /^Migrate\b/, { timeout: 20_000 })
         .should('not.be.disabled')
         .click()
