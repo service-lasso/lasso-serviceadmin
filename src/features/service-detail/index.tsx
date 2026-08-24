@@ -2511,7 +2511,8 @@ function SecretsBrokerSecretsPanel() {
                               providerQuery.isError ||
                               !providerQuery.data?.providers.some(
                                 (provider) =>
-                                  provider.providerId !== migrationSourceProviderId(record) &&
+                                  provider.providerId !==
+                                    migrationSourceProviderId(record) &&
                                   provider.outcome === 'ready'
                               )
                             }
