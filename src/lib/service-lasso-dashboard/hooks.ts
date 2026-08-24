@@ -490,7 +490,10 @@ export function useCoreSecretRotationExecution() {
       queryClient.invalidateQueries({
         queryKey: [...dashboardQueryKey, 'secrets-management'],
       })
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKey,
+        predicate: (query) => query.queryKey[1] !== 'secrets-broker-providers',
+      })
     },
   })
 }
