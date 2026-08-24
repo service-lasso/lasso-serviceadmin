@@ -14,6 +14,10 @@ function openSecrets() {
   cy.contains(expectedRef, { timeout: 20_000 }).should('be.visible')
 }
 
+function managedSecretsInventory() {
+  return cy.get('[data-testid="managed-secrets-inventory"]')
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -21,6 +25,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
     expect(expectedRef).to.be.a('string').and.not.be.empty
+    cy.intercept('GET', '**/providers/config/status').as('providerStatus')
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.request({
@@ -32,13 +37,29 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.visit('/services/%40secretsbroker')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
-    cy.contains('tr', 'vault-auth-required').within(() => {
-      cy.contains('source_auth_required').should('be.visible')
-      cy.contains('unavailable').should('be.visible')
+    cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
+      expect(response?.statusCode).to.equal(200)
+      expect(response?.body?.providers).to.satisfy((providers) =>
+        Array.isArray(providers) &&
+        providers.some(
+          (provider) =>
+            provider?.providerId !== 'generated:sample-service' &&
+            provider?.outcome === 'ready'
+        )
+      )
     })
-    cy.contains('tr', 'vault-invalid').within(() => {
+    cy.contains('Provider status is unavailable; migration remains disabled.').should(
+      'not.exist'
+    )
+    managedSecretsInventory().contains('tr', 'vault-auth-required').within(() => {
+      cy.contains('source_auth_required').should('be.visible')
+      cy.contains('metadata').should('exist')
+      cy.contains('reveal').should('exist')
+    })
+    managedSecretsInventory().contains('tr', 'vault-invalid').within(() => {
       cy.contains('invalid_ref').should('be.visible')
-      cy.contains('unavailable').should('be.visible')
+      cy.contains('metadata').should('exist')
+      cy.contains('reveal').should('exist')
     })
 
     cy.contains('Operational controls').should('be.visible')
@@ -292,8 +313,19 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    cy.contains('Provider status is unavailable; migration remains disabled.', {
+      timeout: 20_000,
+    }).should('not.exist')
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
-      cy.contains('button', /^Migrate\b/).click()
+      cy.get('td')
+        .eq(2)
+        .invoke('text')
+        .then((outcome) => {
+          expect(outcome.trim()).to.equal('ready')
+        })
+      cy.contains('button', /^Migrate\b/, { timeout: 20_000 })
+        .should('not.be.disabled')
+        .click()
     })
     dialog('Migrate secret provider').within(() => {
       cy.get('#migration-target-provider').select('vault-browser')

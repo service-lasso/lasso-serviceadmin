@@ -89,6 +89,7 @@ function proxyHeaders(request) {
   }
 
   headers.set('x-service-lasso-internal-proxy', 'serviceadmin')
+  headers.set('x-service-lasso-proxy', 'serviceadmin')
   const clientAddress = forwardedClientAddress(request.headers['x-forwarded-for'])
   if (clientAddress) {
     headers.set('x-service-lasso-client-address', clientAddress)
@@ -96,6 +97,9 @@ function proxyHeaders(request) {
   const userId = safeHeader(request.headers['x-service-lasso-user'])
   if (userId) {
     headers.set('x-service-lasso-zitadel-user-id', userId)
+    if (clientAddress) {
+      headers.set('x-service-lasso-trusted-ingress', 'serviceadmin-loopback')
+    }
   }
   const roles = trustedRoleClaims(request.headers['x-service-lasso-roles'])
   if (roles) {

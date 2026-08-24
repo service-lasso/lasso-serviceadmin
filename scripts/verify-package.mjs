@@ -132,6 +132,8 @@ try {
   assert.equal(observedRequest.headers.authorization, undefined)
   assert.equal(observedRequest.headers.cookie, undefined)
   assert.equal(observedRequest.headers['x-service-lasso-internal-proxy'], 'serviceadmin')
+  assert.equal(observedRequest.headers['x-service-lasso-proxy'], 'serviceadmin')
+  assert.equal(observedRequest.headers['x-service-lasso-trusted-ingress'], 'serviceadmin-loopback')
   assert.equal(observedRequest.headers['x-service-lasso-client-address'], '192.0.2.51')
   assert.equal(observedRequest.headers['x-service-lasso-zitadel-user-id'], 'usr_release_operator')
   assert.equal(observedRequest.headers['x-service-lasso-workspace-id'], 'workspace-release')

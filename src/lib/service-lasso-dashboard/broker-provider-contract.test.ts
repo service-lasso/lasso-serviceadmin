@@ -12,11 +12,14 @@ async function runtimeClient() {
   return import('./stub')
 }
 
-function operation(maturity = 'validated') {
+function operation(
+  maturity = 'validated',
+  path = '/v1/providers/migration/apply'
+) {
   return {
     operationId: 'post_v1_providers_migration_apply',
     method: 'POST',
-    path: '/v1/providers/migration/apply',
+    path,
     maturity,
     classification: 'mutation',
     authenticationRequired: true,
@@ -149,6 +152,7 @@ function campaignResponse(
 describe('canonical Broker provider and migration client', () => {
   it('loads live operation maturity from the canonical core proxy', async () => {
     const local = provider('local')
+    local.operations = [operation('validated', '/v1/kv/data/{path}')]
     const target = provider()
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

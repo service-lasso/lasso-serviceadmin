@@ -204,6 +204,7 @@ export function useBrokerProviderStatus() {
   return useQuery({
     queryKey: brokerProviderQueryKey,
     queryFn: fetchBrokerProviderStatus,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -490,7 +491,10 @@ export function useCoreSecretRotationExecution() {
       queryClient.invalidateQueries({
         queryKey: [...dashboardQueryKey, 'secrets-management'],
       })
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKey,
+        predicate: (query) => query.queryKey[1] !== 'secrets-broker-providers',
+      })
     },
   })
 }

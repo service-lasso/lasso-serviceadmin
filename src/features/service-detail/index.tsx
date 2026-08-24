@@ -951,6 +951,7 @@ function SecretsBrokerSecretsPanel() {
   const [inventoryPageSize, setInventoryPageSize] = useState(5)
   const secretsQuery = useSecretsManagement(inventorySearch.trim())
   const providerQuery = useBrokerProviderStatus()
+  const providerStatusUnavailable = providerQuery.isError && !providerQuery.data
   const validateProvider = useBrokerProviderValidation()
   const previewMigration = useBrokerMigrationPreview()
   const applyMigration = useBrokerMigrationApply()
@@ -2200,7 +2201,7 @@ function SecretsBrokerSecretsPanel() {
           {providerQuery.isLoading ? (
             <Skeleton className='h-24 w-full' />
           ) : null}
-          {providerQuery.isError ? (
+          {providerStatusUnavailable ? (
             <div className='rounded-md border border-destructive/40 p-3 text-sm text-destructive'>
               Provider status is unavailable; migration remains disabled.
             </div>
@@ -2460,7 +2461,7 @@ function SecretsBrokerSecretsPanel() {
             </div>
           </div>
           <div className='overflow-x-auto rounded-md border'>
-            <Table>
+            <Table data-testid='managed-secrets-inventory'>
               <TableHeader>
                 <TableRow>
                   <TableHead>Ref</TableHead>
@@ -2508,10 +2509,11 @@ function SecretsBrokerSecretsPanel() {
                             disabled={
                               !canManageSecrets ||
                               record.outcome !== 'ready' ||
-                              providerQuery.isError ||
+                              providerStatusUnavailable ||
                               !providerQuery.data?.providers.some(
                                 (provider) =>
-                                  provider.providerId !== record.sourceId &&
+                                  provider.providerId !==
+                                    migrationSourceProviderId(record) &&
                                   provider.outcome === 'ready'
                               )
                             }
