@@ -393,6 +393,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    waitForBrokerProviderStatusReadiness()
+    cy.reload()
+    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    openSecrets()
     cy.contains('Provider status is unavailable; migration remains disabled.', {
       timeout: 20_000,
     }).should('not.exist')
