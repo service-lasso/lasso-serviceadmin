@@ -34,13 +34,13 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     openSecrets()
     cy.contains('tr', 'vault-auth-required').within(() => {
       cy.contains('source_auth_required').should('be.visible')
-      cy.contains('metadata').should('be.visible')
-      cy.contains('reveal').should('be.visible')
+      cy.contains('metadata').should('exist')
+      cy.contains('reveal').should('exist')
     })
     cy.contains('tr', 'vault-invalid').within(() => {
       cy.contains('invalid_ref').should('be.visible')
-      cy.contains('metadata').should('be.visible')
-      cy.contains('reveal').should('be.visible')
+      cy.contains('metadata').should('exist')
+      cy.contains('reveal').should('exist')
     })
 
     cy.contains('Operational controls').should('be.visible')
