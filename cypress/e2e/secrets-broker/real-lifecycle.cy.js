@@ -796,8 +796,8 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload({ targetInventoryRef: createdRef })
-    cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
+    waitForProviderUiStatusAfterReload({ targetInventoryRef: expectedRef })
+    cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td').eq(1).should('contain.text', 'local-encrypted-store')
       cy.get('td')
         .eq(2)
@@ -812,7 +812,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     dialog('Bulk provider migration').within(() => {
       cy.get('#bulk-migration-target-provider').select('vault-browser')
       cy.get(
-        '[aria-label="Select services/sample-service/browser.CREATED_TOKEN for bulk migration"]'
+        '[aria-label="Select services/sample-service/sample.GENERATED_TOKEN for bulk migration"]'
       ).click()
       cy.get('#bulk-migration-audit-reason').type(
         'Release browser verified bulk Vault migration'
@@ -857,7 +857,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         'be.visible'
       )
       cy.contains('1 verified').should('be.visible')
-      cy.contains(`${createdRef}: migrated`).should('be.visible')
+      cy.contains(`${expectedRef}: migrated`).should('be.visible')
       cy.contains('button', 'Close').click()
     })
 
