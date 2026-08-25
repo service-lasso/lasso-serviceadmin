@@ -766,7 +766,20 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       }
     })
 
-    cy.contains('button', 'Validate configuration').first().click()
+    waitForBrokerProviderStatusReadiness()
+    cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    openSecrets()
+    cy.contains('Provider status is unavailable; migration remains disabled.').should(
+      'not.exist'
+    )
+    cy.contains('tr', 'vault-browser', { timeout: 20_000 }).within(() => {
+      cy.contains('ready').should('be.visible')
+      cy.contains('button', 'Validate configuration')
+        .should('be.visible')
+        .and('not.be.disabled')
+        .click()
+    })
     dialog('Validate provider configuration').within(() => {
       cy.get('#provider-validation-reason').type(
         'Release browser qualification'
