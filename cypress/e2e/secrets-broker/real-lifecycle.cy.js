@@ -881,8 +881,28 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       )
       cy.contains('concurrency 1').should('be.visible')
       cy.contains('stop_and_defer_remaining').should('exist')
+      cy.intercept('POST', '**/secrets/campaigns/apply').as(
+        'applyBulkMigrationCampaign'
+      )
       cy.get('[aria-label="Confirm exact bulk migration campaign"]').click()
       cy.contains('button', 'Apply exact campaign').click()
+      cy.wait('@applyBulkMigrationCampaign', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'applied',
+            applied: true,
+            requiresRevalidation: false,
+            auditStatus: 'audit_recorded',
+          })
+          expect(response?.body?.results?.[0]).to.include({
+            ref: expectedRef,
+            outcome: 'migrated',
+            applied: true,
+            verified: true,
+          })
+        }
+      )
       cy.contains('Campaign outcome: applied', { timeout: 20_000 }).should(
         'be.visible'
       )
