@@ -857,9 +857,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         'be.visible'
       )
       cy.contains('1 verified').should('be.visible')
-      cy.contains(
-        'services/sample-service/sample.GENERATED_TOKEN: migrated'
-      ).should('be.visible')
+      cy.contains(`${createdRef}: migrated`).should('be.visible')
       cy.contains('button', 'Close').click()
     })
 
