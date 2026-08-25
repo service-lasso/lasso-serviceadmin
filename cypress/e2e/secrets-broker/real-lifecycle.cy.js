@@ -18,6 +18,110 @@ function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
 }
 
+function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
+  cy.request({
+    method: 'GET',
+    url: `/api/services/${encodeURIComponent(serviceId)}`,
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    const service = body?.service
+    if (
+      status === 200 &&
+      service?.lifecycle?.running === true &&
+      service?.health?.healthy === true
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        `Managed service ${serviceId} did not become healthy before the linked rotation.`
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForManagedServiceReadiness(serviceId, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForBrokerProviderStatusReadiness(
+  targetProviderId = 'vault-browser',
+  remainingAttempts = 60
+) {
+  cy.request({
+    method: 'GET',
+    url: '/api/services/%40secretsbroker/providers/config/status',
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    const providers = body?.providers
+    if (
+      status === 200 &&
+      Array.isArray(providers) &&
+      providers.some((provider) =>
+        provider?.providerId === targetProviderId &&
+        provider?.outcome === 'ready' &&
+        provider?.operations?.some(
+          (operation) =>
+            operation?.path === '/v1/providers/migration/apply' &&
+            (operation?.maturity === 'validated' ||
+              operation?.maturity === 'executable')
+        )
+      )
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        'Broker provider status did not become ready after the linked rotation.'
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForBrokerProviderStatusReadiness(
+        targetProviderId,
+        remainingAttempts - 1
+      )
+    )
+  })
+}
+
+function waitForProviderUiStatusAfterReload(
+  targetProviderId = 'vault-browser',
+  remainingAttempts = 3
+) {
+  waitForBrokerProviderStatusReadiness(targetProviderId)
+  cy.intercept('GET', '**/providers/config/status').as(
+    'providerStatusAfterReload'
+  )
+  cy.reload()
+  cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+  openSecrets()
+  cy.wait('@providerStatusAfterReload', { timeout: 20_000 }).then(
+    ({ response }) => {
+      const hasTargetProvider =
+        response?.statusCode === 200 &&
+        response?.body?.providers?.some(
+          (provider) => provider?.providerId === targetProviderId
+        )
+      if (hasTargetProvider) return
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          `Provider status UI response did not converge for ${targetProviderId} after the bounded post-rotation reloads.`
+        )
+      }
+
+      waitForProviderUiStatusAfterReload(
+        targetProviderId,
+        remainingAttempts - 1
+      )
+    }
+  )
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -25,7 +129,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
     expect(expectedRef).to.be.a('string').and.not.be.empty
-    cy.intercept('GET', '**/providers/config/status').as('providerStatus')
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.request({
@@ -34,20 +137,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       body: { confirm: false },
       timeout: 120_000,
     }).its('status').should('equal', 200)
+    waitForManagedServiceReadiness('sample-service')
+    waitForBrokerProviderStatusReadiness()
     cy.visit('/services/%40secretsbroker')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
-    cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(200)
-      expect(response?.body?.providers).to.satisfy((providers) =>
-        Array.isArray(providers) &&
-        providers.some(
-          (provider) =>
-            provider?.providerId !== 'generated:sample-service' &&
-            provider?.outcome === 'ready'
-        )
-      )
-    })
     cy.contains('Provider status is unavailable; migration remains disabled.').should(
       'not.exist'
     )
@@ -63,11 +157,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
 
     cy.contains('Operational controls').should('be.visible')
-    cy.contains('Active lockouts').parent().find('p').should('not.contain', '—')
-    cy.contains('Local API auth failures')
-      .parent()
-      .find('p')
-      .should('not.contain', '—')
     cy.intercept('GET', '**/operations/telemetry').as('brokerTelemetry')
     cy.intercept('GET', '**/operations/events*').as('brokerEvents')
     cy.contains('button', 'Refresh').click()
@@ -86,6 +175,14 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         valueMaterialIncluded: false,
       })
     })
+    cy.contains('Active lockouts')
+      .parent()
+      .find('p', { timeout: 20_000 })
+      .should('not.contain', '—')
+    cy.contains('Local API auth failures')
+      .parent()
+      .find('p', { timeout: 20_000 })
+      .should('not.contain', '—')
 
     cy.get('#broker-lockout-scope').type(
       'management:browser-release-qualification'
@@ -163,17 +260,12 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
-    cy.wait('@providerStatus', { timeout: 60_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(200)
-      expect(response?.body?.providers).to.satisfy((providers) =>
-        Array.isArray(providers) &&
-        providers.some(
-          (provider) =>
-            provider?.providerId !== 'generated:sample-service' &&
-            provider?.outcome === 'ready'
-        )
-      )
-    })
+    waitForManagedServiceReadiness('sample-service')
+    waitForBrokerProviderStatusReadiness()
+    cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    openSecrets()
 
     cy.contains('button', /^Create secret$/).click()
     dialog('Create local secret').within(() => {
@@ -324,6 +416,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    waitForBrokerProviderStatusReadiness()
+    cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    openSecrets()
     cy.contains('Provider status is unavailable; migration remains disabled.', {
       timeout: 20_000,
     }).should('not.exist')
@@ -490,7 +587,22 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    cy.contains('button', 'Bulk provider migration').click()
+    waitForBrokerProviderStatusReadiness()
+    cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    openSecrets()
+    cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
+      cy.get('td')
+        .eq(2)
+        .invoke('text')
+        .then((outcome) => {
+          expect(outcome.trim()).to.equal('ready')
+        })
+    })
+    cy.contains('button', 'Bulk provider migration', { timeout: 20_000 })
+      .should('not.be.disabled')
+      .click({ waitForAnimations: false })
     dialog('Bulk provider migration').within(() => {
       cy.get('#bulk-migration-target-provider').select('vault-browser')
       cy.get(
@@ -499,7 +611,35 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#bulk-migration-audit-reason').type(
         'Release browser verified bulk Vault migration'
       )
+      cy.intercept('POST', '**/secrets/campaigns/create').as(
+        'createBulkMigrationCampaign'
+      )
+      cy.intercept('POST', '**/secrets/campaigns/revalidate').as(
+        'revalidateBulkMigrationCampaign'
+      )
       cy.contains('button', 'Create and revalidate campaign').click()
+      cy.wait('@createBulkMigrationCampaign', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresRevalidation: true,
+            auditStatus: 'audit_recorded',
+          })
+        }
+      )
+      cy.wait('@revalidateBulkMigrationCampaign', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'dry_run_ready',
+            applied: false,
+            requiresRevalidation: false,
+            auditStatus: 'audit_recorded',
+          })
+        }
+      )
       cy.contains('Durable campaign ready', { timeout: 20_000 }).should(
         'be.visible'
       )
@@ -554,7 +694,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    waitForBrokerProviderStatusReadiness()
     cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     openSecrets()
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
@@ -564,7 +706,21 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     dialog('Restore secret').within(() => {
       cy.get('#secret-decommission-reason').type('Release browser qualification')
       cy.get('[aria-label="Confirm secret restore"]').click()
+      cy.intercept('POST', '**/secrets/decommission/restore').as(
+        'restoreSecretDecommission'
+      )
       cy.contains('button', /^Restore secret$/).click()
+      cy.wait('@restoreSecretDecommission', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'applied',
+            applied: true,
+            auditStatus: 'audit_recorded',
+          })
+          expect(response?.body?.tombstone?.state).to.equal('restored')
+        }
+      )
       cy.contains('Secret restored and audit recorded', { timeout: 20_000 }).should(
         'be.visible'
       )
@@ -638,6 +794,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         cy.contains(/created and verified/i, {
           timeout: 20_000,
         }).should('be.visible')
+        waitForProviderUiStatusAfterReload()
       } else {
         cy.contains('button', 'Rotate master key').should('be.disabled')
         cy.contains(
@@ -647,7 +804,17 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       }
     })
 
-    cy.contains('button', 'Validate configuration').first().click()
+    cy.contains('Provider status is unavailable; migration remains disabled.').should(
+      'not.exist'
+    )
+    cy.contains('tr', 'vault-browser', { timeout: 20_000 }).within(() => {
+      cy.contains('ready').should('be.visible')
+      cy.contains('button', 'Validate configuration')
+        .scrollIntoView()
+        .should('be.visible')
+        .and('not.be.disabled')
+        .click()
+    })
     dialog('Validate provider configuration').within(() => {
       cy.get('#provider-validation-reason').type(
         'Release browser qualification'
