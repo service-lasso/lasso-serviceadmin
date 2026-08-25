@@ -103,10 +103,10 @@ function waitForProviderTableRowAfterReload(
       .filter((_, title) => title.textContent?.trim() === 'Secret providers')
       .closest('[data-slot="card"]')
     const providerRow = providerCard.find('tr').filter((_, row) => {
-      const cells = Array.from(row.querySelectorAll('td'))
-      const hasProvider = cells.some(
-        (cell) => cell.textContent?.trim() === targetProviderId
-      )
+      const providerMetadata = row.querySelector('td .font-mono')
+      const hasProvider = providerMetadata?.textContent
+        ?.trim()
+        .startsWith(`${targetProviderId} ·`)
       const hasValidationControl = Array.from(
         row.querySelectorAll('button')
       ).some(
