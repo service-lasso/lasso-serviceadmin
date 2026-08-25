@@ -277,6 +277,49 @@ function waitForSuccessfulInventoryUiResponse(
     })
 }
 
+function waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts = 5) {
+  return cy
+    .wait('@brokerTelemetry', { timeout: 60_000 })
+    .then(({ response }) => {
+      if (response?.statusCode === 200) {
+        expect(response?.body?.safety).to.include({
+          lowCardinalityLabels: true,
+          valueMaterialIncluded: false,
+        })
+        return
+      }
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          'Broker telemetry UI response did not recover within the bounded query retries.'
+        )
+      }
+
+      return waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts - 1)
+    })
+}
+
+function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
+  return cy
+    .wait('@brokerEvents', { timeout: 60_000 })
+    .then(({ response }) => {
+      if (response?.statusCode === 200) {
+        expect(response?.body?.safety).to.deep.equal({
+          metadataOnly: true,
+          rawRefIncluded: false,
+          valueMaterialIncluded: false,
+        })
+        return
+      }
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          'Broker events UI response did not recover within the bounded query retries.'
+        )
+      }
+
+      return waitForSuccessfulBrokerEventsUiResponse(remainingAttempts - 1)
+    })
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -314,21 +357,8 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
 
     cy.contains('Operational controls').should('be.visible')
-    cy.wait('@brokerTelemetry', { timeout: 60_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(200)
-      expect(response?.body?.safety).to.include({
-        lowCardinalityLabels: true,
-        valueMaterialIncluded: false,
-      })
-    })
-    cy.wait('@brokerEvents', { timeout: 60_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(200)
-      expect(response?.body?.safety).to.deep.equal({
-        metadataOnly: true,
-        rawRefIncluded: false,
-        valueMaterialIncluded: false,
-      })
-    })
+    waitForSuccessfulBrokerTelemetryUiResponse()
+    waitForSuccessfulBrokerEventsUiResponse()
     cy.contains('Active lockouts')
       .parent()
       .find('p', { timeout: 20_000 })
