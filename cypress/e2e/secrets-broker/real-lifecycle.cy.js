@@ -173,7 +173,15 @@ function waitForSuccessfulProviderUiStatusResponse(
       if (
         successfulMetadataResponse &&
         providers.some(
-          (provider) => provider?.providerId === targetProviderId
+          (provider) =>
+            provider?.providerId === targetProviderId &&
+            provider?.outcome === 'ready' &&
+            provider?.operations?.some(
+              (operation) =>
+                operation?.path === '/v1/providers/migration/apply' &&
+                (operation?.maturity === 'validated' ||
+                  operation?.maturity === 'executable')
+            )
         )
       ) {
         return true
@@ -542,14 +550,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForBrokerProviderStatusReadiness()
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
-    openSecrets()
-    cy.contains('Provider status is unavailable; migration remains disabled.', {
-      timeout: 20_000,
-    }).should('not.exist')
+    waitForProviderUiStatusAfterReload()
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td')
         .eq(2)
@@ -713,11 +714,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForBrokerProviderStatusReadiness()
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
-    openSecrets()
+    waitForProviderUiStatusAfterReload()
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td')
         .eq(2)
