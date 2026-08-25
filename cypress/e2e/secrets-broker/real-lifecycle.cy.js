@@ -89,45 +89,37 @@ function waitForBrokerProviderStatusReadiness(
   })
 }
 
-function waitForProviderTableRowAfterReload(
+function waitForProviderUiStatusAfterReload(
   targetProviderId = 'vault-browser',
   remainingAttempts = 3
 ) {
   waitForBrokerProviderStatusReadiness(targetProviderId)
+  cy.intercept('GET', '**/providers/config/status').as(
+    'providerStatusAfterReload'
+  )
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
-  cy.wait(1_000)
-  cy.get('body').then(($body) => {
-    const providerCard = $body
-      .find('[data-slot="card-title"]')
-      .filter((_, title) => title.textContent?.trim() === 'Secret providers')
-      .closest('[data-slot="card"]')
-    const providerRow = providerCard.find('tr').filter((_, row) => {
-      const providerMetadata = row.querySelector('td .font-mono')
-      const hasProvider = providerMetadata?.textContent
-        ?.trim()
-        .startsWith(`${targetProviderId} ·`)
-      const hasValidationControl = Array.from(
-        row.querySelectorAll('button')
-      ).some(
-        (button) => button.textContent?.trim() === 'Validate configuration'
-      )
-      return hasProvider && hasValidationControl
-    })
+  cy.wait('@providerStatusAfterReload', { timeout: 20_000 }).then(
+    ({ response }) => {
+      const hasTargetProvider =
+        response?.statusCode === 200 &&
+        response?.body?.providers?.some(
+          (provider) => provider?.providerId === targetProviderId
+        )
+      if (hasTargetProvider) return
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          `Provider status UI response did not converge for ${targetProviderId} after the bounded post-rotation reloads.`
+        )
+      }
 
-    if (providerRow.length > 0) return
-    if (remainingAttempts <= 1) {
-      throw new Error(
-        `Provider table did not converge for ${targetProviderId} after the bounded post-rotation reloads.`
+      waitForProviderUiStatusAfterReload(
+        targetProviderId,
+        remainingAttempts - 1
       )
     }
-
-    waitForProviderTableRowAfterReload(
-      targetProviderId,
-      remainingAttempts - 1
-    )
-  })
+  )
 }
 
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
@@ -802,7 +794,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         cy.contains(/created and verified/i, {
           timeout: 20_000,
         }).should('be.visible')
-        waitForProviderTableRowAfterReload()
+        waitForProviderUiStatusAfterReload()
       } else {
         cy.contains('button', 'Rotate master key').should('be.disabled')
         cy.contains(
