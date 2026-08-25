@@ -188,24 +188,36 @@ function waitForProviderUiStatusAfterReload({
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
-  waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
+  return waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
     (hasTargetProvider) => {
       const inventoryReadiness = targetInventoryRef
         ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
         : cy.wrap(true, { log: false })
 
-      inventoryReadiness.then((hasTargetInventoryRecord) => {
-        if (hasTargetProvider && hasTargetInventoryRecord) return
-        if (remainingAttempts <= 1) {
-          throw new Error(
-            `Secrets UI metadata did not converge after the bounded reloads (provider=${targetProviderId}, inventory=${targetInventoryRef ?? 'not-required'}).`
-          )
-        }
+      return inventoryReadiness.then((hasTargetInventoryRecord) => {
+        const providerRowReadiness = hasTargetProvider
+          ? waitForProviderRowRender(targetProviderId)
+          : cy.wrap(false, { log: false })
 
-        waitForProviderUiStatusAfterReload({
-          targetProviderId,
-          targetInventoryRef,
-          remainingAttempts: remainingAttempts - 1,
+        return providerRowReadiness.then((hasTargetProviderRow) => {
+          if (
+            hasTargetProvider &&
+            hasTargetInventoryRecord &&
+            hasTargetProviderRow
+          ) {
+            return
+          }
+          if (remainingAttempts <= 1) {
+            throw new Error(
+              `Secrets UI metadata did not converge after the bounded reloads (provider=${targetProviderId}, inventory=${targetInventoryRef ?? 'not-required'}).`
+            )
+          }
+
+          return waitForProviderUiStatusAfterReload({
+            targetProviderId,
+            targetInventoryRef,
+            remainingAttempts: remainingAttempts - 1,
+          })
         })
       })
     }
@@ -245,6 +257,28 @@ function waitForSuccessfulProviderUiStatusResponse(
         remainingAttempts - 1
       )
     })
+}
+
+function waitForProviderRowRender(targetProviderId, remainingAttempts = 20) {
+  return cy.get('body', { log: false }).then(($body) => {
+    const hasTargetProviderRow = Array.from(
+      $body[0].querySelectorAll('tr')
+    ).some((row) =>
+      Array.from(
+        row.querySelectorAll('.font-mono.text-xs.text-muted-foreground')
+      ).some((metadata) =>
+        metadata.textContent?.trim().startsWith(`${targetProviderId} ·`)
+      )
+    )
+    if (hasTargetProviderRow) return true
+    if (remainingAttempts <= 1) return false
+
+    return cy
+      .wait(250, { log: false })
+      .then(() =>
+        waitForProviderRowRender(targetProviderId, remainingAttempts - 1)
+      )
+  })
 }
 
 function waitForSuccessfulInventoryUiResponse(
