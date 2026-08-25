@@ -14,13 +14,6 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
     })
       .its('status')
       .should('equal', 200)
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.visit('/services/%40secretsbroker')
-    cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
-    cy.contains('[data-slot="card"]', 'Operational controls', {
-      timeout: 30_000,
-    }).should('be.visible')
 
     cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
       expect(controlUrl).to.match(
@@ -31,7 +24,17 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
         `${controlUrl}/induce-local-api-lockout`
       ).then(({ body }) => {
         expect(body.outcome).to.equal('lockout_active')
-        expect(body.lockoutScope).to.match(/^local_api:/)
+        expect(body.lockoutScope).to.be.a('string').and.match(/^local_api:/)
+
+        cy.reload()
+        cy.contains('Trusted identity verified', { timeout: 20_000 }).should(
+          'exist'
+        )
+        cy.visit('/services/%40secretsbroker')
+        cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
+        cy.contains('[data-slot="card"]', 'Operational controls', {
+          timeout: 30_000,
+        }).should('be.visible')
 
         cy.intercept('GET', '**/operations/telemetry').as('lockoutTelemetry')
         cy.contains('[data-slot="card"]', 'Operational controls').within(() => {

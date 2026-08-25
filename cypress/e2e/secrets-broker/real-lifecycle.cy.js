@@ -8,6 +8,25 @@ function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
 }
 
+function waitForVerifiedBackupCreation(alias) {
+  return cy.wait(`@${alias}`, { timeout: 60_000 }).then(({ response }) => {
+    const safeBackupResult = {
+      status: response?.statusCode,
+      outcome: response?.body?.outcome,
+      applied: response?.body?.applied,
+      auditStatus: response?.body?.auditStatus,
+      verification: response?.body?.backup?.verification,
+    }
+    expect(safeBackupResult, JSON.stringify(safeBackupResult)).to.deep.equal({
+      status: 200,
+      outcome: 'ready',
+      applied: true,
+      auditStatus: 'audit_recorded',
+      verification: 'verified',
+    })
+  })
+}
+
 function openSecrets() {
   cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
   cy.get('body').then(($body) => {
@@ -1016,7 +1035,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
 
     cy.get('#broker-lifecycle-reason').type('Release browser qualification')
+    cy.intercept('POST', '**/lifecycle/backups/create').as(
+      'createVerifiedBackup'
+    )
     cy.contains('button', 'Create encrypted backup').click()
+    waitForVerifiedBackupCreation('createVerifiedBackup')
     cy.contains(/created and verified/i, {
       timeout: 20_000,
     }).should('be.visible')
@@ -1078,7 +1101,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         cy.get('#broker-lifecycle-reason')
           .clear()
           .type('Post-rotation qualification')
+        cy.intercept('POST', '**/lifecycle/backups/create').as(
+          'createVerifiedPostRotationBackup'
+        )
         cy.contains('button', 'Create encrypted backup').click()
+        waitForVerifiedBackupCreation('createVerifiedPostRotationBackup')
         cy.contains(/created and verified/i, {
           timeout: 20_000,
         }).should('be.visible')
