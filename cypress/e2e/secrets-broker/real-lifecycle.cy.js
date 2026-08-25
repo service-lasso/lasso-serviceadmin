@@ -159,7 +159,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.contains('Operational controls').should('be.visible')
     cy.intercept('GET', '**/operations/telemetry').as('brokerTelemetry')
     cy.intercept('GET', '**/operations/events*').as('brokerEvents')
-    cy.contains('button', 'Refresh').click()
+    cy.contains('button', 'Refresh', { timeout: 20_000 })
+      .should('not.be.disabled')
+      .click()
     cy.wait('@brokerTelemetry', { timeout: 60_000 }).then(({ response }) => {
       expect(response?.statusCode).to.equal(200)
       expect(response?.body?.safety).to.include({
