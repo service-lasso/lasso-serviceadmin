@@ -89,6 +89,48 @@ function waitForBrokerProviderStatusReadiness(
   })
 }
 
+function waitForProviderTableRowAfterReload(
+  targetProviderId = 'vault-browser',
+  remainingAttempts = 3
+) {
+  waitForBrokerProviderStatusReadiness(targetProviderId)
+  cy.reload()
+  cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+  openSecrets()
+  cy.get('body').then(($body) => {
+    const providerCard = $body
+      .find('[data-slot="card-title"]')
+      .filter((_, title) => title.textContent?.trim() === 'Secret providers')
+      .closest('[data-slot="card"]')
+    const providerRow = providerCard.find('tr').filter((_, row) => {
+      const cells = Array.from(row.querySelectorAll('td'))
+      const hasProvider = cells.some(
+        (cell) => cell.textContent?.trim() === targetProviderId
+      )
+      const hasValidationControl = Array.from(
+        row.querySelectorAll('button')
+      ).some(
+        (button) => button.textContent?.trim() === 'Validate configuration'
+      )
+      return hasProvider && hasValidationControl
+    })
+
+    if (providerRow.length > 0) return
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        `Provider table did not converge for ${targetProviderId} after the bounded post-rotation reloads.`
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForProviderTableRowAfterReload(
+        targetProviderId,
+        remainingAttempts - 1
+      )
+    )
+  })
+}
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -761,12 +803,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         cy.contains(/created and verified/i, {
           timeout: 20_000,
         }).should('be.visible')
-        waitForBrokerProviderStatusReadiness()
-        cy.reload()
-        cy.contains('Trusted identity verified', { timeout: 20_000 }).should(
-          'exist'
-        )
-        openSecrets()
+        waitForProviderTableRowAfterReload()
       } else {
         cy.contains('button', 'Rotate master key').should('be.disabled')
         cy.contains(
