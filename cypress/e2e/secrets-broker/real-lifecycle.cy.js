@@ -757,6 +757,12 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         cy.contains(/created and verified/i, {
           timeout: 20_000,
         }).should('be.visible')
+        waitForBrokerProviderStatusReadiness()
+        cy.reload()
+        cy.contains('Trusted identity verified', { timeout: 20_000 }).should(
+          'exist'
+        )
+        openSecrets()
       } else {
         cy.contains('button', 'Rotate master key').should('be.disabled')
         cy.contains(
@@ -766,16 +772,13 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       }
     })
 
-    waitForBrokerProviderStatusReadiness()
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    openSecrets()
     cy.contains('Provider status is unavailable; migration remains disabled.').should(
       'not.exist'
     )
     cy.contains('tr', 'vault-browser', { timeout: 20_000 }).within(() => {
       cy.contains('ready').should('be.visible')
       cy.contains('button', 'Validate configuration')
+        .scrollIntoView()
         .should('be.visible')
         .and('not.be.disabled')
         .click()
