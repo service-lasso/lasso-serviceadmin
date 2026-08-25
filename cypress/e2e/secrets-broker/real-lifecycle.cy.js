@@ -100,13 +100,8 @@ function waitForProviderUiStatusAfterReload(
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
-  cy.wait('@providerStatusAfterReload', { timeout: 20_000 }).then(
-    ({ response }) => {
-      const hasTargetProvider =
-        response?.statusCode === 200 &&
-        response?.body?.providers?.some(
-          (provider) => provider?.providerId === targetProviderId
-        )
+  waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
+    (hasTargetProvider) => {
       if (hasTargetProvider) return
       if (remainingAttempts <= 1) {
         throw new Error(
@@ -120,6 +115,33 @@ function waitForProviderUiStatusAfterReload(
       )
     }
   )
+}
+
+function waitForSuccessfulProviderUiStatusResponse(
+  targetProviderId,
+  remainingAttempts = 5
+) {
+  return cy
+    .wait('@providerStatusAfterReload', { timeout: 20_000 })
+    .then(({ response }) => {
+      const providers = response?.body?.providers
+      const successfulMetadataResponse =
+        response?.statusCode === 200 && Array.isArray(providers)
+      if (
+        successfulMetadataResponse &&
+        providers.some(
+          (provider) => provider?.providerId === targetProviderId
+        )
+      ) {
+        return true
+      }
+      if (successfulMetadataResponse || remainingAttempts <= 1) return false
+
+      return waitForSuccessfulProviderUiStatusResponse(
+        targetProviderId,
+        remainingAttempts - 1
+      )
+    })
 }
 
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
