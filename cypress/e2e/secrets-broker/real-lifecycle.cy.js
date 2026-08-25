@@ -1,4 +1,8 @@
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
+const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
+const rotationCandidate = 'browser-rotation-candidate-2026-08-14-verified'
+const editedCandidate = 'browser-edited-candidate-2026-08-14-verified'
+const resetCandidate = 'browser-reset-candidate-2026-08-14-verified'
 
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
@@ -16,6 +20,45 @@ function openSecrets() {
 
 function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
+}
+
+function restartBrokerAndOpenSecrets() {
+  cy.request({
+    method: 'POST',
+    url: '/api/services/%40secretsbroker/restart',
+    body: { confirm: true },
+    timeout: 120_000,
+  }).its('status').should('equal', 200)
+  waitForManagedServiceReadiness('@secretsbroker')
+  cy.reload()
+  cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+  openSecrets()
+}
+
+function assertSecretValuesAbsentFromBrowser(secretValues) {
+  cy.window().then((browserWindow) => {
+    const storageValues = [
+      browserWindow.localStorage,
+      browserWindow.sessionStorage,
+    ].flatMap((storage) =>
+      Array.from({ length: storage.length }, (_, index) =>
+        storage.getItem(storage.key(index))
+      ).filter(Boolean)
+    )
+    const browserSurface = [
+      browserWindow.document.documentElement.textContent ?? '',
+      browserWindow.location.href,
+      browserWindow.document.cookie,
+      ...storageValues,
+      ...browserWindow.performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name),
+    ].join('\n')
+    expect(
+      secretValues.some((value) => browserSurface.includes(value)),
+      'secret values are absent from DOM, URL, cookies, storage, and resource URLs'
+    ).to.equal(false)
+  })
 }
 
 function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
@@ -238,9 +281,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-reason').type(
         'Release browser linked consumer qualification'
       )
-      cy.get('#secret-rotation-value').type(
-        'browser-rotation-candidate-2026-08-14-verified'
-      )
+      cy.get('#secret-rotation-value').type(rotationCandidate)
       cy.contains('button', 'Preview rotation').click()
       cy.contains('Linked consumers', { timeout: 20_000 }).should('be.visible')
       cy.contains('Core orchestrated').should('be.visible')
@@ -357,9 +398,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
     dialog('Edit secret').within(() => {
       cy.get('#secret-mutation-reason').type('Release browser qualification')
-      cy.get('#secret-replacement-value').type(
-        'browser-edited-candidate-2026-08-14-verified'
-      )
+      cy.get('#secret-replacement-value').type(editedCandidate)
       cy.contains('button', 'Preview mutation').click()
       cy.contains('Dry run ready', { timeout: 20_000 }).should('be.visible')
       cy.get('[aria-label="Confirm secret mutation"]').click()
@@ -382,6 +421,36 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    restartBrokerAndOpenSecrets()
+    cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
+      cy.contains('button', /^Reveal\b/).click()
+    })
+    dialog('Reveal secret').within(() => {
+      cy.get('#secret-reveal-reason').type('Release browser qualification')
+      cy.get('[aria-label="Confirm secret reveal"]').click()
+      cy.intercept('POST', '**/secrets/reveal').as('revealPersistedEdit')
+      cy.contains('button', 'Reveal value').click()
+      cy.wait('@revealPersistedEdit', {
+        timeout: 60_000,
+        log: false,
+      }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.body?.value === editedCandidate,
+            'edited value persisted across Broker restart'
+          ).to.equal(true)
+        }
+      )
+      cy.get('[data-testid="secret-reveal-value"]', {
+        timeout: 20_000,
+        log: false,
+      }).should('be.visible')
+      cy.contains('button', 'Clear reveal').click()
+      cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
+      cy.contains('button', 'Close').click()
+    })
+
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
     }).within(() => {
@@ -389,9 +458,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
     dialog('Reset secret').within(() => {
       cy.get('#secret-mutation-reason').type('Release browser qualification')
-      cy.get('#secret-replacement-value').type(
-        'browser-reset-candidate-2026-08-14-verified'
-      )
+      cy.get('#secret-replacement-value').type(resetCandidate)
       cy.contains('button', 'Preview mutation').click()
       cy.contains('Dry run ready', { timeout: 20_000 }).should('be.visible')
       cy.get('[aria-label="Confirm secret mutation"]').click()
@@ -413,6 +480,44 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-replacement-value').should('have.value', '')
       cy.contains('button', 'Close').click()
     })
+
+    restartBrokerAndOpenSecrets()
+    cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
+      cy.contains('button', /^Reveal\b/).click()
+    })
+    dialog('Reveal secret').within(() => {
+      cy.get('#secret-reveal-reason').type('Release browser qualification')
+      cy.get('[aria-label="Confirm secret reveal"]').click()
+      cy.intercept('POST', '**/secrets/reveal').as('revealPersistedReset')
+      cy.contains('button', 'Reveal value').click()
+      cy.wait('@revealPersistedReset', {
+        timeout: 60_000,
+        log: false,
+      }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.body?.value === resetCandidate,
+            'reset value persisted across Broker restart'
+          ).to.equal(true)
+          expect(response?.body?.ttlSeconds).to.be.within(1, 300)
+          cy.wrap(response.body.ttlSeconds, { log: false }).as('revealTtl')
+        }
+      )
+      cy.get('[data-testid="secret-reveal-value"]', {
+        timeout: 20_000,
+        log: false,
+      }).should('be.visible')
+      cy.contains('Expires in').should('be.visible')
+      cy.get('@revealTtl', { log: false }).then((ttlSeconds) => {
+        cy.get('[data-testid="secret-reveal-value"]', {
+          timeout: (ttlSeconds + 5) * 1000,
+          log: false,
+        }).should('not.exist')
+      })
+      cy.contains('button', 'Close').click()
+    })
+    assertSecretValuesAbsentFromBrowser([editedCandidate, resetCandidate])
 
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
@@ -968,5 +1073,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
     cy.get('input[type="password"]').should('not.exist')
     cy.contains(/error boundary|uncaught error|failed to load/i).should('not.exist')
+    assertSecretValuesAbsentFromBrowser([
+      rotationCandidate,
+      editedCandidate,
+      resetCandidate,
+    ])
   })
 })
