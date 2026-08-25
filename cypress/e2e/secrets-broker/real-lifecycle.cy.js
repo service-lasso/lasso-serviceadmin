@@ -828,6 +828,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    waitForProviderUiStatusAfterReload()
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.contains('button', /^Migrate\b/).click()
     })
