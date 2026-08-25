@@ -1,4 +1,8 @@
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
+const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
+const rotationCandidate = 'browser-rotation-candidate-2026-08-14-verified'
+const editedCandidate = 'browser-edited-candidate-2026-08-14-verified'
+const resetCandidate = 'browser-reset-candidate-2026-08-14-verified'
 
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
@@ -16,6 +20,45 @@ function openSecrets() {
 
 function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
+}
+
+function restartBrokerAndOpenSecrets() {
+  cy.request({
+    method: 'POST',
+    url: '/api/services/%40secretsbroker/restart',
+    body: { confirm: true },
+    timeout: 120_000,
+  }).its('status').should('equal', 200)
+  waitForManagedServiceReadiness('@secretsbroker')
+  cy.reload()
+  cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+  openSecrets()
+}
+
+function assertSecretValuesAbsentFromBrowser(secretValues) {
+  cy.window().then((browserWindow) => {
+    const storageValues = [
+      browserWindow.localStorage,
+      browserWindow.sessionStorage,
+    ].flatMap((storage) =>
+      Array.from({ length: storage.length }, (_, index) =>
+        storage.getItem(storage.key(index))
+      ).filter(Boolean)
+    )
+    const browserSurface = [
+      browserWindow.document.documentElement.textContent ?? '',
+      browserWindow.location.href,
+      browserWindow.document.cookie,
+      ...storageValues,
+      ...browserWindow.performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name),
+    ].join('\n')
+    expect(
+      secretValues.some((value) => browserSurface.includes(value)),
+      'secret values are absent from DOM, URL, cookies, storage, and resource URLs'
+    ).to.equal(false)
+  })
 }
 
 function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
@@ -89,37 +132,226 @@ function waitForBrokerProviderStatusReadiness(
   })
 }
 
-function waitForProviderUiStatusAfterReload(
-  targetProviderId = 'vault-browser',
-  remainingAttempts = 3
+function waitForBrokerInventoryReadiness(
+  targetRef = createdRef,
+  remainingAttempts = 60
 ) {
+  cy.request({
+    method: 'GET',
+    url: '/api/services/%40secretsbroker/secrets/management',
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    const records = body?.results
+    if (
+      status === 200 &&
+      Array.isArray(records) &&
+      records.some(
+        (record) =>
+          record?.ref === targetRef &&
+          record?.providerKind === 'local-encrypted-store' &&
+          record?.outcome === 'ready'
+      )
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        `Broker inventory did not expose ready local candidate ${targetRef}.`
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForBrokerInventoryReadiness(targetRef, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForProviderUiStatusAfterReload({
+  targetProviderId = 'vault-browser',
+  targetInventoryRef,
+  remainingAttempts = 3,
+} = {}) {
   waitForBrokerProviderStatusReadiness(targetProviderId)
+  if (targetInventoryRef) {
+    waitForBrokerInventoryReadiness(targetInventoryRef)
+  }
   cy.intercept('GET', '**/providers/config/status').as(
     'providerStatusAfterReload'
   )
+  if (targetInventoryRef) {
+    cy.intercept('GET', '**/secrets/management*').as(
+      'secretsInventoryAfterReload'
+    )
+  }
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
-  cy.wait('@providerStatusAfterReload', { timeout: 20_000 }).then(
-    ({ response }) => {
-      const hasTargetProvider =
-        response?.statusCode === 200 &&
-        response?.body?.providers?.some(
-          (provider) => provider?.providerId === targetProviderId
-        )
-      if (hasTargetProvider) return
-      if (remainingAttempts <= 1) {
-        throw new Error(
-          `Provider status UI response did not converge for ${targetProviderId} after the bounded post-rotation reloads.`
-        )
-      }
+  return waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
+    (hasTargetProvider) => {
+      const inventoryReadiness = targetInventoryRef
+        ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
+        : cy.wrap(true, { log: false })
 
-      waitForProviderUiStatusAfterReload(
+      return inventoryReadiness.then((hasTargetInventoryRecord) => {
+        const providerRowReadiness = hasTargetProvider
+          ? waitForProviderRowRender(targetProviderId)
+          : cy.wrap(false, { log: false })
+
+        return providerRowReadiness.then((hasTargetProviderRow) => {
+          if (
+            hasTargetProvider &&
+            hasTargetInventoryRecord &&
+            hasTargetProviderRow
+          ) {
+            return
+          }
+          if (remainingAttempts <= 1) {
+            throw new Error(
+              `Secrets UI metadata did not converge after the bounded reloads (provider=${targetProviderId}, inventory=${targetInventoryRef ?? 'not-required'}).`
+            )
+          }
+
+          return waitForProviderUiStatusAfterReload({
+            targetProviderId,
+            targetInventoryRef,
+            remainingAttempts: remainingAttempts - 1,
+          })
+        })
+      })
+    }
+  )
+}
+
+function waitForSuccessfulProviderUiStatusResponse(
+  targetProviderId,
+  remainingAttempts = 5
+) {
+  return cy
+    .wait('@providerStatusAfterReload', { timeout: 20_000 })
+    .then(({ response }) => {
+      const providers = response?.body?.providers
+      const successfulMetadataResponse =
+        response?.statusCode === 200 && Array.isArray(providers)
+      if (
+        successfulMetadataResponse &&
+        providers.some(
+          (provider) =>
+            provider?.providerId === targetProviderId &&
+            provider?.outcome === 'ready' &&
+            provider?.operations?.some(
+              (operation) =>
+                operation?.path === '/v1/providers/migration/apply' &&
+                (operation?.maturity === 'validated' ||
+                  operation?.maturity === 'executable')
+            )
+        )
+      ) {
+        return true
+      }
+      if (successfulMetadataResponse || remainingAttempts <= 1) return false
+
+      return waitForSuccessfulProviderUiStatusResponse(
         targetProviderId,
         remainingAttempts - 1
       )
-    }
-  )
+    })
+}
+
+function waitForProviderRowRender(targetProviderId, remainingAttempts = 20) {
+  return cy.get('body', { log: false }).then(($body) => {
+    const hasTargetProviderRow = Array.from(
+      $body[0].querySelectorAll('tr')
+    ).some((row) =>
+      Array.from(
+        row.querySelectorAll('.font-mono.text-xs.text-muted-foreground')
+      ).some((metadata) =>
+        metadata.textContent?.trim().startsWith(`${targetProviderId} ·`)
+      )
+    )
+    if (hasTargetProviderRow) return true
+    if (remainingAttempts <= 1) return false
+
+    return cy
+      .wait(250, { log: false })
+      .then(() =>
+        waitForProviderRowRender(targetProviderId, remainingAttempts - 1)
+      )
+  })
+}
+
+function waitForSuccessfulInventoryUiResponse(
+  targetRef,
+  remainingAttempts = 5
+) {
+  return cy
+    .wait('@secretsInventoryAfterReload', { timeout: 20_000 })
+    .then(({ response }) => {
+      const records = response?.body?.results
+      const successfulMetadataResponse =
+        response?.statusCode === 200 && Array.isArray(records)
+      if (
+        successfulMetadataResponse &&
+        records.some(
+          (record) =>
+            record?.ref === targetRef &&
+            record?.providerKind === 'local-encrypted-store' &&
+            record?.outcome === 'ready'
+        )
+      ) {
+        return true
+      }
+      if (successfulMetadataResponse || remainingAttempts <= 1) return false
+
+      return waitForSuccessfulInventoryUiResponse(
+        targetRef,
+        remainingAttempts - 1
+      )
+    })
+}
+
+function waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts = 5) {
+  return cy
+    .wait('@brokerTelemetry', { timeout: 60_000 })
+    .then(({ response }) => {
+      if (response?.statusCode === 200) {
+        expect(response?.body?.safety).to.include({
+          lowCardinalityLabels: true,
+          valueMaterialIncluded: false,
+        })
+        return
+      }
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          'Broker telemetry UI response did not recover within the bounded query retries.'
+        )
+      }
+
+      return waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts - 1)
+    })
+}
+
+function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
+  return cy
+    .wait('@brokerEvents', { timeout: 60_000 })
+    .then(({ response }) => {
+      if (response?.statusCode === 200) {
+        expect(response?.body?.safety).to.deep.equal({
+          metadataOnly: true,
+          rawRefIncluded: false,
+          valueMaterialIncluded: false,
+        })
+        return
+      }
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          'Broker events UI response did not recover within the bounded query retries.'
+        )
+      }
+
+      return waitForSuccessfulBrokerEventsUiResponse(remainingAttempts - 1)
+    })
 }
 
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
@@ -141,6 +373,8 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     waitForBrokerProviderStatusReadiness()
     cy.visit('/services/%40secretsbroker')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    cy.intercept('GET', '**/operations/telemetry').as('brokerTelemetry')
+    cy.intercept('GET', '**/operations/events*').as('brokerEvents')
     openSecrets()
     cy.contains('Provider status is unavailable; migration remains disabled.').should(
       'not.exist'
@@ -157,24 +391,8 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
 
     cy.contains('Operational controls').should('be.visible')
-    cy.intercept('GET', '**/operations/telemetry').as('brokerTelemetry')
-    cy.intercept('GET', '**/operations/events*').as('brokerEvents')
-    cy.contains('button', 'Refresh').click()
-    cy.wait('@brokerTelemetry', { timeout: 60_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(200)
-      expect(response?.body?.safety).to.include({
-        lowCardinalityLabels: true,
-        valueMaterialIncluded: false,
-      })
-    })
-    cy.wait('@brokerEvents', { timeout: 60_000 }).then(({ response }) => {
-      expect(response?.statusCode).to.equal(200)
-      expect(response?.body?.safety).to.deep.equal({
-        metadataOnly: true,
-        rawRefIncluded: false,
-        valueMaterialIncluded: false,
-      })
-    })
+    waitForSuccessfulBrokerTelemetryUiResponse()
+    waitForSuccessfulBrokerEventsUiResponse()
     cy.contains('Active lockouts')
       .parent()
       .find('p', { timeout: 20_000 })
@@ -217,9 +435,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-reason').type(
         'Release browser linked consumer qualification'
       )
-      cy.get('#secret-rotation-value').type(
-        'browser-rotation-candidate-2026-08-14-verified'
-      )
+      cy.get('#secret-rotation-value').type(rotationCandidate)
       cy.contains('button', 'Preview rotation').click()
       cy.contains('Linked consumers', { timeout: 20_000 }).should('be.visible')
       cy.contains('Core orchestrated').should('be.visible')
@@ -336,9 +552,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
     dialog('Edit secret').within(() => {
       cy.get('#secret-mutation-reason').type('Release browser qualification')
-      cy.get('#secret-replacement-value').type(
-        'browser-edited-candidate-2026-08-14-verified'
-      )
+      cy.get('#secret-replacement-value').type(editedCandidate)
       cy.contains('button', 'Preview mutation').click()
       cy.contains('Dry run ready', { timeout: 20_000 }).should('be.visible')
       cy.get('[aria-label="Confirm secret mutation"]').click()
@@ -361,6 +575,36 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
+    restartBrokerAndOpenSecrets()
+    cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
+      cy.contains('button', /^Reveal\b/).click()
+    })
+    dialog('Reveal secret').within(() => {
+      cy.get('#secret-reveal-reason').type('Release browser qualification')
+      cy.get('[aria-label="Confirm secret reveal"]').click()
+      cy.intercept('POST', '**/secrets/reveal').as('revealPersistedEdit')
+      cy.contains('button', 'Reveal value').click()
+      cy.wait('@revealPersistedEdit', {
+        timeout: 60_000,
+        log: false,
+      }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.body?.value === editedCandidate,
+            'edited value persisted across Broker restart'
+          ).to.equal(true)
+        }
+      )
+      cy.get('[data-testid="secret-reveal-value"]', {
+        timeout: 20_000,
+        log: false,
+      }).should('be.visible')
+      cy.contains('button', 'Clear reveal').click()
+      cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
+      cy.contains('button', 'Close').click()
+    })
+
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
     }).within(() => {
@@ -368,9 +612,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
     dialog('Reset secret').within(() => {
       cy.get('#secret-mutation-reason').type('Release browser qualification')
-      cy.get('#secret-replacement-value').type(
-        'browser-reset-candidate-2026-08-14-verified'
-      )
+      cy.get('#secret-replacement-value').type(resetCandidate)
       cy.contains('button', 'Preview mutation').click()
       cy.contains('Dry run ready', { timeout: 20_000 }).should('be.visible')
       cy.get('[aria-label="Confirm secret mutation"]').click()
@@ -392,6 +634,44 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-replacement-value').should('have.value', '')
       cy.contains('button', 'Close').click()
     })
+
+    restartBrokerAndOpenSecrets()
+    cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
+      cy.contains('button', /^Reveal\b/).click()
+    })
+    dialog('Reveal secret').within(() => {
+      cy.get('#secret-reveal-reason').type('Release browser qualification')
+      cy.get('[aria-label="Confirm secret reveal"]').click()
+      cy.intercept('POST', '**/secrets/reveal').as('revealPersistedReset')
+      cy.contains('button', 'Reveal value').click()
+      cy.wait('@revealPersistedReset', {
+        timeout: 60_000,
+        log: false,
+      }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.body?.value === resetCandidate,
+            'reset value persisted across Broker restart'
+          ).to.equal(true)
+          expect(response?.body?.ttlSeconds).to.be.within(1, 300)
+          cy.wrap(response.body.ttlSeconds, { log: false }).as('revealTtl')
+        }
+      )
+      cy.get('[data-testid="secret-reveal-value"]', {
+        timeout: 20_000,
+        log: false,
+      }).should('be.visible')
+      cy.contains('Expires in').should('be.visible')
+      cy.get('@revealTtl', { log: false }).then((ttlSeconds) => {
+        cy.get('[data-testid="secret-reveal-value"]', {
+          timeout: (ttlSeconds + 5) * 1000,
+          log: false,
+        }).should('not.exist')
+      })
+      cy.contains('button', 'Close').click()
+    })
+    assertSecretValuesAbsentFromBrowser([editedCandidate, resetCandidate])
 
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
@@ -416,14 +696,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForBrokerProviderStatusReadiness()
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
-    openSecrets()
-    cy.contains('Provider status is unavailable; migration remains disabled.', {
-      timeout: 20_000,
-    }).should('not.exist')
+    waitForProviderUiStatusAfterReload()
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td')
         .eq(2)
@@ -587,12 +860,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForBrokerProviderStatusReadiness()
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
-    openSecrets()
+    waitForProviderUiStatusAfterReload({ targetInventoryRef: expectedRef })
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
+      cy.get('td').eq(1).should('contain.text', 'local-encrypted-store')
       cy.get('td')
         .eq(2)
         .invoke('text')
@@ -645,15 +915,33 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       )
       cy.contains('concurrency 1').should('be.visible')
       cy.contains('stop_and_defer_remaining').should('exist')
+      cy.intercept('POST', '**/secrets/campaigns/apply').as(
+        'applyBulkMigrationCampaign'
+      )
       cy.get('[aria-label="Confirm exact bulk migration campaign"]').click()
       cy.contains('button', 'Apply exact campaign').click()
+      cy.wait('@applyBulkMigrationCampaign', { timeout: 60_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body).to.include({
+            outcome: 'applied',
+            applied: true,
+            requiresRevalidation: false,
+            auditStatus: 'audit_recorded',
+          })
+          expect(response?.body?.results?.[0]).to.include({
+            ref: expectedRef,
+            outcome: 'migrated',
+            applied: true,
+            verified: true,
+          })
+        }
+      )
       cy.contains('Campaign outcome: applied', { timeout: 20_000 }).should(
         'be.visible'
       )
       cy.contains('1 verified').should('be.visible')
-      cy.contains(
-        'services/sample-service/sample.GENERATED_TOKEN: migrated'
-      ).should('be.visible')
+      cy.contains(`${expectedRef}: migrated`).should('be.visible')
       cy.contains('button', 'Close').click()
     })
 
@@ -947,5 +1235,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
     cy.get('input[type="password"]').should('not.exist')
     cy.contains(/error boundary|uncaught error|failed to load/i).should('not.exist')
+    assertSecretValuesAbsentFromBrowser([
+      rotationCandidate,
+      editedCandidate,
+      resetCandidate,
+    ])
   })
 })
