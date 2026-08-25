@@ -132,30 +132,82 @@ function waitForBrokerProviderStatusReadiness(
   })
 }
 
-function waitForProviderUiStatusAfterReload(
-  targetProviderId = 'vault-browser',
-  remainingAttempts = 3
+function waitForBrokerInventoryReadiness(
+  targetRef = createdRef,
+  remainingAttempts = 60
 ) {
+  cy.request({
+    method: 'GET',
+    url: '/api/services/%40secretsbroker/secrets/management',
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    const records = body?.results
+    if (
+      status === 200 &&
+      Array.isArray(records) &&
+      records.some(
+        (record) =>
+          record?.ref === targetRef &&
+          record?.providerKind === 'local-encrypted-store' &&
+          record?.outcome === 'ready'
+      )
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        `Broker inventory did not expose ready local candidate ${targetRef}.`
+      )
+    }
+
+    cy.wait(1_000).then(() =>
+      waitForBrokerInventoryReadiness(targetRef, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForProviderUiStatusAfterReload({
+  targetProviderId = 'vault-browser',
+  targetInventoryRef,
+  remainingAttempts = 3,
+} = {}) {
   waitForBrokerProviderStatusReadiness(targetProviderId)
+  if (targetInventoryRef) {
+    waitForBrokerInventoryReadiness(targetInventoryRef)
+  }
   cy.intercept('GET', '**/providers/config/status').as(
     'providerStatusAfterReload'
   )
+  if (targetInventoryRef) {
+    cy.intercept('GET', '**/secrets/management*').as(
+      'secretsInventoryAfterReload'
+    )
+  }
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
   waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
     (hasTargetProvider) => {
-      if (hasTargetProvider) return
-      if (remainingAttempts <= 1) {
-        throw new Error(
-          `Provider status UI response did not converge for ${targetProviderId} after the bounded post-rotation reloads.`
-        )
-      }
+      const inventoryReadiness = targetInventoryRef
+        ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
+        : cy.wrap(true, { log: false })
 
-      waitForProviderUiStatusAfterReload(
-        targetProviderId,
-        remainingAttempts - 1
-      )
+      inventoryReadiness.then((hasTargetInventoryRecord) => {
+        if (hasTargetProvider && hasTargetInventoryRecord) return
+        if (remainingAttempts <= 1) {
+          throw new Error(
+            `Secrets UI metadata did not converge after the bounded reloads (provider=${targetProviderId}, inventory=${targetInventoryRef ?? 'not-required'}).`
+          )
+        }
+
+        waitForProviderUiStatusAfterReload({
+          targetProviderId,
+          targetInventoryRef,
+          remainingAttempts: remainingAttempts - 1,
+        })
+      })
     }
   )
 }
@@ -190,6 +242,36 @@ function waitForSuccessfulProviderUiStatusResponse(
 
       return waitForSuccessfulProviderUiStatusResponse(
         targetProviderId,
+        remainingAttempts - 1
+      )
+    })
+}
+
+function waitForSuccessfulInventoryUiResponse(
+  targetRef,
+  remainingAttempts = 5
+) {
+  return cy
+    .wait('@secretsInventoryAfterReload', { timeout: 20_000 })
+    .then(({ response }) => {
+      const records = response?.body?.results
+      const successfulMetadataResponse =
+        response?.statusCode === 200 && Array.isArray(records)
+      if (
+        successfulMetadataResponse &&
+        records.some(
+          (record) =>
+            record?.ref === targetRef &&
+            record?.providerKind === 'local-encrypted-store' &&
+            record?.outcome === 'ready'
+        )
+      ) {
+        return true
+      }
+      if (successfulMetadataResponse || remainingAttempts <= 1) return false
+
+      return waitForSuccessfulInventoryUiResponse(
+        targetRef,
         remainingAttempts - 1
       )
     })
@@ -714,8 +796,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload()
-    cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
+    waitForProviderUiStatusAfterReload({ targetInventoryRef: createdRef })
+    cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
+      cy.get('td').eq(1).should('contain.text', 'local-encrypted-store')
       cy.get('td')
         .eq(2)
         .invoke('text')
@@ -729,7 +812,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     dialog('Bulk provider migration').within(() => {
       cy.get('#bulk-migration-target-provider').select('vault-browser')
       cy.get(
-        '[aria-label="Select services/sample-service/sample.GENERATED_TOKEN for bulk migration"]'
+        '[aria-label="Select services/sample-service/browser.CREATED_TOKEN for bulk migration"]'
       ).click()
       cy.get('#bulk-migration-audit-reason').type(
         'Release browser verified bulk Vault migration'
