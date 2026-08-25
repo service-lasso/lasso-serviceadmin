@@ -230,6 +230,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     waitForManagedServiceReadiness('sample-service')
     waitForBrokerProviderStatusReadiness()
     cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
 
@@ -384,6 +385,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     waitForBrokerProviderStatusReadiness()
     cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
     cy.contains('Provider status is unavailable; migration remains disabled.', {
@@ -554,6 +556,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     waitForBrokerProviderStatusReadiness()
     cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
@@ -660,6 +663,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     waitForBrokerProviderStatusReadiness()
     cy.reload()
+    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     openSecrets()
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
