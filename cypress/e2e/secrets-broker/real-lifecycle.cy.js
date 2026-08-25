@@ -97,6 +97,7 @@ function waitForProviderTableRowAfterReload(
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
+  cy.wait(1_000)
   cy.get('body').then(($body) => {
     const providerCard = $body
       .find('[data-slot="card-title"]')
@@ -122,11 +123,9 @@ function waitForProviderTableRowAfterReload(
       )
     }
 
-    cy.wait(1_000).then(() =>
-      waitForProviderTableRowAfterReload(
-        targetProviderId,
-        remainingAttempts - 1
-      )
+    waitForProviderTableRowAfterReload(
+      targetProviderId,
+      remainingAttempts - 1
     )
   })
 }
