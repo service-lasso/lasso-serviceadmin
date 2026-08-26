@@ -410,6 +410,15 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   assert.deepEqual(disabledWrites, [])
   assert.equal(
     providerReadinessErrorCode({
+      error: 'secrets_broker_not_ready',
+      message: 'private',
+      path: 'private-path',
+      value: 'private-value',
+    }),
+    'secrets_broker_not_ready'
+  )
+  assert.equal(
+    providerReadinessErrorCode({
       error: { code: 'secrets_broker_not_ready', message: 'private' },
     }),
     'secrets_broker_not_ready'
@@ -420,6 +429,15 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   )
   assert.equal(
     providerReadinessErrorCode({ error: { code: 'private-path-or-ref' } }),
+    'unknown'
+  )
+  assert.equal(
+    providerReadinessErrorCode({
+      error: 'private-code',
+      code: 'broker_unavailable',
+      message: 'private-message',
+      ref: 'private-ref',
+    }),
     'unknown'
   )
   assert.deepEqual(

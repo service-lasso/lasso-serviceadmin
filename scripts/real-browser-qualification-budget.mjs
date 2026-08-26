@@ -273,7 +273,9 @@ export function providerFinalLifecycleDiagnosticRequestOptions(url) {
 
 export function providerReadinessErrorCode(body) {
   const candidate =
-    typeof body?.error?.code === 'string'
+    typeof body?.error === 'string'
+      ? body.error
+      : typeof body?.error?.code === 'string'
       ? body.error.code
       : typeof body?.code === 'string'
         ? body.code
