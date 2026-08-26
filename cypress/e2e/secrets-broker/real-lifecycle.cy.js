@@ -81,12 +81,14 @@ function managedSecretsInventory() {
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
   cy.contains('[role="tab"]', /^Overview\b/).click()
-  cy.contains('[data-slot="card"]', /^Actions/).within(() => {
+  cy.contains('[data-slot="card-title"]', /^Actions$/)
+    .closest('[data-slot="card"]')
+    .within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
       .should('be.visible')
       .and('be.enabled')
       .click()
-  })
+    })
   cy.contains('[role="alertdialog"]', 'Confirm elevated action').within(() => {
     cy.contains('button', /^Restart service$/).click()
   })
