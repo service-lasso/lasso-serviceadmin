@@ -391,6 +391,75 @@ function waitForSuccessfulInventoryUiResponse(
     })
 }
 
+function waitForBrokerTelemetryReadiness(
+  privateValues = [],
+  remainingAttempts = 60
+) {
+  cy.request({
+    method: 'GET',
+    url: '/api/services/%40secretsbroker/operations/telemetry',
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    if (status === 200) {
+      expect(body?.safety).to.include({
+        lowCardinalityLabels: true,
+        valueMaterialIncluded: false,
+      })
+      assertPrivateMaterialAbsentFromMetadata(
+        body,
+        privateValues,
+        'private material is absent from telemetry readiness metadata'
+      )
+      return
+    }
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        'Broker telemetry endpoint did not recover within the bounded readiness checks.'
+      )
+    }
+
+    cy.wait(1_000, { log: false }).then(() =>
+      waitForBrokerTelemetryReadiness(privateValues, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForBrokerEventsReadiness(
+  privateValues = [],
+  remainingAttempts = 60
+) {
+  cy.request({
+    method: 'GET',
+    url: '/api/services/%40secretsbroker/operations/events',
+    failOnStatusCode: false,
+    timeout: 20_000,
+  }).then(({ status, body }) => {
+    if (status === 200) {
+      expect(body?.safety).to.deep.equal({
+        metadataOnly: true,
+        rawRefIncluded: false,
+        valueMaterialIncluded: false,
+      })
+      assertPrivateMaterialAbsentFromMetadata(
+        body,
+        privateValues,
+        'private material is absent from event readiness metadata'
+      )
+      return
+    }
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        'Broker event endpoint did not recover within the bounded readiness checks.'
+      )
+    }
+
+    cy.wait(1_000, { log: false }).then(() =>
+      waitForBrokerEventsReadiness(privateValues, remainingAttempts - 1)
+    )
+  })
+}
+
 function waitForSuccessfulBrokerTelemetryUiResponse(
   remainingAttempts = 5,
   alias = 'brokerTelemetry',
@@ -742,6 +811,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-value').should('not.exist')
     })
     waitForManagedServiceReadiness('sample-service')
+    waitForManagedServiceReadiness('@secretsbroker')
+    waitForBrokerTelemetryReadiness(rollbackPrivateMaterial)
+    waitForBrokerEventsReadiness(rollbackPrivateMaterial)
     cy.intercept('GET', '**/api/secrets/rotation/operations/*').as(
       'rehydrateRollbackRotation'
     )
