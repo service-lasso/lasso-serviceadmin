@@ -216,11 +216,14 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     ).length - 1,
     1
   )
-  assert.equal(
-    lifecycleSource.split("cy.intercept(\n      'POST',\n      '**/api/services/%40secretsbroker/restart'")
-      .length - 1,
-    1
-  )
+  const restartInterceptPattern =
+    /cy\.intercept\(\r?\n[ \t]*'POST',\r?\n[ \t]*'\*\*\/api\/services\/%40secretsbroker\/restart'/g
+  for (const source of [
+    lifecycleSource.replace(/\r?\n/g, '\n'),
+    lifecycleSource.replace(/\r?\n/g, '\r\n'),
+  ]) {
+    assert.equal([...source.matchAll(restartInterceptPattern)].length, 1)
+  }
   assert.equal(lifecycleSource.includes("url: '/api/services/%40secretsbroker/restart'"), false)
   assert.equal(lifecycleSource.split('brokerRestartUiRequests += 1').length - 1, 1)
   for (const requestCount of [1, 2]) {
