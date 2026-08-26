@@ -310,21 +310,29 @@ async function verifyNoLeakEvidence(
   runtimeDiagnostics,
   { requireComplete = false } = {}
 ) {
-  const evidenceRoots = [
-    {
-      directory: path.join(tempRoot, 'services', 'sample-service', 'logs'),
-      allowEmptyFiles: true,
-    },
-    {
-      directory: path.join(
-        tempRoot,
-        'workspace',
-        '.service-lasso',
-        'secret-rotations'
-      ),
-      allowEmptyFiles: false,
-    },
-  ]
+  const evidenceRoots =
+    qualificationMode === 'comprehensive'
+      ? [
+          {
+            directory: path.join(
+              tempRoot,
+              'services',
+              'sample-service',
+              'logs'
+            ),
+            allowEmptyFiles: true,
+          },
+          {
+            directory: path.join(
+              tempRoot,
+              'workspace',
+              '.service-lasso',
+              'secret-rotations'
+            ),
+            allowEmptyFiles: false,
+          },
+        ]
+      : []
   let totalBytes = 0
   for (const { directory, allowEmptyFiles } of evidenceRoots) {
     if (requireComplete) {
@@ -535,8 +543,10 @@ try {
     throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
   }
   cypressSucceeded = true
-  await verifyRollbackProcessEvidence(path.resolve(ready.tempRoot))
-  rollbackProcessVerified = true
+  if (qualificationMode === 'comprehensive') {
+    await verifyRollbackProcessEvidence(path.resolve(ready.tempRoot))
+    rollbackProcessVerified = true
+  }
   auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
 } catch (error) {
   runFailure = error
