@@ -746,6 +746,15 @@ export type CoreSecretRotationImpactPlan = {
   status: 'ready' | 'blocked'
   confirmationRequired: true
   valuePolicy: 'metadata_only'
+  ownerAction: {
+    authority: 'service' | 'external'
+    status: 'ready' | 'manual'
+    serviceId?: string
+    actionId?: string
+    rollbackActionId?: string
+    reason: string
+    blockers: string[]
+  } | null
   services: Array<{
     serviceId: string
     role: 'direct' | 'dependent'
@@ -767,6 +776,17 @@ export type CoreSecretRotationImpactPlan = {
       actionId?: string
       reason: string
     }>
+  }
+  summary: {
+    directConsumers: number
+    dependents: number
+    restart: number
+    reload: number
+    action: number
+    manual: number
+    none: number
+    blockers: number
+    ownerAction: number
   }
   blockers: string[]
 }
@@ -796,11 +816,16 @@ export type CoreSecretRotationExecutionState = {
     | 'rolled_back'
     | 'blocked'
   outcome: 'in_progress' | 'committed' | 'rolled_back' | 'blocked'
+  createdAt: string
   activeVersionId: string | null
   previousVersionId: string | null
   stagedVersionId: string | null
+  initialRunningServiceIds: string[]
+  stoppedServiceIds: string[]
   completedOperations: string[]
   rollbackCompletedOperations: string[]
+  ownerActionCompleted: boolean
+  ownerRollbackCompleted: boolean
   failureCode: string | null
   updatedAt: string
   plan: CoreSecretRotationImpactPlan

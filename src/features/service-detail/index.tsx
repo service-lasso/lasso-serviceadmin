@@ -48,6 +48,7 @@ import {
   useBrokerProviderStatus,
   useBrokerProviderValidation,
   useDashboardService,
+  useServices,
   useSecretDecommissionApply,
   useSecretDecommissionPreview,
   useSecretDecommissionRestore,
@@ -60,6 +61,7 @@ import {
   useSecretRotationPreview,
   useSecretRotationVersionAction,
   useCoreSecretRotationPlan,
+  useCoreSecretRotationOperation,
   useCoreSecretRotationExecution,
   useSecretsManagement,
   useRuntimeIdentity,
@@ -69,6 +71,7 @@ import {
   useServiceUpdateAction,
 } from '@/lib/service-lasso-dashboard/hooks'
 import {
+  isRuntimeApiUnavailableError,
   providerSupportsMigrationApply,
   serviceLassoApiBaseUrl,
 } from '@/lib/service-lasso-dashboard/stub'
@@ -925,6 +928,102 @@ function createSecretOperationId(
   return `serviceadmin-${kind}-${randomPart}`
 }
 
+type RotationUiFailureKind =
+  | 'contract_incompatible'
+  | 'authentication_required'
+  | 'permission_denied'
+  | 'audit_unavailable'
+  | 'unsupported'
+  | 'plan_blocked'
+
+class RotationUiFailure extends Error {
+  readonly kind: RotationUiFailureKind
+
+  constructor(kind: RotationUiFailureKind) {
+    super(kind)
+    this.name = 'RotationUiFailure'
+    this.kind = kind
+  }
+}
+
+function rotationFailureCopy(error: unknown, fallback: string) {
+  const kind =
+    error instanceof RotationUiFailure
+      ? error.kind
+      : isRuntimeApiUnavailableError(error)
+        ? error.details.status === 401
+          ? 'authentication_required'
+          : error.details.status === 403
+            ? 'permission_denied'
+            : [
+                  'broker_contract_invalid',
+                  'rotation_plan_invalid',
+                  'rotation_state_invalid',
+                ].includes(error.details.errorCode ?? '')
+              ? 'contract_incompatible'
+              : ['audit_unavailable', 'broker_audit_unavailable'].includes(
+                    error.details.errorCode ?? ''
+                  )
+                ? 'audit_unavailable'
+                : ['unsupported', 'rotation_unsupported'].includes(
+                      error.details.errorCode ?? ''
+                    )
+                  ? 'unsupported'
+                  : null
+        : error instanceof Error &&
+            /Core returned invalid rotation/i.test(error.message)
+          ? 'contract_incompatible'
+          : null
+
+  if (kind === 'contract_incompatible') {
+    return 'Core returned incompatible rotation metadata. Keep the exact Admin and Core versions aligned before retrying.'
+  }
+  if (kind === 'authentication_required') {
+    return 'Rotation requires an authenticated local operator session. Re-authenticate, then request a fresh plan.'
+  }
+  if (kind === 'permission_denied') {
+    return 'Rotation was denied by operator permission or provider policy. No version transition was attempted.'
+  }
+  if (kind === 'audit_unavailable') {
+    return 'Rotation audit storage is unavailable. Mutation remains fail-closed until audit readiness is restored.'
+  }
+  if (kind === 'unsupported') {
+    return 'This provider does not support audited version rotation. No mutation is available for this secret.'
+  }
+  if (kind === 'plan_blocked') {
+    return 'Core blocked this rotation plan because a declared consumer action is unresolved. Update the service policy, then request a fresh plan.'
+  }
+  return fallback
+}
+
+function rotationActionLabel(
+  service: CoreSecretRotationImpactPlan['services'][number]
+) {
+  if (service.action === 'restart') return 'Restart service'
+  if (service.action === 'reload') return 'Reload service'
+  if (service.action === 'action') {
+    return service.actionId ? `Run ${service.actionId}` : 'Named action missing'
+  }
+  if (service.action === 'manual') return 'Manual operator action'
+  return 'No runtime action'
+}
+
+function rotationSafeNextAction(operation: CoreSecretRotationExecutionState) {
+  if (operation.outcome === 'committed') {
+    return 'Verify linked service health; the previous version remains retained.'
+  }
+  if (operation.outcome === 'rolled_back') {
+    return 'Inspect the failed consumer, correct readiness, then request a fresh impact plan.'
+  }
+  if (operation.outcome === 'blocked') {
+    return 'Do not replay the mutation. Inspect the safe failure code and recover the durable Core operation.'
+  }
+  if (operation.phase === 'rolling_back') {
+    return 'Wait for Core to finish automatic rollback; do not retry the mutation.'
+  }
+  return 'Wait for Core to reach a terminal phase; this view refreshes from the durable operation.'
+}
+
 function SecretOutcomeBadge({ outcome }: { outcome: string }) {
   if (outcome === 'ready') {
     return <Badge className='bg-emerald-600 hover:bg-emerald-600'>ready</Badge>
@@ -942,7 +1041,13 @@ function SecretOutcomeBadge({ outcome }: { outcome: string }) {
   return <Badge variant='secondary'>{outcome}</Badge>
 }
 
-function SecretsBrokerSecretsPanel() {
+function SecretsBrokerSecretsPanel({
+  rotationOperationId: requestedRotationOperationId,
+  onRotationOperationChange,
+}: {
+  rotationOperationId?: string
+  onRotationOperationChange: (operationId: string | undefined) => void
+}) {
   const identity = useRuntimeIdentity()
   const [inventorySearch, setInventorySearch] = useState('')
   const [inventoryProvider, setInventoryProvider] = useState('all')
@@ -952,6 +1057,8 @@ function SecretsBrokerSecretsPanel() {
   const [providerStatusRevalidating, setProviderStatusRevalidating] =
     useState(false)
   const secretsQuery = useSecretsManagement(inventorySearch.trim())
+  const servicesQuery = useServices()
+  const refetchLinkedServices = servicesQuery.refetch
   const providerQuery = useBrokerProviderStatus()
   const providerStatusUnavailable =
     providerStatusRevalidating || providerQuery.isError
@@ -972,6 +1079,12 @@ function SecretsBrokerSecretsPanel() {
   const previewRotation = useSecretRotationPreview()
   const runRotationAction = useSecretRotationVersionAction()
   const coreRotationPlan = useCoreSecretRotationPlan()
+  const [rotationSubmissionInFlight, setRotationSubmissionInFlight] =
+    useState(false)
+  const coreRotationOperation = useCoreSecretRotationOperation(
+    requestedRotationOperationId,
+    !rotationSubmissionInFlight
+  )
   const coreRotationExecution = useCoreSecretRotationExecution()
   const previewPolicy = useSecretPolicyPreview()
   const [selectedSecret, setSelectedSecret] =
@@ -1039,6 +1152,9 @@ function SecretsBrokerSecretsPanel() {
   const [rotationExecution, setRotationExecution] =
     useState<CoreSecretRotationExecutionState | null>(null)
   const [rotationError, setRotationError] = useState<string | null>(null)
+  const [rotationRecoveryError, setRotationRecoveryError] = useState<
+    string | null
+  >(null)
   const [policyTarget, setPolicyTarget] =
     useState<SecretManagementRecord | null>(null)
   const [policyPreview, setPolicyPreview] =
@@ -1087,6 +1203,13 @@ function SecretsBrokerSecretsPanel() {
   const records = useMemo(
     () => secretsQuery.data?.results ?? [],
     [secretsQuery.data?.results]
+  )
+  const linkedServiceHealth = useMemo(
+    () =>
+      new Map(
+        (servicesQuery.data ?? []).map((service) => [service.id, service])
+      ),
+    [servicesQuery.data]
   )
   const inventoryProviders = useMemo(
     () => [...new Set(records.map((record) => record.sourceId))].sort(),
@@ -1150,6 +1273,54 @@ function SecretsBrokerSecretsPanel() {
   useEffect(() => {
     setInventoryPage((current) => Math.min(current, inventoryPageCount))
   }, [inventoryPageCount])
+
+  useEffect(() => {
+    const operation = coreRotationOperation.data
+    if (!operation) return
+    const record = records.find((candidate) => candidate.ref === operation.ref)
+    if (!record) {
+      if (!secretsQuery.isFetching) {
+        setRotationRecoveryError(
+          'The durable rotation operation exists, but its secret is not in the current Broker inventory.'
+        )
+      }
+      return
+    }
+    if (
+      rotationExecution?.updatedAt === operation.updatedAt &&
+      rotationTarget?.ref === record.ref
+    ) {
+      return
+    }
+    setRotationRecoveryError(null)
+    setRotationTarget(record)
+    setRotationOperationId(operation.operationId)
+    setRotationImpactPlan(operation.plan)
+    setRotationExecution(operation)
+    setRotationValue('')
+    setRotationConfirmed(false)
+    void refetchLinkedServices()
+  }, [
+    coreRotationOperation.data,
+    records,
+    rotationExecution?.updatedAt,
+    rotationTarget?.ref,
+    secretsQuery.isFetching,
+    refetchLinkedServices,
+  ])
+
+  useEffect(() => {
+    if (!coreRotationOperation.error) return
+    setRotationRecoveryError(
+      rotationFailureCopy(
+        coreRotationOperation.error,
+        isRuntimeApiUnavailableError(coreRotationOperation.error) &&
+          coreRotationOperation.error.details.status === 404
+          ? 'The durable Core rotation operation was not found. Start a new rotation from a fresh impact plan.'
+          : 'The durable Core rotation operation is temporarily unavailable. No mutation was replayed.'
+      )
+    )
+  }, [coreRotationOperation.error])
 
   useEffect(() => {
     if (!revealedSecret) return
@@ -1931,6 +2102,7 @@ function SecretsBrokerSecretsPanel() {
   }
 
   const clearRotationState = () => {
+    onRotationOperationChange(undefined)
     setRotationTarget(null)
     setRotationOperationId('')
     setRotationReason('')
@@ -1942,6 +2114,7 @@ function SecretsBrokerSecretsPanel() {
     setRotationImpactPlan(null)
     setRotationExecution(null)
     setRotationError(null)
+    setRotationRecoveryError(null)
     previewRotation.reset()
     runRotationAction.reset()
     coreRotationPlan.reset()
@@ -1971,8 +2144,9 @@ function SecretsBrokerSecretsPanel() {
     setRotationConfirmed(false)
     try {
       const impactPlan = await coreRotationPlan.mutateAsync(rotationTarget.ref)
+      setRotationImpactPlan(impactPlan)
       if (impactPlan.status !== 'ready' || impactPlan.blockers.length > 0) {
-        throw new Error('Core rotation impact plan is blocked.')
+        throw new RotationUiFailure('plan_blocked')
       }
       const preview = await previewRotation.mutateAsync({
         ref: rotationTarget.ref,
@@ -1982,15 +2156,25 @@ function SecretsBrokerSecretsPanel() {
       const item = preview.results.find(
         (candidate) => candidate.ref === rotationTarget.ref
       )
+      if (!item) throw new RotationUiFailure('contract_incompatible')
+      if (
+        preview.auditStatus !== 'audit_ready' ||
+        item.auditRequirement !== 'required'
+      ) {
+        throw new RotationUiFailure('audit_unavailable')
+      }
+      if (item.capabilityResult !== 'supported') {
+        throw new RotationUiFailure('unsupported')
+      }
+      if (item.policyResult !== 'allowed') {
+        throw new RotationUiFailure('permission_denied')
+      }
       if (
         preview.outcome !== 'dry_run_ready' ||
         !preview.requiresConfirmation ||
-        preview.auditStatus !== 'audit_ready' ||
-        item?.outcome !== 'dry_run_ready' ||
-        item.capabilityResult !== 'supported' ||
-        item.policyResult !== 'allowed'
+        item.outcome !== 'dry_run_ready'
       ) {
-        throw new Error('Rotation preview is not executable.')
+        throw new RotationUiFailure('contract_incompatible')
       }
       const status = await runRotationAction.mutateAsync({
         action: 'status',
@@ -2002,12 +2186,20 @@ function SecretsBrokerSecretsPanel() {
       setRotationPreview(preview)
       setRotationStatus(status)
       setRotationImpactPlan(impactPlan)
-    } catch {
+    } catch (error) {
       setRotationPreview(null)
       setRotationStatus(null)
-      setRotationImpactPlan(null)
+      if (
+        !(error instanceof RotationUiFailure) ||
+        error.kind !== 'plan_blocked'
+      ) {
+        setRotationImpactPlan(null)
+      }
       setRotationError(
-        'Core and the Broker did not return an executable, version-bound consumer impact plan. Resolve manual actions, provider policy, and readiness before retrying.'
+        rotationFailureCopy(
+          error,
+          'Core and the Broker did not return an executable, version-bound consumer impact plan. Resolve provider readiness before retrying.'
+        )
       )
     }
   }
@@ -2026,7 +2218,9 @@ function SecretsBrokerSecretsPanel() {
 
     setRotationError(null)
     try {
-      if (rotationImpactPlan?.services.length) {
+      if (rotationImpactPlan) {
+        setRotationSubmissionInFlight(true)
+        onRotationOperationChange(rotationOperationId)
         const operation = await coreRotationExecution.mutateAsync({
           operationId: rotationOperationId,
           ref: rotationTarget.ref,
@@ -2038,9 +2232,10 @@ function SecretsBrokerSecretsPanel() {
         setRotationValue('')
         setRotationConfirmed(false)
         setRotationExecution(operation)
+        setRotationImpactPlan(operation.plan)
         setProviderStatusRevalidating(true)
         try {
-          await providerQuery.refetch()
+          await Promise.all([providerQuery.refetch(), refetchLinkedServices()])
         } finally {
           setProviderStatusRevalidating(false)
         }
@@ -2071,12 +2266,19 @@ function SecretsBrokerSecretsPanel() {
       setRotationReceipt(result)
       setRotationValue('')
       setRotationConfirmed(false)
-    } catch {
+    } catch (error) {
       setRotationValue('')
       setRotationConfirmed(false)
       setRotationError(
-        'The broker did not stage the candidate. Refresh status before retrying.'
+        rotationFailureCopy(
+          error,
+          rotationImpactPlan
+            ? 'Core did not return a terminal rotation operation. The durable operation will be reloaded without replaying the mutation.'
+            : 'The broker did not stage the candidate. Refresh status before retrying.'
+        )
       )
+    } finally {
+      setRotationSubmissionInFlight(false)
     }
   }
 
@@ -2198,6 +2400,27 @@ function SecretsBrokerSecretsPanel() {
 
   return (
     <>
+      {requestedRotationOperationId &&
+      (coreRotationOperation.isLoading || rotationRecoveryError) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Durable rotation operation</CardTitle>
+            <CardDescription>
+              Rehydrating metadata-only state from Core. No mutation is
+              replayed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {coreRotationOperation.isLoading ? (
+              <Skeleton className='h-16 w-full' />
+            ) : (
+              <div className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+                {rotationRecoveryError}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Secret providers</CardTitle>
@@ -3719,11 +3942,21 @@ function SecretsBrokerSecretsPanel() {
               </div>
             ) : null}
 
-            {rotationImpactPlan?.services.length ? (
+            {rotationImpactPlan ? (
               <div className='space-y-3 rounded-md border p-3'>
                 <div className='flex items-center justify-between gap-2'>
                   <span className='text-sm font-medium'>Linked consumers</span>
-                  <Badge variant='outline'>Core orchestrated</Badge>
+                  <Badge
+                    variant={
+                      rotationImpactPlan.status === 'ready'
+                        ? 'outline'
+                        : 'destructive'
+                    }
+                  >
+                    {rotationImpactPlan.status === 'ready'
+                      ? 'Core orchestrated'
+                      : 'Plan blocked'}
+                  </Badge>
                 </div>
                 <p className='text-xs text-muted-foreground'>
                   Core will stop, rematerialize, restart or reload only the
@@ -3731,18 +3964,50 @@ function SecretsBrokerSecretsPanel() {
                   automatically restores the previous version.
                 </p>
                 <div className='space-y-2'>
-                  {rotationImpactPlan.services.map((service) => (
-                    <div
-                      key={service.serviceId}
-                      className='flex items-start justify-between gap-3 text-sm'
-                    >
-                      <span className='font-mono'>{service.serviceId}</span>
-                      <span className='text-right text-muted-foreground'>
-                        {service.action}
-                      </span>
-                    </div>
-                  ))}
+                  {rotationImpactPlan.services.length === 0 ? (
+                    <p className='text-sm text-muted-foreground'>
+                      No linked consumer action is required. Core still owns the
+                      audited version transition.
+                    </p>
+                  ) : null}
+                  {rotationImpactPlan.services.map((service) => {
+                    const currentHealth = linkedServiceHealth.get(
+                      service.serviceId
+                    )
+                    return (
+                      <div
+                        key={service.serviceId}
+                        className='grid gap-1 rounded-md border p-2 text-sm sm:grid-cols-[1fr_auto]'
+                      >
+                        <div>
+                          <span className='font-mono'>{service.serviceId}</span>
+                          <div className='text-xs text-muted-foreground'>
+                            {service.role} consumer
+                          </div>
+                        </div>
+                        <div className='text-left sm:text-right'>
+                          <div>{rotationActionLabel(service)}</div>
+                          <div className='text-xs text-muted-foreground'>
+                            {currentHealth
+                              ? `${currentHealth.status} · ${currentHealth.runtimeHealth.health}`
+                              : 'current health unavailable'}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
+                {rotationImpactPlan.ownerAction ? (
+                  <div className='rounded-md border p-2 text-sm'>
+                    <div className='font-medium'>Rotation owner</div>
+                    <div className='text-muted-foreground'>
+                      {rotationImpactPlan.ownerAction.status === 'ready'
+                        ? `Run ${rotationImpactPlan.ownerAction.actionId ?? 'declared owner action'}`
+                        : 'Manual owner action required'}{' '}
+                      · {rotationImpactPlan.ownerAction.authority}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -3754,10 +4019,68 @@ function SecretsBrokerSecretsPanel() {
                     : 'rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm'
                 }
               >
-                Core rotation {rotationExecution.outcome}. Phase{' '}
-                {rotationExecution.phase};{' '}
-                {rotationExecution.completedOperations.length} consumer actions
-                completed.
+                <div className='space-y-3'>
+                  <div className='font-medium'>
+                    Core rotation {rotationExecution.outcome}
+                  </div>
+                  <div className='grid gap-2 text-xs sm:grid-cols-3'>
+                    <div>
+                      <div className='text-muted-foreground'>
+                        Active version
+                      </div>
+                      <div className='font-mono'>
+                        {rotationExecution.activeVersionId ?? 'not committed'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className='text-muted-foreground'>
+                        Previous version
+                      </div>
+                      <div className='font-mono'>
+                        {rotationExecution.previousVersionId ?? 'none'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className='text-muted-foreground'>
+                        Staged version
+                      </div>
+                      <div className='font-mono'>
+                        {rotationExecution.stagedVersionId ?? 'none'}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    Phase {rotationExecution.phase};{' '}
+                    {rotationExecution.completedOperations.length} consumer
+                    actions completed;{' '}
+                    {rotationExecution.rollbackCompletedOperations.length}{' '}
+                    rollback actions completed.
+                  </div>
+                  {rotationExecution.failureCode ? (
+                    <div>
+                      Safe failure code:{' '}
+                      <span className='font-mono'>
+                        {rotationExecution.failureCode}
+                      </span>
+                    </div>
+                  ) : null}
+                  <div>
+                    <span className='font-medium'>Safe next action:</span>{' '}
+                    {rotationSafeNextAction(rotationExecution)}
+                  </div>
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={coreRotationOperation.isFetching}
+                    onClick={() => void coreRotationOperation.refetch()}
+                  >
+                    <RefreshCw
+                      className={`mr-2 size-4 ${coreRotationOperation.isFetching ? 'animate-spin' : ''}`}
+                    />
+                    Refresh operation status
+                  </Button>
+                </div>
               </div>
             ) : null}
 
@@ -3846,9 +4169,7 @@ function SecretsBrokerSecretsPanel() {
                 }
                 onClick={() => void runRotationStage()}
               >
-                {rotationImpactPlan?.services.length
-                  ? 'Rotate and converge consumers'
-                  : 'Stage candidate'}
+                {rotationImpactPlan ? 'Rotate through Core' : 'Stage candidate'}
               </Button>
             ) : null}
             {rotationReceipt?.operation === 'rotation_stage' ? (
@@ -4452,7 +4773,15 @@ type ServiceDetailTab =
   | 'secrets'
   | 'logs'
 
-export function ServiceDetail({ serviceId }: { serviceId: string }) {
+export function ServiceDetail({
+  serviceId,
+  rotationOperationId,
+  onRotationOperationChange = () => undefined,
+}: {
+  serviceId: string
+  rotationOperationId?: string
+  onRotationOperationChange?: (operationId: string | undefined) => void
+}) {
   const serviceQuery = useDashboardService(serviceId)
   const setupQuery = useServiceSetup(serviceId)
   const setupAction = useServiceSetupAction()
@@ -4463,9 +4792,19 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const [tabState, setTabState] = useState<{
     serviceId: string
     activeTab: ServiceDetailTab
-  }>({ serviceId, activeTab: 'overview' })
+  }>({
+    serviceId,
+    activeTab:
+      rotationOperationId && isSecretsBrokerService(serviceId)
+        ? 'secrets'
+        : 'overview',
+  })
   const activeTab =
-    tabState.serviceId === serviceId ? tabState.activeTab : 'overview'
+    rotationOperationId && isSecretsBrokerService(serviceId)
+      ? 'secrets'
+      : tabState.serviceId === serviceId
+        ? tabState.activeTab
+        : 'overview'
   const setActiveTab = useCallback(
     (nextTab: ServiceDetailTab) => {
       setTabState({ serviceId, activeTab: nextTab })
@@ -4923,7 +5262,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     <TabsContent value='secrets' className='mt-0 space-y-4'>
                       <SecretsBrokerOperationsPanel />
                       <SecretsBrokerLifecyclePanel />
-                      <SecretsBrokerSecretsPanel />
+                      <SecretsBrokerSecretsPanel
+                        rotationOperationId={rotationOperationId}
+                        onRotationOperationChange={onRotationOperationChange}
+                      />
                     </TabsContent>
                   ) : null}
 
