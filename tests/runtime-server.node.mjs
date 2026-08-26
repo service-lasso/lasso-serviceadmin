@@ -35,6 +35,9 @@ import {
   providerFinalLifecycleDiagnosticRequestOptions,
   providerFinalLifecycleDiagnosticTimeoutMs,
   providerLifecycleDiagnostic,
+  providerMigrationApplyDiagnostic,
+  providerMigrationApplyErrorCodes,
+  providerMigrationApplyFailureOutcomes,
   providerReadinessAttempts,
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
@@ -258,6 +261,18 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     ].length,
     providerFinalLifecycleDiagnosticCount
   )
+  assert.equal(
+    [...lifecycleSource.matchAll(/cy\.wait\('@migrationApply'/g)].length,
+    1
+  )
+  assert.equal(
+    [
+      ...lifecycleSource.matchAll(
+        /providerMigrationApplyDiagnostic\(response\)/g
+      ),
+    ].length,
+    1
+  )
 })
 
 test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
@@ -420,6 +435,44 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
     serviceRunning: 'unavailable',
     serviceHealthy: 'unavailable',
   })
+  assert.deepEqual(providerMigrationApplyFailureOutcomes, [
+    'audit_unavailable',
+    'degraded',
+    'locked',
+    'missing_ref',
+    'source_auth_required',
+    'source_unavailable',
+  ])
+  assert.deepEqual(providerMigrationApplyErrorCodes, [
+    'broker_unavailable',
+    'secrets_broker_not_ready',
+    'security_not_configured',
+  ])
+  const safeMigrationFailure = providerMigrationApplyDiagnostic({
+    statusCode: 503,
+    body: {
+      outcome: 'audit_unavailable',
+      error: { code: 'broker_unavailable', message: 'private message' },
+      ref: 'private ref',
+      value: 'private value',
+    },
+  })
+  assert.equal(
+    safeMigrationFailure,
+    'status=503, outcome=audit_unavailable, errorCode=broker_unavailable'
+  )
+  assert.equal(safeMigrationFailure.includes('private'), false)
+  assert.equal(
+    providerMigrationApplyDiagnostic({
+      statusCode: 700,
+      body: {
+        outcome: 'private-outcome',
+        code: 'private-code',
+        path: 'private-path',
+      },
+    }),
+    'status=unavailable, outcome=unknown, errorCode=unknown'
+  )
 })
 
 test('qualification progress is allowlisted, ordered, integral, and capped', () => {

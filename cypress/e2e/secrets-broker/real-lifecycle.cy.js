@@ -12,6 +12,7 @@ import {
   providerUiConvergenceDiagnostic,
   providerFinalLifecycleDiagnosticRequestOptions,
   providerLifecycleDiagnostic,
+  providerMigrationApplyDiagnostic,
   providerReadinessAttempts,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
@@ -1358,7 +1359,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       )
       cy.contains('button', 'Apply migration').click()
       cy.wait('@migrationApply', { timeout: 60_000 }).then(({ response }) => {
-        expect(response?.statusCode).to.equal(200)
+        expect(
+          response?.statusCode,
+          providerMigrationApplyDiagnostic(response)
+        ).to.equal(200)
         expect(response?.body).to.include({
           outcome: 'applied',
           applied: true,

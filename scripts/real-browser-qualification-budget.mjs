@@ -37,6 +37,26 @@ const providerUiConvergenceErrorCodes = new Set([
   'security_not_configured',
   'unknown',
 ])
+export const providerMigrationApplyFailureOutcomes = Object.freeze([
+  'audit_unavailable',
+  'degraded',
+  'locked',
+  'missing_ref',
+  'source_auth_required',
+  'source_unavailable',
+])
+export const providerMigrationApplyErrorCodes = Object.freeze([
+  'broker_unavailable',
+  'secrets_broker_not_ready',
+  'security_not_configured',
+])
+const providerMigrationApplyDiagnosticOutcomes = new Set([
+  'applied',
+  ...providerMigrationApplyFailureOutcomes,
+])
+const providerMigrationApplyDiagnosticErrorCodes = new Set(
+  providerMigrationApplyErrorCodes
+)
 
 export function brokerMetadataRequestOptions(url) {
   return {
@@ -272,6 +292,30 @@ export function providerLifecycleDiagnostic(body) {
         ? body.service.health.healthy
         : 'unavailable',
   }
+}
+
+export function providerMigrationApplyDiagnostic(response) {
+  const statusCode =
+    Number.isInteger(response?.statusCode) &&
+    response.statusCode >= 100 &&
+    response.statusCode <= 599
+      ? response.statusCode
+      : 'unavailable'
+  const outcome = providerMigrationApplyDiagnosticOutcomes.has(
+    response?.body?.outcome
+  )
+    ? response.body.outcome
+    : 'unknown'
+  const codeCandidate =
+    typeof response?.body?.error?.code === 'string'
+      ? response.body.error.code
+      : typeof response?.body?.code === 'string'
+        ? response.body.code
+        : 'unknown'
+  const errorCode = providerMigrationApplyDiagnosticErrorCodes.has(codeCandidate)
+    ? codeCandidate
+    : 'unknown'
+  return `status=${statusCode}, outcome=${outcome}, errorCode=${errorCode}`
 }
 
 export function managedServiceStopMutationRequestOptions(url) {
