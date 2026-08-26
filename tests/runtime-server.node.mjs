@@ -183,6 +183,60 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     ),
     'utf8'
   )
+  const restartUiSource = lifecycleSource.slice(
+    lifecycleSource.indexOf(
+      'function restartBrokerFromUi(expectedRequestCount, requestCount)'
+    ),
+    lifecycleSource.indexOf(
+      'function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount)'
+    )
+  )
+  const restartHelperSource = lifecycleSource.slice(
+    lifecycleSource.indexOf(
+      'function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount)'
+    ),
+    lifecycleSource.indexOf('function assertSecretValuesAbsentFromBrowser')
+  )
+  assert.ok(restartUiSource.length > 0)
+  assert.ok(restartHelperSource.length > 0)
+  for (const uiRestartProof of [
+    "cy.contains('[role=\"tab\"]', /^Overview$/).click()",
+    "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
+    "cy.wait('@restartBrokerFromUi', { timeout: 120_000 })",
+    'expect(request.body).to.deep.equal({ confirm: true })',
+    'expect(response?.statusCode).to.equal(200)',
+    'expect(requestCount()).to.equal(expectedRequestCount)',
+  ]) {
+    assert.equal(restartUiSource.split(uiRestartProof).length - 1, 1)
+  }
+  assert.equal(restartHelperSource.includes('cy.request('), false)
+  assert.equal(
+    restartHelperSource.split(
+      'restartBrokerFromUi(expectedRequestCount, requestCount)'
+    ).length - 1,
+    1
+  )
+  assert.equal(
+    lifecycleSource.split("cy.intercept(\n      'POST',\n      '**/api/services/%40secretsbroker/restart'")
+      .length - 1,
+    1
+  )
+  assert.equal(lifecycleSource.includes("url: '/api/services/%40secretsbroker/restart'"), false)
+  assert.equal(lifecycleSource.split('brokerRestartUiRequests += 1').length - 1, 1)
+  for (const requestCount of [1, 2]) {
+    assert.equal(
+      lifecycleSource.split(
+        `restartBrokerAndOpenSecrets(${requestCount}, () => brokerRestartUiRequests)`
+      ).length - 1,
+      1
+    )
+  }
+  assert.equal(
+    lifecycleSource.split(
+      'restartBrokerFromUi(3, () => brokerRestartUiRequests)'
+    ).length - 1,
+    1
+  )
   const stoppedLifecycleSource = await readFile(
     new URL(
       '../cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js',
@@ -443,13 +497,19 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const lateCheckpointCount = [
     ...lateLifecycleSource.matchAll(/qualificationCheckpoint\('/g),
   ].length
-  assert.equal(rawLifecycleRequestCount, 5)
+  assert.equal(rawLifecycleRequestCount, 4)
   assert.equal(sharedStopMutationCount, 0)
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
   assert.equal(directTwentySecondWaitCount, 7)
   assert.equal(directThirtySecondWaitCount, 4)
   assert.equal(openSecretsCount, 2)
+  assert.equal(
+    lateLifecycleSource.split(
+      'restartBrokerFromUi(3, () => brokerRestartUiRequests)'
+    ).length - 1,
+    1
+  )
   assert.equal(validationDialogCount, 1)
   assert.equal(lateCheckpointCount, 4)
   assert.equal(
@@ -470,13 +530,20 @@ test('bounded provider, metadata, and execute network waits retain exact source 
       20_000 +
     directThirtySecondWaitCount * 30_000
   const progressTaskWaitMs = (lateCheckpointCount + 1) * 60_000
+  const uiRestartActionWaitMs =
+    (lateLifecycleSource.split(
+      'restartBrokerFromUi(3, () => brokerRestartUiRequests)'
+    ).length -
+      1) *
+    140_000
   const enumeratedLateLifecycleWaitMs =
     lifecycleMutationWaitMs +
     controlRequestWaitMs +
     reloadWaitMs +
     longUiWaitMs +
-    progressTaskWaitMs
-  assert.equal(enumeratedLateLifecycleWaitMs, 1_500_000)
+    progressTaskWaitMs +
+    uiRestartActionWaitMs
+  assert.equal(enumeratedLateLifecycleWaitMs, 1_520_000)
   assert.ok(enumeratedLateLifecycleWaitMs > cypressQualificationTimeoutMs)
   // Default four-second UI commands and Cypress's implicit network retries are
   // deliberately excluded, so this is not a whole-spec maximum either.
@@ -1100,6 +1167,8 @@ test('packaged proxy does not manufacture a trusted ingress marker from incomple
 
 test('packaged proxy gives consumer-converging rotation a bounded cross-platform window', () => {
   assert.equal(runtimeApiTimeoutMs('POST', '/api/services/%40secretsbroker/restart'), 120_000)
+  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/config'), 120_000)
+  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/reload'), 120_000)
   assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/start'), 120_000)
   assert.equal(runtimeApiTimeoutMs('POST', '/api/secrets/rotation/execute'), 300_000)
   assert.equal(runtimeApiTimeoutMs('POST', '/api/setup/bootstrap'), 180_000)

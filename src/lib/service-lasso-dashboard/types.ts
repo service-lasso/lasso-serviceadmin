@@ -970,6 +970,7 @@ export type ServiceAction = {
     | 'restart'
     | 'reload'
     | 'install'
+    | 'config'
     | 'uninstall'
     | 'open_logs'
     | 'open_config'
@@ -987,9 +988,11 @@ export type ServiceAction = {
 
 export type ServiceLifecycleActionKind =
   | 'install'
+  | 'config'
   | 'start'
   | 'stop'
   | 'restart'
+  | 'reload'
 
 export type SecurityPermissionRisk = 'low' | 'medium' | 'high' | 'critical'
 

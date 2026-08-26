@@ -2368,29 +2368,93 @@ const serviceActionKinds = new Set<ServiceAction['kind']>([
   'restart',
   'reload',
   'install',
+  'config',
   'uninstall',
   'open_logs',
   'open_config',
   'open_admin',
 ])
 
+const dashboardActionPolicies = new Map<
+  ServiceAction['kind'],
+  { permission: string; requiresConfirmation: boolean }
+>([
+  ['install', { permission: 'service:install', requiresConfirmation: false }],
+  ['config', { permission: 'service:configure', requiresConfirmation: false }],
+  ['start', { permission: 'service:start', requiresConfirmation: false }],
+  ['stop', { permission: 'service:stop', requiresConfirmation: true }],
+  ['restart', { permission: 'service:restart', requiresConfirmation: true }],
+  ['reload', { permission: 'service:reload', requiresConfirmation: true }],
+  [
+    'open_logs',
+    { permission: 'service:diagnose', requiresConfirmation: false },
+  ],
+  [
+    'open_config',
+    { permission: 'service:configure', requiresConfirmation: false },
+  ],
+  ['open_admin', { permission: 'workspace:read', requiresConfirmation: false }],
+])
+
 export function normalizeRuntimeServiceAction(
   input: unknown
 ): ServiceAction | null {
   if (!isRecord(input)) return null
-  const id = requireSafeBrokerIdentifier(input.id, 'dashboard action id')
+  let id: string
+  try {
+    id = requireSafeBrokerIdentifier(input.id, 'dashboard action id')
+  } catch {
+    return null
+  }
   const label = sanitizeBrokerDisplayText(input.label)
   if (!label || !serviceActionKinds.has(input.kind as ServiceAction['kind'])) {
     return null
   }
+  if (id !== input.kind) return null
+  const actionPolicy = dashboardActionPolicies.get(
+    input.kind as ServiceAction['kind']
+  )
 
-  if (typeof input.permission === 'string') {
-    const permissionKey = requireSafeBrokerIdentifier(
-      input.permission,
-      'dashboard action permission'
-    )
-    const allowed = input.granted === true
-    const requiresConfirmation = input.requiresConfirmation === true
+  const authoritativeDecision =
+    typeof input.permission === 'string' &&
+    typeof input.granted === 'boolean' &&
+    typeof input.requiresConfirmation === 'boolean' &&
+    typeof input.actor === 'string' &&
+    (input.mode === 'local-root' || input.mode === 'signed-in') &&
+    actionPolicy !== undefined &&
+    input.permission === actionPolicy.permission &&
+    input.requiresConfirmation === actionPolicy.requiresConfirmation &&
+    ((input.granted === true && input.unavailableReason === null) ||
+      (input.granted === false &&
+        input.unavailableReason === 'permission_not_granted'))
+
+  if (authoritativeDecision) {
+    let permissionKey: string
+    let actor: string
+    try {
+      permissionKey = requireSafeBrokerIdentifier(
+        input.permission as string,
+        'dashboard action permission'
+      )
+      actor = requireSafeBrokerIdentifier(
+        input.actor as string,
+        'dashboard action actor'
+      )
+    } catch {
+      return {
+        id,
+        label,
+        kind: input.kind as ServiceAction['kind'],
+        permission: {
+          allowed: false,
+          reason:
+            'The runtime did not provide an authoritative permission decision.',
+        },
+      }
+    }
+
+    const allowed = input.granted as boolean
+    const requiresConfirmation = input.requiresConfirmation as boolean
     return {
       id,
       label,
@@ -2398,14 +2462,8 @@ export function normalizeRuntimeServiceAction(
       permission: {
         key: permissionKey,
         allowed,
-        actor:
-          typeof input.actor === 'string'
-            ? requireSafeBrokerIdentifier(input.actor, 'dashboard action actor')
-            : undefined,
-        mode:
-          input.mode === 'local-root' || input.mode === 'signed-in'
-            ? input.mode
-            : undefined,
+        actor,
+        mode: input.mode as 'local-root' | 'signed-in',
         requiresConfirmation,
         confirmationLabel: requiresConfirmation ? label : undefined,
         reason: allowed

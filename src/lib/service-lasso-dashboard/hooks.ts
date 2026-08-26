@@ -605,23 +605,31 @@ export function useServiceUpdateAction() {
 export function useServiceLifecycleAction() {
   const queryClient = useQueryClient()
 
+  const refreshLifecycleViews = async (serviceId: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: dashboardQueryKey,
+        exact: true,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'services'],
+        exact: true,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, serviceId],
+        exact: true,
+      }),
+    ])
+  }
+
   return useMutation({
     mutationFn: (options: {
       action: ServiceLifecycleActionKind
       serviceId: string
       confirm?: boolean
     }) => runServiceLifecycleAction(options),
-    onSuccess: async (result) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
-        queryClient.invalidateQueries({
-          queryKey: [...dashboardQueryKey, 'services'],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [...dashboardQueryKey, result.serviceId],
-        }),
-      ])
-    },
+    onSettled: async (_result, _error, options) =>
+      refreshLifecycleViews(options.serviceId),
   })
 }
 
