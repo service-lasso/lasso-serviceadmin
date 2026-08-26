@@ -6,6 +6,20 @@ const rollbackCandidate =
 const rollbackReason = 'Release browser automatic rollback qualification'
 const editedCandidate = 'browser-edited-candidate-2026-08-14-verified'
 const resetCandidate = 'browser-reset-candidate-2026-08-14-verified'
+const safeTransportErrorCodes = new Set([
+  'ECONNABORTED',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ERR_ABORTED',
+  'ERR_CONNECTION_CLOSED',
+  'ERR_CONNECTION_RESET',
+  'ERR_EMPTY_RESPONSE',
+  'ERR_FAILED',
+  'ERR_NETWORK_CHANGED',
+  'ERR_TIMED_OUT',
+])
 
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
@@ -91,6 +105,16 @@ function containsPrivateMaterial(value, privateValues) {
     serialized = String(value)
   }
   return privateValues.some((privateValue) => serialized.includes(privateValue))
+}
+
+function safeTransportErrorCode(error) {
+  const candidate =
+    error && typeof error === 'object' && typeof error.code === 'string'
+      ? error.code
+      : typeof error === 'string'
+        ? error
+        : ''
+  return safeTransportErrorCodes.has(candidate) ? candidate : 'unavailable'
 }
 
 function installPrivateConsoleGuard(browserWindow, privateValues, onLeak) {
@@ -654,11 +678,15 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         requestTimeout: 20_000,
         responseTimeout: 300_000,
       }).then(
-        ({ request, response }) => {
+        ({ request, response, error }) => {
           rollbackOperationId = request.body?.operationId
           const operation = response?.body?.operation
           const safeRollbackResult = {
+            transportPhase: 'rotation_execute_response',
             status: response?.statusCode,
+            transportErrorCode: response
+              ? 'none'
+              : safeTransportErrorCode(error),
             operationId: operation?.operationId,
             outcome: operation?.outcome,
             phase: operation?.phase,
@@ -775,6 +803,16 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('rotation_consumer_not_ready').should('be.visible')
       cy.contains('button', 'Close').scrollIntoView().click()
     })
+    cy.location('search', { timeout: 20_000 }).should(
+      'not.include',
+      'rotationOperation='
+    )
+    cy.contains('[role="dialog"]', 'Rotate secret', {
+      timeout: 20_000,
+    }).should('not.exist')
+    cy.get('body', { timeout: 20_000 })
+      .should('not.have.attr', 'data-scroll-locked')
+      .and('not.have.css', 'pointer-events', 'none')
     cy.then(() => {
       expect(rollbackExecuteRequests).to.equal(1)
       expect(
