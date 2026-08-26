@@ -796,25 +796,29 @@ describe('app screens', () => {
     ).toBeVisible()
   })
 
-  it('rotates a local secret through preview, stage, activation, and rollback without rendering the value', async () => {
+  it('rotates a local secret through the durable Core operation without rendering or storing the value', async () => {
     const user = userEvent.setup()
-    const replacement = 'rotation-value-must-never-render'
+    const replacement = 'NOLEAK459'
 
     await renderRoute('/services/secrets-broker')
-    await user.click(await screen.findByRole('tab', { name: /Secrets/i }))
     await user.click(
-      await screen.findByRole('button', {
-        name: /Rotate SESSION_SIGNING_KEY/i,
-      })
+      await screen.findByRole('tab', { name: /Secrets/i }, { timeout: 5_000 })
+    )
+    await user.click(
+      await screen.findByRole(
+        'button',
+        { name: /Rotate SESSION_SIGNING_KEY/i },
+        { timeout: 5_000 }
+      )
     )
 
-    const dialog = await screen.findByRole('dialog', {
-      name: /Rotate secret/i,
-    })
-    await user.type(
-      within(dialog).getByLabelText(/Audit reason/i),
-      'Approved versioned rotation'
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: /Rotate secret/i },
+      { timeout: 5_000 }
     )
+    expect(dialog).toHaveClass('max-h-[calc(100vh-2rem)]', 'overflow-y-auto')
+    await user.type(within(dialog).getByLabelText(/Audit reason/i), 'approved')
     await user.type(
       within(dialog).getByLabelText(/Replacement value/i),
       replacement
@@ -829,29 +833,47 @@ describe('app screens', () => {
       within(dialog).getByLabelText(/Confirm secret rotation transition/i)
     )
     await user.click(
-      within(dialog).getByRole('button', { name: /Stage candidate/i })
-    )
-    expect(await within(dialog).findByText(/is staged/i)).toBeVisible()
-    expect(within(dialog).queryByText(replacement)).toBeNull()
-
-    await user.click(
-      within(dialog).getByLabelText(/Confirm secret rotation transition/i)
-    )
-    await user.click(
       within(dialog).getByRole('button', {
-        name: /Activate staged version/i,
+        name: /Rotate and converge consumers/i,
       })
     )
-    expect(await within(dialog).findByText(/is active/i)).toBeVisible()
-
-    await user.click(
-      within(dialog).getByLabelText(/Confirm secret rotation transition/i)
-    )
-    await user.click(within(dialog).getByRole('button', { name: /Roll back/i }))
     expect(
-      await within(dialog).findByText(/Previous version restored/i)
+      await within(dialog).findByText(/Core rotation committed/i)
+    ).toBeVisible()
+    expect(within(dialog).getAllByText('stub-version-2')).toHaveLength(2)
+    expect(within(dialog).getByText('stub-version-1')).toBeVisible()
+    expect(
+      within(dialog).getByText(/Verify linked service health/i)
     ).toBeVisible()
     expect(within(dialog).queryByText(replacement)).toBeNull()
+    expect(window.localStorage.length).toBe(0)
+    expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('rehydrates a durable Core rotation from the safe operation URL', async () => {
+    const { router } = await renderRoute(
+      '/services/secrets-broker?rotationOperation=serviceadmin-rotate-rehydrate'
+    )
+    expect(router.state.location.search).toMatchObject({
+      rotationOperation: 'serviceadmin-rotate-rehydrate',
+    })
+    expect(
+      await screen.findByRole('tab', { name: /Secrets/i }, { timeout: 5_000 })
+    ).toHaveAttribute('data-state', 'active')
+
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: /Rotate secret/i },
+      { timeout: 5_000 }
+    )
+    expect(
+      await within(dialog).findByText(/Core rotation committed/i)
+    ).toBeVisible()
+    expect(within(dialog).getAllByText('stub-version-2')).toHaveLength(2)
+    expect(
+      within(dialog).getByRole('button', { name: /Refresh operation status/i })
+    ).toBeEnabled()
+    expect(document.body.textContent).not.toContain('NOLEAK459')
   })
 
   it('edits a local managed secret only after dry-run and explicit confirmation', async () => {

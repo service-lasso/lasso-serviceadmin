@@ -38,6 +38,7 @@ import {
   previewSecretDecommission,
   previewSecretRotation,
   fetchCoreSecretRotationImpactPlan,
+  fetchCoreSecretRotationExecutionState,
   executeCoreSecretRotation,
   restoreSecretDecommission,
   createBrokerLifecycleBackup,
@@ -479,6 +480,20 @@ export function useSecretRotationPreview() {
 export function useCoreSecretRotationPlan() {
   return useMutation({
     mutationFn: (ref: string) => fetchCoreSecretRotationImpactPlan(ref),
+  })
+}
+
+export function useCoreSecretRotationOperation(
+  operationId: string | undefined,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, 'secret-rotation-operation', operationId],
+    queryFn: () => fetchCoreSecretRotationExecutionState(operationId!),
+    enabled: enabled && Boolean(operationId),
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.outcome === 'in_progress' ? 2_000 : false,
   })
 }
 

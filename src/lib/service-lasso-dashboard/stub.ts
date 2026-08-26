@@ -91,6 +91,7 @@ export type RuntimeApiUnavailableDetails = {
   contentType: string | null
   packagedProxyConfigured: boolean
   reason: 'missing_api_base_url' | 'fetch_failed' | 'http_error' | 'non_json'
+  errorCode?: string | null
 }
 
 export class RuntimeApiUnavailableError extends Error {
@@ -101,6 +102,7 @@ export class RuntimeApiUnavailableError extends Error {
     const metadata = [
       `path ${details.path}`,
       details.status == null ? null : `status ${details.status}`,
+      details.errorCode ? `code ${details.errorCode}` : null,
       details.contentType ? `content-type ${details.contentType}` : null,
     ]
       .filter(Boolean)
@@ -2251,6 +2253,7 @@ export async function fetchRuntimeJson<T>(
     method?: string
     headers?: HeadersInit
     body?: BodyInit | null
+    acceptErrorResponse?: (status: number, payload: unknown) => boolean
   }
 ) {
   const apiBaseUrl =
@@ -2307,10 +2310,32 @@ export async function fetchRuntimeJson<T>(
   }
 
   if (!response.ok) {
-    throw new RuntimeApiUnavailableError({
-      ...responseDetails,
-      reason: 'http_error',
-    })
+    let errorCode: string | null = null
+    let errorPayload: unknown = null
+    if (contentType?.toLowerCase().includes('application/json')) {
+      try {
+        errorPayload = (await response.clone().json()) as unknown
+        if (errorPayload && typeof errorPayload === 'object') {
+          const candidate = (errorPayload as Record<string, unknown>).error
+          if (
+            typeof candidate === 'string' &&
+            /^[a-z][a-z0-9_-]{0,99}$/.test(candidate)
+          ) {
+            errorCode = candidate
+          }
+        }
+      } catch {
+        // Only a bounded allowlisted error code may cross this boundary.
+      }
+    }
+    if (!options?.acceptErrorResponse?.(response.status, errorPayload)) {
+      throw new RuntimeApiUnavailableError({
+        ...responseDetails,
+        reason: 'http_error',
+        errorCode,
+      })
+    }
+    // The caller still validates the complete typed response body.
   }
 
   if (!contentType?.toLowerCase().includes('application/json')) {
@@ -6416,6 +6441,30 @@ function requireCoreRotationStringArray(value: unknown, field: string) {
   return value as string[]
 }
 
+function requireCoreRotationCount(value: unknown, field: string) {
+  if (!Number.isInteger(value) || Number(value) < 0 || Number(value) > 4096) {
+    throw new Error(`Core returned invalid rotation ${field}.`)
+  }
+  return Number(value)
+}
+
+function requireCoreRotationMetadataId(value: unknown, field: string) {
+  if (
+    typeof value !== 'string' ||
+    !/^[A-Za-z0-9@][A-Za-z0-9@._:-]{0,511}$/.test(value)
+  ) {
+    throw new Error(`Core returned invalid rotation ${field}.`)
+  }
+  return value
+}
+
+function requireCoreRotationMetadataIdArray(value: unknown, field: string) {
+  if (!Array.isArray(value) || value.length > 256) {
+    throw new Error(`Core returned invalid rotation ${field}.`)
+  }
+  return value.map((entry) => requireCoreRotationMetadataId(entry, field))
+}
+
 function assertNoCoreRotationSecretFields(value: unknown, depth = 0) {
   if (depth > 16 || value === null || typeof value !== 'object') return
   if (Array.isArray(value)) {
@@ -6460,6 +6509,63 @@ function normalizeCoreRotationImpactPlan(
     input.execution,
     'Core returned invalid rotation execution metadata.'
   )
+  const summary = requireRecord(
+    input.summary,
+    'Core returned invalid rotation summary metadata.'
+  )
+  const ownerAction =
+    input.ownerAction === null
+      ? null
+      : (() => {
+          const owner = requireRecord(
+            input.ownerAction,
+            'Core returned invalid rotation owner action metadata.'
+          )
+          if (
+            !['service', 'external'].includes(String(owner.authority)) ||
+            !['ready', 'manual'].includes(String(owner.status)) ||
+            typeof owner.reason !== 'string'
+          ) {
+            throw new Error(
+              'Core returned invalid rotation owner action metadata.'
+            )
+          }
+          return {
+            authority: owner.authority as 'service' | 'external',
+            status: owner.status as 'ready' | 'manual',
+            ...(typeof owner.serviceId === 'string'
+              ? {
+                  serviceId: requireCoreRotationMetadataId(
+                    owner.serviceId,
+                    'rotation owner service id'
+                  ),
+                }
+              : {}),
+            ...(typeof owner.actionId === 'string'
+              ? {
+                  actionId: requireCoreRotationMetadataId(
+                    owner.actionId,
+                    'rotation owner action id'
+                  ),
+                }
+              : {}),
+            ...(typeof owner.rollbackActionId === 'string'
+              ? {
+                  rollbackActionId: requireCoreRotationMetadataId(
+                    owner.rollbackActionId,
+                    'rotation owner rollback action id'
+                  ),
+                }
+              : {}),
+            reason:
+              sanitizeBrokerDisplayText(owner.reason) ??
+              '[rotation owner reason unavailable]',
+            blockers: requireCoreRotationStringArray(
+              owner.blockers,
+              'owner blockers'
+            ),
+          }
+        })()
   const services = input.services.map((value) => {
     const service = requireRecord(
       value,
@@ -6477,12 +6583,17 @@ function normalizeCoreRotationImpactPlan(
       throw new Error('Core returned invalid rotation service metadata.')
     }
     return {
-      serviceId: service.serviceId,
+      serviceId: requireCoreRotationMetadataId(service.serviceId, 'service id'),
       role: service.role as 'direct' | 'dependent',
       action:
         service.action as CoreSecretRotationImpactPlan['services'][number]['action'],
       ...(typeof service.actionId === 'string'
-        ? { actionId: service.actionId }
+        ? {
+            actionId: requireCoreRotationMetadataId(
+              service.actionId,
+              'service action id'
+            ),
+          }
         : {}),
       reason:
         sanitizeBrokerDisplayText(service.reason) ??
@@ -6511,10 +6622,18 @@ function normalizeCoreRotationImpactPlan(
           throw new Error('Core returned invalid rotation operation metadata.')
         }
         return {
-          serviceId: operation.serviceId,
+          serviceId: requireCoreRotationMetadataId(
+            operation.serviceId,
+            'operation service id'
+          ),
           action: operation.action as 'restart' | 'reload' | 'action',
           ...(typeof operation.actionId === 'string'
-            ? { actionId: operation.actionId }
+            ? {
+                actionId: requireCoreRotationMetadataId(
+                  operation.actionId,
+                  'operation action id'
+                ),
+              }
             : {}),
           reason:
             sanitizeBrokerDisplayText(operation.reason) ??
@@ -6525,11 +6644,12 @@ function normalizeCoreRotationImpactPlan(
         throw new Error('Core returned invalid rotation operations.')
       })()
   return {
-    ref: input.ref,
+    ref: requireSafeBrokerIdentifier(input.ref, 'rotation ref'),
     planFingerprint: input.planFingerprint,
     status: input.status as 'ready' | 'blocked',
     confirmationRequired: true,
     valuePolicy: 'metadata_only',
+    ownerAction,
     services,
     execution: {
       stopOrder: requireCoreRotationStringArray(
@@ -6541,6 +6661,26 @@ function normalizeCoreRotationImpactPlan(
         'start order'
       ),
       operations,
+    },
+    summary: {
+      directConsumers: requireCoreRotationCount(
+        summary.directConsumers,
+        'direct consumer count'
+      ),
+      dependents: requireCoreRotationCount(
+        summary.dependents,
+        'dependent count'
+      ),
+      restart: requireCoreRotationCount(summary.restart, 'restart count'),
+      reload: requireCoreRotationCount(summary.reload, 'reload count'),
+      action: requireCoreRotationCount(summary.action, 'action count'),
+      manual: requireCoreRotationCount(summary.manual, 'manual count'),
+      none: requireCoreRotationCount(summary.none, 'none count'),
+      blockers: requireCoreRotationCount(summary.blockers, 'blocker count'),
+      ownerAction: requireCoreRotationCount(
+        summary.ownerAction,
+        'owner action count'
+      ),
     },
     blockers: requireCoreRotationStringArray(input.blockers, 'blockers'),
   }
@@ -6557,8 +6697,20 @@ export async function fetchCoreSecretRotationImpactPlan(
       status: 'ready',
       confirmationRequired: true,
       valuePolicy: 'metadata_only',
+      ownerAction: null,
       services: [],
       execution: { stopOrder: [], startOrder: [], operations: [] },
+      summary: {
+        directConsumers: 0,
+        dependents: 0,
+        restart: 0,
+        reload: 0,
+        action: 0,
+        manual: 0,
+        none: 0,
+        blockers: 0,
+        ownerAction: 0,
+      },
       blockers: [],
     }
   }
@@ -6566,6 +6718,163 @@ export async function fetchCoreSecretRotationImpactPlan(
     await fetchRuntimeJson<unknown>(
       `/api/secrets/rotation-plan?ref=${encodeURIComponent(ref)}`
     )
+  )
+}
+
+const coreRotationPhases: CoreSecretRotationExecutionState['phase'][] = [
+  'planned',
+  'staged',
+  'consumers_stopped',
+  'activated',
+  'converging',
+  'committed',
+  'rolling_back',
+  'rolled_back',
+  'blocked',
+]
+
+function normalizeCoreRotationVersionId(value: unknown, field: string) {
+  return value === null
+    ? null
+    : requireCoreRotationMetadataId(value, `${field} version id`)
+}
+
+function normalizeCoreRotationExecutionState(
+  payload: unknown,
+  expected?: {
+    operationId?: string
+    ref?: string
+    planFingerprint?: string
+  }
+): CoreSecretRotationExecutionState {
+  const wrapper = requireRecord(
+    payload,
+    'Core returned an invalid rotation execution response.'
+  )
+  assertNoLifecycleSecretFields(wrapper)
+  assertNoCoreRotationSecretFields(wrapper)
+  const operation = requireRecord(
+    wrapper.operation,
+    'Core returned invalid rotation operation state.'
+  )
+  const plan = normalizeCoreRotationImpactPlan(operation.plan)
+  const operationId = requireCoreRotationMetadataId(
+    operation.operationId,
+    'rotation operation id'
+  )
+  const ref = requireSafeBrokerIdentifier(operation.ref, 'rotation ref')
+  const failureCode =
+    operation.failureCode === null
+      ? null
+      : requireCoreRotationMetadataId(
+          operation.failureCode,
+          'rotation failure code'
+        )
+  if (
+    operation.schema !== 'service-lasso.secret-rotation-operation.v1' ||
+    (expected?.operationId && operationId !== expected.operationId) ||
+    (expected?.ref && ref !== expected.ref) ||
+    (expected?.planFingerprint &&
+      operation.planFingerprint !== expected.planFingerprint) ||
+    ref !== plan.ref ||
+    operation.planFingerprint !== plan.planFingerprint ||
+    !coreRotationPhases.includes(
+      operation.phase as CoreSecretRotationExecutionState['phase']
+    ) ||
+    !['committed', 'rolled_back', 'blocked', 'in_progress'].includes(
+      String(operation.outcome)
+    ) ||
+    typeof operation.createdAt !== 'string' ||
+    Number.isNaN(Date.parse(operation.createdAt)) ||
+    typeof operation.updatedAt !== 'string' ||
+    Number.isNaN(Date.parse(operation.updatedAt)) ||
+    typeof operation.ownerActionCompleted !== 'boolean' ||
+    typeof operation.ownerRollbackCompleted !== 'boolean'
+  ) {
+    throw new Error('Core returned invalid rotation operation state.')
+  }
+  return {
+    schema: 'service-lasso.secret-rotation-operation.v1',
+    operationId,
+    ref,
+    planFingerprint: plan.planFingerprint,
+    phase: operation.phase as CoreSecretRotationExecutionState['phase'],
+    outcome: operation.outcome as CoreSecretRotationExecutionState['outcome'],
+    createdAt: operation.createdAt,
+    activeVersionId: normalizeCoreRotationVersionId(
+      operation.activeVersionId,
+      'active'
+    ),
+    previousVersionId: normalizeCoreRotationVersionId(
+      operation.previousVersionId,
+      'previous'
+    ),
+    stagedVersionId: normalizeCoreRotationVersionId(
+      operation.stagedVersionId,
+      'staged'
+    ),
+    initialRunningServiceIds: requireCoreRotationMetadataIdArray(
+      operation.initialRunningServiceIds,
+      'initial running service ids'
+    ),
+    stoppedServiceIds: requireCoreRotationMetadataIdArray(
+      operation.stoppedServiceIds,
+      'stopped service ids'
+    ),
+    completedOperations: requireCoreRotationMetadataIdArray(
+      operation.completedOperations,
+      'completed operations'
+    ),
+    rollbackCompletedOperations: requireCoreRotationMetadataIdArray(
+      operation.rollbackCompletedOperations,
+      'rollback operations'
+    ),
+    ownerActionCompleted: operation.ownerActionCompleted,
+    ownerRollbackCompleted: operation.ownerRollbackCompleted,
+    failureCode,
+    updatedAt: operation.updatedAt,
+    plan,
+  }
+}
+
+export async function fetchCoreSecretRotationExecutionState(
+  operationId: string
+): Promise<CoreSecretRotationExecutionState> {
+  const safeOperationId = requireSafeBrokerIdentifier(
+    operationId,
+    'rotation operation id'
+  )
+  if (serviceLassoStubDataEnabled) {
+    const ref = secretsManagementFixture.results[0]?.ref
+    if (!ref) throw new Error('Stub rotation inventory is unavailable.')
+    const plan = await fetchCoreSecretRotationImpactPlan(ref)
+    return {
+      schema: 'service-lasso.secret-rotation-operation.v1',
+      operationId: safeOperationId,
+      ref,
+      planFingerprint: plan.planFingerprint,
+      phase: 'committed',
+      outcome: 'committed',
+      createdAt: new Date().toISOString(),
+      activeVersionId: 'stub-version-2',
+      previousVersionId: 'stub-version-1',
+      stagedVersionId: 'stub-version-2',
+      initialRunningServiceIds: [],
+      stoppedServiceIds: [],
+      completedOperations: [],
+      rollbackCompletedOperations: [],
+      ownerActionCompleted: false,
+      ownerRollbackCompleted: false,
+      failureCode: null,
+      updatedAt: new Date().toISOString(),
+      plan,
+    }
+  }
+  return normalizeCoreRotationExecutionState(
+    await fetchRuntimeJson<unknown>(
+      `/api/secrets/rotation/operations/${encodeURIComponent(safeOperationId)}`
+    ),
+    { operationId: safeOperationId }
   )
 }
 
@@ -6591,11 +6900,16 @@ export async function executeCoreSecretRotation(
       planFingerprint: request.planFingerprint,
       phase: 'committed',
       outcome: 'committed',
+      createdAt: new Date().toISOString(),
       activeVersionId: 'stub-version-2',
       previousVersionId: 'stub-version-1',
       stagedVersionId: 'stub-version-2',
+      initialRunningServiceIds: [],
+      stoppedServiceIds: [],
       completedOperations: [],
       rollbackCompletedOperations: [],
+      ownerActionCompleted: false,
+      ownerRollbackCompleted: false,
       failureCode: null,
       updatedAt: new Date().toISOString(),
       plan: await fetchCoreSecretRotationImpactPlan(request.ref),
@@ -6607,62 +6921,15 @@ export async function executeCoreSecretRotation(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      acceptErrorResponse: (status, response) =>
+        status === 503 && isRecord(response) && isRecord(response.operation),
     }
   )
-  const wrapper = requireRecord(
-    payload,
-    'Core returned an invalid rotation execution response.'
-  )
-  assertNoLifecycleSecretFields(wrapper)
-  assertNoCoreRotationSecretFields(wrapper)
-  const operation = requireRecord(
-    wrapper.operation,
-    'Core returned invalid rotation operation state.'
-  )
-  if (
-    operation.schema !== 'service-lasso.secret-rotation-operation.v1' ||
-    operation.operationId !== request.operationId ||
-    operation.ref !== request.ref ||
-    operation.planFingerprint !== request.planFingerprint ||
-    !['committed', 'rolled_back', 'blocked', 'in_progress'].includes(
-      String(operation.outcome)
-    ) ||
-    typeof operation.updatedAt !== 'string'
-  ) {
-    throw new Error('Core returned invalid rotation operation state.')
-  }
-  return {
-    schema: 'service-lasso.secret-rotation-operation.v1',
+  return normalizeCoreRotationExecutionState(payload, {
     operationId: request.operationId,
     ref: request.ref,
     planFingerprint: request.planFingerprint,
-    phase: operation.phase as CoreSecretRotationExecutionState['phase'],
-    outcome: operation.outcome as CoreSecretRotationExecutionState['outcome'],
-    activeVersionId:
-      typeof operation.activeVersionId === 'string'
-        ? operation.activeVersionId
-        : null,
-    previousVersionId:
-      typeof operation.previousVersionId === 'string'
-        ? operation.previousVersionId
-        : null,
-    stagedVersionId:
-      typeof operation.stagedVersionId === 'string'
-        ? operation.stagedVersionId
-        : null,
-    completedOperations: requireCoreRotationStringArray(
-      operation.completedOperations,
-      'completed operations'
-    ),
-    rollbackCompletedOperations: requireCoreRotationStringArray(
-      operation.rollbackCompletedOperations,
-      'rollback operations'
-    ),
-    failureCode:
-      typeof operation.failureCode === 'string' ? operation.failureCode : null,
-    updatedAt: operation.updatedAt,
-    plan: normalizeCoreRotationImpactPlan(operation.plan),
-  }
+  })
 }
 
 export async function runSecretRotationVersionAction(
