@@ -1,6 +1,9 @@
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
 const rotationCandidate = 'browser-rotation-candidate-2026-08-14-verified'
+const rollbackCandidate =
+  '/private/service-lasso/browser-rollback-sentinel-2026-08-26'
+const rollbackReason = 'Release browser automatic rollback qualification'
 const editedCandidate = 'browser-edited-candidate-2026-08-14-verified'
 const resetCandidate = 'browser-reset-candidate-2026-08-14-verified'
 
@@ -78,6 +81,40 @@ function assertSecretValuesAbsentFromBrowser(secretValues) {
       'secret values are absent from DOM, URL, cookies, storage, and resource URLs'
     ).to.equal(false)
   })
+}
+
+function containsPrivateMaterial(value, privateValues) {
+  let serialized = ''
+  try {
+    serialized = `${String(value)}\n${JSON.stringify(value)}`
+  } catch {
+    serialized = String(value)
+  }
+  return privateValues.some((privateValue) => serialized.includes(privateValue))
+}
+
+function installPrivateConsoleGuard(browserWindow, privateValues, onLeak) {
+  for (const method of ['debug', 'error', 'info', 'log', 'warn']) {
+    const original = browserWindow.console[method]
+    browserWindow.console[method] = (...values) => {
+      if (values.some((value) => containsPrivateMaterial(value, privateValues))) {
+        onLeak()
+        return
+      }
+      original.apply(browserWindow.console, values)
+    }
+  }
+}
+
+function assertPrivateMaterialAbsentFromMetadata(
+  metadata,
+  privateValues,
+  assertion
+) {
+  expect(
+    containsPrivateMaterial(metadata, privateValues),
+    assertion
+  ).to.equal(false)
 }
 
 function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
@@ -330,15 +367,24 @@ function waitForSuccessfulInventoryUiResponse(
     })
 }
 
-function waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts = 5) {
+function waitForSuccessfulBrokerTelemetryUiResponse(
+  remainingAttempts = 5,
+  alias = 'brokerTelemetry',
+  privateValues = []
+) {
   return cy
-    .wait('@brokerTelemetry', { timeout: 60_000 })
+    .wait(`@${alias}`, { timeout: 60_000 })
     .then(({ response }) => {
       if (response?.statusCode === 200) {
         expect(response?.body?.safety).to.include({
           lowCardinalityLabels: true,
           valueMaterialIncluded: false,
         })
+        assertPrivateMaterialAbsentFromMetadata(
+          response.body,
+          privateValues,
+          'private material is absent from telemetry metadata'
+        )
         return
       }
       if (remainingAttempts <= 1) {
@@ -347,13 +393,21 @@ function waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts = 5) {
         )
       }
 
-      return waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts - 1)
+      return waitForSuccessfulBrokerTelemetryUiResponse(
+        remainingAttempts - 1,
+        alias,
+        privateValues
+      )
     })
 }
 
-function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
+function waitForSuccessfulBrokerEventsUiResponse(
+  remainingAttempts = 5,
+  alias = 'brokerEvents',
+  privateValues = []
+) {
   return cy
-    .wait('@brokerEvents', { timeout: 60_000 })
+    .wait(`@${alias}`, { timeout: 60_000 })
     .then(({ response }) => {
       if (response?.statusCode === 200) {
         expect(response?.body?.safety).to.deep.equal({
@@ -361,6 +415,11 @@ function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
           rawRefIncluded: false,
           valueMaterialIncluded: false,
         })
+        assertPrivateMaterialAbsentFromMetadata(
+          response.body,
+          privateValues,
+          'private material is absent from event metadata'
+        )
         return
       }
       if (remainingAttempts <= 1) {
@@ -369,7 +428,11 @@ function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
         )
       }
 
-      return waitForSuccessfulBrokerEventsUiResponse(remainingAttempts - 1)
+      return waitForSuccessfulBrokerEventsUiResponse(
+        remainingAttempts - 1,
+        alias,
+        privateValues
+      )
     })
 }
 
@@ -379,6 +442,49 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
   })
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
+    let committedRotationVersionId
+    let rollbackOperationId
+    let rollbackExecuteRequests = 0
+    let rollbackConsoleLeakDetected = false
+    let rollbackOutboundLeakDetected = false
+    const rollbackPrivateMaterial = [rollbackCandidate, rollbackReason]
+
+    cy.on('window:before:load', (browserWindow) => {
+      installPrivateConsoleGuard(
+        browserWindow,
+        rollbackPrivateMaterial,
+        () => {
+          rollbackConsoleLeakDetected = true
+        }
+      )
+    })
+    cy.intercept({ url: '**', middleware: true }, (request) => {
+      const requestSurface = [request.url, request.body]
+      const requestUrl = new URL(request.url)
+      const requestPath = decodeURIComponent(requestUrl.pathname)
+      const adminOrigin = new URL(Cypress.config('baseUrl')).origin
+      const executePath = '/api/secrets/rotation/execute'
+      const previewPath =
+        '/api/services/@secretsbroker/secrets/rotation/dry-run'
+      const isAuthorizedExecute =
+        request.method === 'POST' &&
+        requestUrl.origin === adminOrigin &&
+        requestPath === executePath
+      const isAuthorizedPreview =
+        request.method === 'POST' &&
+        requestUrl.origin === adminOrigin &&
+        requestPath === previewPath
+      if (
+        (containsPrivateMaterial(requestSurface, [rollbackCandidate]) &&
+          !isAuthorizedExecute) ||
+        (containsPrivateMaterial(requestSurface, [rollbackReason]) &&
+          !isAuthorizedExecute &&
+          !isAuthorizedPreview)
+      ) {
+        rollbackOutboundLeakDetected = true
+      }
+    })
+
     expect(expectedRef).to.be.a('string').and.not.be.empty
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
@@ -483,6 +589,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             JSON.stringify(safeRotationFailure)
           ).to.equal(200)
           expect(response?.body?.operation?.outcome).to.equal('committed')
+          committedRotationVersionId =
+            response?.body?.operation?.activeVersionId
+          expect(committedRotationVersionId).to.match(/^[A-Za-z0-9._-]{1,128}$/)
           expect(response?.body?.operation?.completedOperations).to.have.length(
             1
           )
@@ -501,6 +610,172 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
+
+    cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
+      cy.contains('button', /^Rotate\b/).click()
+    })
+    dialog('Rotate secret').within(() => {
+      cy.get('#secret-rotation-reason').type(rollbackReason)
+      cy.get('#secret-rotation-value').type(rollbackCandidate, { log: false })
+      cy.contains('button', 'Preview rotation').click()
+      cy.contains('Linked consumers', { timeout: 20_000 }).should('be.visible')
+      cy.contains('Core orchestrated').should('be.visible')
+      cy.contains('sample-service').should('be.visible')
+      cy.contains('Restart service').should('be.visible')
+      cy.get('[aria-label="Confirm secret rotation transition"]').click()
+      cy.env('testControlUrl').then((controlUrl) => {
+        expect(controlUrl).to.match(
+          /^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/
+        )
+        cy.request({
+          method: 'POST',
+          url: `${controlUrl}/fail-next-sample-start`,
+          failOnStatusCode: false,
+        }).then(({ status, body }) => {
+          expect(status).to.equal(200)
+          expect(body).to.deep.equal({
+            outcome: 'sample_start_failure_armed',
+          })
+        })
+      })
+      cy.intercept(
+        'POST',
+        '**/api/secrets/rotation/execute',
+        (request) => {
+          rollbackExecuteRequests += 1
+          request.continue()
+        }
+      ).as('executeRollbackRotation')
+      cy.contains('button', 'Rotate and converge consumers').click()
+      cy.wait('@executeRollbackRotation', { timeout: 120_000 }).then(
+        ({ request, response }) => {
+          rollbackOperationId = request.body?.operationId
+          const operation = response?.body?.operation
+          const safeRollbackResult = {
+            status: response?.statusCode,
+            operationId: operation?.operationId,
+            outcome: operation?.outcome,
+            phase: operation?.phase,
+            failureCode: operation?.failureCode,
+            activeVersionId: operation?.activeVersionId,
+            previousVersionId: operation?.previousVersionId,
+            stagedVersionId: operation?.stagedVersionId,
+            rollbackCompletedOperations:
+              operation?.rollbackCompletedOperations,
+          }
+          expect(
+            safeRollbackResult,
+            JSON.stringify(safeRollbackResult)
+          ).to.deep.include({
+            status: 200,
+            operationId: rollbackOperationId,
+            outcome: 'rolled_back',
+            phase: 'rolled_back',
+            failureCode: 'rotation_consumer_not_ready',
+            activeVersionId: committedRotationVersionId,
+            previousVersionId: committedRotationVersionId,
+          })
+          expect(rollbackOperationId).to.match(
+            /^serviceadmin-rotate-[A-Za-z0-9._-]+$/
+          )
+          expect(operation?.stagedVersionId).to.match(
+            /^[A-Za-z0-9._-]{1,128}$/
+          )
+          expect(operation?.stagedVersionId).not.to.equal(
+            committedRotationVersionId
+          )
+          expect(operation?.rollbackCompletedOperations).to.deep.equal([
+            'sample-service:restart:',
+          ])
+        }
+      )
+      cy.contains('Core rotation rolled_back', { timeout: 20_000 }).should(
+        'be.visible'
+      )
+      cy.contains('Phase rolled_back').should('be.visible')
+      cy.contains('1 rollback actions completed').should('be.visible')
+      cy.contains('Safe failure code:').parent().within(() => {
+        cy.contains('rotation_consumer_not_ready').should('be.visible')
+      })
+      cy.contains(
+        'Inspect the failed consumer, correct readiness, then request a fresh impact plan.'
+      ).should('be.visible')
+      cy.get('#secret-rotation-value').should('not.exist')
+    })
+    waitForManagedServiceReadiness('sample-service')
+    cy.intercept('GET', '**/api/secrets/rotation/operations/*').as(
+      'rehydrateRollbackRotation'
+    )
+    cy.intercept('GET', '**/operations/telemetry').as(
+      'rollbackTelemetryAfterReload'
+    )
+    cy.intercept('GET', '**/operations/events*').as(
+      'rollbackEventsAfterReload'
+    )
+    cy.reload()
+    cy.wait('@rehydrateRollbackRotation', { timeout: 60_000 }).then(
+      ({ request, response }) => {
+        expect(request.url).to.include(
+          `/api/secrets/rotation/operations/${rollbackOperationId}`
+        )
+        expect(response?.statusCode).to.equal(200)
+        const operation = response?.body?.operation
+        const safeRollbackRehydration = {
+          operationId: operation?.operationId,
+          outcome: operation?.outcome,
+          phase: operation?.phase,
+          failureCode: operation?.failureCode,
+          activeVersionId: operation?.activeVersionId,
+          previousVersionId: operation?.previousVersionId,
+          rollbackCompletedOperations:
+            operation?.rollbackCompletedOperations,
+        }
+        expect(
+          safeRollbackRehydration,
+          JSON.stringify(safeRollbackRehydration)
+        ).to.deep.equal({
+          operationId: rollbackOperationId,
+          outcome: 'rolled_back',
+          phase: 'rolled_back',
+          failureCode: 'rotation_consumer_not_ready',
+          activeVersionId: committedRotationVersionId,
+          previousVersionId: committedRotationVersionId,
+          rollbackCompletedOperations: ['sample-service:restart:'],
+        })
+      }
+    )
+    waitForSuccessfulBrokerTelemetryUiResponse(
+      5,
+      'rollbackTelemetryAfterReload',
+      rollbackPrivateMaterial
+    )
+    waitForSuccessfulBrokerEventsUiResponse(
+      5,
+      'rollbackEventsAfterReload',
+      rollbackPrivateMaterial
+    )
+    dialog('Rotate secret').within(() => {
+      cy.contains('Core rotation rolled_back', { timeout: 20_000 }).should(
+        'be.visible'
+      )
+      cy.contains('sample-service').should('be.visible')
+      cy.contains('running · healthy', { timeout: 20_000 }).should('be.visible')
+      cy.contains(committedRotationVersionId).should('be.visible')
+      cy.contains('rotation_consumer_not_ready').should('be.visible')
+      cy.contains('button', 'Close').scrollIntoView().click()
+    })
+    cy.then(() => {
+      expect(rollbackExecuteRequests).to.equal(1)
+      expect(
+        rollbackConsoleLeakDetected,
+        'private rollback material is absent from browser console records'
+      ).to.equal(false)
+      expect(
+        rollbackOutboundLeakDetected,
+        'private rollback material is sent only to authorized rotation endpoints'
+      ).to.equal(false)
+    })
+    assertSecretValuesAbsentFromBrowser([rollbackCandidate])
 
     cy.contains('button', /^Create secret$/).click()
     dialog('Create local secret').within(() => {
