@@ -1,8 +1,50 @@
+import {
+  brokerMetadataReadinessAttempts,
+  brokerMetadataRetryDelayMs,
+  brokerMetadataRequestOptions,
+  isManagedServiceStoppedResponse,
+  linkedRotationResponseTimeoutMs,
+  managedServiceStopReadinessAttempts,
+  managedServiceStopMutationRequestOptions,
+  managedServiceStopRequestOptions,
+  managedServiceStopRetryDelayMs,
+  providerUiConvergenceAttempts,
+  providerUiConvergenceDiagnostic,
+  providerFinalLifecycleDiagnosticRequestOptions,
+  providerLifecycleDiagnostic,
+  providerMigrationApplyDiagnostic,
+  providerReadinessAttempts,
+  providerReadinessErrorCode,
+  providerReadinessRequestOptions,
+  providerReadinessRetryDelayMs,
+} from '../../../scripts/real-browser-qualification-budget.mjs'
+
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
 const rotationCandidate = 'browser-rotation-candidate-2026-08-14-verified'
+const rollbackCandidate =
+  '/private/service-lasso/browser-rollback-sentinel-2026-08-26'
+const rollbackReason = 'Release browser automatic rollback qualification'
 const editedCandidate = 'browser-edited-candidate-2026-08-14-verified'
 const resetCandidate = 'browser-reset-candidate-2026-08-14-verified'
+const safeTransportErrorCodes = new Set([
+  'ECONNABORTED',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ERR_ABORTED',
+  'ERR_CONNECTION_CLOSED',
+  'ERR_CONNECTION_RESET',
+  'ERR_EMPTY_RESPONSE',
+  'ERR_FAILED',
+  'ERR_NETWORK_CHANGED',
+  'ERR_TIMED_OUT',
+])
+
+function qualificationCheckpoint(phase) {
+  return cy.task('qualificationCheckpoint', phase, { log: false })
+}
 
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
@@ -80,6 +122,50 @@ function assertSecretValuesAbsentFromBrowser(secretValues) {
   })
 }
 
+function containsPrivateMaterial(value, privateValues) {
+  let serialized = ''
+  try {
+    serialized = `${String(value)}\n${JSON.stringify(value)}`
+  } catch {
+    serialized = String(value)
+  }
+  return privateValues.some((privateValue) => serialized.includes(privateValue))
+}
+
+function safeTransportErrorCode(error) {
+  const candidate =
+    error && typeof error === 'object' && typeof error.code === 'string'
+      ? error.code
+      : typeof error === 'string'
+        ? error
+        : ''
+  return safeTransportErrorCodes.has(candidate) ? candidate : 'unavailable'
+}
+
+function installPrivateConsoleGuard(browserWindow, privateValues, onLeak) {
+  for (const method of ['debug', 'error', 'info', 'log', 'warn']) {
+    const original = browserWindow.console[method]
+    browserWindow.console[method] = (...values) => {
+      if (values.some((value) => containsPrivateMaterial(value, privateValues))) {
+        onLeak()
+        return
+      }
+      original.apply(browserWindow.console, values)
+    }
+  }
+}
+
+function assertPrivateMaterialAbsentFromMetadata(
+  metadata,
+  privateValues,
+  assertion
+) {
+  expect(
+    containsPrivateMaterial(metadata, privateValues),
+    assertion
+  ).to.equal(false)
+}
+
 function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
   cy.request({
     method: 'GET',
@@ -108,94 +194,225 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
   })
 }
 
-function waitForBrokerProviderStatusReadiness(
-  targetProviderId = 'vault-browser',
-  remainingAttempts = 60
+function waitForManagedServiceStopped(
+  serviceId,
+  remainingAttempts = managedServiceStopReadinessAttempts
 ) {
-  cy.request({
-    method: 'GET',
-    url: '/api/services/%40secretsbroker/providers/config/status',
-    failOnStatusCode: false,
-    timeout: 20_000,
-  }).then(({ status, body }) => {
-    const providers = body?.providers
-    if (
-      status === 200 &&
-      Array.isArray(providers) &&
-      providers.some((provider) =>
-        provider?.providerId === targetProviderId &&
-        provider?.outcome === 'ready' &&
-        provider?.operations?.some(
-          (operation) =>
-            operation?.path === '/v1/providers/migration/apply' &&
-            (operation?.maturity === 'validated' ||
-              operation?.maturity === 'executable')
-        )
-      )
-    ) {
+  cy.request(
+    managedServiceStopRequestOptions(
+      `/api/services/${encodeURIComponent(serviceId)}`
+    )
+  ).then((response) => {
+    if (isManagedServiceStoppedResponse(response)) {
       return
     }
 
     if (remainingAttempts <= 1) {
       throw new Error(
-        'Broker provider status did not become ready after the linked rotation.'
+        `Managed service ${serviceId} did not reach the stopped lifecycle state.`
       )
     }
 
-    cy.wait(1_000).then(() =>
-      waitForBrokerProviderStatusReadiness(
-        targetProviderId,
-        remainingAttempts - 1
-      )
+    cy.wait(managedServiceStopRetryDelayMs, { log: false }).then(() =>
+      waitForManagedServiceStopped(serviceId, remainingAttempts - 1)
     )
+  })
+}
+
+function waitForBrokerProviderStatusReadiness(
+  targetProviderId = 'vault-browser',
+  remainingAttempts = providerReadinessAttempts,
+  diagnostic
+) {
+  const attempt = providerReadinessAttempts - remainingAttempts + 1
+  return cy.request(
+    providerReadinessRequestOptions(
+      '/api/services/%40secretsbroker/providers/config/status'
+    )
+  ).then(({ status, body }) => {
+    const errorCode = providerReadinessErrorCode(body)
+    const diagnosticRecord = diagnostic
+      ? recordProviderUiConvergence({
+          checkpoint: diagnostic.checkpoint,
+          component: 'response_metadata',
+          attempt,
+          statusCode: status,
+          errorCode,
+        })
+      : cy.wrap(null, { log: false })
+
+    return diagnosticRecord.then(() => {
+      const providers = body?.providers
+      if (
+        status === 200 &&
+        Array.isArray(providers) &&
+        providers.some(
+          (provider) =>
+            provider?.providerId === targetProviderId &&
+            provider?.outcome === 'ready' &&
+            provider?.operations?.some(
+              (operation) =>
+                operation?.path === '/v1/providers/migration/apply' &&
+                (operation?.maturity === 'validated' ||
+                  operation?.maturity === 'executable')
+            )
+        )
+      ) {
+        return
+      }
+
+      if (remainingAttempts <= 1) {
+        if (status === 503) {
+          return cy
+            .request(
+              providerFinalLifecycleDiagnosticRequestOptions(
+                '/api/services/%40secretsbroker'
+              )
+            )
+            .then(({ body: serviceBody }) => {
+              const lifecycle = providerLifecycleDiagnostic(serviceBody)
+              const finalDiagnostic = {
+                checkpoint: diagnostic?.checkpoint,
+                component: 'response_metadata',
+                attempt,
+                statusCode: status,
+                errorCode,
+                ...lifecycle,
+              }
+              const recorded = diagnostic
+                ? recordProviderUiConvergence(finalDiagnostic)
+                : cy.wrap(null, { log: false })
+              return recorded.then(() => {
+                throw new Error(
+                  `Broker provider status did not become ready (${providerUiConvergenceDiagnostic(
+                    finalDiagnostic
+                  )}).`
+                )
+              })
+            })
+        }
+        throw new Error(
+          `Broker provider status did not become ready (${providerUiConvergenceDiagnostic({
+            checkpoint: diagnostic?.checkpoint,
+            component: 'response_metadata',
+            attempt,
+            statusCode: status,
+            errorCode,
+          })}).`
+        )
+      }
+
+      return cy.wait(providerReadinessRetryDelayMs, { log: false }).then(() =>
+        waitForBrokerProviderStatusReadiness(
+          targetProviderId,
+          remainingAttempts - 1,
+          diagnostic
+        )
+      )
+    })
   })
 }
 
 function waitForBrokerInventoryReadiness(
   targetRef = createdRef,
-  remainingAttempts = 60
+  remainingAttempts = providerReadinessAttempts,
+  diagnostic
 ) {
-  cy.request({
-    method: 'GET',
-    url: '/api/services/%40secretsbroker/secrets/management',
-    failOnStatusCode: false,
-    timeout: 20_000,
-  }).then(({ status, body }) => {
-    const records = body?.results
-    if (
-      status === 200 &&
-      Array.isArray(records) &&
-      records.some(
-        (record) =>
-          record?.ref === targetRef &&
-          record?.providerKind === 'local-encrypted-store' &&
-          record?.outcome === 'ready'
-      )
-    ) {
-      return
-    }
+  const attempt = providerReadinessAttempts - remainingAttempts + 1
+  return cy.request(
+    providerReadinessRequestOptions(
+      '/api/services/%40secretsbroker/secrets/management'
+    )
+  ).then(({ status, body }) => {
+    const diagnosticRecord = diagnostic
+      ? recordProviderUiConvergence({
+          checkpoint: diagnostic.checkpoint,
+          component: 'response_metadata',
+          attempt,
+          statusCode: status,
+        })
+      : cy.wrap(null, { log: false })
 
-    if (remainingAttempts <= 1) {
-      throw new Error(
-        `Broker inventory did not expose ready local candidate ${targetRef}.`
-      )
-    }
+    return diagnosticRecord.then(() => {
+      const records = body?.results
+      if (
+        status === 200 &&
+        Array.isArray(records) &&
+        records.some(
+          (record) =>
+            record?.ref === targetRef &&
+            record?.providerKind === 'local-encrypted-store' &&
+            record?.outcome === 'ready'
+        )
+      ) {
+        return
+      }
 
-    cy.wait(1_000).then(() =>
-      waitForBrokerInventoryReadiness(targetRef, remainingAttempts - 1)
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          'Broker inventory did not expose a ready local candidate.'
+        )
+      }
+
+      return cy.wait(providerReadinessRetryDelayMs, { log: false }).then(() =>
+        waitForBrokerInventoryReadiness(
+          targetRef,
+          remainingAttempts - 1,
+          diagnostic
+        )
+      )
+    })
+  })
+}
+
+function recordProviderUiConvergence(diagnostic) {
+  return cy.task('providerUiConvergenceCheckpoint', diagnostic, { log: false })
+}
+
+function waitForProviderUiStatusAfterReload({
+  checkpoint,
+  targetProviderId = 'vault-browser',
+  targetInventoryRef,
+  remainingAttempts = providerUiConvergenceAttempts,
+  attempt = 1,
+} = {}) {
+  return waitForBrokerProviderStatusReadiness(
+    targetProviderId,
+    providerReadinessAttempts,
+    { checkpoint }
+  ).then(() => {
+    const inventoryReadiness = targetInventoryRef
+      ? waitForBrokerInventoryReadiness(
+          targetInventoryRef,
+          providerReadinessAttempts,
+          { checkpoint }
+        )
+      : cy.wrap(null, { log: false })
+    return inventoryReadiness.then(() =>
+      waitForProviderUiStatusAfterBackendReady({
+        checkpoint,
+        targetProviderId,
+        targetInventoryRef,
+        remainingAttempts,
+        attempt,
+      })
     )
   })
 }
 
-function waitForProviderUiStatusAfterReload({
-  targetProviderId = 'vault-browser',
+function waitForProviderUiStatusAfterBackendReady({
+  checkpoint,
+  targetProviderId,
   targetInventoryRef,
-  remainingAttempts = 3,
-} = {}) {
-  waitForBrokerProviderStatusReadiness(targetProviderId)
-  if (targetInventoryRef) {
-    waitForBrokerInventoryReadiness(targetInventoryRef)
-  }
+  remainingAttempts,
+  attempt,
+}) {
+  recordProviderUiConvergence({
+    checkpoint,
+    component: 'response_metadata',
+    attempt,
+    statusCode: 'unavailable',
+  })
   cy.intercept('GET', '**/providers/config/status').as(
     'providerStatusAfterReload'
   )
@@ -208,38 +425,74 @@ function waitForProviderUiStatusAfterReload({
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
   return waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
-    (hasTargetProvider) => {
-      const inventoryReadiness = targetInventoryRef
-        ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
-        : cy.wrap(true, { log: false })
+    (providerReadiness) =>
+      recordProviderUiConvergence({
+        checkpoint,
+        component: 'response_metadata',
+        attempt,
+        statusCode: providerReadiness.statusCode,
+      }).then(() => {
+        const inventoryReadiness = targetInventoryRef
+          ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
+          : cy.wrap({ ready: true, statusCode: 200 }, { log: false })
 
-      return inventoryReadiness.then((hasTargetInventoryRecord) => {
-        const providerRowReadiness = hasTargetProvider
-          ? waitForProviderRowRender(targetProviderId)
-          : cy.wrap(false, { log: false })
+        return inventoryReadiness.then((inventoryReadinessResult) => {
+          const inventoryDiagnostic = targetInventoryRef
+            ? recordProviderUiConvergence({
+                checkpoint,
+                component: 'response_metadata',
+                attempt,
+                statusCode: inventoryReadinessResult.statusCode,
+              })
+            : cy.wrap(null, { log: false })
 
-        return providerRowReadiness.then((hasTargetProviderRow) => {
-          if (
-            hasTargetProvider &&
-            hasTargetInventoryRecord &&
-            hasTargetProviderRow
-          ) {
-            return
-          }
-          if (remainingAttempts <= 1) {
-            throw new Error(
-              `Secrets UI metadata did not converge after the bounded reloads (provider=${targetProviderId}, inventory=${targetInventoryRef ?? 'not-required'}).`
-            )
-          }
+          return inventoryDiagnostic.then(() => {
+            const providerRowReadiness = providerReadiness.ready
+              ? recordProviderUiConvergence({
+                  checkpoint,
+                  component: 'row_render',
+                  attempt,
+                  statusCode: providerReadiness.statusCode,
+                }).then(() => waitForProviderRowRender(targetProviderId))
+              : cy.wrap(false, { log: false })
 
-          return waitForProviderUiStatusAfterReload({
-            targetProviderId,
-            targetInventoryRef,
-            remainingAttempts: remainingAttempts - 1,
+            return providerRowReadiness.then((hasTargetProviderRow) => {
+              if (
+                providerReadiness.ready &&
+                inventoryReadinessResult.ready &&
+                hasTargetProviderRow
+              ) {
+                return
+              }
+              if (remainingAttempts <= 1) {
+                const responseMetadataReady =
+                  providerReadiness.ready && inventoryReadinessResult.ready
+                const statusCode = providerReadiness.ready
+                  ? inventoryReadinessResult.statusCode
+                  : providerReadiness.statusCode
+                throw new Error(
+                  `Secrets UI metadata did not converge after the bounded reloads (${providerUiConvergenceDiagnostic({
+                    checkpoint,
+                    component: responseMetadataReady
+                      ? 'row_render'
+                      : 'response_metadata',
+                    attempt,
+                    statusCode,
+                  })}).`
+                )
+              }
+
+              return waitForProviderUiStatusAfterBackendReady({
+                checkpoint,
+                targetProviderId,
+                targetInventoryRef,
+                remainingAttempts: remainingAttempts - 1,
+                attempt: attempt + 1,
+              })
+            })
           })
         })
       })
-    }
   )
 }
 
@@ -267,9 +520,11 @@ function waitForSuccessfulProviderUiStatusResponse(
             )
         )
       ) {
-        return true
+        return { ready: true, statusCode: response?.statusCode }
       }
-      if (successfulMetadataResponse || remainingAttempts <= 1) return false
+      if (successfulMetadataResponse || remainingAttempts <= 1) {
+        return { ready: false, statusCode: response?.statusCode }
+      }
 
       return waitForSuccessfulProviderUiStatusResponse(
         targetProviderId,
@@ -319,9 +574,11 @@ function waitForSuccessfulInventoryUiResponse(
             record?.outcome === 'ready'
         )
       ) {
-        return true
+        return { ready: true, statusCode: response?.statusCode }
       }
-      if (successfulMetadataResponse || remainingAttempts <= 1) return false
+      if (successfulMetadataResponse || remainingAttempts <= 1) {
+        return { ready: false, statusCode: response?.statusCode }
+      }
 
       return waitForSuccessfulInventoryUiResponse(
         targetRef,
@@ -330,15 +587,91 @@ function waitForSuccessfulInventoryUiResponse(
     })
 }
 
-function waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts = 5) {
+function waitForBrokerTelemetryReadiness(
+  privateValues = [],
+  remainingAttempts = brokerMetadataReadinessAttempts
+) {
+  cy.request(
+    brokerMetadataRequestOptions(
+      '/api/services/%40secretsbroker/operations/telemetry'
+    )
+  ).then(({ status, body }) => {
+    if (status === 200) {
+      expect(body?.safety).to.include({
+        lowCardinalityLabels: true,
+        valueMaterialIncluded: false,
+      })
+      assertPrivateMaterialAbsentFromMetadata(
+        body,
+        privateValues,
+        'private material is absent from telemetry readiness metadata'
+      )
+      return
+    }
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        'Broker telemetry endpoint did not recover within the bounded readiness checks.'
+      )
+    }
+
+    cy.wait(brokerMetadataRetryDelayMs, { log: false }).then(() =>
+      waitForBrokerTelemetryReadiness(privateValues, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForBrokerEventsReadiness(
+  privateValues = [],
+  remainingAttempts = brokerMetadataReadinessAttempts
+) {
+  cy.request(
+    brokerMetadataRequestOptions(
+      '/api/services/%40secretsbroker/operations/events'
+    )
+  ).then(({ status, body }) => {
+    if (status === 200) {
+      expect(body?.safety).to.deep.equal({
+        metadataOnly: true,
+        rawRefIncluded: false,
+        valueMaterialIncluded: false,
+      })
+      assertPrivateMaterialAbsentFromMetadata(
+        body,
+        privateValues,
+        'private material is absent from event readiness metadata'
+      )
+      return
+    }
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        'Broker event endpoint did not recover within the bounded readiness checks.'
+      )
+    }
+
+    cy.wait(brokerMetadataRetryDelayMs, { log: false }).then(() =>
+      waitForBrokerEventsReadiness(privateValues, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForSuccessfulBrokerTelemetryUiResponse(
+  remainingAttempts = 5,
+  alias = 'brokerTelemetry',
+  privateValues = []
+) {
   return cy
-    .wait('@brokerTelemetry', { timeout: 60_000 })
+    .wait(`@${alias}`, { timeout: 60_000 })
     .then(({ response }) => {
       if (response?.statusCode === 200) {
         expect(response?.body?.safety).to.include({
           lowCardinalityLabels: true,
           valueMaterialIncluded: false,
         })
+        assertPrivateMaterialAbsentFromMetadata(
+          response.body,
+          privateValues,
+          'private material is absent from telemetry metadata'
+        )
         return
       }
       if (remainingAttempts <= 1) {
@@ -347,13 +680,21 @@ function waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts = 5) {
         )
       }
 
-      return waitForSuccessfulBrokerTelemetryUiResponse(remainingAttempts - 1)
+      return waitForSuccessfulBrokerTelemetryUiResponse(
+        remainingAttempts - 1,
+        alias,
+        privateValues
+      )
     })
 }
 
-function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
+function waitForSuccessfulBrokerEventsUiResponse(
+  remainingAttempts = 5,
+  alias = 'brokerEvents',
+  privateValues = []
+) {
   return cy
-    .wait('@brokerEvents', { timeout: 60_000 })
+    .wait(`@${alias}`, { timeout: 60_000 })
     .then(({ response }) => {
       if (response?.statusCode === 200) {
         expect(response?.body?.safety).to.deep.equal({
@@ -361,6 +702,11 @@ function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
           rawRefIncluded: false,
           valueMaterialIncluded: false,
         })
+        assertPrivateMaterialAbsentFromMetadata(
+          response.body,
+          privateValues,
+          'private material is absent from event metadata'
+        )
         return
       }
       if (remainingAttempts <= 1) {
@@ -369,7 +715,11 @@ function waitForSuccessfulBrokerEventsUiResponse(remainingAttempts = 5) {
         )
       }
 
-      return waitForSuccessfulBrokerEventsUiResponse(remainingAttempts - 1)
+      return waitForSuccessfulBrokerEventsUiResponse(
+        remainingAttempts - 1,
+        alias,
+        privateValues
+      )
     })
 }
 
@@ -379,6 +729,51 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
   })
 
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
+    let committedRotationVersionId
+    let rollbackOperationId
+    let rollbackExecuteRequests = 0
+    let rollbackConsoleLeakDetected = false
+    let rollbackOutboundLeakDetected = false
+    const rollbackPrivateMaterial = [rollbackCandidate, rollbackReason]
+
+    qualificationCheckpoint('lifecycle_started')
+
+    cy.on('window:before:load', (browserWindow) => {
+      installPrivateConsoleGuard(
+        browserWindow,
+        rollbackPrivateMaterial,
+        () => {
+          rollbackConsoleLeakDetected = true
+        }
+      )
+    })
+    cy.intercept({ url: '**', middleware: true }, (request) => {
+      const requestSurface = [request.url, request.body]
+      const requestUrl = new URL(request.url)
+      const requestPath = decodeURIComponent(requestUrl.pathname)
+      const adminOrigin = new URL(Cypress.config('baseUrl')).origin
+      const executePath = '/api/secrets/rotation/execute'
+      const previewPath =
+        '/api/services/@secretsbroker/secrets/rotation/dry-run'
+      const isAuthorizedExecute =
+        request.method === 'POST' &&
+        requestUrl.origin === adminOrigin &&
+        requestPath === executePath
+      const isAuthorizedPreview =
+        request.method === 'POST' &&
+        requestUrl.origin === adminOrigin &&
+        requestPath === previewPath
+      if (
+        (containsPrivateMaterial(requestSurface, [rollbackCandidate]) &&
+          !isAuthorizedExecute) ||
+        (containsPrivateMaterial(requestSurface, [rollbackReason]) &&
+          !isAuthorizedExecute &&
+          !isAuthorizedPreview)
+      ) {
+        rollbackOutboundLeakDetected = true
+      }
+    })
+
     expect(expectedRef).to.be.a('string').and.not.be.empty
     cy.visit('/services/%40secretsbroker')
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
@@ -465,7 +860,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         'executeLinkedRotation'
       )
       cy.contains('button', 'Rotate and converge consumers').click()
-      cy.wait('@executeLinkedRotation', { timeout: 120_000 }).then(
+      cy.wait('@executeLinkedRotation', {
+        requestTimeout: 20_000,
+        responseTimeout: linkedRotationResponseTimeoutMs,
+      }).then(
         ({ response }) => {
           const safeRotationFailure = {
             status: response?.statusCode,
@@ -483,6 +881,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             JSON.stringify(safeRotationFailure)
           ).to.equal(200)
           expect(response?.body?.operation?.outcome).to.equal('committed')
+          committedRotationVersionId =
+            response?.body?.operation?.activeVersionId
+          expect(committedRotationVersionId).to.match(/^[A-Za-z0-9._-]{1,128}$/)
           expect(response?.body?.operation?.completedOperations).to.have.length(
             1
           )
@@ -495,12 +896,214 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
+    qualificationCheckpoint('committed_rotation_complete')
     waitForManagedServiceReadiness('sample-service')
     waitForBrokerProviderStatusReadiness()
     cy.reload()
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
     openSecrets()
+
+    cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
+      cy.contains('button', /^Rotate\b/).click()
+    })
+    dialog('Rotate secret').within(() => {
+      cy.get('#secret-rotation-reason').type(rollbackReason)
+      cy.get('#secret-rotation-value').type(rollbackCandidate, { log: false })
+      cy.contains('button', 'Preview rotation').click()
+      cy.contains('Linked consumers', { timeout: 20_000 }).should('be.visible')
+      cy.contains('Core orchestrated').should('be.visible')
+      cy.contains('sample-service').should('be.visible')
+      cy.contains('Restart service').should('be.visible')
+      cy.get('[aria-label="Confirm secret rotation transition"]').click()
+      cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
+        expect(controlUrl).to.match(
+          /^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/
+        )
+        cy.request({
+          method: 'POST',
+          url: `${controlUrl}/fail-next-sample-start`,
+          failOnStatusCode: false,
+        }).then(({ status, body }) => {
+          expect(status).to.equal(200)
+          expect(body).to.deep.equal({
+            outcome: 'sample_start_failure_armed',
+          })
+          qualificationCheckpoint('rollback_fixture_armed')
+        })
+      })
+      cy.intercept(
+        'POST',
+        '**/api/secrets/rotation/execute',
+        (request) => {
+          rollbackExecuteRequests += 1
+          request.continue()
+        }
+      ).as('executeRollbackRotation')
+      cy.contains('button', 'Rotate and converge consumers').click()
+      cy.wait('@executeRollbackRotation', {
+        requestTimeout: 20_000,
+        responseTimeout: linkedRotationResponseTimeoutMs,
+      }).then(
+        ({ request, response, error }) => {
+          rollbackOperationId = request.body?.operationId
+          const operation = response?.body?.operation
+          const safeRollbackResult = {
+            transportPhase: 'rotation_execute_response',
+            status: response?.statusCode,
+            transportErrorCode: response
+              ? 'none'
+              : safeTransportErrorCode(error),
+            operationId: operation?.operationId,
+            outcome: operation?.outcome,
+            phase: operation?.phase,
+            failureCode: operation?.failureCode,
+            activeVersionId: operation?.activeVersionId,
+            previousVersionId: operation?.previousVersionId,
+            stagedVersionId: operation?.stagedVersionId,
+            rollbackCompletedOperations:
+              operation?.rollbackCompletedOperations,
+          }
+          expect(
+            safeRollbackResult,
+            JSON.stringify(safeRollbackResult)
+          ).to.deep.include({
+            status: 200,
+            operationId: rollbackOperationId,
+            outcome: 'rolled_back',
+            phase: 'rolled_back',
+            failureCode: 'rotation_consumer_not_ready',
+            activeVersionId: committedRotationVersionId,
+            previousVersionId: committedRotationVersionId,
+          })
+          expect(rollbackOperationId).to.match(
+            /^serviceadmin-rotate-[A-Za-z0-9._-]+$/
+          )
+          expect(operation?.stagedVersionId).to.match(
+            /^[A-Za-z0-9._-]{1,128}$/
+          )
+          expect(operation?.stagedVersionId).not.to.equal(
+            committedRotationVersionId
+          )
+          expect(operation?.rollbackCompletedOperations).to.deep.equal([
+            'sample-service:restart:',
+          ])
+        }
+      )
+      cy.contains('Core rotation rolled_back', { timeout: 20_000 }).should(
+        'be.visible'
+      )
+      cy.contains('Phase rolled_back').should('be.visible')
+      cy.contains('1 rollback actions completed').should('be.visible')
+      cy.contains('Safe failure code:').parent().within(() => {
+        cy.contains('rotation_consumer_not_ready').should('be.visible')
+      })
+      cy.contains('span', 'Safe next action:')
+        .parent()
+        .scrollIntoView()
+        .should('be.visible')
+        .and(
+          'contain.text',
+          'Inspect the failed consumer, correct readiness, then request a fresh impact plan.'
+        )
+      cy.get('#secret-rotation-value').should('not.exist')
+    })
+    qualificationCheckpoint('rollback_rotation_complete')
+    waitForManagedServiceReadiness('sample-service')
+    waitForManagedServiceReadiness('@secretsbroker')
+    waitForBrokerTelemetryReadiness(rollbackPrivateMaterial)
+    waitForBrokerEventsReadiness(rollbackPrivateMaterial)
+    qualificationCheckpoint('metadata_ready')
+    cy.intercept('GET', '**/api/secrets/rotation/operations/*').as(
+      'rehydrateRollbackRotation'
+    )
+    cy.intercept('GET', '**/operations/telemetry').as(
+      'rollbackTelemetryAfterReload'
+    )
+    cy.intercept('GET', '**/operations/events*').as(
+      'rollbackEventsAfterReload'
+    )
+    cy.reload()
+    cy.wait('@rehydrateRollbackRotation', { timeout: 60_000 }).then(
+      ({ request, response }) => {
+        expect(request.url).to.include(
+          `/api/secrets/rotation/operations/${rollbackOperationId}`
+        )
+        expect(response?.statusCode).to.equal(200)
+        const operation = response?.body?.operation
+        const safeRollbackRehydration = {
+          operationId: operation?.operationId,
+          outcome: operation?.outcome,
+          phase: operation?.phase,
+          failureCode: operation?.failureCode,
+          activeVersionId: operation?.activeVersionId,
+          previousVersionId: operation?.previousVersionId,
+          rollbackCompletedOperations:
+            operation?.rollbackCompletedOperations,
+        }
+        expect(
+          safeRollbackRehydration,
+          JSON.stringify(safeRollbackRehydration)
+        ).to.deep.equal({
+          operationId: rollbackOperationId,
+          outcome: 'rolled_back',
+          phase: 'rolled_back',
+          failureCode: 'rotation_consumer_not_ready',
+          activeVersionId: committedRotationVersionId,
+          previousVersionId: committedRotationVersionId,
+          rollbackCompletedOperations: ['sample-service:restart:'],
+        })
+      }
+    )
+    waitForSuccessfulBrokerTelemetryUiResponse(
+      5,
+      'rollbackTelemetryAfterReload',
+      rollbackPrivateMaterial
+    )
+    waitForSuccessfulBrokerEventsUiResponse(
+      5,
+      'rollbackEventsAfterReload',
+      rollbackPrivateMaterial
+    )
+    dialog('Rotate secret').within(() => {
+      cy.contains('Core rotation rolled_back', { timeout: 20_000 }).should(
+        'be.visible'
+      )
+      cy.contains('sample-service').should('be.visible')
+      cy.contains('running · healthy', { timeout: 20_000 }).should('be.visible')
+      cy.contains(committedRotationVersionId).should('be.visible')
+      cy.contains('rotation_consumer_not_ready').should('be.visible')
+      cy.contains('button', 'Close').scrollIntoView().click()
+    })
+    qualificationCheckpoint('rollback_rehydrated')
+    cy.location('search', { timeout: 20_000 }).should(
+      'not.include',
+      'rotationOperation='
+    )
+    cy.contains('[role="dialog"]', 'Rotate secret', {
+      timeout: 20_000,
+    }).should('not.exist')
+    cy.get('body', { timeout: 20_000 }).should(
+      'not.have.attr',
+      'data-scroll-locked'
+    )
+    cy.get('body', { timeout: 20_000 }).should(
+      'not.have.css',
+      'pointer-events',
+      'none'
+    )
+    cy.then(() => {
+      expect(rollbackExecuteRequests).to.equal(1)
+      expect(
+        rollbackConsoleLeakDetected,
+        'private rollback material is absent from browser console records'
+      ).to.equal(false)
+      expect(
+        rollbackOutboundLeakDetected,
+        'private rollback material is sent only to authorized rotation endpoints'
+      ).to.equal(false)
+    })
+    assertSecretValuesAbsentFromBrowser([rollbackCandidate])
 
     cy.contains('button', /^Create secret$/).click()
     dialog('Create local secret').within(() => {
@@ -715,7 +1318,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload()
+    waitForProviderUiStatusAfterReload({ checkpoint: 'single_migration' })
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td')
         .eq(2)
@@ -756,7 +1359,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       )
       cy.contains('button', 'Apply migration').click()
       cy.wait('@migrationApply', { timeout: 60_000 }).then(({ response }) => {
-        expect(response?.statusCode).to.equal(200)
+        expect(
+          response?.statusCode,
+          providerMigrationApplyDiagnostic(response)
+        ).to.equal(200)
         expect(response?.body).to.include({
           outcome: 'applied',
           applied: true,
@@ -828,7 +1434,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload()
+    waitForProviderUiStatusAfterReload({ checkpoint: 'unavailable_migration' })
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.contains('button', /^Migrate\b/).click()
     })
@@ -880,7 +1486,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload({ targetInventoryRef: expectedRef })
+    waitForProviderUiStatusAfterReload({
+      checkpoint: 'bulk_migration',
+      targetInventoryRef: expectedRef,
+    })
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td').eq(1).should('contain.text', 'local-encrypted-store')
       cy.get('td')
@@ -1110,7 +1719,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         cy.contains(/created and verified/i, {
           timeout: 20_000,
         }).should('be.visible')
-        waitForProviderUiStatusAfterReload()
+        waitForProviderUiStatusAfterReload({ checkpoint: 'post_rotation' })
       } else {
         cy.contains('button', 'Rotate master key').should('be.disabled')
         cy.contains(
@@ -1238,15 +1847,25 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       }
     )
 
-    cy.request({
-      method: 'POST',
-      url: '/api/services/%40secretsbroker/stop',
-      body: { confirm: true },
-      timeout: 120_000,
-    }).its('status').should('equal', 200)
+    cy.request(
+      managedServiceStopMutationRequestOptions(
+        '/api/services/%40secretsbroker/stop'
+      )
+    )
+      .its('status')
+      .should('equal', 200)
+    waitForManagedServiceStopped('@secretsbroker')
+    cy.intercept('GET', '**/secrets/management*').as(
+      'stoppedBrokerManagement'
+    )
     cy.reload()
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
+    cy.wait('@stoppedBrokerManagement', { timeout: 20_000 }).then(
+      ({ response }) => {
+        expect(response?.statusCode).to.be.within(400, 599)
+      }
+    )
     cy.contains('Secrets Broker management is unavailable.', {
       timeout: 30_000,
     }).should('be.visible')
@@ -1268,5 +1887,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       editedCandidate,
       resetCandidate,
     ])
+    qualificationCheckpoint('acceptance_complete')
   })
 })
