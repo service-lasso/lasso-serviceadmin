@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress'
+import { createProviderUiConvergenceRecorder } from './scripts/real-browser-qualification-budget.mjs'
 import { createQualificationProgressRecorder } from './scripts/real-browser-qualification-progress.mjs'
 
 export default defineConfig({
@@ -14,11 +15,25 @@ export default defineConfig({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
       })
-      on('before:spec', (spec) => progress.setSpecPath(spec.absolute))
-      on('after:spec', () => progress.setSpecPath(undefined))
+      const providerUi = createProviderUiConvergenceRecorder({
+        enabled: String(config.env.qualificationProgress) === '1',
+        write: (line) => process.stderr.write(line),
+      })
+      on('before:spec', (spec) => {
+        progress.setSpecPath(spec.absolute)
+        providerUi.setSpecPath(spec.absolute)
+      })
+      on('after:spec', () => {
+        progress.setSpecPath(undefined)
+        providerUi.setSpecPath(undefined)
+      })
       on('task', {
         qualificationCheckpoint(phase) {
           progress.record(phase)
+          return null
+        },
+        providerUiConvergenceCheckpoint(diagnostic) {
+          providerUi.record(diagnostic)
           return null
         },
       })

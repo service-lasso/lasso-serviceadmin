@@ -10,6 +10,15 @@ export const managedServiceStopReadinessAttempts = 5
 export const managedServiceStopRequestTimeoutMs = 10_000
 export const managedServiceStopRetryDelayMs = 1_000
 export const providerUiConvergenceAttempts = 3
+export const providerReadinessAttempts = 3
+export const providerReadinessRequestTimeoutMs = 8_000
+export const providerReadinessRetryDelayMs = 1_000
+export const providerReadinessCheckpointCount = 4
+export const providerReadinessCallCount = 8
+export const providerReadinessDiagnosticEventCap = 64
+export const providerReadinessOtherLifecycleReserveMs = 144_000
+
+const providerUiConvergenceSchema = 'service-admin.provider-ui-convergence.v1'
 
 const providerUiConvergenceCheckpoints = new Set([
   'single_migration',
@@ -52,6 +61,21 @@ export function providerUiConvergenceDiagnostic({
   attempt,
   statusCode,
 }) {
+  const safe = normalizeProviderUiConvergenceEvidence({
+    checkpoint,
+    component,
+    attempt,
+    statusCode,
+  })
+  return `checkpoint=${safe.checkpoint}, component=${safe.component}, attempt=${safe.attempt}, status=${safe.statusCode}`
+}
+
+function normalizeProviderUiConvergenceEvidence({
+  checkpoint,
+  component,
+  attempt,
+  statusCode,
+} = {}) {
   const safeCheckpoint = providerUiConvergenceCheckpoints.has(checkpoint)
     ? checkpoint
     : 'unknown'
@@ -59,14 +83,113 @@ export function providerUiConvergenceDiagnostic({
     ? component
     : 'unknown'
   const safeAttempt = Number.isInteger(attempt)
-    ? Math.min(providerUiConvergenceAttempts, Math.max(1, attempt))
-    : providerUiConvergenceAttempts
+    ? Math.min(providerReadinessAttempts, Math.max(1, attempt))
+    : providerReadinessAttempts
   const safeStatusCode =
     Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
       ? statusCode
       : 'unavailable'
+  return {
+    checkpoint: safeCheckpoint,
+    component: safeComponent,
+    attempt: safeAttempt,
+    statusCode: safeStatusCode,
+  }
+}
 
-  return `checkpoint=${safeCheckpoint}, component=${safeComponent}, attempt=${safeAttempt}, status=${safeStatusCode}`
+export function providerUiConvergenceEvidence(options = {}) {
+  const safe = normalizeProviderUiConvergenceEvidence(options)
+  return {
+    schema: providerUiConvergenceSchema,
+    ...safe,
+  }
+}
+
+export function parseProviderUiConvergenceEvidence(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  let value
+  try {
+    value = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (
+    value?.schema !== providerUiConvergenceSchema ||
+    !providerUiConvergenceCheckpoints.has(value.checkpoint) ||
+    !providerUiConvergenceComponents.has(value.component) ||
+    !Number.isInteger(value.attempt) ||
+    value.attempt < 1 ||
+    value.attempt > providerReadinessAttempts ||
+    !(
+      value.statusCode === 'unavailable' ||
+      (Number.isInteger(value.statusCode) &&
+        value.statusCode >= 100 &&
+        value.statusCode <= 599)
+    ) ||
+    !Object.keys(value).every((key) =>
+      ['schema', 'checkpoint', 'component', 'attempt', 'statusCode'].includes(
+        key
+      )
+    )
+  ) {
+    return null
+  }
+  return {
+    checkpoint: value.checkpoint,
+    component: value.component,
+    attempt: value.attempt,
+    statusCode: value.statusCode,
+  }
+}
+
+export function createProviderUiConvergenceRecorder({
+  enabled = false,
+  write = () => undefined,
+  maxEvents = providerReadinessDiagnosticEventCap,
+} = {}) {
+  if (
+    !Number.isInteger(maxEvents) ||
+    maxEvents < 1 ||
+    maxEvents > providerReadinessDiagnosticEventCap
+  ) {
+    throw new Error('Provider UI convergence event cap is invalid.')
+  }
+  let active = false
+  let emitted = 0
+  return {
+    setSpecPath(specPath) {
+      active =
+        enabled === true &&
+        typeof specPath === 'string' &&
+        /(?:^|[\\/])cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
+          specPath
+        )
+      emitted = 0
+    },
+    record(options) {
+      if (!active || emitted >= maxEvents) return null
+      const evidence = providerUiConvergenceEvidence(options)
+      write(`${JSON.stringify(evidence)}\n`)
+      emitted += 1
+      return {
+        checkpoint: evidence.checkpoint,
+        component: evidence.component,
+        attempt: evidence.attempt,
+        statusCode: evidence.statusCode,
+      }
+    },
+  }
+}
+
+export function providerReadinessRequestOptions(url) {
+  return {
+    method: 'GET',
+    url,
+    failOnStatusCode: false,
+    retryOnNetworkFailure: false,
+    retryOnStatusCodeFailure: false,
+    timeout: providerReadinessRequestTimeoutMs,
+  }
 }
 
 export function managedServiceStopMutationRequestOptions(url) {
@@ -84,9 +207,19 @@ export function managedServiceStopMutationRequestOptions(url) {
 export function managedServiceStopReadinessWorstCaseMs() {
   return (
     managedServiceStopReadinessAttempts * managedServiceStopRequestTimeoutMs +
-    (managedServiceStopReadinessAttempts - 1) *
-      managedServiceStopRetryDelayMs
+    (managedServiceStopReadinessAttempts - 1) * managedServiceStopRetryDelayMs
   )
+}
+
+export function providerReadinessWorstCaseMs() {
+  return (
+    providerReadinessAttempts * providerReadinessRequestTimeoutMs +
+    (providerReadinessAttempts - 1) * providerReadinessRetryDelayMs
+  )
+}
+
+export function providerReadinessReservedLifecycleMs() {
+  return providerReadinessCallCount * providerReadinessWorstCaseMs()
 }
 
 export function realBrowserQualificationWorstCaseMs() {
@@ -94,7 +227,8 @@ export function realBrowserQualificationWorstCaseMs() {
     brokerMetadataReadinessAttempts * brokerMetadataRequestTimeoutMs +
     (brokerMetadataReadinessAttempts - 1) * brokerMetadataRetryDelayMs
   return (
-    brokerMetadataReservedLifecycleMs +
+    providerReadinessReservedLifecycleMs() +
+    providerReadinessOtherLifecycleReserveMs +
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs +
     brokerMetadataEndpointCount * perEndpointMs
   )

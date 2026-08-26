@@ -10,6 +10,9 @@ import {
   managedServiceStopRetryDelayMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
+  providerReadinessAttempts,
+  providerReadinessRequestOptions,
+  providerReadinessRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
@@ -214,81 +217,120 @@ function waitForManagedServiceStopped(
 
 function waitForBrokerProviderStatusReadiness(
   targetProviderId = 'vault-browser',
-  remainingAttempts = 60
+  remainingAttempts = providerReadinessAttempts,
+  diagnostic
 ) {
-  cy.request({
-    method: 'GET',
-    url: '/api/services/%40secretsbroker/providers/config/status',
-    failOnStatusCode: false,
-    timeout: 20_000,
-  }).then(({ status, body }) => {
-    const providers = body?.providers
-    if (
-      status === 200 &&
-      Array.isArray(providers) &&
-      providers.some((provider) =>
-        provider?.providerId === targetProviderId &&
-        provider?.outcome === 'ready' &&
-        provider?.operations?.some(
-          (operation) =>
-            operation?.path === '/v1/providers/migration/apply' &&
-            (operation?.maturity === 'validated' ||
-              operation?.maturity === 'executable')
+  const attempt = providerReadinessAttempts - remainingAttempts + 1
+  return cy.request(
+    providerReadinessRequestOptions(
+      '/api/services/%40secretsbroker/providers/config/status'
+    )
+  ).then(({ status, body }) => {
+    const diagnosticRecord = diagnostic
+      ? recordProviderUiConvergence({
+          checkpoint: diagnostic.checkpoint,
+          component: 'response_metadata',
+          attempt,
+          statusCode: status,
+        })
+      : cy.wrap(null, { log: false })
+
+    return diagnosticRecord.then(() => {
+      const providers = body?.providers
+      if (
+        status === 200 &&
+        Array.isArray(providers) &&
+        providers.some(
+          (provider) =>
+            provider?.providerId === targetProviderId &&
+            provider?.outcome === 'ready' &&
+            provider?.operations?.some(
+              (operation) =>
+                operation?.path === '/v1/providers/migration/apply' &&
+                (operation?.maturity === 'validated' ||
+                  operation?.maturity === 'executable')
+            )
+        )
+      ) {
+        return
+      }
+
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          `Broker provider status did not become ready (${providerUiConvergenceDiagnostic({
+            checkpoint: diagnostic?.checkpoint,
+            component: 'response_metadata',
+            attempt,
+            statusCode: status,
+          })}).`
+        )
+      }
+
+      return cy.wait(providerReadinessRetryDelayMs, { log: false }).then(() =>
+        waitForBrokerProviderStatusReadiness(
+          targetProviderId,
+          remainingAttempts - 1,
+          diagnostic
         )
       )
-    ) {
-      return
-    }
-
-    if (remainingAttempts <= 1) {
-      throw new Error(
-        'Broker provider status did not become ready after the linked rotation.'
-      )
-    }
-
-    cy.wait(1_000).then(() =>
-      waitForBrokerProviderStatusReadiness(
-        targetProviderId,
-        remainingAttempts - 1
-      )
-    )
+    })
   })
 }
 
 function waitForBrokerInventoryReadiness(
   targetRef = createdRef,
-  remainingAttempts = 60
+  remainingAttempts = providerReadinessAttempts,
+  diagnostic
 ) {
-  cy.request({
-    method: 'GET',
-    url: '/api/services/%40secretsbroker/secrets/management',
-    failOnStatusCode: false,
-    timeout: 20_000,
-  }).then(({ status, body }) => {
-    const records = body?.results
-    if (
-      status === 200 &&
-      Array.isArray(records) &&
-      records.some(
-        (record) =>
-          record?.ref === targetRef &&
-          record?.providerKind === 'local-encrypted-store' &&
-          record?.outcome === 'ready'
-      )
-    ) {
-      return
-    }
-
-    if (remainingAttempts <= 1) {
-      throw new Error(
-        `Broker inventory did not expose ready local candidate ${targetRef}.`
-      )
-    }
-
-    cy.wait(1_000).then(() =>
-      waitForBrokerInventoryReadiness(targetRef, remainingAttempts - 1)
+  const attempt = providerReadinessAttempts - remainingAttempts + 1
+  return cy.request(
+    providerReadinessRequestOptions(
+      '/api/services/%40secretsbroker/secrets/management'
     )
+  ).then(({ status, body }) => {
+    const diagnosticRecord = diagnostic
+      ? recordProviderUiConvergence({
+          checkpoint: diagnostic.checkpoint,
+          component: 'response_metadata',
+          attempt,
+          statusCode: status,
+        })
+      : cy.wrap(null, { log: false })
+
+    return diagnosticRecord.then(() => {
+      const records = body?.results
+      if (
+        status === 200 &&
+        Array.isArray(records) &&
+        records.some(
+          (record) =>
+            record?.ref === targetRef &&
+            record?.providerKind === 'local-encrypted-store' &&
+            record?.outcome === 'ready'
+        )
+      ) {
+        return
+      }
+
+      if (remainingAttempts <= 1) {
+        throw new Error(
+          'Broker inventory did not expose a ready local candidate.'
+        )
+      }
+
+      return cy.wait(providerReadinessRetryDelayMs, { log: false }).then(() =>
+        waitForBrokerInventoryReadiness(
+          targetRef,
+          remainingAttempts - 1,
+          diagnostic
+        )
+      )
+    })
   })
+}
+
+function recordProviderUiConvergence(diagnostic) {
+  return cy.task('providerUiConvergenceCheckpoint', diagnostic, { log: false })
 }
 
 function waitForProviderUiStatusAfterReload({
@@ -298,10 +340,43 @@ function waitForProviderUiStatusAfterReload({
   remainingAttempts = providerUiConvergenceAttempts,
   attempt = 1,
 } = {}) {
-  waitForBrokerProviderStatusReadiness(targetProviderId)
-  if (targetInventoryRef) {
-    waitForBrokerInventoryReadiness(targetInventoryRef)
-  }
+  return waitForBrokerProviderStatusReadiness(
+    targetProviderId,
+    providerReadinessAttempts,
+    { checkpoint }
+  ).then(() => {
+    const inventoryReadiness = targetInventoryRef
+      ? waitForBrokerInventoryReadiness(
+          targetInventoryRef,
+          providerReadinessAttempts,
+          { checkpoint }
+        )
+      : cy.wrap(null, { log: false })
+    return inventoryReadiness.then(() =>
+      waitForProviderUiStatusAfterBackendReady({
+        checkpoint,
+        targetProviderId,
+        targetInventoryRef,
+        remainingAttempts,
+        attempt,
+      })
+    )
+  })
+}
+
+function waitForProviderUiStatusAfterBackendReady({
+  checkpoint,
+  targetProviderId,
+  targetInventoryRef,
+  remainingAttempts,
+  attempt,
+}) {
+  recordProviderUiConvergence({
+    checkpoint,
+    component: 'response_metadata',
+    attempt,
+    statusCode: 'unavailable',
+  })
   cy.intercept('GET', '**/providers/config/status').as(
     'providerStatusAfterReload'
   )
@@ -314,52 +389,74 @@ function waitForProviderUiStatusAfterReload({
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
   openSecrets()
   return waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
-    (providerReadiness) => {
-      const inventoryReadiness = targetInventoryRef
-        ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
-        : cy.wrap({ ready: true, statusCode: 200 }, { log: false })
+    (providerReadiness) =>
+      recordProviderUiConvergence({
+        checkpoint,
+        component: 'response_metadata',
+        attempt,
+        statusCode: providerReadiness.statusCode,
+      }).then(() => {
+        const inventoryReadiness = targetInventoryRef
+          ? waitForSuccessfulInventoryUiResponse(targetInventoryRef)
+          : cy.wrap({ ready: true, statusCode: 200 }, { log: false })
 
-      return inventoryReadiness.then((inventoryReadinessResult) => {
-        const providerRowReadiness = providerReadiness.ready
-          ? waitForProviderRowRender(targetProviderId)
-          : cy.wrap(false, { log: false })
-
-        return providerRowReadiness.then((hasTargetProviderRow) => {
-          if (
-            providerReadiness.ready &&
-            inventoryReadinessResult.ready &&
-            hasTargetProviderRow
-          ) {
-            return
-          }
-          if (remainingAttempts <= 1) {
-            const responseMetadataReady =
-              providerReadiness.ready && inventoryReadinessResult.ready
-            const statusCode = providerReadiness.ready
-              ? inventoryReadinessResult.statusCode
-              : providerReadiness.statusCode
-            throw new Error(
-              `Secrets UI metadata did not converge after the bounded reloads (${providerUiConvergenceDiagnostic({
+        return inventoryReadiness.then((inventoryReadinessResult) => {
+          const inventoryDiagnostic = targetInventoryRef
+            ? recordProviderUiConvergence({
                 checkpoint,
-                component: responseMetadataReady
-                  ? 'row_render'
-                  : 'response_metadata',
+                component: 'response_metadata',
                 attempt,
-                statusCode,
-              })}).`
-            )
-          }
+                statusCode: inventoryReadinessResult.statusCode,
+              })
+            : cy.wrap(null, { log: false })
 
-          return waitForProviderUiStatusAfterReload({
-            checkpoint,
-            targetProviderId,
-            targetInventoryRef,
-            remainingAttempts: remainingAttempts - 1,
-            attempt: attempt + 1,
+          return inventoryDiagnostic.then(() => {
+            const providerRowReadiness = providerReadiness.ready
+              ? recordProviderUiConvergence({
+                  checkpoint,
+                  component: 'row_render',
+                  attempt,
+                  statusCode: providerReadiness.statusCode,
+                }).then(() => waitForProviderRowRender(targetProviderId))
+              : cy.wrap(false, { log: false })
+
+            return providerRowReadiness.then((hasTargetProviderRow) => {
+              if (
+                providerReadiness.ready &&
+                inventoryReadinessResult.ready &&
+                hasTargetProviderRow
+              ) {
+                return
+              }
+              if (remainingAttempts <= 1) {
+                const responseMetadataReady =
+                  providerReadiness.ready && inventoryReadinessResult.ready
+                const statusCode = providerReadiness.ready
+                  ? inventoryReadinessResult.statusCode
+                  : providerReadiness.statusCode
+                throw new Error(
+                  `Secrets UI metadata did not converge after the bounded reloads (${providerUiConvergenceDiagnostic({
+                    checkpoint,
+                    component: responseMetadataReady
+                      ? 'row_render'
+                      : 'response_metadata',
+                    attempt,
+                    statusCode,
+                  })}).`
+                )
+              }
+
+              return waitForProviderUiStatusAfterBackendReady({
+                checkpoint,
+                targetProviderId,
+                targetInventoryRef,
+                remainingAttempts: remainingAttempts - 1,
+                attempt: attempt + 1,
+              })
+            })
           })
         })
       })
-    }
   )
 }
 

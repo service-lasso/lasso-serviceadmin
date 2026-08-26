@@ -18,6 +18,8 @@ import {
   brokerMetadataEndpointCount,
   brokerMetadataReadinessAttempts,
   brokerMetadataRequestOptions,
+  brokerMetadataRequestTimeoutMs,
+  brokerMetadataRetryDelayMs,
   isManagedServiceStoppedResponse,
   brokerMetadataReservedLifecycleMs,
   cypressQualificationTimeoutMs,
@@ -27,6 +29,15 @@ import {
   managedServiceStopReadinessWorstCaseMs,
   managedServiceStopMutationRequestOptions,
   managedServiceStopRequestOptions,
+  createProviderUiConvergenceRecorder,
+  parseProviderUiConvergenceEvidence,
+  providerReadinessAttempts,
+  providerReadinessCallCount,
+  providerReadinessCheckpointCount,
+  providerReadinessOtherLifecycleReserveMs,
+  providerReadinessRequestOptions,
+  providerReadinessReservedLifecycleMs,
+  providerReadinessWorstCaseMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
   realBrowserQualificationWorstCaseMs,
@@ -48,11 +59,40 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
   assert.equal(brokerMetadataReservedLifecycleMs, 6 * 60_000)
   assert.equal(managedServiceStopReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
+  assert.equal(providerReadinessAttempts, 3)
+  assert.equal(providerReadinessCheckpointCount, 4)
+  assert.equal(providerReadinessCallCount, 8)
+  assert.equal(providerReadinessWorstCaseMs(), 26_000)
+  assert.equal(providerReadinessReservedLifecycleMs(), 208_000)
+  assert.equal(providerReadinessOtherLifecycleReserveMs, 144_000)
+  assert.equal(
+    providerReadinessReservedLifecycleMs() +
+      providerReadinessOtherLifecycleReserveMs,
+    352_000
+  )
+  const brokerMetadataWorstCaseMs =
+    brokerMetadataEndpointCount *
+    (brokerMetadataReadinessAttempts * brokerMetadataRequestTimeoutMs +
+      (brokerMetadataReadinessAttempts - 1) * brokerMetadataRetryDelayMs)
+  assert.equal(brokerMetadataWorstCaseMs, 108_000)
+  assert.equal(
+    linkedRotationExecuteCount * linkedRotationResponseTimeoutMs,
+    240_000
+  )
+  assert.ok(
+    providerReadinessReservedLifecycleMs() +
+      providerReadinessOtherLifecycleReserveMs <
+      brokerMetadataReservedLifecycleMs
+  )
   assert.equal(
     brokerMetadataReservedLifecycleMs - managedServiceStopReadinessWorstCaseMs(),
     306_000
   )
-  assert.equal(realBrowserQualificationWorstCaseMs(), 708_000)
+  assert.equal(realBrowserQualificationWorstCaseMs(), 700_000)
+  assert.equal(
+    cypressQualificationTimeoutMs - realBrowserQualificationWorstCaseMs(),
+    20_000
+  )
   assert.ok(realBrowserQualificationWorstCaseMs() < cypressQualificationTimeoutMs)
   for (const endpoint of ['telemetry', 'events']) {
     assert.deepEqual(
@@ -73,6 +113,17 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     retryOnNetworkFailure: false,
     timeout: 10_000,
   })
+  assert.deepEqual(
+    providerReadinessRequestOptions('/api/providers/config/status'),
+    {
+      method: 'GET',
+      url: '/api/providers/config/status',
+      failOnStatusCode: false,
+      retryOnNetworkFailure: false,
+      retryOnStatusCodeFailure: false,
+      timeout: 8_000,
+    }
+  )
   assert.equal(
     isManagedServiceStoppedResponse({
       status: 200,
@@ -149,6 +200,38 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     ].length,
     1
   )
+  for (const checkpoint of [
+    'single_migration',
+    'unavailable_migration',
+    'bulk_migration',
+    'post_rotation',
+  ]) {
+    assert.equal(
+      [
+        ...lifecycleSource.matchAll(
+          new RegExp(`checkpoint: '${checkpoint}'`, 'g')
+        ),
+      ].length,
+      1
+    )
+  }
+  const standaloneProviderReadinessCalls = [
+    ...lifecycleSource.matchAll(/^\s*waitForBrokerProviderStatusReadiness\(\)$/gm),
+  ].length
+  const checkpointProviderReadinessCalls = providerReadinessCheckpointCount
+  const checkpointInventoryReadinessCalls = [
+    ...lifecycleSource.matchAll(
+      /waitForBrokerInventoryReadiness\(\s*targetInventoryRef,\s*providerReadinessAttempts,/g
+    ),
+  ].length
+  assert.equal(standaloneProviderReadinessCalls, 3)
+  assert.equal(checkpointInventoryReadinessCalls, 1)
+  assert.equal(
+    standaloneProviderReadinessCalls +
+      checkpointProviderReadinessCalls +
+      checkpointInventoryReadinessCalls,
+    providerReadinessCallCount
+  )
 })
 
 test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
@@ -175,6 +258,97 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   )
   assert.equal(sanitized.includes('private-provider-ref'), false)
   assert.equal(sanitized.includes('response-body-value'), false)
+
+  const writes = []
+  const recorder = createProviderUiConvergenceRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+    maxEvents: 2,
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      checkpoint: 'single_migration',
+      component: 'response_metadata',
+      attempt: 1,
+      statusCode: 503,
+    }),
+    {
+      checkpoint: 'single_migration',
+      component: 'response_metadata',
+      attempt: 1,
+      statusCode: 503,
+    }
+  )
+  recorder.record({
+    checkpoint: 'post_rotation',
+    component: 'row_render',
+    attempt: 2,
+    statusCode: 200,
+  })
+  assert.equal(
+    recorder.record({
+      checkpoint: 'bulk_migration',
+      component: 'row_render',
+      attempt: 3,
+      statusCode: 200,
+    }),
+    null
+  )
+  assert.equal(writes.length, 2)
+  assert.deepEqual(parseProviderUiConvergenceEvidence(writes[1].trim()), {
+    checkpoint: 'post_rotation',
+    component: 'row_render',
+    attempt: 2,
+    statusCode: 200,
+  })
+  assert.equal(
+    parseProviderUiConvergenceEvidence(
+      JSON.stringify({
+        schema: 'service-admin.provider-ui-convergence.v1',
+        checkpoint: 'private-provider-ref',
+        component: 'response_metadata',
+        attempt: 1,
+        statusCode: 200,
+      })
+    ),
+    null
+  )
+
+  const disabledWrites = []
+  const disabled = createProviderUiConvergenceRecorder({
+    enabled: false,
+    write: (line) => disabledWrites.push(line),
+  })
+  disabled.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.equal(
+    disabled.record({
+      checkpoint: 'post_rotation',
+      component: 'row_render',
+      attempt: 1,
+      statusCode: 200,
+    }),
+    null
+  )
+  const otherSpec = createProviderUiConvergenceRecorder({
+    enabled: true,
+    write: (line) => disabledWrites.push(line),
+  })
+  otherSpec.setSpecPath('C:/candidate/cypress/e2e/other.cy.js')
+  assert.equal(
+    otherSpec.record({
+      checkpoint: 'post_rotation',
+      component: 'row_render',
+      attempt: 1,
+      statusCode: 200,
+    }),
+    null
+  )
+  assert.deepEqual(disabledWrites, [])
 })
 
 test('qualification progress is allowlisted, ordered, integral, and capped', () => {
@@ -268,6 +442,12 @@ test('qualification failures retain only bounded phase and transport metadata', 
         { phase: 'lifecycle_started', elapsedMs: 20 },
         { phase: 'rollback_rotation_complete', elapsedMs: 80_000 },
       ],
+      providerUiDiagnostic: {
+        checkpoint: 'post_rotation',
+        component: 'response_metadata',
+        attempt: 3,
+        statusCode: 503,
+      },
       transportDiagnostic: {
         phases: ['upstream_started', 'headers_received', 'body_received'],
         statuses: [200, 200],
@@ -286,6 +466,12 @@ test('qualification failures retain only bounded phase and transport metadata', 
       ],
       statuses: [200, 200],
       adminReachability: 'reachable',
+      providerUi: {
+        checkpoint: 'post_rotation',
+        component: 'response_metadata',
+        attempt: 3,
+        statusCode: 503,
+      },
     }
   )
   assert.deepEqual(
@@ -301,6 +487,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
       transportPhases: [],
       statuses: [],
       adminReachability: 'unreachable',
+      providerUi: null,
     }
   )
 })

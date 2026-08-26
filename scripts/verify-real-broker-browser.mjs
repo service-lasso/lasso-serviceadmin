@@ -10,7 +10,11 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from './real-browser-transport-diagnostics.mjs'
-import { cypressQualificationTimeoutMs } from './real-browser-qualification-budget.mjs'
+import {
+  cypressQualificationTimeoutMs,
+  parseProviderUiConvergenceEvidence,
+  providerReadinessDiagnosticEventCap,
+} from './real-browser-qualification-budget.mjs'
 import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
@@ -71,7 +75,6 @@ const cypressBin = path.join(
   'bin',
   'cypress'
 )
-
 function requiredPath(name) {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`${name} is required.`)
@@ -512,6 +515,7 @@ let cypressOutputChecked = false
 let cypressSucceeded = false
 let qualificationFailureKind
 const qualificationProgressEvents = []
+const providerUiConvergenceEvents = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -557,7 +561,11 @@ try {
     }
   )
   cypressOutput = captureBoundedChildOutput(cypress)
-  captureQualificationProgress(cypress, qualificationProgressEvents)
+  captureQualificationProgress(
+    cypress,
+    qualificationProgressEvents,
+    providerUiConvergenceEvents
+  )
   let cypressExit
   try {
     cypressExit = await waitForExit(cypress, cypressQualificationTimeoutMs)
@@ -619,6 +627,7 @@ try {
         buildQualificationFailureDiagnostic({
           failure: qualificationFailureKind,
           progressEvents: qualificationProgressEvents,
+          providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
             adminReachability
@@ -649,7 +658,7 @@ function cypressEnvironment() {
   return environment
 }
 
-function captureQualificationProgress(child, target) {
+function captureQualificationProgress(child, target, providerUiTarget) {
   let buffer = ''
   child.stderr.on('data', (chunk) => {
     buffer += chunk.toString('utf8')
@@ -660,6 +669,13 @@ function captureQualificationProgress(child, target) {
       const event = parseQualificationProgressDiagnostic(line)
       if (event && target.length < qualificationProgressPhases.length) {
         target.push(event)
+      }
+      const providerUiEvent = parseProviderUiConvergenceEvidence(line)
+      if (
+        providerUiEvent &&
+        providerUiTarget.length < providerReadinessDiagnosticEventCap
+      ) {
+        providerUiTarget.push(providerUiEvent)
       }
     }
   })
