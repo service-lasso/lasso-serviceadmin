@@ -2,6 +2,7 @@ import {
   brokerMetadataReadinessAttempts,
   brokerMetadataRetryDelayMs,
   brokerMetadataRequestOptions,
+  isManagedServiceStoppedResponse,
   linkedRotationResponseTimeoutMs,
   managedServiceStopReadinessAttempts,
   managedServiceStopMutationRequestOptions,
@@ -192,13 +193,8 @@ function waitForManagedServiceStopped(
     managedServiceStopRequestOptions(
       `/api/services/${encodeURIComponent(serviceId)}`
     )
-  ).then(({ status, body }) => {
-    const service = body?.service
-    if (
-      status === 200 &&
-      service?.status === 'stopped' &&
-      service?.lifecycle?.running === false
-    ) {
+  ).then((response) => {
+    if (isManagedServiceStoppedResponse(response)) {
       return
     }
 

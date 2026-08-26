@@ -30,6 +30,10 @@ export function managedServiceStopRequestOptions(url) {
   }
 }
 
+export function isManagedServiceStoppedResponse({ status, body }) {
+  return status === 200 && body?.service?.lifecycle?.running === false
+}
+
 export function managedServiceStopMutationRequestOptions(url) {
   return {
     method: 'POST',

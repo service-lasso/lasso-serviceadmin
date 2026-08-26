@@ -18,6 +18,7 @@ import {
   brokerMetadataEndpointCount,
   brokerMetadataReadinessAttempts,
   brokerMetadataRequestOptions,
+  isManagedServiceStoppedResponse,
   brokerMetadataReservedLifecycleMs,
   cypressQualificationTimeoutMs,
   linkedRotationExecuteCount,
@@ -70,6 +71,24 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     retryOnNetworkFailure: false,
     timeout: 10_000,
   })
+  assert.equal(
+    isManagedServiceStoppedResponse({
+      status: 200,
+      body: {
+        service: { status: 'discovered', lifecycle: { running: false } },
+      },
+    }),
+    true
+  )
+  assert.equal(
+    isManagedServiceStoppedResponse({
+      status: 200,
+      body: {
+        service: { status: 'discovered', lifecycle: { running: true } },
+      },
+    }),
+    false
+  )
   assert.deepEqual(
     managedServiceStopMutationRequestOptions('/api/services/broker/stop'),
     {
