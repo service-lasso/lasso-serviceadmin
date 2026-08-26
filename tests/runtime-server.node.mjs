@@ -42,6 +42,7 @@ import {
   providerReadinessAttempts,
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
+  providerReadinessConvergenceWindowMs,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
   providerReadinessReservedLifecycleMs,
@@ -65,11 +66,12 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(brokerMetadataReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
-  assert.equal(providerReadinessAttempts, 3)
+  assert.equal(providerReadinessAttempts, 6)
   assert.equal(providerReadinessCheckpointCount, 4)
   assert.equal(providerReadinessCallCount, 8)
-  assert.equal(providerReadinessWorstCaseMs(), 26_000)
-  assert.equal(providerReadinessReservedLifecycleMs(), 208_000)
+  assert.equal(providerReadinessConvergenceWindowMs(), 5_000)
+  assert.equal(providerReadinessWorstCaseMs(), 35_000)
+  assert.equal(providerReadinessReservedLifecycleMs(), 280_000)
   assert.equal(providerFinalLifecycleDiagnosticCount, 1)
   assert.equal(providerFinalLifecycleDiagnosticTimeoutMs, 5_000)
   const brokerMetadataWorstCaseMs =
@@ -81,7 +83,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs,
     240_000
   )
-  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 561_000)
+  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 633_000)
   // This network-only subtotal must never be presented as a whole-spec bound.
   // Lifecycle transitions, page loads, UI waits, tasks, and cleanup are
   // source-accounted separately against the fixed Cypress wrapper.
@@ -112,7 +114,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
       failOnStatusCode: false,
       retryOnNetworkFailure: false,
       retryOnStatusCodeFailure: false,
-      timeout: 8_000,
+      timeout: 5_000,
     }
   )
   assert.deepEqual(
@@ -491,7 +493,7 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   })
   assert.equal(
     sanitized,
-    'checkpoint=unknown, component=unknown, attempt=3, status=unavailable, errorCode=unknown, serviceRunning=unavailable, serviceHealthy=unavailable'
+    'checkpoint=unknown, component=unknown, attempt=6, status=unavailable, errorCode=unknown, serviceRunning=unavailable, serviceHealthy=unavailable'
   )
   assert.equal(sanitized.includes('private-provider-ref'), false)
   assert.equal(sanitized.includes('response-body-value'), false)

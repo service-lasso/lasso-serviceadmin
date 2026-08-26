@@ -9,8 +9,12 @@ export const managedServiceStopReadinessAttempts = 5
 export const managedServiceStopRequestTimeoutMs = 10_000
 export const managedServiceStopRetryDelayMs = 1_000
 export const providerUiConvergenceAttempts = 3
-export const providerReadinessAttempts = 3
-export const providerReadinessRequestTimeoutMs = 8_000
+// Core's protected Broker client and authenticated readiness proof are each
+// bounded to five seconds. Six response-bound attempts with one-second gaps
+// cover that same convergence window even when 503 responses return
+// immediately, while each Admin request remains capped to Core's deadline.
+export const providerReadinessAttempts = 6
+export const providerReadinessRequestTimeoutMs = 5_000
 export const providerReadinessRetryDelayMs = 1_000
 export const providerReadinessCheckpointCount = 4
 export const providerReadinessCallCount = 8
@@ -355,6 +359,10 @@ export function providerReadinessWorstCaseMs() {
     providerReadinessAttempts * providerReadinessRequestTimeoutMs +
     (providerReadinessAttempts - 1) * providerReadinessRetryDelayMs
   )
+}
+
+export function providerReadinessConvergenceWindowMs() {
+  return (providerReadinessAttempts - 1) * providerReadinessRetryDelayMs
 }
 
 export function providerReadinessReservedLifecycleMs() {
