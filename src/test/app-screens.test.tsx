@@ -817,6 +817,7 @@ describe('app screens', () => {
       { name: /Rotate secret/i },
       { timeout: 5_000 }
     )
+    expect(dialog).toHaveClass('max-h-[calc(100vh-2rem)]', 'overflow-y-auto')
     await user.type(within(dialog).getByLabelText(/Audit reason/i), 'approved')
     await user.type(
       within(dialog).getByLabelText(/Replacement value/i),
