@@ -118,10 +118,10 @@ test('packaged proxy does not manufacture a trusted ingress marker from incomple
   }
 })
 
-test('packaged proxy gives lifecycle and consumer-converging rotation mutations the bounded restart window', () => {
+test('packaged proxy gives consumer-converging rotation a bounded cross-platform window', () => {
   assert.equal(runtimeApiTimeoutMs('POST', '/api/services/%40secretsbroker/restart'), 120_000)
   assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/start'), 120_000)
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/secrets/rotation/execute'), 120_000)
+  assert.equal(runtimeApiTimeoutMs('POST', '/api/secrets/rotation/execute'), 300_000)
   assert.equal(runtimeApiTimeoutMs('POST', '/api/setup/bootstrap'), 180_000)
   assert.equal(runtimeApiTimeoutMs('GET', '/api/services/sample/restart'), 30_000)
   assert.equal(runtimeApiTimeoutMs('GET', '/api/secrets/rotation/execute'), 30_000)

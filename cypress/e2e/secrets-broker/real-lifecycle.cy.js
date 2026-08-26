@@ -571,7 +571,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         'executeLinkedRotation'
       )
       cy.contains('button', 'Rotate and converge consumers').click()
-      cy.wait('@executeLinkedRotation', { timeout: 120_000 }).then(
+      cy.wait('@executeLinkedRotation', {
+        requestTimeout: 20_000,
+        responseTimeout: 300_000,
+      }).then(
         ({ response }) => {
           const safeRotationFailure = {
             status: response?.statusCode,
@@ -647,7 +650,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         }
       ).as('executeRollbackRotation')
       cy.contains('button', 'Rotate and converge consumers').click()
-      cy.wait('@executeRollbackRotation', { timeout: 120_000 }).then(
+      cy.wait('@executeRollbackRotation', {
+        requestTimeout: 20_000,
+        responseTimeout: 300_000,
+      }).then(
         ({ request, response }) => {
           rollbackOperationId = request.body?.operationId
           const operation = response?.body?.operation
@@ -697,9 +703,14 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Safe failure code:').parent().within(() => {
         cy.contains('rotation_consumer_not_ready').should('be.visible')
       })
-      cy.contains(
-        'Inspect the failed consumer, correct readiness, then request a fresh impact plan.'
-      ).should('be.visible')
+      cy.contains('span', 'Safe next action:')
+        .parent()
+        .scrollIntoView()
+        .should('be.visible')
+        .and(
+          'contain.text',
+          'Inspect the failed consumer, correct readiness, then request a fresh impact plan.'
+        )
       cy.get('#secret-rotation-value').should('not.exist')
     })
     waitForManagedServiceReadiness('sample-service')

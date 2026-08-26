@@ -116,12 +116,12 @@ export function runtimeApiTimeoutMs(method, pathname) {
   if (method === 'POST' && pathname === '/api/setup/bootstrap') {
     return 180_000
   }
+  if (method === 'POST' && pathname === '/api/secrets/rotation/execute') {
+    return 300_000
+  }
   if (
     method === 'POST' &&
-    (
-      /^\/api\/services\/[^/]+\/(?:install|config|start|stop|restart)$/.test(pathname) ||
-      pathname === '/api/secrets/rotation/execute'
-    )
+    /^\/api\/services\/[^/]+\/(?:install|config|start|stop|restart)$/.test(pathname)
   ) {
     return 120_000
   }
