@@ -1,3 +1,9 @@
+import {
+  brokerMetadataReadinessAttempts,
+  brokerMetadataRetryDelayMs,
+  brokerMetadataRequestOptions,
+} from '../../../scripts/real-browser-qualification-budget.mjs'
+
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
 const rotationCandidate = 'browser-rotation-candidate-2026-08-14-verified'
@@ -393,14 +399,13 @@ function waitForSuccessfulInventoryUiResponse(
 
 function waitForBrokerTelemetryReadiness(
   privateValues = [],
-  remainingAttempts = 60
+  remainingAttempts = brokerMetadataReadinessAttempts
 ) {
-  cy.request({
-    method: 'GET',
-    url: '/api/services/%40secretsbroker/operations/telemetry',
-    failOnStatusCode: false,
-    timeout: 20_000,
-  }).then(({ status, body }) => {
+  cy.request(
+    brokerMetadataRequestOptions(
+      '/api/services/%40secretsbroker/operations/telemetry'
+    )
+  ).then(({ status, body }) => {
     if (status === 200) {
       expect(body?.safety).to.include({
         lowCardinalityLabels: true,
@@ -419,7 +424,7 @@ function waitForBrokerTelemetryReadiness(
       )
     }
 
-    cy.wait(1_000, { log: false }).then(() =>
+    cy.wait(brokerMetadataRetryDelayMs, { log: false }).then(() =>
       waitForBrokerTelemetryReadiness(privateValues, remainingAttempts - 1)
     )
   })
@@ -427,14 +432,13 @@ function waitForBrokerTelemetryReadiness(
 
 function waitForBrokerEventsReadiness(
   privateValues = [],
-  remainingAttempts = 60
+  remainingAttempts = brokerMetadataReadinessAttempts
 ) {
-  cy.request({
-    method: 'GET',
-    url: '/api/services/%40secretsbroker/operations/events',
-    failOnStatusCode: false,
-    timeout: 20_000,
-  }).then(({ status, body }) => {
+  cy.request(
+    brokerMetadataRequestOptions(
+      '/api/services/%40secretsbroker/operations/events'
+    )
+  ).then(({ status, body }) => {
     if (status === 200) {
       expect(body?.safety).to.deep.equal({
         metadataOnly: true,
@@ -454,7 +458,7 @@ function waitForBrokerEventsReadiness(
       )
     }
 
-    cy.wait(1_000, { log: false }).then(() =>
+    cy.wait(brokerMetadataRetryDelayMs, { log: false }).then(() =>
       waitForBrokerEventsReadiness(privateValues, remainingAttempts - 1)
     )
   })

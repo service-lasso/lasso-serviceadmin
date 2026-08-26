@@ -14,6 +14,35 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from '../scripts/real-browser-transport-diagnostics.mjs'
+import {
+  brokerMetadataEndpointCount,
+  brokerMetadataQualificationWorstCaseMs,
+  brokerMetadataReadinessAttempts,
+  brokerMetadataRequestOptions,
+  brokerMetadataReservedLifecycleMs,
+  cypressQualificationTimeoutMs,
+} from '../scripts/real-browser-qualification-budget.mjs'
+
+test('broker metadata readiness stays inside the real-browser qualification budget', () => {
+  assert.equal(brokerMetadataEndpointCount, 2)
+  assert.equal(brokerMetadataReadinessAttempts, 5)
+  assert.ok(brokerMetadataReservedLifecycleMs >= 8 * 60_000)
+  assert.ok(
+    brokerMetadataQualificationWorstCaseMs() < cypressQualificationTimeoutMs
+  )
+  for (const endpoint of ['telemetry', 'events']) {
+    assert.deepEqual(
+      brokerMetadataRequestOptions(`/operations/${endpoint}`),
+      {
+        method: 'GET',
+        url: `/operations/${endpoint}`,
+        failOnStatusCode: false,
+        retryOnNetworkFailure: false,
+        timeout: 20_000,
+      }
+    )
+  }
+})
 
 async function listen(server, host = '127.0.0.1') {
   await new Promise((resolve, reject) => {

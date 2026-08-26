@@ -10,6 +10,7 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from './real-browser-transport-diagnostics.mjs'
+import { cypressQualificationTimeoutMs } from './real-browser-qualification-budget.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
@@ -548,7 +549,7 @@ try {
     }
   )
   cypressOutput = captureBoundedChildOutput(cypress)
-  const cypressExit = await waitForExit(cypress, 12 * 60_000)
+  const cypressExit = await waitForExit(cypress, cypressQualificationTimeoutMs)
   cypressOutputChecked = true
   publishSafeChildOutput(cypressOutput)
   if (cypressExit !== 0) {
