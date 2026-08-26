@@ -11,6 +11,14 @@ const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 17700
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024
 const MAX_UPSTREAM_BODY_BYTES = 8 * 1024 * 1024
+const ROTATION_PROXY_LIFECYCLE_SCHEMA =
+  'service-admin.rotation-proxy-lifecycle.v1'
+const rotationProxyLifecyclePhases = new Set([
+  'upstream_started',
+  'headers_received',
+  'body_received',
+  'downstream_closed',
+])
 
 const mimeTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -128,6 +136,28 @@ export function runtimeApiTimeoutMs(method, pathname) {
   return 30_000
 }
 
+export function rotationProxyLifecycleEvidence(phase, status) {
+  if (!rotationProxyLifecyclePhases.has(phase)) return null
+  const evidence = {
+    schema: ROTATION_PROXY_LIFECYCLE_SCHEMA,
+    phase,
+  }
+  if (Number.isInteger(status) && status >= 100 && status <= 599) {
+    evidence.status = status
+  }
+  return evidence
+}
+
+function emitRotationProxyLifecycle(phase, status) {
+  const evidence = rotationProxyLifecycleEvidence(phase, status)
+  if (!evidence) return
+  try {
+    process.stderr.write(`${JSON.stringify(evidence)}\n`)
+  } catch {
+    // Diagnostics must never change the proxy outcome.
+  }
+}
+
 function securityHeaders(contentType) {
   return {
     'Content-Type': contentType,
@@ -224,16 +254,30 @@ function resolveStaticFile(distDir, requestPath) {
 export function createServiceAdminServer(options = {}) {
   const distDir = path.resolve(options.distDir ?? path.join(packageRoot, 'dist'))
   const runtimeApiBaseUrl = requiredLoopbackUrl(options.runtimeApiBaseUrl)
+  const rotationProxyLifecycleDiagnostics =
+    options.rotationProxyLifecycleDiagnostics === true
 
   return http.createServer(async (request, response) => {
     const method = request.method ?? 'GET'
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (requestUrl.pathname.startsWith('/api/')) {
+      const tracksRotationLifecycle =
+        rotationProxyLifecycleDiagnostics &&
+        method === 'POST' &&
+        requestUrl.pathname === '/api/secrets/rotation/execute'
+      if (tracksRotationLifecycle) {
+        response.once('close', () => {
+          emitRotationProxyLifecycle('downstream_closed')
+        })
+      }
       try {
         const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, runtimeApiBaseUrl)
         const body = ['GET', 'HEAD'].includes(method)
           ? undefined
           : await readBoundedBody(request)
+        if (tracksRotationLifecycle) {
+          emitRotationProxyLifecycle('upstream_started')
+        }
         const upstream = await fetch(targetUrl, {
           method,
           headers: proxyHeaders(request),
@@ -241,7 +285,13 @@ export function createServiceAdminServer(options = {}) {
           redirect: 'manual',
           signal: AbortSignal.timeout(runtimeApiTimeoutMs(method, requestUrl.pathname)),
         })
+        if (tracksRotationLifecycle) {
+          emitRotationProxyLifecycle('headers_received', upstream.status)
+        }
         const bytes = await readBoundedUpstream(upstream)
+        if (tracksRotationLifecycle) {
+          emitRotationProxyLifecycle('body_received', upstream.status)
+        }
         response.writeHead(upstream.status, {
           ...securityHeaders(
             upstream.headers.get('content-type') ?? 'application/json; charset=utf-8'
@@ -301,6 +351,9 @@ export async function startServiceAdminServer(options = {}) {
   const server = createServiceAdminServer({
     distDir: options.distDir,
     runtimeApiBaseUrl,
+    rotationProxyLifecycleDiagnostics:
+      options.rotationProxyLifecycleDiagnostics ??
+      process.env.SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE === '1',
   })
   await new Promise((resolve, reject) => {
     server.once('error', reject)

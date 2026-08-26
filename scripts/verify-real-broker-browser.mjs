@@ -5,6 +5,12 @@ import { lstat, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  buildTransportDiagnostic,
+  parseRotationProxyLifecycleDiagnostic,
+  probeAdminReachability,
+} from './real-browser-transport-diagnostics.mjs'
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
 const brokerBinary = requiredPath('SERVICE_LASSO_TEST_BROKER_BINARY')
@@ -455,9 +461,11 @@ const runner = spawn(process.execPath, [runnerPath], {
     ...process.env,
     SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
     SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
+    SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
   },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
+const rotationProxyLifecycleEvents = []
 let stderrBytes = 0
 let stderrBuffer = ''
 let stderrEvidence = ''
@@ -471,6 +479,10 @@ runner.stderr.on('data', (chunk) => {
   const lines = stderrBuffer.split(/\r?\n/)
   stderrBuffer = lines.pop() ?? ''
   for (const line of lines) {
+    const lifecycleEvent = parseRotationProxyLifecycleDiagnostic(line)
+    if (lifecycleEvent && rotationProxyLifecycleEvents.length < 16) {
+      rotationProxyLifecycleEvents.push(lifecycleEvent)
+    }
     try {
       const diagnostic = JSON.parse(line)
       if (
@@ -540,6 +552,15 @@ try {
   cypressOutputChecked = true
   publishSafeChildOutput(cypressOutput)
   if (cypressExit !== 0) {
+    const adminReachability = await probeAdminReachability(adminUrl.origin)
+    process.stderr.write(
+      `${JSON.stringify(
+        buildTransportDiagnostic(
+          rotationProxyLifecycleEvents,
+          adminReachability
+        )
+      )}\n`
+    )
     throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
   }
   cypressSucceeded = true

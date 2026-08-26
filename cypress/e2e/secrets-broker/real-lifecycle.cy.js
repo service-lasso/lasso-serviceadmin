@@ -810,9 +810,15 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.contains('[role="dialog"]', 'Rotate secret', {
       timeout: 20_000,
     }).should('not.exist')
-    cy.get('body', { timeout: 20_000 })
-      .should('not.have.attr', 'data-scroll-locked')
-      .and('not.have.css', 'pointer-events', 'none')
+    cy.get('body', { timeout: 20_000 }).should(
+      'not.have.attr',
+      'data-scroll-locked'
+    )
+    cy.get('body', { timeout: 20_000 }).should(
+      'not.have.css',
+      'pointer-events',
+      'none'
+    )
     cy.then(() => {
       expect(rollbackExecuteRequests).to.equal(1)
       expect(
