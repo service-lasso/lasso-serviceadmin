@@ -1,3 +1,5 @@
+import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualification-budget.mjs'
+
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
 
@@ -20,6 +22,7 @@ const phaseIndex = new Map(
 )
 const providerCheckpoints = new Set([
   'single_migration',
+  'single_migration_apply',
   'unavailable_migration',
   'bulk_migration',
   'post_rotation',
@@ -124,7 +127,7 @@ export function buildQualificationFailureDiagnostic({
     providerComponents.has(providerUiDiagnostic?.component) &&
     Number.isInteger(providerUiDiagnostic?.attempt) &&
     providerUiDiagnostic.attempt >= 1 &&
-    providerUiDiagnostic.attempt <= 3 &&
+    providerUiDiagnostic.attempt <= providerReadinessDiagnosticMaxAttempts &&
     (providerUiDiagnostic.statusCode === 'unavailable' ||
       (Number.isInteger(providerUiDiagnostic.statusCode) &&
         providerUiDiagnostic.statusCode >= 100 &&

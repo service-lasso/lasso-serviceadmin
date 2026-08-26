@@ -39,10 +39,13 @@ import {
   providerMigrationApplyDiagnostic,
   providerMigrationApplyErrorCodes,
   providerMigrationApplyFailureOutcomes,
+  providerMigrationReadinessAttempts,
+  providerMigrationReadinessCallCount,
+  providerMigrationReadinessConvergenceWindowMs,
+  providerMigrationReadinessWorstCaseMs,
   providerReadinessAttempts,
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
-  providerReadinessConvergenceWindowMs,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
   providerReadinessReservedLifecycleMs,
@@ -66,12 +69,15 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(brokerMetadataReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
-  assert.equal(providerReadinessAttempts, 6)
+  assert.equal(providerReadinessAttempts, 3)
+  assert.equal(providerMigrationReadinessAttempts, 6)
   assert.equal(providerReadinessCheckpointCount, 4)
-  assert.equal(providerReadinessCallCount, 8)
-  assert.equal(providerReadinessConvergenceWindowMs(), 5_000)
-  assert.equal(providerReadinessWorstCaseMs(), 35_000)
-  assert.equal(providerReadinessReservedLifecycleMs(), 280_000)
+  assert.equal(providerReadinessCallCount, 9)
+  assert.equal(providerMigrationReadinessCallCount, 2)
+  assert.equal(providerReadinessWorstCaseMs(), 26_000)
+  assert.equal(providerMigrationReadinessConvergenceWindowMs(), 5_000)
+  assert.equal(providerMigrationReadinessWorstCaseMs(), 53_000)
+  assert.equal(providerReadinessReservedLifecycleMs(), 288_000)
   assert.equal(providerFinalLifecycleDiagnosticCount, 1)
   assert.equal(providerFinalLifecycleDiagnosticTimeoutMs, 5_000)
   const brokerMetadataWorstCaseMs =
@@ -83,7 +89,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs,
     240_000
   )
-  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 633_000)
+  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 641_000)
   // This network-only subtotal must never be presented as a whole-spec bound.
   // Lifecycle transitions, page loads, UI waits, tasks, and cleanup are
   // source-accounted separately against the fixed Cypress wrapper.
@@ -114,7 +120,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
       failOnStatusCode: false,
       retryOnNetworkFailure: false,
       retryOnStatusCodeFailure: false,
-      timeout: 5_000,
+      timeout: 8_000,
     }
   )
   assert.deepEqual(
@@ -309,6 +315,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   )
   for (const checkpoint of [
     'single_migration',
+    'single_migration_apply',
     'unavailable_migration',
     'bulk_migration',
     'post_rotation',
@@ -333,11 +340,28 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   ].length
   assert.equal(standaloneProviderReadinessCalls, 3)
   assert.equal(checkpointInventoryReadinessCalls, 1)
+  const migrationBackendReadinessCalls = [
+    ...lifecycleSource.matchAll(
+      /backendReadinessAttempts:\s*providerMigrationReadinessAttempts/g
+    ),
+  ].length
+  const migrationApplyReadinessCalls = [
+    ...lifecycleSource.matchAll(
+      /waitForBrokerProviderStatusReadiness\(\s*'vault-browser',\s*providerMigrationReadinessAttempts,\s*\{ checkpoint: 'single_migration_apply' \}/g
+    ),
+  ].length
+  assert.equal(migrationBackendReadinessCalls, 1)
+  assert.equal(migrationApplyReadinessCalls, 1)
   assert.equal(
     standaloneProviderReadinessCalls +
       checkpointProviderReadinessCalls +
-      checkpointInventoryReadinessCalls,
+      checkpointInventoryReadinessCalls +
+      migrationApplyReadinessCalls,
     providerReadinessCallCount
+  )
+  assert.equal(
+    migrationBackendReadinessCalls + migrationApplyReadinessCalls,
+    providerMigrationReadinessCallCount
   )
   assert.equal(
     [
@@ -351,6 +375,21 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     [...lifecycleSource.matchAll(/cy\.wait\('@migrationApply'/g)].length,
     1
   )
+  const dryRunReadyIndex = lifecycleSource.indexOf(
+    "cy.contains('Migration dry run ready'"
+  )
+  const applyReadinessIndex = lifecycleSource.indexOf(
+    "{ checkpoint: 'single_migration_apply' }"
+  )
+  const confirmMigrationIndex = lifecycleSource.indexOf(
+    'cy.get(\'[aria-label="Confirm provider migration"]\').click()'
+  )
+  const applyMigrationIndex = lifecycleSource.indexOf(
+    "cy.contains('button', 'Apply migration').click()"
+  )
+  assert.ok(dryRunReadyIndex < applyReadinessIndex)
+  assert.ok(applyReadinessIndex < confirmMigrationIndex)
+  assert.ok(confirmMigrationIndex < applyMigrationIndex)
   assert.equal(
     [
       ...lifecycleSource.matchAll(
@@ -497,6 +536,35 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   )
   assert.equal(sanitized.includes('private-provider-ref'), false)
   assert.equal(sanitized.includes('response-body-value'), false)
+
+  const finalMigrationAttempt = {
+    schema: 'service-admin.provider-ui-convergence.v1',
+    checkpoint: 'single_migration_apply',
+    component: 'response_metadata',
+    attempt: 6,
+    statusCode: 503,
+    errorCode: 'broker_unavailable',
+    serviceRunning: true,
+    serviceHealthy: true,
+  }
+  assert.deepEqual(
+    parseProviderUiConvergenceEvidence(JSON.stringify(finalMigrationAttempt)),
+    {
+      checkpoint: 'single_migration_apply',
+      component: 'response_metadata',
+      attempt: 6,
+      statusCode: 503,
+      errorCode: 'broker_unavailable',
+      serviceRunning: true,
+      serviceHealthy: true,
+    }
+  )
+  assert.equal(
+    parseProviderUiConvergenceEvidence(
+      JSON.stringify({ ...finalMigrationAttempt, attempt: 7 })
+    ),
+    null
+  )
 
   const writes = []
   const recorder = createProviderUiConvergenceRecorder({
@@ -845,9 +913,9 @@ test('qualification failures retain only bounded phase and transport metadata', 
         { phase: 'wrapper_recovery_complete', elapsedMs: 80_000 },
       ],
       providerUiDiagnostic: {
-        checkpoint: 'post_rotation',
+        checkpoint: 'single_migration_apply',
         component: 'response_metadata',
-        attempt: 3,
+        attempt: 6,
         statusCode: 503,
         errorCode: 'secrets_broker_not_ready',
         serviceRunning: true,
@@ -872,15 +940,30 @@ test('qualification failures retain only bounded phase and transport metadata', 
       statuses: [200, 200],
       adminReachability: 'reachable',
       providerUi: {
-        checkpoint: 'post_rotation',
+        checkpoint: 'single_migration_apply',
         component: 'response_metadata',
-        attempt: 3,
+        attempt: 6,
         statusCode: 503,
         errorCode: 'secrets_broker_not_ready',
         serviceRunning: true,
         serviceHealthy: false,
       },
     }
+  )
+  assert.equal(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      providerUiDiagnostic: {
+        checkpoint: 'single_migration_apply',
+        component: 'response_metadata',
+        attempt: 7,
+        statusCode: 503,
+        errorCode: 'broker_unavailable',
+        serviceRunning: true,
+        serviceHealthy: true,
+      },
+    }).providerUi,
+    null
   )
   assert.deepEqual(
     buildQualificationFailureDiagnostic({

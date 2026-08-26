@@ -9,15 +9,18 @@ export const managedServiceStopReadinessAttempts = 5
 export const managedServiceStopRequestTimeoutMs = 10_000
 export const managedServiceStopRetryDelayMs = 1_000
 export const providerUiConvergenceAttempts = 3
-// Core's protected Broker client and authenticated readiness proof are each
-// bounded to five seconds. Six response-bound attempts with one-second gaps
-// cover that same convergence window even when 503 responses return
-// immediately, while each Admin request remains capped to Core's deadline.
-export const providerReadinessAttempts = 6
-export const providerReadinessRequestTimeoutMs = 5_000
+export const providerReadinessAttempts = 3
+export const providerMigrationReadinessAttempts = 6
+export const providerReadinessDiagnosticMaxAttempts =
+  providerMigrationReadinessAttempts
+// Keep each qualification sample inside the existing eight-second browser cap.
+// The Admin proxy and Core protected operator route have longer independent
+// ceilings; exceeding this test cap fails the exact readiness proof closed.
+export const providerReadinessRequestTimeoutMs = 8_000
 export const providerReadinessRetryDelayMs = 1_000
 export const providerReadinessCheckpointCount = 4
-export const providerReadinessCallCount = 8
+export const providerReadinessCallCount = 9
+export const providerMigrationReadinessCallCount = 2
 export const providerFinalLifecycleDiagnosticCount = 1
 export const providerFinalLifecycleDiagnosticTimeoutMs = 5_000
 export const providerReadinessDiagnosticEventCap = 64
@@ -26,6 +29,7 @@ const providerUiConvergenceSchema = 'service-admin.provider-ui-convergence.v1'
 
 const providerUiConvergenceCheckpoints = new Set([
   'single_migration',
+  'single_migration_apply',
   'unavailable_migration',
   'bulk_migration',
   'post_rotation',
@@ -122,7 +126,7 @@ function normalizeProviderUiConvergenceEvidence({
     ? component
     : 'unknown'
   const safeAttempt = Number.isInteger(attempt)
-    ? Math.min(providerReadinessAttempts, Math.max(1, attempt))
+    ? Math.min(providerReadinessDiagnosticMaxAttempts, Math.max(1, attempt))
     : providerReadinessAttempts
   const safeStatusCode =
     Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
@@ -168,7 +172,7 @@ export function parseProviderUiConvergenceEvidence(line) {
     !providerUiConvergenceComponents.has(value.component) ||
     !Number.isInteger(value.attempt) ||
     value.attempt < 1 ||
-    value.attempt > providerReadinessAttempts ||
+    value.attempt > providerReadinessDiagnosticMaxAttempts ||
     !(
       value.statusCode === 'unavailable' ||
       (Number.isInteger(value.statusCode) &&
@@ -361,12 +365,28 @@ export function providerReadinessWorstCaseMs() {
   )
 }
 
-export function providerReadinessConvergenceWindowMs() {
-  return (providerReadinessAttempts - 1) * providerReadinessRetryDelayMs
+export function providerMigrationReadinessConvergenceWindowMs() {
+  return (
+    (providerMigrationReadinessAttempts - 1) *
+    providerReadinessRetryDelayMs
+  )
+}
+
+export function providerMigrationReadinessWorstCaseMs() {
+  return (
+    providerMigrationReadinessAttempts * providerReadinessRequestTimeoutMs +
+    (providerMigrationReadinessAttempts - 1) *
+      providerReadinessRetryDelayMs
+  )
 }
 
 export function providerReadinessReservedLifecycleMs() {
-  return providerReadinessCallCount * providerReadinessWorstCaseMs()
+  return (
+    (providerReadinessCallCount - providerMigrationReadinessCallCount) *
+      providerReadinessWorstCaseMs() +
+    providerMigrationReadinessCallCount *
+      providerMigrationReadinessWorstCaseMs()
+  )
 }
 
 // This subtotal covers only the explicitly bounded provider, metadata, and

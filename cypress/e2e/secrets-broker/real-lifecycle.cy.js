@@ -8,6 +8,7 @@ import {
   providerFinalLifecycleDiagnosticRequestOptions,
   providerLifecycleDiagnostic,
   providerMigrationApplyDiagnostic,
+  providerMigrationReadinessAttempts,
   providerReadinessAttempts,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
@@ -192,9 +193,10 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
 function waitForBrokerProviderStatusReadiness(
   targetProviderId = 'vault-browser',
   remainingAttempts = providerReadinessAttempts,
-  diagnostic
+  diagnostic,
+  maximumAttempts = remainingAttempts
 ) {
-  const attempt = providerReadinessAttempts - remainingAttempts + 1
+  const attempt = maximumAttempts - remainingAttempts + 1
   return cy.request(
     providerReadinessRequestOptions(
       '/api/services/%40secretsbroker/providers/config/status'
@@ -276,7 +278,8 @@ function waitForBrokerProviderStatusReadiness(
         waitForBrokerProviderStatusReadiness(
           targetProviderId,
           remainingAttempts - 1,
-          diagnostic
+          diagnostic,
+          maximumAttempts
         )
       )
     })
@@ -343,12 +346,13 @@ function waitForProviderUiStatusAfterReload({
   checkpoint,
   targetProviderId = 'vault-browser',
   targetInventoryRef,
+  backendReadinessAttempts = providerReadinessAttempts,
   remainingAttempts = providerUiConvergenceAttempts,
   attempt = 1,
 } = {}) {
   return waitForBrokerProviderStatusReadiness(
     targetProviderId,
-    providerReadinessAttempts,
+    backendReadinessAttempts,
     { checkpoint }
   ).then(() => {
     const inventoryReadiness = targetInventoryRef
@@ -1288,7 +1292,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload({ checkpoint: 'single_migration' })
+    waitForProviderUiStatusAfterReload({
+      checkpoint: 'single_migration',
+      backendReadinessAttempts: providerMigrationReadinessAttempts,
+    })
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td')
         .eq(2)
@@ -1322,6 +1329,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       )
       cy.contains('write_value_to_remote_provider_after_revalidation').should(
         'be.visible'
+      )
+      waitForBrokerProviderStatusReadiness(
+        'vault-browser',
+        providerMigrationReadinessAttempts,
+        { checkpoint: 'single_migration_apply' }
       )
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
