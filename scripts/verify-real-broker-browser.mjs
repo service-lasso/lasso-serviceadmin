@@ -43,7 +43,7 @@ const forbiddenAuditMaterial = [
   'Release browser verified bulk Vault migration',
   'Real browser qualification active lockout recovery',
 ]
-const qualificationMode = ['first-run', 'lockout'].includes(
+const qualificationMode = ['first-run', 'lockout', 'stopped-lifecycle'].includes(
   process.env.SERVICE_LASSO_REAL_BROWSER_MODE
 )
   ? process.env.SERVICE_LASSO_REAL_BROWSER_MODE
@@ -67,7 +67,9 @@ const specPath = path.join(
     ? 'real-lockout.cy.js'
     : qualificationMode === 'first-run'
       ? 'real-first-run.cy.js'
-      : 'real-lifecycle.cy.js'
+      : qualificationMode === 'stopped-lifecycle'
+        ? 'real-stopped-lifecycle.cy.js'
+        : 'real-lifecycle.cy.js'
 )
 const require = createRequire(import.meta.url)
 const cypressBin = path.join(
@@ -251,7 +253,7 @@ async function verifyBrokerAudit(tempRoot) {
   const requiredOperations = (
     qualificationMode === 'lockout'
       ? ['local_api_auth', 'local_api_lockout', 'lockout_clear']
-      : qualificationMode === 'first-run'
+      : ['first-run', 'stopped-lifecycle'].includes(qualificationMode)
         ? ['key_initialize', 'vault_created', 'setup_completed', 'writeback_capture']
       : [
     'credential_rotation_dry_run',

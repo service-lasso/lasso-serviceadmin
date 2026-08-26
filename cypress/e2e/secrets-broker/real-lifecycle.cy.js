@@ -2,12 +2,7 @@ import {
   brokerMetadataReadinessAttempts,
   brokerMetadataRetryDelayMs,
   brokerMetadataRequestOptions,
-  isManagedServiceStoppedResponse,
   linkedRotationResponseTimeoutMs,
-  managedServiceStopReadinessAttempts,
-  managedServiceStopMutationRequestOptions,
-  managedServiceStopRequestOptions,
-  managedServiceStopRetryDelayMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
   providerFinalLifecycleDiagnosticRequestOptions,
@@ -190,31 +185,6 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
 
     cy.wait(1_000).then(() =>
       waitForManagedServiceReadiness(serviceId, remainingAttempts - 1)
-    )
-  })
-}
-
-function waitForManagedServiceStopped(
-  serviceId,
-  remainingAttempts = managedServiceStopReadinessAttempts
-) {
-  cy.request(
-    managedServiceStopRequestOptions(
-      `/api/services/${encodeURIComponent(serviceId)}`
-    )
-  ).then((response) => {
-    if (isManagedServiceStoppedResponse(response)) {
-      return
-    }
-
-    if (remainingAttempts <= 1) {
-      throw new Error(
-        `Managed service ${serviceId} did not reach the stopped lifecycle state.`
-      )
-    }
-
-    cy.wait(managedServiceStopRetryDelayMs, { log: false }).then(() =>
-      waitForManagedServiceStopped(serviceId, remainingAttempts - 1)
     )
   })
 }
@@ -1850,41 +1820,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       }
     )
     qualificationCheckpoint('wrapper_recovery_complete')
-
-    cy.request(
-      managedServiceStopMutationRequestOptions(
-        '/api/services/%40secretsbroker/stop'
-      )
-    )
-      .its('status')
-      .should('equal', 200)
-    waitForManagedServiceStopped('@secretsbroker')
-    qualificationCheckpoint('managed_service_stopped')
-    cy.intercept('GET', '**/secrets/management*').as(
-      'stoppedBrokerManagement'
-    )
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
-    cy.wait('@stoppedBrokerManagement', { timeout: 20_000 }).then(
-      ({ response }) => {
-        expect(response?.statusCode).to.be.within(400, 599)
-      }
-    )
-    cy.contains('Secrets Broker management is unavailable.', {
-      timeout: 30_000,
-    }).should('be.visible')
-    cy.contains('button', 'Retry inventory').should('be.visible')
-    qualificationCheckpoint('stopped_management_unavailable')
-    cy.request({
-      method: 'POST',
-      url: '/api/services/%40secretsbroker/start',
-      body: { confirm: false },
-      timeout: 120_000,
-    }).its('status').should('equal', 200)
-    cy.contains('button', 'Retry inventory').click()
-    cy.contains(expectedRef, { timeout: 30_000 }).should('be.visible')
-    qualificationCheckpoint('inventory_recovered')
 
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
     cy.get('input[type="password"]').should('not.exist')

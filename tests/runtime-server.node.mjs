@@ -25,6 +25,7 @@ import {
   cypressQualificationTimeoutMs,
   linkedRotationExecuteCount,
   linkedRotationResponseTimeoutMs,
+  managedServiceStartMutationRequestOptions,
   managedServiceStopReadinessAttempts,
   managedServiceStopReadinessWorstCaseMs,
   managedServiceStopMutationRequestOptions,
@@ -155,12 +156,75 @@ test('bounded provider, metadata, and execute network waits retain exact source 
       timeout: 120_000,
     }
   )
+  assert.deepEqual(
+    managedServiceStartMutationRequestOptions('/api/services/broker/start'),
+    {
+      method: 'POST',
+      url: '/api/services/broker/start',
+      body: { confirm: false },
+      failOnStatusCode: true,
+      retryOnNetworkFailure: false,
+      retryOnStatusCodeFailure: false,
+      timeout: 120_000,
+    }
+  )
   const lifecycleSource = await readFile(
     new URL(
       '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
       import.meta.url
     ),
     'utf8'
+  )
+  const stoppedLifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  const packageManifest = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  )
+  const browserWorkflowSource = await readFile(
+    new URL('../.github/workflows/real-secrets-broker.yml', import.meta.url),
+    'utf8'
+  )
+  const verifierSource = await readFile(
+    new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url),
+    'utf8'
+  )
+  const stoppedLifecycleVerifierSource = await readFile(
+    new URL(
+      '../scripts/verify-real-broker-stopped-lifecycle-browser.mjs',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  assert.equal(
+    packageManifest.scripts['test:secrets:real-stopped-lifecycle-browser'],
+    'node scripts/verify-real-broker-stopped-lifecycle-browser.mjs'
+  )
+  assert.equal(
+    browserWorkflowSource.split(
+      'pnpm test:secrets:real-stopped-lifecycle-browser'
+    ).length - 1,
+    1
+  )
+  assert.equal(
+    stoppedLifecycleVerifierSource.split(
+      "SERVICE_LASSO_REAL_BROWSER_MODE: 'stopped-lifecycle'"
+    ).length - 1,
+    1
+  )
+  assert.equal(
+    verifierSource.split("? 'real-stopped-lifecycle.cy.js'").length - 1,
+    1
+  )
+  assert.equal(
+    verifierSource.split(
+      "['first-run', 'stopped-lifecycle'].includes(qualificationMode)"
+    ).length - 1,
+    1
   )
   assert.equal(
     [...lifecycleSource.matchAll(/cy\.wait\('@executeLinkedRotation'/g)].length,
@@ -179,7 +243,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(
     [...lifecycleSource.matchAll(/waitForManagedServiceStopped\('@secretsbroker'\)/g)]
       .length,
-    1
+    0
   )
   assert.equal(
     [
@@ -187,15 +251,55 @@ test('bounded provider, metadata, and execute network waits retain exact source 
         /managedServiceStopMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/stop'\s*\)/g
       ),
     ].length,
-    1
+    0
   )
   assert.equal(
     [...lifecycleSource.matchAll(/cy\.wait\('@stoppedBrokerManagement'/g)].length,
-    1
+    0
   )
   assert.equal(
     [
       ...lifecycleSource.matchAll(
+        /expect\(response\?\.statusCode\)\.to\.be\.within\(400, 599\)/g
+      ),
+    ].length,
+    0
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /waitForManagedServiceStopped\('@secretsbroker'\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /managedServiceStopMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/stop'\s*\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /managedServiceStartMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/start'\s*\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /cy\.wait\('@stoppedBrokerManagement'/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
         /expect\(response\?\.statusCode\)\.to\.be\.within\(400, 599\)/g
       ),
     ].length,
@@ -298,27 +402,26 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const lateCheckpointCount = [
     ...lateLifecycleSource.matchAll(/qualificationCheckpoint\('/g),
   ].length
-  assert.equal(rawLifecycleRequestCount, 6)
-  assert.equal(sharedStopMutationCount, 1)
+  assert.equal(rawLifecycleRequestCount, 5)
+  assert.equal(sharedStopMutationCount, 0)
   assert.equal(controlRequestCount, 2)
-  assert.equal(reloadCount, 4)
-  assert.equal(directTwentySecondWaitCount, 10)
-  assert.equal(directThirtySecondWaitCount, 6)
+  assert.equal(reloadCount, 3)
+  assert.equal(directTwentySecondWaitCount, 7)
+  assert.equal(directThirtySecondWaitCount, 4)
   assert.equal(openSecretsCount, 2)
   assert.equal(validationDialogCount, 1)
-  assert.equal(lateCheckpointCount, 7)
+  assert.equal(lateCheckpointCount, 4)
   assert.equal(
     [
       ...lateLifecycleSource.matchAll(
         /waitForManagedServiceStopped\('@secretsbroker'\)/g
       ),
     ].length,
-    1
+    0
   )
   const lifecycleMutationWaitMs =
     (rawLifecycleRequestCount + sharedStopMutationCount) * 120_000
   const controlRequestWaitMs = controlRequestCount * 30_000
-  const managedStopReadinessWaitMs = managedServiceStopReadinessWorstCaseMs()
   const reloadWaitMs = reloadCount * 60_000
   const longUiWaitMs =
     (directTwentySecondWaitCount + openSecretsCount * 2 +
@@ -329,14 +432,40 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const enumeratedLateLifecycleWaitMs =
     lifecycleMutationWaitMs +
     controlRequestWaitMs +
-    managedStopReadinessWaitMs +
     reloadWaitMs +
     longUiWaitMs +
     progressTaskWaitMs
-  assert.equal(enumeratedLateLifecycleWaitMs, 2_154_000)
+  assert.equal(enumeratedLateLifecycleWaitMs, 1_500_000)
   assert.ok(enumeratedLateLifecycleWaitMs > cypressQualificationTimeoutMs)
   // Default four-second UI commands and Cypress's implicit network retries are
   // deliberately excluded, so this is not a whole-spec maximum either.
+
+  const stoppedLifecycleMutationCount = [
+    ...stoppedLifecycleSource.matchAll(
+      /managedService(?:Stop|Start)MutationRequestOptions\(/g
+    ),
+  ].length
+  const stoppedLifecycleReloadCount = [
+    ...stoppedLifecycleSource.matchAll(/cy\.reload\(\)/g),
+  ].length
+  const stoppedLifecycleTwentySecondWaitCount = [
+    ...stoppedLifecycleSource.matchAll(/timeout:\s*20_000/g),
+  ].length
+  const stoppedLifecycleThirtySecondWaitCount = [
+    ...stoppedLifecycleSource.matchAll(/timeout:\s*30_000/g),
+  ].length
+  assert.equal(stoppedLifecycleMutationCount, 2)
+  assert.equal(stoppedLifecycleReloadCount, 1)
+  assert.equal(stoppedLifecycleTwentySecondWaitCount, 5)
+  assert.equal(stoppedLifecycleThirtySecondWaitCount, 3)
+  const stoppedLifecycleEnumeratedWaitMs =
+    stoppedLifecycleMutationCount * 120_000 +
+    managedServiceStopReadinessWorstCaseMs() +
+    stoppedLifecycleReloadCount * 60_000 +
+    stoppedLifecycleTwentySecondWaitCount * 20_000 +
+    stoppedLifecycleThirtySecondWaitCount * 30_000
+  assert.equal(stoppedLifecycleEnumeratedWaitMs, 544_000)
+  assert.ok(stoppedLifecycleEnumeratedWaitMs < cypressQualificationTimeoutMs)
 })
 
 test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
@@ -603,7 +732,7 @@ test('qualification progress is allowlisted, ordered, integral, and capped', () 
     parseQualificationProgressDiagnostic(
       JSON.stringify({
         schema: 'service-admin.real-browser-progress.v1',
-        phase: 'inventory_recovered',
+        phase: 'wrapper_recovery_complete',
         elapsedMs: 1,
         raw: 'discard-me',
       })
@@ -621,9 +750,6 @@ test('qualification progress is allowlisted, ordered, integral, and capped', () 
     'broker_restart_rehydrated',
     'wrapper_locked',
     'wrapper_recovery_complete',
-    'managed_service_stopped',
-    'stopped_management_unavailable',
-    'inventory_recovered',
     'acceptance_complete',
   ])
 
@@ -714,7 +840,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'timeout',
       progressEvents: [
         { phase: 'lifecycle_started', elapsedMs: 20 },
-        { phase: 'inventory_recovered', elapsedMs: 80_000 },
+        { phase: 'wrapper_recovery_complete', elapsedMs: 80_000 },
       ],
       providerUiDiagnostic: {
         checkpoint: 'post_rotation',
@@ -734,7 +860,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
     {
       schema: 'service-admin.real-browser-qualification-diagnostic.v1',
       failure: 'timeout',
-      lastPhase: 'inventory_recovered',
+      lastPhase: 'wrapper_recovery_complete',
       elapsedMs: 80_000,
       transportPhases: [
         'upstream_started',

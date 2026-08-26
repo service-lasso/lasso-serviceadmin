@@ -331,6 +331,18 @@ export function managedServiceStopMutationRequestOptions(url) {
   }
 }
 
+export function managedServiceStartMutationRequestOptions(url) {
+  return {
+    method: 'POST',
+    url,
+    body: { confirm: false },
+    failOnStatusCode: true,
+    retryOnNetworkFailure: false,
+    retryOnStatusCodeFailure: false,
+    timeout: 120_000,
+  }
+}
+
 export function managedServiceStopReadinessWorstCaseMs() {
   return (
     managedServiceStopReadinessAttempts * managedServiceStopRequestTimeoutMs +

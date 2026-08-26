@@ -12,9 +12,6 @@ export const qualificationProgressPhases = Object.freeze([
   'broker_restart_rehydrated',
   'wrapper_locked',
   'wrapper_recovery_complete',
-  'managed_service_stopped',
-  'stopped_management_unavailable',
-  'inventory_recovered',
   'acceptance_complete',
 ])
 
