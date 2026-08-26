@@ -23,7 +23,9 @@ const phaseIndex = new Map(
 const providerCheckpoints = new Set([
   'single_migration',
   'single_migration_apply',
+  'policy_denied_migration_apply',
   'unavailable_migration',
+  'unavailable_migration_apply',
   'bulk_migration',
   'post_rotation',
 ])

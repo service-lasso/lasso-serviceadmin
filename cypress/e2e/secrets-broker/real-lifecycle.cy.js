@@ -9,6 +9,7 @@ import {
   providerLifecycleDiagnostic,
   providerMigrationApplyDiagnostic,
   providerMigrationReadinessAttempts,
+  providerPointInTimeApplyReadinessAttempts,
   providerReadinessAttempts,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
@@ -1414,6 +1415,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Migration dry run ready', { timeout: 20_000 }).should(
         'be.visible'
       )
+      waitForBrokerProviderStatusReadiness(
+        'vault-policy-denied',
+        providerMigrationReadinessAttempts,
+        { checkpoint: 'policy_denied_migration_apply' }
+      )
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'policyDeniedMigration'
@@ -1421,7 +1427,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Apply migration').click()
       cy.wait('@policyDeniedMigration', { timeout: 60_000 }).then(
         ({ response }) => {
-          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.statusCode,
+            providerMigrationApplyDiagnostic(response)
+          ).to.equal(200)
           expect(response?.body).to.include({
             outcome: 'partial_failure',
             applied: false,
@@ -1467,6 +1476,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Migration dry run ready', { timeout: 20_000 }).should(
         'be.visible'
       )
+      waitForBrokerProviderStatusReadiness(
+        'vault-unavailable',
+        providerPointInTimeApplyReadinessAttempts,
+        { checkpoint: 'unavailable_migration_apply' }
+      )
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'unavailableMigration'
@@ -1474,7 +1488,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Apply migration').click()
       cy.wait('@unavailableMigration', { timeout: 60_000 }).then(
         ({ response }) => {
-          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.statusCode,
+            providerMigrationApplyDiagnostic(response)
+          ).to.equal(200)
           expect(response?.body).to.include({
             outcome: 'partial_failure',
             applied: false,

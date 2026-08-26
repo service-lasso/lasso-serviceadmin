@@ -43,6 +43,9 @@ import {
   providerMigrationReadinessCallCount,
   providerMigrationReadinessConvergenceWindowMs,
   providerMigrationReadinessWorstCaseMs,
+  providerPointInTimeApplyReadinessAttempts,
+  providerPointInTimeApplyReadinessCallCount,
+  providerPointInTimeApplyReadinessWorstCaseMs,
   providerReadinessAttempts,
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
@@ -71,13 +74,16 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
   assert.equal(providerReadinessAttempts, 3)
   assert.equal(providerMigrationReadinessAttempts, 6)
+  assert.equal(providerPointInTimeApplyReadinessAttempts, 1)
   assert.equal(providerReadinessCheckpointCount, 4)
-  assert.equal(providerReadinessCallCount, 9)
-  assert.equal(providerMigrationReadinessCallCount, 2)
+  assert.equal(providerReadinessCallCount, 11)
+  assert.equal(providerMigrationReadinessCallCount, 3)
+  assert.equal(providerPointInTimeApplyReadinessCallCount, 1)
   assert.equal(providerReadinessWorstCaseMs(), 26_000)
   assert.equal(providerMigrationReadinessConvergenceWindowMs(), 5_000)
   assert.equal(providerMigrationReadinessWorstCaseMs(), 53_000)
-  assert.equal(providerReadinessReservedLifecycleMs(), 288_000)
+  assert.equal(providerPointInTimeApplyReadinessWorstCaseMs(), 8_000)
+  assert.equal(providerReadinessReservedLifecycleMs(), 349_000)
   assert.equal(providerFinalLifecycleDiagnosticCount, 1)
   assert.equal(providerFinalLifecycleDiagnosticTimeoutMs, 5_000)
   const brokerMetadataWorstCaseMs =
@@ -89,7 +95,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs,
     240_000
   )
-  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 641_000)
+  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 702_000)
   // This network-only subtotal must never be presented as a whole-spec bound.
   // Lifecycle transitions, page loads, UI waits, tasks, and cleanup are
   // source-accounted separately against the fixed Cypress wrapper.
@@ -375,7 +381,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   for (const checkpoint of [
     'single_migration',
     'single_migration_apply',
+    'policy_denied_migration_apply',
     'unavailable_migration',
+    'unavailable_migration_apply',
     'bulk_migration',
     'post_rotation',
   ]) {
@@ -405,22 +413,38 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     ),
   ].length
   const migrationApplyReadinessCalls = [
+    ['vault-browser', 'single_migration_apply'],
+    ['vault-policy-denied', 'policy_denied_migration_apply'],
+  ].reduce((count, [providerId, checkpoint]) => {
+    const exactCall = new RegExp(
+      `waitForBrokerProviderStatusReadiness\\(\\s*'${providerId}',\\s*providerMigrationReadinessAttempts,\\s*\\{ checkpoint: '${checkpoint}' \\}`,
+      'g'
+    )
+    return count + [...lifecycleSource.matchAll(exactCall)].length
+  }, 0)
+  const pointInTimeApplyReadinessCalls = [
     ...lifecycleSource.matchAll(
-      /waitForBrokerProviderStatusReadiness\(\s*'vault-browser',\s*providerMigrationReadinessAttempts,\s*\{ checkpoint: 'single_migration_apply' \}/g
+      /waitForBrokerProviderStatusReadiness\(\s*'vault-unavailable',\s*providerPointInTimeApplyReadinessAttempts,\s*\{ checkpoint: 'unavailable_migration_apply' \}/g
     ),
   ].length
   assert.equal(migrationBackendReadinessCalls, 1)
-  assert.equal(migrationApplyReadinessCalls, 1)
+  assert.equal(migrationApplyReadinessCalls, 2)
+  assert.equal(pointInTimeApplyReadinessCalls, 1)
   assert.equal(
     standaloneProviderReadinessCalls +
       checkpointProviderReadinessCalls +
       checkpointInventoryReadinessCalls +
-      migrationApplyReadinessCalls,
+      migrationApplyReadinessCalls +
+      pointInTimeApplyReadinessCalls,
     providerReadinessCallCount
   )
   assert.equal(
     migrationBackendReadinessCalls + migrationApplyReadinessCalls,
     providerMigrationReadinessCallCount
+  )
+  assert.equal(
+    pointInTimeApplyReadinessCalls,
+    providerPointInTimeApplyReadinessCallCount
   )
   assert.equal(
     [
@@ -434,6 +458,32 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     [...lifecycleSource.matchAll(/cy\.wait\('@migrationApply'/g)].length,
     1
   )
+  assert.equal(
+    [
+      ...lifecycleSource.matchAll(
+        /cy\.intercept\('POST', '\*\*\/providers\/migration\/apply'\)/g
+      ),
+    ].length,
+    3
+  )
+  assert.equal(
+    [
+      ...lifecycleSource.matchAll(
+        /cy\.contains\('button', 'Apply migration'\)\.click\(\)/g
+      ),
+    ].length,
+    3
+  )
+  for (const responseAlias of [
+    'migrationApply',
+    'policyDeniedMigration',
+    'unavailableMigration',
+  ]) {
+    assert.equal(
+      lifecycleSource.split(`cy.wait('@${responseAlias}',`).length - 1,
+      1
+    )
+  }
   const dryRunReadyIndex = lifecycleSource.indexOf(
     "cy.contains('Migration dry run ready'"
   )
@@ -449,13 +499,86 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.ok(dryRunReadyIndex < applyReadinessIndex)
   assert.ok(applyReadinessIndex < confirmMigrationIndex)
   assert.ok(confirmMigrationIndex < applyMigrationIndex)
+  const policyDeniedDryRunIndex = lifecycleSource.indexOf(
+    "cy.wait('@policyDeniedMigrationPreview'"
+  )
+  const policyDeniedApplyReadinessIndex = lifecycleSource.indexOf(
+    "{ checkpoint: 'policy_denied_migration_apply' }"
+  )
+  const policyDeniedConfirmIndex = lifecycleSource.indexOf(
+    'cy.get(\'[aria-label="Confirm provider migration"]\').click()',
+    policyDeniedApplyReadinessIndex
+  )
+  const policyDeniedApplyIndex = lifecycleSource.indexOf(
+    "cy.contains('button', 'Apply migration').click()",
+    policyDeniedConfirmIndex
+  )
+  const policyDeniedResponseIndex = lifecycleSource.indexOf(
+    "cy.wait('@policyDeniedMigration'",
+    policyDeniedApplyIndex
+  )
+  assert.ok(policyDeniedDryRunIndex < policyDeniedApplyReadinessIndex)
+  assert.ok(policyDeniedApplyReadinessIndex < policyDeniedConfirmIndex)
+  assert.ok(policyDeniedConfirmIndex < policyDeniedApplyIndex)
+  assert.ok(policyDeniedApplyIndex < policyDeniedResponseIndex)
+  const unavailableDryRunIndex = lifecycleSource.indexOf(
+    "cy.wait('@unavailableMigrationPreview'"
+  )
+  const unavailableApplyReadinessIndex = lifecycleSource.indexOf(
+    "{ checkpoint: 'unavailable_migration_apply' }"
+  )
+  const unavailableConfirmIndex = lifecycleSource.indexOf(
+    'cy.get(\'[aria-label="Confirm provider migration"]\').click()',
+    unavailableApplyReadinessIndex
+  )
+  const unavailableApplyIndex = lifecycleSource.indexOf(
+    "cy.contains('button', 'Apply migration').click()",
+    unavailableConfirmIndex
+  )
+  const unavailableResponseIndex = lifecycleSource.indexOf(
+    "cy.wait('@unavailableMigration'",
+    unavailableApplyIndex
+  )
+  assert.ok(unavailableDryRunIndex < unavailableApplyReadinessIndex)
+  assert.ok(unavailableApplyReadinessIndex < unavailableConfirmIndex)
+  assert.ok(unavailableConfirmIndex < unavailableApplyIndex)
+  assert.ok(unavailableApplyIndex < unavailableResponseIndex)
+  // Bulk campaign apply is a distinct durable-campaign contract. Its exact
+  // response-bound revalidation must complete before the one campaign apply.
+  const bulkRevalidationIndex = lifecycleSource.indexOf(
+    "cy.wait('@revalidateBulkMigrationCampaign'"
+  )
+  const bulkReadyIndex = lifecycleSource.indexOf(
+    "cy.contains('Durable campaign ready'"
+  )
+  const bulkApplyInterceptIndex = lifecycleSource.indexOf(
+    "cy.intercept('POST', '**/secrets/campaigns/apply')"
+  )
+  const bulkApplyClickIndex = lifecycleSource.indexOf(
+    "cy.contains('button', 'Apply exact campaign').click()"
+  )
+  const bulkApplyResponseIndex = lifecycleSource.indexOf(
+    "cy.wait('@applyBulkMigrationCampaign'"
+  )
+  assert.ok(bulkRevalidationIndex < bulkReadyIndex)
+  assert.ok(bulkReadyIndex < bulkApplyInterceptIndex)
+  assert.ok(bulkApplyInterceptIndex < bulkApplyClickIndex)
+  assert.ok(bulkApplyClickIndex < bulkApplyResponseIndex)
+  for (const bulkApplyProof of [
+    "cy.intercept('POST', '**/secrets/campaigns/apply')",
+    'cy.get(\'[aria-label="Confirm exact bulk migration campaign"]\').click()',
+    "cy.contains('button', 'Apply exact campaign').click()",
+    "cy.wait('@applyBulkMigrationCampaign'",
+  ]) {
+    assert.equal(lifecycleSource.split(bulkApplyProof).length - 1, 1)
+  }
   assert.equal(
     [
       ...lifecycleSource.matchAll(
         /providerMigrationApplyDiagnostic\(response\)/g
       ),
     ].length,
-    1
+    3
   )
 
   const postRotationStart = lifecycleSource.indexOf(
@@ -611,7 +734,7 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
 
   const finalMigrationAttempt = {
     schema: 'service-admin.provider-ui-convergence.v1',
-    checkpoint: 'single_migration_apply',
+    checkpoint: 'policy_denied_migration_apply',
     component: 'response_metadata',
     attempt: 6,
     statusCode: 503,
@@ -622,7 +745,7 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   assert.deepEqual(
     parseProviderUiConvergenceEvidence(JSON.stringify(finalMigrationAttempt)),
     {
-      checkpoint: 'single_migration_apply',
+      checkpoint: 'policy_denied_migration_apply',
       component: 'response_metadata',
       attempt: 6,
       statusCode: 503,
@@ -636,6 +759,27 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
       JSON.stringify({ ...finalMigrationAttempt, attempt: 7 })
     ),
     null
+  )
+  const pointInTimeUnavailableAttempt = {
+    ...finalMigrationAttempt,
+    checkpoint: 'unavailable_migration_apply',
+    attempt: 1,
+    statusCode: 200,
+    errorCode: 'unknown',
+  }
+  assert.deepEqual(
+    parseProviderUiConvergenceEvidence(
+      JSON.stringify(pointInTimeUnavailableAttempt)
+    ),
+    {
+      checkpoint: 'unavailable_migration_apply',
+      component: 'response_metadata',
+      attempt: 1,
+      statusCode: 200,
+      errorCode: 'unknown',
+      serviceRunning: true,
+      serviceHealthy: true,
+    }
   )
 
   const writes = []
