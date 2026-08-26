@@ -2,6 +2,7 @@ import {
   brokerMetadataReadinessAttempts,
   brokerMetadataRetryDelayMs,
   brokerMetadataRequestOptions,
+  linkedRotationResponseTimeoutMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
@@ -26,6 +27,10 @@ const safeTransportErrorCodes = new Set([
   'ERR_NETWORK_CHANGED',
   'ERR_TIMED_OUT',
 ])
+
+function qualificationCheckpoint(phase) {
+  return cy.task('qualificationCheckpoint', phase, { log: false })
+}
 
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
@@ -546,6 +551,8 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     let rollbackOutboundLeakDetected = false
     const rollbackPrivateMaterial = [rollbackCandidate, rollbackReason]
 
+    qualificationCheckpoint('lifecycle_started')
+
     cy.on('window:before:load', (browserWindow) => {
       installPrivateConsoleGuard(
         browserWindow,
@@ -670,7 +677,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Rotate and converge consumers').click()
       cy.wait('@executeLinkedRotation', {
         requestTimeout: 20_000,
-        responseTimeout: 300_000,
+        responseTimeout: linkedRotationResponseTimeoutMs,
       }).then(
         ({ response }) => {
           const safeRotationFailure = {
@@ -704,6 +711,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-rotation-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
+    qualificationCheckpoint('committed_rotation_complete')
     waitForManagedServiceReadiness('sample-service')
     waitForBrokerProviderStatusReadiness()
     cy.reload()
@@ -736,6 +744,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
           expect(body).to.deep.equal({
             outcome: 'sample_start_failure_armed',
           })
+          qualificationCheckpoint('rollback_fixture_armed')
         })
       })
       cy.intercept(
@@ -749,7 +758,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Rotate and converge consumers').click()
       cy.wait('@executeRollbackRotation', {
         requestTimeout: 20_000,
-        responseTimeout: 300_000,
+        responseTimeout: linkedRotationResponseTimeoutMs,
       }).then(
         ({ request, response, error }) => {
           rollbackOperationId = request.body?.operationId
@@ -814,10 +823,12 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         )
       cy.get('#secret-rotation-value').should('not.exist')
     })
+    qualificationCheckpoint('rollback_rotation_complete')
     waitForManagedServiceReadiness('sample-service')
     waitForManagedServiceReadiness('@secretsbroker')
     waitForBrokerTelemetryReadiness(rollbackPrivateMaterial)
     waitForBrokerEventsReadiness(rollbackPrivateMaterial)
+    qualificationCheckpoint('metadata_ready')
     cy.intercept('GET', '**/api/secrets/rotation/operations/*').as(
       'rehydrateRollbackRotation'
     )
@@ -879,6 +890,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('rotation_consumer_not_ready').should('be.visible')
       cy.contains('button', 'Close').scrollIntoView().click()
     })
+    qualificationCheckpoint('rollback_rehydrated')
     cy.location('search', { timeout: 20_000 }).should(
       'not.include',
       'rotationOperation='
@@ -1674,5 +1686,6 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       editedCandidate,
       resetCandidate,
     ])
+    qualificationCheckpoint('acceptance_complete')
   })
 })

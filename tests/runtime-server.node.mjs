@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import {
   rotationProxyLifecycleEvidence,
   runtimeApiTimeoutMs,
@@ -16,20 +16,31 @@ import {
 } from '../scripts/real-browser-transport-diagnostics.mjs'
 import {
   brokerMetadataEndpointCount,
-  brokerMetadataQualificationWorstCaseMs,
   brokerMetadataReadinessAttempts,
   brokerMetadataRequestOptions,
   brokerMetadataReservedLifecycleMs,
   cypressQualificationTimeoutMs,
+  linkedRotationExecuteCount,
+  linkedRotationResponseTimeoutMs,
+  realBrowserQualificationWorstCaseMs,
 } from '../scripts/real-browser-qualification-budget.mjs'
+import {
+  buildQualificationFailureDiagnostic,
+  classifyQualificationFailure,
+  createQualificationProgressRecorder,
+  parseQualificationProgressDiagnostic,
+  qualificationProgressPhases,
+} from '../scripts/real-browser-qualification-progress.mjs'
 
-test('broker metadata readiness stays inside the real-browser qualification budget', () => {
+test('real-browser waits stay inside the unchanged qualification budget', async () => {
+  assert.equal(cypressQualificationTimeoutMs, 720_000)
+  assert.equal(linkedRotationExecuteCount, 2)
+  assert.equal(linkedRotationResponseTimeoutMs, 120_000)
   assert.equal(brokerMetadataEndpointCount, 2)
   assert.equal(brokerMetadataReadinessAttempts, 5)
-  assert.ok(brokerMetadataReservedLifecycleMs >= 8 * 60_000)
-  assert.ok(
-    brokerMetadataQualificationWorstCaseMs() < cypressQualificationTimeoutMs
-  )
+  assert.equal(brokerMetadataReservedLifecycleMs, 6 * 60_000)
+  assert.equal(realBrowserQualificationWorstCaseMs(), 708_000)
+  assert.ok(realBrowserQualificationWorstCaseMs() < cypressQualificationTimeoutMs)
   for (const endpoint of ['telemetry', 'events']) {
     assert.deepEqual(
       brokerMetadataRequestOptions(`/operations/${endpoint}`),
@@ -38,10 +49,159 @@ test('broker metadata readiness stays inside the real-browser qualification budg
         url: `/operations/${endpoint}`,
         failOnStatusCode: false,
         retryOnNetworkFailure: false,
-        timeout: 20_000,
+        timeout: 10_000,
       }
     )
   }
+  const lifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  assert.equal(
+    [...lifecycleSource.matchAll(/cy\.wait\('@executeLinkedRotation'/g)].length,
+    1
+  )
+  assert.equal(
+    [...lifecycleSource.matchAll(/cy\.wait\('@executeRollbackRotation'/g)]
+      .length,
+    1
+  )
+  assert.equal(
+    [...lifecycleSource.matchAll(/responseTimeout: linkedRotationResponseTimeoutMs/g)]
+      .length,
+    2
+  )
+})
+
+test('qualification progress is allowlisted, ordered, integral, and capped', () => {
+  const writes = []
+  let now = 1_000.5
+  const recorder = createQualificationProgressRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+    now: () => now,
+    maxEvents: 2,
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  now = 1_123.9
+  assert.deepEqual(recorder.record('lifecycle_started'), {
+    phase: 'lifecycle_started',
+    elapsedMs: 123,
+  })
+  now = 1_456.2
+  assert.deepEqual(recorder.record('committed_rotation_complete'), {
+    phase: 'committed_rotation_complete',
+    elapsedMs: 455,
+  })
+  assert.equal(recorder.record('rollback_fixture_armed'), null)
+  assert.equal(writes.length, 2)
+  assert.deepEqual(parseQualificationProgressDiagnostic(writes[1].trim()), {
+    phase: 'committed_rotation_complete',
+    elapsedMs: 455,
+  })
+  assert.equal(
+    parseQualificationProgressDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.real-browser-progress.v1',
+        phase: 'not_allowed',
+        elapsedMs: 1,
+      })
+    ),
+    null
+  )
+  assert.equal(qualificationProgressPhases.length, 7)
+
+  const outOfOrder = createQualificationProgressRecorder({ enabled: true })
+  outOfOrder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  outOfOrder.record('rollback_fixture_armed')
+  assert.throws(
+    () => outOfOrder.record('committed_rotation_complete'),
+    /invalid or out of order/
+  )
+})
+
+test('qualification progress emits nothing when disabled or outside the lifecycle spec', () => {
+  const writes = []
+  const disabled = createQualificationProgressRecorder({
+    enabled: false,
+    write: (line) => writes.push(line),
+  })
+  disabled.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.equal(disabled.record('lifecycle_started'), null)
+
+  const otherSpec = createQualificationProgressRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  otherSpec.setSpecPath('C:/candidate/real-first-run.cy.js')
+  assert.equal(otherSpec.record('lifecycle_started'), null)
+  otherSpec.setSpecPath('C:/other-suite/real-lifecycle.cy.js')
+  assert.equal(otherSpec.record('lifecycle_started'), null)
+  assert.deepEqual(writes, [])
+})
+
+test('qualification failures retain only bounded phase and transport metadata', () => {
+  assert.equal(classifyQualificationFailure({ timedOut: true }), 'timeout')
+  assert.equal(
+    classifyQualificationFailure({ exitCode: 1 }),
+    'nonzero_exit'
+  )
+  assert.equal(classifyQualificationFailure({ exitCode: 0 }), null)
+  assert.equal(
+    classifyQualificationFailure({ exitCode: null }),
+    'nonzero_exit'
+  )
+  assert.deepEqual(
+    buildQualificationFailureDiagnostic({
+      failure: 'timeout',
+      progressEvents: [
+        { phase: 'lifecycle_started', elapsedMs: 20 },
+        { phase: 'rollback_rotation_complete', elapsedMs: 80_000 },
+      ],
+      transportDiagnostic: {
+        phases: ['upstream_started', 'headers_received', 'body_received'],
+        statuses: [200, 200],
+        adminReachability: 'reachable',
+      },
+    }),
+    {
+      schema: 'service-admin.real-browser-qualification-diagnostic.v1',
+      failure: 'timeout',
+      lastPhase: 'rollback_rotation_complete',
+      elapsedMs: 80_000,
+      transportPhases: [
+        'upstream_started',
+        'headers_received',
+        'body_received',
+      ],
+      statuses: [200, 200],
+      adminReachability: 'reachable',
+    }
+  )
+  assert.deepEqual(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      transportDiagnostic: { adminReachability: 'unreachable' },
+    }),
+    {
+      schema: 'service-admin.real-browser-qualification-diagnostic.v1',
+      failure: 'nonzero_exit',
+      lastPhase: 'not_started',
+      elapsedMs: 0,
+      transportPhases: [],
+      statuses: [],
+      adminReachability: 'unreachable',
+    }
+  )
 })
 
 async function listen(server, host = '127.0.0.1') {

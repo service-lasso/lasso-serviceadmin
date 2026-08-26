@@ -11,6 +11,12 @@ import {
   probeAdminReachability,
 } from './real-browser-transport-diagnostics.mjs'
 import { cypressQualificationTimeoutMs } from './real-browser-qualification-budget.mjs'
+import {
+  buildQualificationFailureDiagnostic,
+  classifyQualificationFailure,
+  parseQualificationProgressDiagnostic,
+  qualificationProgressPhases,
+} from './real-browser-qualification-progress.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
@@ -504,6 +510,8 @@ let cypress
 let cypressOutput
 let cypressOutputChecked = false
 let cypressSucceeded = false
+let qualificationFailureKind
+const qualificationProgressEvents = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -538,7 +546,7 @@ try {
       '--config',
       `baseUrl=${adminUrl.origin},video=false,screenshotOnRunFailure=false`,
       '--env',
-      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform}`,
+      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1`,
       '--spec',
       specPath,
     ],
@@ -549,19 +557,20 @@ try {
     }
   )
   cypressOutput = captureBoundedChildOutput(cypress)
-  const cypressExit = await waitForExit(cypress, cypressQualificationTimeoutMs)
+  captureQualificationProgress(cypress, qualificationProgressEvents)
+  let cypressExit
+  try {
+    cypressExit = await waitForExit(cypress, cypressQualificationTimeoutMs)
+  } catch (error) {
+    qualificationFailureKind = classifyQualificationFailure({ timedOut: true })
+    throw error
+  }
   cypressOutputChecked = true
   publishSafeChildOutput(cypressOutput)
   if (cypressExit !== 0) {
-    const adminReachability = await probeAdminReachability(adminUrl.origin)
-    process.stderr.write(
-      `${JSON.stringify(
-        buildTransportDiagnostic(
-          rotationProxyLifecycleEvents,
-          adminReachability
-        )
-      )}\n`
-    )
+    qualificationFailureKind = classifyQualificationFailure({
+      exitCode: cypressExit,
+    })
     throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
   }
   cypressSucceeded = true
@@ -601,6 +610,23 @@ try {
       'Real browser runtime diagnostic output exceeded its bound.'
     )
   }
+  if (qualificationFailureKind && ready) {
+    const adminReachability = await probeAdminReachability(
+      new URL(ready.adminUrl).origin
+    )
+    process.stderr.write(
+      `${JSON.stringify(
+        buildQualificationFailureDiagnostic({
+          failure: qualificationFailureKind,
+          progressEvents: qualificationProgressEvents,
+          transportDiagnostic: buildTransportDiagnostic(
+            rotationProxyLifecycleEvents,
+            adminReachability
+          ),
+        })
+      )}\n`
+    )
+  }
   if (runner.exitCode === null) {
     runner.send({ type: 'service-lasso-real-admin-shutdown' })
     try {
@@ -621,6 +647,22 @@ function cypressEnvironment() {
   // become plain Node processes, which disables Cypress's browser protocol.
   delete environment.ELECTRON_RUN_AS_NODE
   return environment
+}
+
+function captureQualificationProgress(child, target) {
+  let buffer = ''
+  child.stderr.on('data', (chunk) => {
+    buffer += chunk.toString('utf8')
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() ?? ''
+    if (buffer.length > 256) buffer = ''
+    for (const line of lines) {
+      const event = parseQualificationProgressDiagnostic(line)
+      if (event && target.length < qualificationProgressPhases.length) {
+        target.push(event)
+      }
+    }
+  })
 }
 
 const brokerSha256 = createHash('sha256')
