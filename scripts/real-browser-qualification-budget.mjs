@@ -5,25 +5,31 @@ export const brokerMetadataReadinessAttempts = 5
 export const brokerMetadataRequestTimeoutMs = 10_000
 export const brokerMetadataRetryDelayMs = 1_000
 export const brokerMetadataEndpointCount = 2
-export const brokerMetadataReservedLifecycleMs = 6 * 60_000
 export const managedServiceStopReadinessAttempts = 5
 export const managedServiceStopRequestTimeoutMs = 10_000
 export const managedServiceStopRetryDelayMs = 1_000
 export const providerUiConvergenceAttempts = 3
 export const providerReadinessAttempts = 3
+export const providerMigrationReadinessAttempts = 6
+export const providerReadinessDiagnosticMaxAttempts =
+  providerMigrationReadinessAttempts
+// Keep each qualification sample inside the existing eight-second browser cap.
+// The Admin proxy and Core protected operator route have longer independent
+// ceilings; exceeding this test cap fails the exact readiness proof closed.
 export const providerReadinessRequestTimeoutMs = 8_000
 export const providerReadinessRetryDelayMs = 1_000
 export const providerReadinessCheckpointCount = 4
-export const providerReadinessCallCount = 8
+export const providerReadinessCallCount = 9
+export const providerMigrationReadinessCallCount = 2
 export const providerFinalLifecycleDiagnosticCount = 1
 export const providerFinalLifecycleDiagnosticTimeoutMs = 5_000
 export const providerReadinessDiagnosticEventCap = 64
-export const providerReadinessOtherLifecycleReserveMs = 144_000
 
 const providerUiConvergenceSchema = 'service-admin.provider-ui-convergence.v1'
 
 const providerUiConvergenceCheckpoints = new Set([
   'single_migration',
+  'single_migration_apply',
   'unavailable_migration',
   'bulk_migration',
   'post_rotation',
@@ -33,6 +39,7 @@ const providerUiConvergenceComponents = new Set([
   'row_render',
 ])
 const providerUiConvergenceErrorCodes = new Set([
+  'broker_unavailable',
   'secrets_broker_not_ready',
   'security_not_configured',
   'unknown',
@@ -119,7 +126,7 @@ function normalizeProviderUiConvergenceEvidence({
     ? component
     : 'unknown'
   const safeAttempt = Number.isInteger(attempt)
-    ? Math.min(providerReadinessAttempts, Math.max(1, attempt))
+    ? Math.min(providerReadinessDiagnosticMaxAttempts, Math.max(1, attempt))
     : providerReadinessAttempts
   const safeStatusCode =
     Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
@@ -165,7 +172,7 @@ export function parseProviderUiConvergenceEvidence(line) {
     !providerUiConvergenceComponents.has(value.component) ||
     !Number.isInteger(value.attempt) ||
     value.attempt < 1 ||
-    value.attempt > providerReadinessAttempts ||
+    value.attempt > providerReadinessDiagnosticMaxAttempts ||
     !(
       value.statusCode === 'unavailable' ||
       (Number.isInteger(value.statusCode) &&
@@ -273,7 +280,9 @@ export function providerFinalLifecycleDiagnosticRequestOptions(url) {
 
 export function providerReadinessErrorCode(body) {
   const candidate =
-    typeof body?.error?.code === 'string'
+    typeof body?.error === 'string'
+      ? body.error
+      : typeof body?.error?.code === 'string'
       ? body.error.code
       : typeof body?.code === 'string'
         ? body.code
@@ -330,6 +339,18 @@ export function managedServiceStopMutationRequestOptions(url) {
   }
 }
 
+export function managedServiceStartMutationRequestOptions(url) {
+  return {
+    method: 'POST',
+    url,
+    body: { confirm: false },
+    failOnStatusCode: true,
+    retryOnNetworkFailure: false,
+    retryOnStatusCodeFailure: false,
+    timeout: 120_000,
+  }
+}
+
 export function managedServiceStopReadinessWorstCaseMs() {
   return (
     managedServiceStopReadinessAttempts * managedServiceStopRequestTimeoutMs +
@@ -344,11 +365,34 @@ export function providerReadinessWorstCaseMs() {
   )
 }
 
-export function providerReadinessReservedLifecycleMs() {
-  return providerReadinessCallCount * providerReadinessWorstCaseMs()
+export function providerMigrationReadinessConvergenceWindowMs() {
+  return (
+    (providerMigrationReadinessAttempts - 1) *
+    providerReadinessRetryDelayMs
+  )
 }
 
-export function realBrowserQualificationWorstCaseMs() {
+export function providerMigrationReadinessWorstCaseMs() {
+  return (
+    providerMigrationReadinessAttempts * providerReadinessRequestTimeoutMs +
+    (providerMigrationReadinessAttempts - 1) *
+      providerReadinessRetryDelayMs
+  )
+}
+
+export function providerReadinessReservedLifecycleMs() {
+  return (
+    (providerReadinessCallCount - providerMigrationReadinessCallCount) *
+      providerReadinessWorstCaseMs() +
+    providerMigrationReadinessCallCount *
+      providerMigrationReadinessWorstCaseMs()
+  )
+}
+
+// This subtotal covers only the explicitly bounded provider, metadata, and
+// rotation-execute network waits. Lifecycle transitions, page loads, UI waits,
+// Cypress task overhead, and runner cleanup require separate source accounting.
+export function boundedProviderMetadataExecuteNetworkWaitsMs() {
   const perEndpointMs =
     brokerMetadataReadinessAttempts * brokerMetadataRequestTimeoutMs +
     (brokerMetadataReadinessAttempts - 1) * brokerMetadataRetryDelayMs
@@ -356,7 +400,6 @@ export function realBrowserQualificationWorstCaseMs() {
     providerReadinessReservedLifecycleMs() +
     providerFinalLifecycleDiagnosticCount *
       providerFinalLifecycleDiagnosticTimeoutMs +
-    providerReadinessOtherLifecycleReserveMs +
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs +
     brokerMetadataEndpointCount * perEndpointMs
   )

@@ -20,6 +20,7 @@
     "test:secrets:real-browser": "node scripts/verify-real-broker-browser.mjs",
     "test:secrets:real-first-run-browser": "node scripts/verify-real-broker-first-run-browser.mjs",
     "test:secrets:real-lockout-browser": "node scripts/verify-real-broker-lockout-browser.mjs",
+    "test:secrets:real-stopped-lifecycle-browser": "node scripts/verify-real-broker-stopped-lifecycle-browser.mjs",
     "package:artifact": "node scripts/package-artifact.mjs",
     "package:verify": "node scripts/verify-package.mjs"
   },

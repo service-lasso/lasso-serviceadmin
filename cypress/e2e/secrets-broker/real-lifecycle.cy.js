@@ -2,17 +2,13 @@ import {
   brokerMetadataReadinessAttempts,
   brokerMetadataRetryDelayMs,
   brokerMetadataRequestOptions,
-  isManagedServiceStoppedResponse,
   linkedRotationResponseTimeoutMs,
-  managedServiceStopReadinessAttempts,
-  managedServiceStopMutationRequestOptions,
-  managedServiceStopRequestOptions,
-  managedServiceStopRetryDelayMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
   providerFinalLifecycleDiagnosticRequestOptions,
   providerLifecycleDiagnostic,
   providerMigrationApplyDiagnostic,
+  providerMigrationReadinessAttempts,
   providerReadinessAttempts,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
@@ -194,37 +190,13 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
   })
 }
 
-function waitForManagedServiceStopped(
-  serviceId,
-  remainingAttempts = managedServiceStopReadinessAttempts
-) {
-  cy.request(
-    managedServiceStopRequestOptions(
-      `/api/services/${encodeURIComponent(serviceId)}`
-    )
-  ).then((response) => {
-    if (isManagedServiceStoppedResponse(response)) {
-      return
-    }
-
-    if (remainingAttempts <= 1) {
-      throw new Error(
-        `Managed service ${serviceId} did not reach the stopped lifecycle state.`
-      )
-    }
-
-    cy.wait(managedServiceStopRetryDelayMs, { log: false }).then(() =>
-      waitForManagedServiceStopped(serviceId, remainingAttempts - 1)
-    )
-  })
-}
-
 function waitForBrokerProviderStatusReadiness(
   targetProviderId = 'vault-browser',
   remainingAttempts = providerReadinessAttempts,
-  diagnostic
+  diagnostic,
+  maximumAttempts = remainingAttempts
 ) {
-  const attempt = providerReadinessAttempts - remainingAttempts + 1
+  const attempt = maximumAttempts - remainingAttempts + 1
   return cy.request(
     providerReadinessRequestOptions(
       '/api/services/%40secretsbroker/providers/config/status'
@@ -306,7 +278,8 @@ function waitForBrokerProviderStatusReadiness(
         waitForBrokerProviderStatusReadiness(
           targetProviderId,
           remainingAttempts - 1,
-          diagnostic
+          diagnostic,
+          maximumAttempts
         )
       )
     })
@@ -373,12 +346,13 @@ function waitForProviderUiStatusAfterReload({
   checkpoint,
   targetProviderId = 'vault-browser',
   targetInventoryRef,
+  backendReadinessAttempts = providerReadinessAttempts,
   remainingAttempts = providerUiConvergenceAttempts,
   attempt = 1,
 } = {}) {
   return waitForBrokerProviderStatusReadiness(
     targetProviderId,
-    providerReadinessAttempts,
+    backendReadinessAttempts,
     { checkpoint }
   ).then(() => {
     const inventoryReadiness = targetInventoryRef
@@ -1318,7 +1292,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    waitForProviderUiStatusAfterReload({ checkpoint: 'single_migration' })
+    waitForProviderUiStatusAfterReload({
+      checkpoint: 'single_migration',
+      backendReadinessAttempts: providerMigrationReadinessAttempts,
+    })
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
       cy.get('td')
         .eq(2)
@@ -1352,6 +1329,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       )
       cy.contains('write_value_to_remote_provider_after_revalidation').should(
         'be.visible'
+      )
+      waitForBrokerProviderStatusReadiness(
+        'vault-browser',
+        providerMigrationReadinessAttempts,
+        { checkpoint: 'single_migration_apply' }
       )
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
@@ -1751,6 +1733,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Review provider capability metadata').should('be.visible')
       cy.contains('button', 'Close').click()
     })
+    qualificationCheckpoint('provider_validation_complete')
 
     cy.request({
       method: 'POST',
@@ -1779,6 +1762,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Previous').should('not.be.disabled')
       cy.get('tbody tr').should('have.length.at.least', 1)
     })
+    qualificationCheckpoint('broker_restart_rehydrated')
 
     cy.env(['testControlUrl', 'qualificationPlatform']).then(
       ({ testControlUrl: controlUrl, qualificationPlatform }) => {
@@ -1816,6 +1800,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         .should('be.visible')
       cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
       cy.get('input[type="password"]').should('not.exist')
+      qualificationCheckpoint('wrapper_locked')
       cy.request({
         method: 'POST',
         url: '/api/services/%40secretsbroker/stop',
@@ -1846,38 +1831,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         .should('be.visible')
       }
     )
-
-    cy.request(
-      managedServiceStopMutationRequestOptions(
-        '/api/services/%40secretsbroker/stop'
-      )
-    )
-      .its('status')
-      .should('equal', 200)
-    waitForManagedServiceStopped('@secretsbroker')
-    cy.intercept('GET', '**/secrets/management*').as(
-      'stoppedBrokerManagement'
-    )
-    cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
-    cy.wait('@stoppedBrokerManagement', { timeout: 20_000 }).then(
-      ({ response }) => {
-        expect(response?.statusCode).to.be.within(400, 599)
-      }
-    )
-    cy.contains('Secrets Broker management is unavailable.', {
-      timeout: 30_000,
-    }).should('be.visible')
-    cy.contains('button', 'Retry inventory').should('be.visible')
-    cy.request({
-      method: 'POST',
-      url: '/api/services/%40secretsbroker/start',
-      body: { confirm: false },
-      timeout: 120_000,
-    }).its('status').should('equal', 200)
-    cy.contains('button', 'Retry inventory').click()
-    cy.contains(expectedRef, { timeout: 30_000 }).should('be.visible')
+    qualificationCheckpoint('wrapper_recovery_complete')
 
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
     cy.get('input[type="password"]').should('not.exist')

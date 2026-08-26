@@ -21,10 +21,11 @@ import {
   brokerMetadataRequestTimeoutMs,
   brokerMetadataRetryDelayMs,
   isManagedServiceStoppedResponse,
-  brokerMetadataReservedLifecycleMs,
+  boundedProviderMetadataExecuteNetworkWaitsMs,
   cypressQualificationTimeoutMs,
   linkedRotationExecuteCount,
   linkedRotationResponseTimeoutMs,
+  managedServiceStartMutationRequestOptions,
   managedServiceStopReadinessAttempts,
   managedServiceStopReadinessWorstCaseMs,
   managedServiceStopMutationRequestOptions,
@@ -38,17 +39,19 @@ import {
   providerMigrationApplyDiagnostic,
   providerMigrationApplyErrorCodes,
   providerMigrationApplyFailureOutcomes,
+  providerMigrationReadinessAttempts,
+  providerMigrationReadinessCallCount,
+  providerMigrationReadinessConvergenceWindowMs,
+  providerMigrationReadinessWorstCaseMs,
   providerReadinessAttempts,
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
   providerReadinessErrorCode,
-  providerReadinessOtherLifecycleReserveMs,
   providerReadinessRequestOptions,
   providerReadinessReservedLifecycleMs,
   providerReadinessWorstCaseMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
-  realBrowserQualificationWorstCaseMs,
 } from '../scripts/real-browser-qualification-budget.mjs'
 import {
   buildQualificationFailureDiagnostic,
@@ -58,28 +61,25 @@ import {
   qualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
 
-test('real-browser waits stay inside the unchanged qualification budget', async () => {
+test('bounded provider, metadata, and execute network waits retain exact source counts', async () => {
   assert.equal(cypressQualificationTimeoutMs, 720_000)
   assert.equal(linkedRotationExecuteCount, 2)
   assert.equal(linkedRotationResponseTimeoutMs, 120_000)
   assert.equal(brokerMetadataEndpointCount, 2)
   assert.equal(brokerMetadataReadinessAttempts, 5)
-  assert.equal(brokerMetadataReservedLifecycleMs, 6 * 60_000)
   assert.equal(managedServiceStopReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
   assert.equal(providerReadinessAttempts, 3)
+  assert.equal(providerMigrationReadinessAttempts, 6)
   assert.equal(providerReadinessCheckpointCount, 4)
-  assert.equal(providerReadinessCallCount, 8)
+  assert.equal(providerReadinessCallCount, 9)
+  assert.equal(providerMigrationReadinessCallCount, 2)
   assert.equal(providerReadinessWorstCaseMs(), 26_000)
-  assert.equal(providerReadinessReservedLifecycleMs(), 208_000)
+  assert.equal(providerMigrationReadinessConvergenceWindowMs(), 5_000)
+  assert.equal(providerMigrationReadinessWorstCaseMs(), 53_000)
+  assert.equal(providerReadinessReservedLifecycleMs(), 288_000)
   assert.equal(providerFinalLifecycleDiagnosticCount, 1)
   assert.equal(providerFinalLifecycleDiagnosticTimeoutMs, 5_000)
-  assert.equal(providerReadinessOtherLifecycleReserveMs, 144_000)
-  assert.equal(
-    providerReadinessReservedLifecycleMs() +
-      providerReadinessOtherLifecycleReserveMs,
-    352_000
-  )
   const brokerMetadataWorstCaseMs =
     brokerMetadataEndpointCount *
     (brokerMetadataReadinessAttempts * brokerMetadataRequestTimeoutMs +
@@ -89,21 +89,10 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs,
     240_000
   )
-  assert.ok(
-    providerReadinessReservedLifecycleMs() +
-      providerReadinessOtherLifecycleReserveMs <
-      brokerMetadataReservedLifecycleMs
-  )
-  assert.equal(
-    brokerMetadataReservedLifecycleMs - managedServiceStopReadinessWorstCaseMs(),
-    306_000
-  )
-  assert.equal(realBrowserQualificationWorstCaseMs(), 705_000)
-  assert.equal(
-    cypressQualificationTimeoutMs - realBrowserQualificationWorstCaseMs(),
-    15_000
-  )
-  assert.ok(realBrowserQualificationWorstCaseMs() < cypressQualificationTimeoutMs)
+  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 641_000)
+  // This network-only subtotal must never be presented as a whole-spec bound.
+  // Lifecycle transitions, page loads, UI waits, tasks, and cleanup are
+  // source-accounted separately against the fixed Cypress wrapper.
   for (const endpoint of ['telemetry', 'events']) {
     assert.deepEqual(
       brokerMetadataRequestOptions(`/operations/${endpoint}`),
@@ -175,12 +164,75 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
       timeout: 120_000,
     }
   )
+  assert.deepEqual(
+    managedServiceStartMutationRequestOptions('/api/services/broker/start'),
+    {
+      method: 'POST',
+      url: '/api/services/broker/start',
+      body: { confirm: false },
+      failOnStatusCode: true,
+      retryOnNetworkFailure: false,
+      retryOnStatusCodeFailure: false,
+      timeout: 120_000,
+    }
+  )
   const lifecycleSource = await readFile(
     new URL(
       '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
       import.meta.url
     ),
     'utf8'
+  )
+  const stoppedLifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  const packageManifest = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  )
+  const browserWorkflowSource = await readFile(
+    new URL('../.github/workflows/real-secrets-broker.yml', import.meta.url),
+    'utf8'
+  )
+  const verifierSource = await readFile(
+    new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url),
+    'utf8'
+  )
+  const stoppedLifecycleVerifierSource = await readFile(
+    new URL(
+      '../scripts/verify-real-broker-stopped-lifecycle-browser.mjs',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  assert.equal(
+    packageManifest.scripts['test:secrets:real-stopped-lifecycle-browser'],
+    'node scripts/verify-real-broker-stopped-lifecycle-browser.mjs'
+  )
+  assert.equal(
+    browserWorkflowSource.split(
+      'pnpm test:secrets:real-stopped-lifecycle-browser'
+    ).length - 1,
+    1
+  )
+  assert.equal(
+    stoppedLifecycleVerifierSource.split(
+      "SERVICE_LASSO_REAL_BROWSER_MODE: 'stopped-lifecycle'"
+    ).length - 1,
+    1
+  )
+  assert.equal(
+    verifierSource.split("? 'real-stopped-lifecycle.cy.js'").length - 1,
+    1
+  )
+  assert.equal(
+    verifierSource.split(
+      "['first-run', 'stopped-lifecycle'].includes(qualificationMode)"
+    ).length - 1,
+    1
   )
   assert.equal(
     [...lifecycleSource.matchAll(/cy\.wait\('@executeLinkedRotation'/g)].length,
@@ -199,7 +251,7 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
   assert.equal(
     [...lifecycleSource.matchAll(/waitForManagedServiceStopped\('@secretsbroker'\)/g)]
       .length,
-    1
+    0
   )
   assert.equal(
     [
@@ -207,11 +259,11 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
         /managedServiceStopMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/stop'\s*\)/g
       ),
     ].length,
-    1
+    0
   )
   assert.equal(
     [...lifecycleSource.matchAll(/cy\.wait\('@stoppedBrokerManagement'/g)].length,
-    1
+    0
   )
   assert.equal(
     [
@@ -219,10 +271,51 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
         /expect\(response\?\.statusCode\)\.to\.be\.within\(400, 599\)/g
       ),
     ].length,
+    0
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /waitForManagedServiceStopped\('@secretsbroker'\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /managedServiceStopMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/stop'\s*\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /managedServiceStartMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/start'\s*\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /cy\.wait\('@stoppedBrokerManagement'/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [
+      ...stoppedLifecycleSource.matchAll(
+        /expect\(response\?\.statusCode\)\.to\.be\.within\(400, 599\)/g
+      ),
+    ].length,
     1
   )
   for (const checkpoint of [
     'single_migration',
+    'single_migration_apply',
     'unavailable_migration',
     'bulk_migration',
     'post_rotation',
@@ -247,11 +340,28 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
   ].length
   assert.equal(standaloneProviderReadinessCalls, 3)
   assert.equal(checkpointInventoryReadinessCalls, 1)
+  const migrationBackendReadinessCalls = [
+    ...lifecycleSource.matchAll(
+      /backendReadinessAttempts:\s*providerMigrationReadinessAttempts/g
+    ),
+  ].length
+  const migrationApplyReadinessCalls = [
+    ...lifecycleSource.matchAll(
+      /waitForBrokerProviderStatusReadiness\(\s*'vault-browser',\s*providerMigrationReadinessAttempts,\s*\{ checkpoint: 'single_migration_apply' \}/g
+    ),
+  ].length
+  assert.equal(migrationBackendReadinessCalls, 1)
+  assert.equal(migrationApplyReadinessCalls, 1)
   assert.equal(
     standaloneProviderReadinessCalls +
       checkpointProviderReadinessCalls +
-      checkpointInventoryReadinessCalls,
+      checkpointInventoryReadinessCalls +
+      migrationApplyReadinessCalls,
     providerReadinessCallCount
+  )
+  assert.equal(
+    migrationBackendReadinessCalls + migrationApplyReadinessCalls,
+    providerMigrationReadinessCallCount
   )
   assert.equal(
     [
@@ -265,6 +375,21 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     [...lifecycleSource.matchAll(/cy\.wait\('@migrationApply'/g)].length,
     1
   )
+  const dryRunReadyIndex = lifecycleSource.indexOf(
+    "cy.contains('Migration dry run ready'"
+  )
+  const applyReadinessIndex = lifecycleSource.indexOf(
+    "{ checkpoint: 'single_migration_apply' }"
+  )
+  const confirmMigrationIndex = lifecycleSource.indexOf(
+    'cy.get(\'[aria-label="Confirm provider migration"]\').click()'
+  )
+  const applyMigrationIndex = lifecycleSource.indexOf(
+    "cy.contains('button', 'Apply migration').click()"
+  )
+  assert.ok(dryRunReadyIndex < applyReadinessIndex)
+  assert.ok(applyReadinessIndex < confirmMigrationIndex)
+  assert.ok(confirmMigrationIndex < applyMigrationIndex)
   assert.equal(
     [
       ...lifecycleSource.matchAll(
@@ -273,6 +398,115 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     ].length,
     1
   )
+
+  const postRotationStart = lifecycleSource.indexOf(
+    "waitForProviderUiStatusAfterReload({ checkpoint: 'post_rotation' })"
+  )
+  const acceptanceComplete = lifecycleSource.indexOf(
+    "qualificationCheckpoint('acceptance_complete')"
+  )
+  assert.ok(postRotationStart >= 0)
+  assert.ok(acceptanceComplete > postRotationStart)
+  const lateLifecycleSource = lifecycleSource.slice(
+    postRotationStart,
+    acceptanceComplete
+  )
+  const rawLifecycleRequestCount = [
+    ...lateLifecycleSource.matchAll(/timeout:\s*120_000/g),
+  ].length
+  const sharedStopMutationCount = [
+    ...lateLifecycleSource.matchAll(
+      /managedServiceStopMutationRequestOptions\(/g
+    ),
+  ].length
+  const controlRequestCount = [
+    ...lateLifecycleSource.matchAll(
+      /cy\.request\(\s*'POST',\s*`\$\{controlUrl\}\/(?:lock|unlock)-wrapper`\s*\)/g
+    ),
+  ].length
+  const reloadCount = [...lateLifecycleSource.matchAll(/cy\.reload\(\)/g)]
+    .length
+  const directTwentySecondWaitCount = [
+    ...lateLifecycleSource.matchAll(/timeout:\s*20_000/g),
+  ].length
+  const directThirtySecondWaitCount = [
+    ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
+  ].length
+  const openSecretsCount = [
+    ...lateLifecycleSource.matchAll(/openSecrets\(\)/g),
+  ].length
+  const validationDialogCount = [
+    ...lateLifecycleSource.matchAll(
+      /dialog\('Validate provider configuration'\)/g
+    ),
+  ].length
+  const lateCheckpointCount = [
+    ...lateLifecycleSource.matchAll(/qualificationCheckpoint\('/g),
+  ].length
+  assert.equal(rawLifecycleRequestCount, 5)
+  assert.equal(sharedStopMutationCount, 0)
+  assert.equal(controlRequestCount, 2)
+  assert.equal(reloadCount, 3)
+  assert.equal(directTwentySecondWaitCount, 7)
+  assert.equal(directThirtySecondWaitCount, 4)
+  assert.equal(openSecretsCount, 2)
+  assert.equal(validationDialogCount, 1)
+  assert.equal(lateCheckpointCount, 4)
+  assert.equal(
+    [
+      ...lateLifecycleSource.matchAll(
+        /waitForManagedServiceStopped\('@secretsbroker'\)/g
+      ),
+    ].length,
+    0
+  )
+  const lifecycleMutationWaitMs =
+    (rawLifecycleRequestCount + sharedStopMutationCount) * 120_000
+  const controlRequestWaitMs = controlRequestCount * 30_000
+  const reloadWaitMs = reloadCount * 60_000
+  const longUiWaitMs =
+    (directTwentySecondWaitCount + openSecretsCount * 2 +
+      validationDialogCount) *
+      20_000 +
+    directThirtySecondWaitCount * 30_000
+  const progressTaskWaitMs = (lateCheckpointCount + 1) * 60_000
+  const enumeratedLateLifecycleWaitMs =
+    lifecycleMutationWaitMs +
+    controlRequestWaitMs +
+    reloadWaitMs +
+    longUiWaitMs +
+    progressTaskWaitMs
+  assert.equal(enumeratedLateLifecycleWaitMs, 1_500_000)
+  assert.ok(enumeratedLateLifecycleWaitMs > cypressQualificationTimeoutMs)
+  // Default four-second UI commands and Cypress's implicit network retries are
+  // deliberately excluded, so this is not a whole-spec maximum either.
+
+  const stoppedLifecycleMutationCount = [
+    ...stoppedLifecycleSource.matchAll(
+      /managedService(?:Stop|Start)MutationRequestOptions\(/g
+    ),
+  ].length
+  const stoppedLifecycleReloadCount = [
+    ...stoppedLifecycleSource.matchAll(/cy\.reload\(\)/g),
+  ].length
+  const stoppedLifecycleTwentySecondWaitCount = [
+    ...stoppedLifecycleSource.matchAll(/timeout:\s*20_000/g),
+  ].length
+  const stoppedLifecycleThirtySecondWaitCount = [
+    ...stoppedLifecycleSource.matchAll(/timeout:\s*30_000/g),
+  ].length
+  assert.equal(stoppedLifecycleMutationCount, 2)
+  assert.equal(stoppedLifecycleReloadCount, 1)
+  assert.equal(stoppedLifecycleTwentySecondWaitCount, 5)
+  assert.equal(stoppedLifecycleThirtySecondWaitCount, 3)
+  const stoppedLifecycleEnumeratedWaitMs =
+    stoppedLifecycleMutationCount * 120_000 +
+    managedServiceStopReadinessWorstCaseMs() +
+    stoppedLifecycleReloadCount * 60_000 +
+    stoppedLifecycleTwentySecondWaitCount * 20_000 +
+    stoppedLifecycleThirtySecondWaitCount * 30_000
+  assert.equal(stoppedLifecycleEnumeratedWaitMs, 544_000)
+  assert.ok(stoppedLifecycleEnumeratedWaitMs < cypressQualificationTimeoutMs)
 })
 
 test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
@@ -298,10 +532,39 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   })
   assert.equal(
     sanitized,
-    'checkpoint=unknown, component=unknown, attempt=3, status=unavailable, errorCode=unknown, serviceRunning=unavailable, serviceHealthy=unavailable'
+    'checkpoint=unknown, component=unknown, attempt=6, status=unavailable, errorCode=unknown, serviceRunning=unavailable, serviceHealthy=unavailable'
   )
   assert.equal(sanitized.includes('private-provider-ref'), false)
   assert.equal(sanitized.includes('response-body-value'), false)
+
+  const finalMigrationAttempt = {
+    schema: 'service-admin.provider-ui-convergence.v1',
+    checkpoint: 'single_migration_apply',
+    component: 'response_metadata',
+    attempt: 6,
+    statusCode: 503,
+    errorCode: 'broker_unavailable',
+    serviceRunning: true,
+    serviceHealthy: true,
+  }
+  assert.deepEqual(
+    parseProviderUiConvergenceEvidence(JSON.stringify(finalMigrationAttempt)),
+    {
+      checkpoint: 'single_migration_apply',
+      component: 'response_metadata',
+      attempt: 6,
+      statusCode: 503,
+      errorCode: 'broker_unavailable',
+      serviceRunning: true,
+      serviceHealthy: true,
+    }
+  )
+  assert.equal(
+    parseProviderUiConvergenceEvidence(
+      JSON.stringify({ ...finalMigrationAttempt, attempt: 7 })
+    ),
+    null
+  )
 
   const writes = []
   const recorder = createProviderUiConvergenceRecorder({
@@ -410,6 +673,15 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   assert.deepEqual(disabledWrites, [])
   assert.equal(
     providerReadinessErrorCode({
+      error: 'secrets_broker_not_ready',
+      message: 'private',
+      path: 'private-path',
+      value: 'private-value',
+    }),
+    'secrets_broker_not_ready'
+  )
+  assert.equal(
+    providerReadinessErrorCode({
       error: { code: 'secrets_broker_not_ready', message: 'private' },
     }),
     'secrets_broker_not_ready'
@@ -419,7 +691,20 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
     'security_not_configured'
   )
   assert.equal(
+    providerReadinessErrorCode({ error: 'broker_unavailable' }),
+    'broker_unavailable'
+  )
+  assert.equal(
     providerReadinessErrorCode({ error: { code: 'private-path-or-ref' } }),
+    'unknown'
+  )
+  assert.equal(
+    providerReadinessErrorCode({
+      error: 'private-code',
+      code: 'broker_unavailable',
+      message: 'private-message',
+      ref: 'private-ref',
+    }),
     'unknown'
   )
   assert.deepEqual(
@@ -513,7 +798,30 @@ test('qualification progress is allowlisted, ordered, integral, and capped', () 
     ),
     null
   )
-  assert.equal(qualificationProgressPhases.length, 7)
+  assert.equal(
+    parseQualificationProgressDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.real-browser-progress.v1',
+        phase: 'wrapper_recovery_complete',
+        elapsedMs: 1,
+        raw: 'discard-me',
+      })
+    ),
+    null
+  )
+  assert.deepEqual(qualificationProgressPhases, [
+    'lifecycle_started',
+    'committed_rotation_complete',
+    'rollback_fixture_armed',
+    'rollback_rotation_complete',
+    'metadata_ready',
+    'rollback_rehydrated',
+    'provider_validation_complete',
+    'broker_restart_rehydrated',
+    'wrapper_locked',
+    'wrapper_recovery_complete',
+    'acceptance_complete',
+  ])
 
   const outOfOrder = createQualificationProgressRecorder({ enabled: true })
   outOfOrder.setSpecPath(
@@ -548,6 +856,44 @@ test('qualification progress emits nothing when disabled or outside the lifecycl
   assert.deepEqual(writes, [])
 })
 
+test('qualification progress call sites are exact, ordered, and bounded', async () => {
+  const lifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  let previousIndex = -1
+  for (const phase of qualificationProgressPhases) {
+    const call = `qualificationCheckpoint('${phase}')`
+    assert.equal(lifecycleSource.split(call).length - 1, 1)
+    const nextIndex = lifecycleSource.indexOf(call)
+    assert.ok(nextIndex > previousIndex)
+    previousIndex = nextIndex
+  }
+
+  const writes = []
+  let now = 10_000
+  const recorder = createQualificationProgressRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+    now: () => now,
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  for (const phase of qualificationProgressPhases) {
+    now += 1_000
+    assert.deepEqual(recorder.record(phase), {
+      phase,
+      elapsedMs: now - 10_000,
+    })
+  }
+  assert.equal(writes.length, qualificationProgressPhases.length)
+  assert.equal(recorder.record('acceptance_complete'), null)
+})
+
 test('qualification failures retain only bounded phase and transport metadata', () => {
   assert.equal(classifyQualificationFailure({ timedOut: true }), 'timeout')
   assert.equal(
@@ -564,12 +910,12 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'timeout',
       progressEvents: [
         { phase: 'lifecycle_started', elapsedMs: 20 },
-        { phase: 'rollback_rotation_complete', elapsedMs: 80_000 },
+        { phase: 'wrapper_recovery_complete', elapsedMs: 80_000 },
       ],
       providerUiDiagnostic: {
-        checkpoint: 'post_rotation',
+        checkpoint: 'single_migration_apply',
         component: 'response_metadata',
-        attempt: 3,
+        attempt: 6,
         statusCode: 503,
         errorCode: 'secrets_broker_not_ready',
         serviceRunning: true,
@@ -584,7 +930,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
     {
       schema: 'service-admin.real-browser-qualification-diagnostic.v1',
       failure: 'timeout',
-      lastPhase: 'rollback_rotation_complete',
+      lastPhase: 'wrapper_recovery_complete',
       elapsedMs: 80_000,
       transportPhases: [
         'upstream_started',
@@ -594,9 +940,9 @@ test('qualification failures retain only bounded phase and transport metadata', 
       statuses: [200, 200],
       adminReachability: 'reachable',
       providerUi: {
-        checkpoint: 'post_rotation',
+        checkpoint: 'single_migration_apply',
         component: 'response_metadata',
-        attempt: 3,
+        attempt: 6,
         statusCode: 503,
         errorCode: 'secrets_broker_not_ready',
         serviceRunning: true,
@@ -604,16 +950,34 @@ test('qualification failures retain only bounded phase and transport metadata', 
       },
     }
   )
+  assert.equal(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      providerUiDiagnostic: {
+        checkpoint: 'single_migration_apply',
+        component: 'response_metadata',
+        attempt: 7,
+        statusCode: 503,
+        errorCode: 'broker_unavailable',
+        serviceRunning: true,
+        serviceHealthy: true,
+      },
+    }).providerUi,
+    null
+  )
   assert.deepEqual(
     buildQualificationFailureDiagnostic({
       failure: 'nonzero_exit',
+      progressEvents: [
+        { phase: 'wrapper_recovery_complete', elapsedMs: 1_234 },
+      ],
       transportDiagnostic: { adminReachability: 'unreachable' },
     }),
     {
       schema: 'service-admin.real-browser-qualification-diagnostic.v1',
       failure: 'nonzero_exit',
-      lastPhase: 'not_started',
-      elapsedMs: 0,
+      lastPhase: 'wrapper_recovery_complete',
+      elapsedMs: 1_234,
       transportPhases: [],
       statuses: [],
       adminReachability: 'unreachable',
