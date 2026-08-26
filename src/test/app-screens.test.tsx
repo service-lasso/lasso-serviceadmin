@@ -851,6 +851,7 @@ describe('app screens', () => {
   })
 
   it('rehydrates a durable Core rotation from the safe operation URL', async () => {
+    const user = userEvent.setup()
     const { router } = await renderRoute(
       '/services/secrets-broker?rotationOperation=serviceadmin-rotate-rehydrate'
     )
@@ -874,6 +875,22 @@ describe('app screens', () => {
       within(dialog).getByRole('button', { name: /Refresh operation status/i })
     ).toBeEnabled()
     expect(document.body.textContent).not.toContain('NOLEAK459')
+
+    const closeButton = within(dialog)
+      .getAllByRole('button', { name: /^Close$/i })
+      .find((button) => button.closest('[data-slot="dialog-footer"]'))
+    expect(closeButton).toBeDefined()
+    await user.click(closeButton!)
+    await waitFor(() => {
+      expect(router.state.location.search).not.toHaveProperty(
+        'rotationOperation'
+      )
+      expect(
+        screen.queryByRole('dialog', { name: /Rotate secret/i })
+      ).not.toBeInTheDocument()
+      expect(document.body).not.toHaveAttribute('data-scroll-locked')
+      expect(document.body.style.pointerEvents).not.toBe('none')
+    })
   })
 
   it('edits a local managed secret only after dry-run and explicit confirmation', async () => {

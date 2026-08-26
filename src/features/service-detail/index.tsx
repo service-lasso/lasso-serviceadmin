@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { LazyLog, ScrollFollow } from '@melloware/react-logviewer'
 import {
@@ -1138,6 +1138,7 @@ function SecretsBrokerSecretsPanel({
   const [rotationTarget, setRotationTarget] =
     useState<SecretManagementRecord | null>(null)
   const [rotationOperationId, setRotationOperationId] = useState('')
+  const dismissedRotationOperationId = useRef<string | null>(null)
   const [rotationReason, setRotationReason] = useState('')
   const [rotationValue, setRotationValue] = useState('')
   const [rotationConfirmed, setRotationConfirmed] = useState(false)
@@ -1275,8 +1276,21 @@ function SecretsBrokerSecretsPanel({
   }, [inventoryPageCount])
 
   useEffect(() => {
+    if (requestedRotationOperationId !== dismissedRotationOperationId.current) {
+      dismissedRotationOperationId.current = null
+    }
+  }, [requestedRotationOperationId])
+
+  useEffect(() => {
     const operation = coreRotationOperation.data
-    if (!operation) return
+    if (
+      !requestedRotationOperationId ||
+      !operation ||
+      operation.operationId !== requestedRotationOperationId ||
+      dismissedRotationOperationId.current === requestedRotationOperationId
+    ) {
+      return
+    }
     const record = records.find((candidate) => candidate.ref === operation.ref)
     if (!record) {
       if (!secretsQuery.isFetching) {
@@ -1303,6 +1317,7 @@ function SecretsBrokerSecretsPanel({
   }, [
     coreRotationOperation.data,
     records,
+    requestedRotationOperationId,
     rotationExecution?.updatedAt,
     rotationTarget?.ref,
     secretsQuery.isFetching,
@@ -2128,7 +2143,11 @@ function SecretsBrokerSecretsPanel({
   }
 
   const closeRotation = (open: boolean) => {
-    if (!open) clearRotationState()
+    if (!open) {
+      dismissedRotationOperationId.current =
+        requestedRotationOperationId ?? rotationOperationId
+      clearRotationState()
+    }
   }
 
   const runRotationPreview = async () => {
