@@ -8,6 +8,13 @@ export const qualificationProgressPhases = Object.freeze([
   'rollback_rotation_complete',
   'metadata_ready',
   'rollback_rehydrated',
+  'provider_validation_complete',
+  'broker_restart_rehydrated',
+  'wrapper_locked',
+  'wrapper_recovery_complete',
+  'managed_service_stopped',
+  'stopped_management_unavailable',
+  'inventory_recovered',
   'acceptance_complete',
 ])
 
@@ -125,9 +132,12 @@ export function buildQualificationFailureDiagnostic({
       (Number.isInteger(providerUiDiagnostic.statusCode) &&
         providerUiDiagnostic.statusCode >= 100 &&
         providerUiDiagnostic.statusCode <= 599)) &&
-    ['secrets_broker_not_ready', 'security_not_configured', 'unknown'].includes(
-      providerUiDiagnostic.errorCode
-    ) &&
+    [
+      'broker_unavailable',
+      'secrets_broker_not_ready',
+      'security_not_configured',
+      'unknown',
+    ].includes(providerUiDiagnostic.errorCode) &&
     (providerUiDiagnostic.serviceRunning === 'unavailable' ||
       typeof providerUiDiagnostic.serviceRunning === 'boolean') &&
     (providerUiDiagnostic.serviceHealthy === 'unavailable' ||

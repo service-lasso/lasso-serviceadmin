@@ -1751,6 +1751,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Review provider capability metadata').should('be.visible')
       cy.contains('button', 'Close').click()
     })
+    qualificationCheckpoint('provider_validation_complete')
 
     cy.request({
       method: 'POST',
@@ -1779,6 +1780,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Previous').should('not.be.disabled')
       cy.get('tbody tr').should('have.length.at.least', 1)
     })
+    qualificationCheckpoint('broker_restart_rehydrated')
 
     cy.env(['testControlUrl', 'qualificationPlatform']).then(
       ({ testControlUrl: controlUrl, qualificationPlatform }) => {
@@ -1816,6 +1818,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         .should('be.visible')
       cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
       cy.get('input[type="password"]').should('not.exist')
+      qualificationCheckpoint('wrapper_locked')
       cy.request({
         method: 'POST',
         url: '/api/services/%40secretsbroker/stop',
@@ -1846,6 +1849,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         .should('be.visible')
       }
     )
+    qualificationCheckpoint('wrapper_recovery_complete')
 
     cy.request(
       managedServiceStopMutationRequestOptions(
@@ -1855,6 +1859,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       .its('status')
       .should('equal', 200)
     waitForManagedServiceStopped('@secretsbroker')
+    qualificationCheckpoint('managed_service_stopped')
     cy.intercept('GET', '**/secrets/management*').as(
       'stoppedBrokerManagement'
     )
@@ -1870,6 +1875,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       timeout: 30_000,
     }).should('be.visible')
     cy.contains('button', 'Retry inventory').should('be.visible')
+    qualificationCheckpoint('stopped_management_unavailable')
     cy.request({
       method: 'POST',
       url: '/api/services/%40secretsbroker/start',
@@ -1878,6 +1884,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     }).its('status').should('equal', 200)
     cy.contains('button', 'Retry inventory').click()
     cy.contains(expectedRef, { timeout: 30_000 }).should('be.visible')
+    qualificationCheckpoint('inventory_recovered')
 
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
     cy.get('input[type="password"]').should('not.exist')

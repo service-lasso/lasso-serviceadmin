@@ -5,7 +5,6 @@ export const brokerMetadataReadinessAttempts = 5
 export const brokerMetadataRequestTimeoutMs = 10_000
 export const brokerMetadataRetryDelayMs = 1_000
 export const brokerMetadataEndpointCount = 2
-export const brokerMetadataReservedLifecycleMs = 6 * 60_000
 export const managedServiceStopReadinessAttempts = 5
 export const managedServiceStopRequestTimeoutMs = 10_000
 export const managedServiceStopRetryDelayMs = 1_000
@@ -18,7 +17,6 @@ export const providerReadinessCallCount = 8
 export const providerFinalLifecycleDiagnosticCount = 1
 export const providerFinalLifecycleDiagnosticTimeoutMs = 5_000
 export const providerReadinessDiagnosticEventCap = 64
-export const providerReadinessOtherLifecycleReserveMs = 144_000
 
 const providerUiConvergenceSchema = 'service-admin.provider-ui-convergence.v1'
 
@@ -33,6 +31,7 @@ const providerUiConvergenceComponents = new Set([
   'row_render',
 ])
 const providerUiConvergenceErrorCodes = new Set([
+  'broker_unavailable',
   'secrets_broker_not_ready',
   'security_not_configured',
   'unknown',
@@ -350,7 +349,10 @@ export function providerReadinessReservedLifecycleMs() {
   return providerReadinessCallCount * providerReadinessWorstCaseMs()
 }
 
-export function realBrowserQualificationWorstCaseMs() {
+// This subtotal covers only the explicitly bounded provider, metadata, and
+// rotation-execute network waits. Lifecycle transitions, page loads, UI waits,
+// Cypress task overhead, and runner cleanup require separate source accounting.
+export function boundedProviderMetadataExecuteNetworkWaitsMs() {
   const perEndpointMs =
     brokerMetadataReadinessAttempts * brokerMetadataRequestTimeoutMs +
     (brokerMetadataReadinessAttempts - 1) * brokerMetadataRetryDelayMs
@@ -358,7 +360,6 @@ export function realBrowserQualificationWorstCaseMs() {
     providerReadinessReservedLifecycleMs() +
     providerFinalLifecycleDiagnosticCount *
       providerFinalLifecycleDiagnosticTimeoutMs +
-    providerReadinessOtherLifecycleReserveMs +
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs +
     brokerMetadataEndpointCount * perEndpointMs
   )

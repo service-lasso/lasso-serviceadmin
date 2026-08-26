@@ -21,7 +21,7 @@ import {
   brokerMetadataRequestTimeoutMs,
   brokerMetadataRetryDelayMs,
   isManagedServiceStoppedResponse,
-  brokerMetadataReservedLifecycleMs,
+  boundedProviderMetadataExecuteNetworkWaitsMs,
   cypressQualificationTimeoutMs,
   linkedRotationExecuteCount,
   linkedRotationResponseTimeoutMs,
@@ -42,13 +42,11 @@ import {
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
   providerReadinessErrorCode,
-  providerReadinessOtherLifecycleReserveMs,
   providerReadinessRequestOptions,
   providerReadinessReservedLifecycleMs,
   providerReadinessWorstCaseMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
-  realBrowserQualificationWorstCaseMs,
 } from '../scripts/real-browser-qualification-budget.mjs'
 import {
   buildQualificationFailureDiagnostic,
@@ -58,13 +56,12 @@ import {
   qualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
 
-test('real-browser waits stay inside the unchanged qualification budget', async () => {
+test('bounded provider, metadata, and execute network waits retain exact source counts', async () => {
   assert.equal(cypressQualificationTimeoutMs, 720_000)
   assert.equal(linkedRotationExecuteCount, 2)
   assert.equal(linkedRotationResponseTimeoutMs, 120_000)
   assert.equal(brokerMetadataEndpointCount, 2)
   assert.equal(brokerMetadataReadinessAttempts, 5)
-  assert.equal(brokerMetadataReservedLifecycleMs, 6 * 60_000)
   assert.equal(managedServiceStopReadinessAttempts, 5)
   assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
   assert.equal(providerReadinessAttempts, 3)
@@ -74,12 +71,6 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
   assert.equal(providerReadinessReservedLifecycleMs(), 208_000)
   assert.equal(providerFinalLifecycleDiagnosticCount, 1)
   assert.equal(providerFinalLifecycleDiagnosticTimeoutMs, 5_000)
-  assert.equal(providerReadinessOtherLifecycleReserveMs, 144_000)
-  assert.equal(
-    providerReadinessReservedLifecycleMs() +
-      providerReadinessOtherLifecycleReserveMs,
-    352_000
-  )
   const brokerMetadataWorstCaseMs =
     brokerMetadataEndpointCount *
     (brokerMetadataReadinessAttempts * brokerMetadataRequestTimeoutMs +
@@ -89,21 +80,10 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs,
     240_000
   )
-  assert.ok(
-    providerReadinessReservedLifecycleMs() +
-      providerReadinessOtherLifecycleReserveMs <
-      brokerMetadataReservedLifecycleMs
-  )
-  assert.equal(
-    brokerMetadataReservedLifecycleMs - managedServiceStopReadinessWorstCaseMs(),
-    306_000
-  )
-  assert.equal(realBrowserQualificationWorstCaseMs(), 705_000)
-  assert.equal(
-    cypressQualificationTimeoutMs - realBrowserQualificationWorstCaseMs(),
-    15_000
-  )
-  assert.ok(realBrowserQualificationWorstCaseMs() < cypressQualificationTimeoutMs)
+  assert.equal(boundedProviderMetadataExecuteNetworkWaitsMs(), 561_000)
+  // This network-only subtotal must never be presented as a whole-spec bound.
+  // Lifecycle transitions, page loads, UI waits, tasks, and cleanup are
+  // source-accounted separately against the fixed Cypress wrapper.
   for (const endpoint of ['telemetry', 'events']) {
     assert.deepEqual(
       brokerMetadataRequestOptions(`/operations/${endpoint}`),
@@ -273,6 +253,90 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     ].length,
     1
   )
+
+  const postRotationStart = lifecycleSource.indexOf(
+    "waitForProviderUiStatusAfterReload({ checkpoint: 'post_rotation' })"
+  )
+  const acceptanceComplete = lifecycleSource.indexOf(
+    "qualificationCheckpoint('acceptance_complete')"
+  )
+  assert.ok(postRotationStart >= 0)
+  assert.ok(acceptanceComplete > postRotationStart)
+  const lateLifecycleSource = lifecycleSource.slice(
+    postRotationStart,
+    acceptanceComplete
+  )
+  const rawLifecycleRequestCount = [
+    ...lateLifecycleSource.matchAll(/timeout:\s*120_000/g),
+  ].length
+  const sharedStopMutationCount = [
+    ...lateLifecycleSource.matchAll(
+      /managedServiceStopMutationRequestOptions\(/g
+    ),
+  ].length
+  const controlRequestCount = [
+    ...lateLifecycleSource.matchAll(
+      /cy\.request\(\s*'POST',\s*`\$\{controlUrl\}\/(?:lock|unlock)-wrapper`\s*\)/g
+    ),
+  ].length
+  const reloadCount = [...lateLifecycleSource.matchAll(/cy\.reload\(\)/g)]
+    .length
+  const directTwentySecondWaitCount = [
+    ...lateLifecycleSource.matchAll(/timeout:\s*20_000/g),
+  ].length
+  const directThirtySecondWaitCount = [
+    ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
+  ].length
+  const openSecretsCount = [
+    ...lateLifecycleSource.matchAll(/openSecrets\(\)/g),
+  ].length
+  const validationDialogCount = [
+    ...lateLifecycleSource.matchAll(
+      /dialog\('Validate provider configuration'\)/g
+    ),
+  ].length
+  const lateCheckpointCount = [
+    ...lateLifecycleSource.matchAll(/qualificationCheckpoint\('/g),
+  ].length
+  assert.equal(rawLifecycleRequestCount, 6)
+  assert.equal(sharedStopMutationCount, 1)
+  assert.equal(controlRequestCount, 2)
+  assert.equal(reloadCount, 4)
+  assert.equal(directTwentySecondWaitCount, 10)
+  assert.equal(directThirtySecondWaitCount, 6)
+  assert.equal(openSecretsCount, 2)
+  assert.equal(validationDialogCount, 1)
+  assert.equal(lateCheckpointCount, 7)
+  assert.equal(
+    [
+      ...lateLifecycleSource.matchAll(
+        /waitForManagedServiceStopped\('@secretsbroker'\)/g
+      ),
+    ].length,
+    1
+  )
+  const lifecycleMutationWaitMs =
+    (rawLifecycleRequestCount + sharedStopMutationCount) * 120_000
+  const controlRequestWaitMs = controlRequestCount * 30_000
+  const managedStopReadinessWaitMs = managedServiceStopReadinessWorstCaseMs()
+  const reloadWaitMs = reloadCount * 60_000
+  const longUiWaitMs =
+    (directTwentySecondWaitCount + openSecretsCount * 2 +
+      validationDialogCount) *
+      20_000 +
+    directThirtySecondWaitCount * 30_000
+  const progressTaskWaitMs = (lateCheckpointCount + 1) * 60_000
+  const enumeratedLateLifecycleWaitMs =
+    lifecycleMutationWaitMs +
+    controlRequestWaitMs +
+    managedStopReadinessWaitMs +
+    reloadWaitMs +
+    longUiWaitMs +
+    progressTaskWaitMs
+  assert.equal(enumeratedLateLifecycleWaitMs, 2_154_000)
+  assert.ok(enumeratedLateLifecycleWaitMs > cypressQualificationTimeoutMs)
+  // Default four-second UI commands and Cypress's implicit network retries are
+  // deliberately excluded, so this is not a whole-spec maximum either.
 })
 
 test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
@@ -428,6 +492,10 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
     'security_not_configured'
   )
   assert.equal(
+    providerReadinessErrorCode({ error: 'broker_unavailable' }),
+    'broker_unavailable'
+  )
+  assert.equal(
     providerReadinessErrorCode({ error: { code: 'private-path-or-ref' } }),
     'unknown'
   )
@@ -531,7 +599,33 @@ test('qualification progress is allowlisted, ordered, integral, and capped', () 
     ),
     null
   )
-  assert.equal(qualificationProgressPhases.length, 7)
+  assert.equal(
+    parseQualificationProgressDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.real-browser-progress.v1',
+        phase: 'inventory_recovered',
+        elapsedMs: 1,
+        raw: 'discard-me',
+      })
+    ),
+    null
+  )
+  assert.deepEqual(qualificationProgressPhases, [
+    'lifecycle_started',
+    'committed_rotation_complete',
+    'rollback_fixture_armed',
+    'rollback_rotation_complete',
+    'metadata_ready',
+    'rollback_rehydrated',
+    'provider_validation_complete',
+    'broker_restart_rehydrated',
+    'wrapper_locked',
+    'wrapper_recovery_complete',
+    'managed_service_stopped',
+    'stopped_management_unavailable',
+    'inventory_recovered',
+    'acceptance_complete',
+  ])
 
   const outOfOrder = createQualificationProgressRecorder({ enabled: true })
   outOfOrder.setSpecPath(
@@ -566,6 +660,44 @@ test('qualification progress emits nothing when disabled or outside the lifecycl
   assert.deepEqual(writes, [])
 })
 
+test('qualification progress call sites are exact, ordered, and bounded', async () => {
+  const lifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  let previousIndex = -1
+  for (const phase of qualificationProgressPhases) {
+    const call = `qualificationCheckpoint('${phase}')`
+    assert.equal(lifecycleSource.split(call).length - 1, 1)
+    const nextIndex = lifecycleSource.indexOf(call)
+    assert.ok(nextIndex > previousIndex)
+    previousIndex = nextIndex
+  }
+
+  const writes = []
+  let now = 10_000
+  const recorder = createQualificationProgressRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+    now: () => now,
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  for (const phase of qualificationProgressPhases) {
+    now += 1_000
+    assert.deepEqual(recorder.record(phase), {
+      phase,
+      elapsedMs: now - 10_000,
+    })
+  }
+  assert.equal(writes.length, qualificationProgressPhases.length)
+  assert.equal(recorder.record('acceptance_complete'), null)
+})
+
 test('qualification failures retain only bounded phase and transport metadata', () => {
   assert.equal(classifyQualificationFailure({ timedOut: true }), 'timeout')
   assert.equal(
@@ -582,7 +714,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'timeout',
       progressEvents: [
         { phase: 'lifecycle_started', elapsedMs: 20 },
-        { phase: 'rollback_rotation_complete', elapsedMs: 80_000 },
+        { phase: 'inventory_recovered', elapsedMs: 80_000 },
       ],
       providerUiDiagnostic: {
         checkpoint: 'post_rotation',
@@ -602,7 +734,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
     {
       schema: 'service-admin.real-browser-qualification-diagnostic.v1',
       failure: 'timeout',
-      lastPhase: 'rollback_rotation_complete',
+      lastPhase: 'inventory_recovered',
       elapsedMs: 80_000,
       transportPhases: [
         'upstream_started',
@@ -625,13 +757,16 @@ test('qualification failures retain only bounded phase and transport metadata', 
   assert.deepEqual(
     buildQualificationFailureDiagnostic({
       failure: 'nonzero_exit',
+      progressEvents: [
+        { phase: 'wrapper_recovery_complete', elapsedMs: 1_234 },
+      ],
       transportDiagnostic: { adminReachability: 'unreachable' },
     }),
     {
       schema: 'service-admin.real-browser-qualification-diagnostic.v1',
       failure: 'nonzero_exit',
-      lastPhase: 'not_started',
-      elapsedMs: 0,
+      lastPhase: 'wrapper_recovery_complete',
+      elapsedMs: 1_234,
       transportPhases: [],
       statuses: [],
       adminReachability: 'unreachable',
