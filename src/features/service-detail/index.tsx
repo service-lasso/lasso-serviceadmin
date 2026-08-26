@@ -4169,7 +4169,9 @@ function SecretsBrokerSecretsPanel({
                 }
                 onClick={() => void runRotationStage()}
               >
-                {rotationImpactPlan ? 'Rotate through Core' : 'Stage candidate'}
+                {rotationImpactPlan
+                  ? 'Rotate and converge consumers'
+                  : 'Stage candidate'}
               </Button>
             ) : null}
             {rotationReceipt?.operation === 'rotation_stage' ? (

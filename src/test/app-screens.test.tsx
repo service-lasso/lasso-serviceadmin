@@ -832,7 +832,9 @@ describe('app screens', () => {
       within(dialog).getByLabelText(/Confirm secret rotation transition/i)
     )
     await user.click(
-      within(dialog).getByRole('button', { name: /Rotate through Core/i })
+      within(dialog).getByRole('button', {
+        name: /Rotate and converge consumers/i,
+      })
     )
     expect(
       await within(dialog).findByText(/Core rotation committed/i)
