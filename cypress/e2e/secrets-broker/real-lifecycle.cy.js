@@ -3,6 +3,10 @@ import {
   brokerMetadataRetryDelayMs,
   brokerMetadataRequestOptions,
   linkedRotationResponseTimeoutMs,
+  managedServiceStopReadinessAttempts,
+  managedServiceStopMutationRequestOptions,
+  managedServiceStopRequestOptions,
+  managedServiceStopRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
@@ -176,6 +180,36 @@ function waitForManagedServiceReadiness(serviceId, remainingAttempts = 60) {
 
     cy.wait(1_000).then(() =>
       waitForManagedServiceReadiness(serviceId, remainingAttempts - 1)
+    )
+  })
+}
+
+function waitForManagedServiceStopped(
+  serviceId,
+  remainingAttempts = managedServiceStopReadinessAttempts
+) {
+  cy.request(
+    managedServiceStopRequestOptions(
+      `/api/services/${encodeURIComponent(serviceId)}`
+    )
+  ).then(({ status, body }) => {
+    const service = body?.service
+    if (
+      status === 200 &&
+      service?.status === 'stopped' &&
+      service?.lifecycle?.running === false
+    ) {
+      return
+    }
+
+    if (remainingAttempts <= 1) {
+      throw new Error(
+        `Managed service ${serviceId} did not reach the stopped lifecycle state.`
+      )
+    }
+
+    cy.wait(managedServiceStopRetryDelayMs, { log: false }).then(() =>
+      waitForManagedServiceStopped(serviceId, remainingAttempts - 1)
     )
   })
 }
@@ -1656,15 +1690,25 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       }
     )
 
-    cy.request({
-      method: 'POST',
-      url: '/api/services/%40secretsbroker/stop',
-      body: { confirm: true },
-      timeout: 120_000,
-    }).its('status').should('equal', 200)
+    cy.request(
+      managedServiceStopMutationRequestOptions(
+        '/api/services/%40secretsbroker/stop'
+      )
+    )
+      .its('status')
+      .should('equal', 200)
+    waitForManagedServiceStopped('@secretsbroker')
+    cy.intercept('GET', '**/secrets/management*').as(
+      'stoppedBrokerManagement'
+    )
     cy.reload()
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
+    cy.wait('@stoppedBrokerManagement', { timeout: 20_000 }).then(
+      ({ response }) => {
+        expect(response?.statusCode).to.be.within(400, 599)
+      }
+    )
     cy.contains('Secrets Broker management is unavailable.', {
       timeout: 30_000,
     }).should('be.visible')

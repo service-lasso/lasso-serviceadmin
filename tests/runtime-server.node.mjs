@@ -22,6 +22,10 @@ import {
   cypressQualificationTimeoutMs,
   linkedRotationExecuteCount,
   linkedRotationResponseTimeoutMs,
+  managedServiceStopReadinessAttempts,
+  managedServiceStopReadinessWorstCaseMs,
+  managedServiceStopMutationRequestOptions,
+  managedServiceStopRequestOptions,
   realBrowserQualificationWorstCaseMs,
 } from '../scripts/real-browser-qualification-budget.mjs'
 import {
@@ -39,6 +43,12 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
   assert.equal(brokerMetadataEndpointCount, 2)
   assert.equal(brokerMetadataReadinessAttempts, 5)
   assert.equal(brokerMetadataReservedLifecycleMs, 6 * 60_000)
+  assert.equal(managedServiceStopReadinessAttempts, 5)
+  assert.equal(managedServiceStopReadinessWorstCaseMs(), 54_000)
+  assert.equal(
+    brokerMetadataReservedLifecycleMs - managedServiceStopReadinessWorstCaseMs(),
+    306_000
+  )
   assert.equal(realBrowserQualificationWorstCaseMs(), 708_000)
   assert.ok(realBrowserQualificationWorstCaseMs() < cypressQualificationTimeoutMs)
   for (const endpoint of ['telemetry', 'events']) {
@@ -53,6 +63,25 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
       }
     )
   }
+  assert.deepEqual(managedServiceStopRequestOptions('/api/services/broker'), {
+    method: 'GET',
+    url: '/api/services/broker',
+    failOnStatusCode: false,
+    retryOnNetworkFailure: false,
+    timeout: 10_000,
+  })
+  assert.deepEqual(
+    managedServiceStopMutationRequestOptions('/api/services/broker/stop'),
+    {
+      method: 'POST',
+      url: '/api/services/broker/stop',
+      body: { confirm: true },
+      failOnStatusCode: true,
+      retryOnNetworkFailure: false,
+      retryOnStatusCodeFailure: false,
+      timeout: 120_000,
+    }
+  )
   const lifecycleSource = await readFile(
     new URL(
       '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
@@ -73,6 +102,31 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     [...lifecycleSource.matchAll(/responseTimeout: linkedRotationResponseTimeoutMs/g)]
       .length,
     2
+  )
+  assert.equal(
+    [...lifecycleSource.matchAll(/waitForManagedServiceStopped\('@secretsbroker'\)/g)]
+      .length,
+    1
+  )
+  assert.equal(
+    [
+      ...lifecycleSource.matchAll(
+        /managedServiceStopMutationRequestOptions\(\s*'\/api\/services\/%40secretsbroker\/stop'\s*\)/g
+      ),
+    ].length,
+    1
+  )
+  assert.equal(
+    [...lifecycleSource.matchAll(/cy\.wait\('@stoppedBrokerManagement'/g)].length,
+    1
+  )
+  assert.equal(
+    [
+      ...lifecycleSource.matchAll(
+        /expect\(response\?\.statusCode\)\.to\.be\.within\(400, 599\)/g
+      ),
+    ].length,
+    1
   )
 })
 
