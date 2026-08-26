@@ -201,7 +201,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.ok(restartHelperSource.length > 0)
   for (const uiRestartProof of [
     "cy.contains('[role=\"tab\"]', /^Overview\\b/).click()",
-    "cy.contains('[data-slot=\"card-title\"]', /^Actions$/)",
+    "cy.contains('[data-slot=\"card-title\"]', /^\\s*Actions\\s*$/)",
     ".closest('[data-slot=\"card\"]')",
     "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
     "cy.wait('@restartBrokerFromUi', { timeout: 120_000 })",

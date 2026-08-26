@@ -81,7 +81,7 @@ function managedSecretsInventory() {
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
   cy.contains('[role="tab"]', /^Overview\b/).click()
-  cy.contains('[data-slot="card-title"]', /^Actions$/)
+  cy.contains('[data-slot="card-title"]', /^\s*Actions\s*$/)
     .closest('[data-slot="card"]')
     .within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
