@@ -9,6 +9,18 @@ export const brokerMetadataReservedLifecycleMs = 6 * 60_000
 export const managedServiceStopReadinessAttempts = 5
 export const managedServiceStopRequestTimeoutMs = 10_000
 export const managedServiceStopRetryDelayMs = 1_000
+export const providerUiConvergenceAttempts = 3
+
+const providerUiConvergenceCheckpoints = new Set([
+  'single_migration',
+  'unavailable_migration',
+  'bulk_migration',
+  'post_rotation',
+])
+const providerUiConvergenceComponents = new Set([
+  'response_metadata',
+  'row_render',
+])
 
 export function brokerMetadataRequestOptions(url) {
   return {
@@ -32,6 +44,29 @@ export function managedServiceStopRequestOptions(url) {
 
 export function isManagedServiceStoppedResponse({ status, body }) {
   return status === 200 && body?.service?.lifecycle?.running === false
+}
+
+export function providerUiConvergenceDiagnostic({
+  checkpoint,
+  component,
+  attempt,
+  statusCode,
+}) {
+  const safeCheckpoint = providerUiConvergenceCheckpoints.has(checkpoint)
+    ? checkpoint
+    : 'unknown'
+  const safeComponent = providerUiConvergenceComponents.has(component)
+    ? component
+    : 'unknown'
+  const safeAttempt = Number.isInteger(attempt)
+    ? Math.min(providerUiConvergenceAttempts, Math.max(1, attempt))
+    : providerUiConvergenceAttempts
+  const safeStatusCode =
+    Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
+      ? statusCode
+      : 'unavailable'
+
+  return `checkpoint=${safeCheckpoint}, component=${safeComponent}, attempt=${safeAttempt}, status=${safeStatusCode}`
 }
 
 export function managedServiceStopMutationRequestOptions(url) {

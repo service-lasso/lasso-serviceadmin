@@ -27,6 +27,8 @@ import {
   managedServiceStopReadinessWorstCaseMs,
   managedServiceStopMutationRequestOptions,
   managedServiceStopRequestOptions,
+  providerUiConvergenceAttempts,
+  providerUiConvergenceDiagnostic,
   realBrowserQualificationWorstCaseMs,
 } from '../scripts/real-browser-qualification-budget.mjs'
 import {
@@ -147,6 +149,32 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     ].length,
     1
   )
+})
+
+test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
+  assert.equal(providerUiConvergenceAttempts, 3)
+  assert.equal(
+    providerUiConvergenceDiagnostic({
+      checkpoint: 'post_rotation',
+      component: 'row_render',
+      attempt: 2,
+      statusCode: 200,
+    }),
+    'checkpoint=post_rotation, component=row_render, attempt=2, status=200'
+  )
+
+  const sanitized = providerUiConvergenceDiagnostic({
+    checkpoint: 'private-provider-ref',
+    component: 'response-body-value',
+    attempt: 99,
+    statusCode: 700,
+  })
+  assert.equal(
+    sanitized,
+    'checkpoint=unknown, component=unknown, attempt=3, status=unavailable'
+  )
+  assert.equal(sanitized.includes('private-provider-ref'), false)
+  assert.equal(sanitized.includes('response-body-value'), false)
 })
 
 test('qualification progress is allowlisted, ordered, integral, and capped', () => {
