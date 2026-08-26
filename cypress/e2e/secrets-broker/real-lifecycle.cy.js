@@ -623,7 +623,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('sample-service').should('be.visible')
       cy.contains('Restart service').should('be.visible')
       cy.get('[aria-label="Confirm secret rotation transition"]').click()
-      cy.env('testControlUrl').then((controlUrl) => {
+      cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
         expect(controlUrl).to.match(
           /^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/
         )
