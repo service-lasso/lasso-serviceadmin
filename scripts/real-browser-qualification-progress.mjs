@@ -124,12 +124,22 @@ export function buildQualificationFailureDiagnostic({
     (providerUiDiagnostic.statusCode === 'unavailable' ||
       (Number.isInteger(providerUiDiagnostic.statusCode) &&
         providerUiDiagnostic.statusCode >= 100 &&
-        providerUiDiagnostic.statusCode <= 599))
+        providerUiDiagnostic.statusCode <= 599)) &&
+    ['secrets_broker_not_ready', 'security_not_configured', 'unknown'].includes(
+      providerUiDiagnostic.errorCode
+    ) &&
+    (providerUiDiagnostic.serviceRunning === 'unavailable' ||
+      typeof providerUiDiagnostic.serviceRunning === 'boolean') &&
+    (providerUiDiagnostic.serviceHealthy === 'unavailable' ||
+      typeof providerUiDiagnostic.serviceHealthy === 'boolean')
       ? {
           checkpoint: providerUiDiagnostic.checkpoint,
           component: providerUiDiagnostic.component,
           attempt: providerUiDiagnostic.attempt,
           statusCode: providerUiDiagnostic.statusCode,
+          errorCode: providerUiDiagnostic.errorCode,
+          serviceRunning: providerUiDiagnostic.serviceRunning,
+          serviceHealthy: providerUiDiagnostic.serviceHealthy,
         }
       : null
   return {

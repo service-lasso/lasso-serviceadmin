@@ -10,7 +10,10 @@ import {
   managedServiceStopRetryDelayMs,
   providerUiConvergenceAttempts,
   providerUiConvergenceDiagnostic,
+  providerFinalLifecycleDiagnosticRequestOptions,
+  providerLifecycleDiagnostic,
   providerReadinessAttempts,
+  providerReadinessErrorCode,
   providerReadinessRequestOptions,
   providerReadinessRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
@@ -226,12 +229,14 @@ function waitForBrokerProviderStatusReadiness(
       '/api/services/%40secretsbroker/providers/config/status'
     )
   ).then(({ status, body }) => {
+    const errorCode = providerReadinessErrorCode(body)
     const diagnosticRecord = diagnostic
       ? recordProviderUiConvergence({
           checkpoint: diagnostic.checkpoint,
           component: 'response_metadata',
           attempt,
           statusCode: status,
+          errorCode,
         })
       : cy.wrap(null, { log: false })
 
@@ -256,12 +261,42 @@ function waitForBrokerProviderStatusReadiness(
       }
 
       if (remainingAttempts <= 1) {
+        if (status === 503) {
+          return cy
+            .request(
+              providerFinalLifecycleDiagnosticRequestOptions(
+                '/api/services/%40secretsbroker'
+              )
+            )
+            .then(({ body: serviceBody }) => {
+              const lifecycle = providerLifecycleDiagnostic(serviceBody)
+              const finalDiagnostic = {
+                checkpoint: diagnostic?.checkpoint,
+                component: 'response_metadata',
+                attempt,
+                statusCode: status,
+                errorCode,
+                ...lifecycle,
+              }
+              const recorded = diagnostic
+                ? recordProviderUiConvergence(finalDiagnostic)
+                : cy.wrap(null, { log: false })
+              return recorded.then(() => {
+                throw new Error(
+                  `Broker provider status did not become ready (${providerUiConvergenceDiagnostic(
+                    finalDiagnostic
+                  )}).`
+                )
+              })
+            })
+        }
         throw new Error(
           `Broker provider status did not become ready (${providerUiConvergenceDiagnostic({
             checkpoint: diagnostic?.checkpoint,
             component: 'response_metadata',
             attempt,
             statusCode: status,
+            errorCode,
           })}).`
         )
       }

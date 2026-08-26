@@ -31,9 +31,14 @@ import {
   managedServiceStopRequestOptions,
   createProviderUiConvergenceRecorder,
   parseProviderUiConvergenceEvidence,
+  providerFinalLifecycleDiagnosticCount,
+  providerFinalLifecycleDiagnosticRequestOptions,
+  providerFinalLifecycleDiagnosticTimeoutMs,
+  providerLifecycleDiagnostic,
   providerReadinessAttempts,
   providerReadinessCallCount,
   providerReadinessCheckpointCount,
+  providerReadinessErrorCode,
   providerReadinessOtherLifecycleReserveMs,
   providerReadinessRequestOptions,
   providerReadinessReservedLifecycleMs,
@@ -64,6 +69,8 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
   assert.equal(providerReadinessCallCount, 8)
   assert.equal(providerReadinessWorstCaseMs(), 26_000)
   assert.equal(providerReadinessReservedLifecycleMs(), 208_000)
+  assert.equal(providerFinalLifecycleDiagnosticCount, 1)
+  assert.equal(providerFinalLifecycleDiagnosticTimeoutMs, 5_000)
   assert.equal(providerReadinessOtherLifecycleReserveMs, 144_000)
   assert.equal(
     providerReadinessReservedLifecycleMs() +
@@ -88,10 +95,10 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
     brokerMetadataReservedLifecycleMs - managedServiceStopReadinessWorstCaseMs(),
     306_000
   )
-  assert.equal(realBrowserQualificationWorstCaseMs(), 700_000)
+  assert.equal(realBrowserQualificationWorstCaseMs(), 705_000)
   assert.equal(
     cypressQualificationTimeoutMs - realBrowserQualificationWorstCaseMs(),
-    20_000
+    15_000
   )
   assert.ok(realBrowserQualificationWorstCaseMs() < cypressQualificationTimeoutMs)
   for (const endpoint of ['telemetry', 'events']) {
@@ -122,6 +129,17 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
       retryOnNetworkFailure: false,
       retryOnStatusCodeFailure: false,
       timeout: 8_000,
+    }
+  )
+  assert.deepEqual(
+    providerFinalLifecycleDiagnosticRequestOptions('/api/services/broker'),
+    {
+      method: 'GET',
+      url: '/api/services/broker',
+      failOnStatusCode: false,
+      retryOnNetworkFailure: false,
+      retryOnStatusCodeFailure: false,
+      timeout: 5_000,
     }
   )
   assert.equal(
@@ -232,6 +250,14 @@ test('real-browser waits stay inside the unchanged qualification budget', async 
       checkpointInventoryReadinessCalls,
     providerReadinessCallCount
   )
+  assert.equal(
+    [
+      ...lifecycleSource.matchAll(
+        /providerFinalLifecycleDiagnosticRequestOptions\(\s*'\/api\/services\/%40secretsbroker'\s*\)/g
+      ),
+    ].length,
+    providerFinalLifecycleDiagnosticCount
+  )
 })
 
 test('provider UI convergence diagnostics expose only bounded allowlisted metadata', () => {
@@ -242,8 +268,11 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
       component: 'row_render',
       attempt: 2,
       statusCode: 200,
+      errorCode: 'unknown',
+      serviceRunning: true,
+      serviceHealthy: true,
     }),
-    'checkpoint=post_rotation, component=row_render, attempt=2, status=200'
+    'checkpoint=post_rotation, component=row_render, attempt=2, status=200, errorCode=unknown, serviceRunning=true, serviceHealthy=true'
   )
 
   const sanitized = providerUiConvergenceDiagnostic({
@@ -254,7 +283,7 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
   })
   assert.equal(
     sanitized,
-    'checkpoint=unknown, component=unknown, attempt=3, status=unavailable'
+    'checkpoint=unknown, component=unknown, attempt=3, status=unavailable, errorCode=unknown, serviceRunning=unavailable, serviceHealthy=unavailable'
   )
   assert.equal(sanitized.includes('private-provider-ref'), false)
   assert.equal(sanitized.includes('response-body-value'), false)
@@ -274,12 +303,18 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
       component: 'response_metadata',
       attempt: 1,
       statusCode: 503,
+      errorCode: 'secrets_broker_not_ready',
+      serviceRunning: true,
+      serviceHealthy: false,
     }),
     {
       checkpoint: 'single_migration',
       component: 'response_metadata',
       attempt: 1,
       statusCode: 503,
+      errorCode: 'secrets_broker_not_ready',
+      serviceRunning: true,
+      serviceHealthy: false,
     }
   )
   recorder.record({
@@ -287,6 +322,9 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
     component: 'row_render',
     attempt: 2,
     statusCode: 200,
+    errorCode: 'unknown',
+    serviceRunning: true,
+    serviceHealthy: true,
   })
   assert.equal(
     recorder.record({
@@ -303,6 +341,9 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
     component: 'row_render',
     attempt: 2,
     statusCode: 200,
+    errorCode: 'unknown',
+    serviceRunning: true,
+    serviceHealthy: true,
   })
   assert.equal(
     parseProviderUiConvergenceEvidence(
@@ -312,6 +353,9 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
         component: 'response_metadata',
         attempt: 1,
         statusCode: 200,
+        errorCode: 'unknown',
+        serviceRunning: 'unavailable',
+        serviceHealthy: 'unavailable',
       })
     ),
     null
@@ -349,6 +393,33 @@ test('provider UI convergence diagnostics expose only bounded allowlisted metada
     null
   )
   assert.deepEqual(disabledWrites, [])
+  assert.equal(
+    providerReadinessErrorCode({
+      error: { code: 'secrets_broker_not_ready', message: 'private' },
+    }),
+    'secrets_broker_not_ready'
+  )
+  assert.equal(
+    providerReadinessErrorCode({ code: 'security_not_configured' }),
+    'security_not_configured'
+  )
+  assert.equal(
+    providerReadinessErrorCode({ error: { code: 'private-path-or-ref' } }),
+    'unknown'
+  )
+  assert.deepEqual(
+    providerLifecycleDiagnostic({
+      service: {
+        lifecycle: { running: true },
+        health: { healthy: false, message: 'private' },
+      },
+    }),
+    { serviceRunning: true, serviceHealthy: false }
+  )
+  assert.deepEqual(providerLifecycleDiagnostic({ private: 'value' }), {
+    serviceRunning: 'unavailable',
+    serviceHealthy: 'unavailable',
+  })
 })
 
 test('qualification progress is allowlisted, ordered, integral, and capped', () => {
@@ -447,6 +518,9 @@ test('qualification failures retain only bounded phase and transport metadata', 
         component: 'response_metadata',
         attempt: 3,
         statusCode: 503,
+        errorCode: 'secrets_broker_not_ready',
+        serviceRunning: true,
+        serviceHealthy: false,
       },
       transportDiagnostic: {
         phases: ['upstream_started', 'headers_received', 'body_received'],
@@ -471,6 +545,9 @@ test('qualification failures retain only bounded phase and transport metadata', 
         component: 'response_metadata',
         attempt: 3,
         statusCode: 503,
+        errorCode: 'secrets_broker_not_ready',
+        serviceRunning: true,
+        serviceHealthy: false,
       },
     }
   )

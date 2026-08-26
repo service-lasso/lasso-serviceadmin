@@ -15,6 +15,8 @@ export const providerReadinessRequestTimeoutMs = 8_000
 export const providerReadinessRetryDelayMs = 1_000
 export const providerReadinessCheckpointCount = 4
 export const providerReadinessCallCount = 8
+export const providerFinalLifecycleDiagnosticCount = 1
+export const providerFinalLifecycleDiagnosticTimeoutMs = 5_000
 export const providerReadinessDiagnosticEventCap = 64
 export const providerReadinessOtherLifecycleReserveMs = 144_000
 
@@ -29,6 +31,11 @@ const providerUiConvergenceCheckpoints = new Set([
 const providerUiConvergenceComponents = new Set([
   'response_metadata',
   'row_render',
+])
+const providerUiConvergenceErrorCodes = new Set([
+  'secrets_broker_not_ready',
+  'security_not_configured',
+  'unknown',
 ])
 
 export function brokerMetadataRequestOptions(url) {
@@ -60,14 +67,20 @@ export function providerUiConvergenceDiagnostic({
   component,
   attempt,
   statusCode,
+  errorCode,
+  serviceRunning,
+  serviceHealthy,
 }) {
   const safe = normalizeProviderUiConvergenceEvidence({
     checkpoint,
     component,
     attempt,
     statusCode,
+    errorCode,
+    serviceRunning,
+    serviceHealthy,
   })
-  return `checkpoint=${safe.checkpoint}, component=${safe.component}, attempt=${safe.attempt}, status=${safe.statusCode}`
+  return `checkpoint=${safe.checkpoint}, component=${safe.component}, attempt=${safe.attempt}, status=${safe.statusCode}, errorCode=${safe.errorCode}, serviceRunning=${safe.serviceRunning}, serviceHealthy=${safe.serviceHealthy}`
 }
 
 function normalizeProviderUiConvergenceEvidence({
@@ -75,6 +88,9 @@ function normalizeProviderUiConvergenceEvidence({
   component,
   attempt,
   statusCode,
+  errorCode,
+  serviceRunning,
+  serviceHealthy,
 } = {}) {
   const safeCheckpoint = providerUiConvergenceCheckpoints.has(checkpoint)
     ? checkpoint
@@ -89,11 +105,21 @@ function normalizeProviderUiConvergenceEvidence({
     Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
       ? statusCode
       : 'unavailable'
+  const safeErrorCode = providerUiConvergenceErrorCodes.has(errorCode)
+    ? errorCode
+    : 'unknown'
+  const safeServiceRunning =
+    typeof serviceRunning === 'boolean' ? serviceRunning : 'unavailable'
+  const safeServiceHealthy =
+    typeof serviceHealthy === 'boolean' ? serviceHealthy : 'unavailable'
   return {
     checkpoint: safeCheckpoint,
     component: safeComponent,
     attempt: safeAttempt,
     statusCode: safeStatusCode,
+    errorCode: safeErrorCode,
+    serviceRunning: safeServiceRunning,
+    serviceHealthy: safeServiceHealthy,
   }
 }
 
@@ -126,10 +152,26 @@ export function parseProviderUiConvergenceEvidence(line) {
         value.statusCode >= 100 &&
         value.statusCode <= 599)
     ) ||
+    !providerUiConvergenceErrorCodes.has(value.errorCode) ||
+    !(
+      value.serviceRunning === 'unavailable' ||
+      typeof value.serviceRunning === 'boolean'
+    ) ||
+    !(
+      value.serviceHealthy === 'unavailable' ||
+      typeof value.serviceHealthy === 'boolean'
+    ) ||
     !Object.keys(value).every((key) =>
-      ['schema', 'checkpoint', 'component', 'attempt', 'statusCode'].includes(
-        key
-      )
+      [
+        'schema',
+        'checkpoint',
+        'component',
+        'attempt',
+        'statusCode',
+        'errorCode',
+        'serviceRunning',
+        'serviceHealthy',
+      ].includes(key)
     )
   ) {
     return null
@@ -139,6 +181,9 @@ export function parseProviderUiConvergenceEvidence(line) {
     component: value.component,
     attempt: value.attempt,
     statusCode: value.statusCode,
+    errorCode: value.errorCode,
+    serviceRunning: value.serviceRunning,
+    serviceHealthy: value.serviceHealthy,
   }
 }
 
@@ -176,6 +221,9 @@ export function createProviderUiConvergenceRecorder({
         component: evidence.component,
         attempt: evidence.attempt,
         statusCode: evidence.statusCode,
+        errorCode: evidence.errorCode,
+        serviceRunning: evidence.serviceRunning,
+        serviceHealthy: evidence.serviceHealthy,
       }
     },
   }
@@ -189,6 +237,40 @@ export function providerReadinessRequestOptions(url) {
     retryOnNetworkFailure: false,
     retryOnStatusCodeFailure: false,
     timeout: providerReadinessRequestTimeoutMs,
+  }
+}
+
+export function providerFinalLifecycleDiagnosticRequestOptions(url) {
+  return {
+    method: 'GET',
+    url,
+    failOnStatusCode: false,
+    retryOnNetworkFailure: false,
+    retryOnStatusCodeFailure: false,
+    timeout: providerFinalLifecycleDiagnosticTimeoutMs,
+  }
+}
+
+export function providerReadinessErrorCode(body) {
+  const candidate =
+    typeof body?.error?.code === 'string'
+      ? body.error.code
+      : typeof body?.code === 'string'
+        ? body.code
+        : 'unknown'
+  return providerUiConvergenceErrorCodes.has(candidate) ? candidate : 'unknown'
+}
+
+export function providerLifecycleDiagnostic(body) {
+  return {
+    serviceRunning:
+      typeof body?.service?.lifecycle?.running === 'boolean'
+        ? body.service.lifecycle.running
+        : 'unavailable',
+    serviceHealthy:
+      typeof body?.service?.health?.healthy === 'boolean'
+        ? body.service.health.healthy
+        : 'unavailable',
   }
 }
 
@@ -228,6 +310,8 @@ export function realBrowserQualificationWorstCaseMs() {
     (brokerMetadataReadinessAttempts - 1) * brokerMetadataRetryDelayMs
   return (
     providerReadinessReservedLifecycleMs() +
+    providerFinalLifecycleDiagnosticCount *
+      providerFinalLifecycleDiagnosticTimeoutMs +
     providerReadinessOtherLifecycleReserveMs +
     linkedRotationExecuteCount * linkedRotationResponseTimeoutMs +
     brokerMetadataEndpointCount * perEndpointMs
