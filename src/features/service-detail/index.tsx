@@ -4461,7 +4461,7 @@ function ServiceSetupPanel({
   )
 }
 
-function ServiceActionButton({
+export function ServiceActionButton({
   action,
   service,
 }: {
@@ -4478,16 +4478,18 @@ function ServiceActionButton({
 
   const lifecycleKinds: ServiceLifecycleActionKind[] = [
     'install',
+    'config',
     'start',
     'stop',
     'restart',
+    'reload',
   ]
   const isLifecycleAction = lifecycleKinds.includes(
     action.kind as ServiceLifecycleActionKind
   )
 
   const runLifecycleAction = (confirm: boolean) => {
-    if (!isLifecycleAction) return
+    if (!isLifecycleAction || lifecycleAction.isPending) return
     lifecycleAction.mutate(
       {
         serviceId: service.id,
@@ -4600,6 +4602,7 @@ function ServiceActionButton({
             </div>
           }
           confirmText={permission.confirmationLabel ?? action.label}
+          isLoading={lifecycleAction.isPending}
           destructive={
             action.kind === 'stop' ||
             action.kind === 'restart' ||

@@ -9,6 +9,7 @@ import {
   providerLifecycleDiagnostic,
   providerMigrationApplyDiagnostic,
   providerMigrationReadinessAttempts,
+  providerPointInTimeApplyReadinessAttempts,
   providerReadinessAttempts,
   providerReadinessErrorCode,
   providerReadinessRequestOptions,
@@ -79,13 +80,30 @@ function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
 }
 
-function restartBrokerAndOpenSecrets() {
-  cy.request({
-    method: 'POST',
-    url: '/api/services/%40secretsbroker/restart',
-    body: { confirm: true },
-    timeout: 120_000,
-  }).its('status').should('equal', 200)
+function restartBrokerFromUi(expectedRequestCount, requestCount) {
+  cy.contains('[role="tab"]', /^Overview\b/).click()
+  cy.contains('[data-slot="card-title"]', /^\s*Actions\s*$/)
+    .closest('[data-slot="card"]')
+    .within(() => {
+    cy.contains('button', /^Restart service$/, { timeout: 20_000 })
+      .should('be.visible')
+      .and('be.enabled')
+      .click()
+    })
+  cy.contains('[role="alertdialog"]', 'Confirm elevated action').within(() => {
+    cy.contains('button', /^Restart service$/).click()
+  })
+  cy.wait('@restartBrokerFromUi', { timeout: 120_000 }).then(
+    ({ request, response }) => {
+      expect(request.body).to.deep.equal({ confirm: true })
+      expect(response?.statusCode).to.equal(200)
+      expect(requestCount()).to.equal(expectedRequestCount)
+    }
+  )
+}
+
+function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount) {
+  restartBrokerFromUi(expectedRequestCount, requestCount)
   waitForManagedServiceReadiness('@secretsbroker')
   cy.reload()
   cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
@@ -705,6 +723,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
   it('completes linked rotation, create, reveal, tombstone recovery, backup, key rotation, and provider validation', () => {
     let committedRotationVersionId
     let rollbackOperationId
+    let brokerRestartUiRequests = 0
     let rollbackExecuteRequests = 0
     let rollbackConsoleLeakDetected = false
     let rollbackOutboundLeakDetected = false
@@ -747,6 +766,13 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         rollbackOutboundLeakDetected = true
       }
     })
+    cy.intercept(
+      'POST',
+      '**/api/services/%40secretsbroker/restart',
+      () => {
+        brokerRestartUiRequests += 1
+      }
+    ).as('restartBrokerFromUi')
 
     expect(expectedRef).to.be.a('string').and.not.be.empty
     cy.visit('/services/%40secretsbroker')
@@ -1171,7 +1197,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    restartBrokerAndOpenSecrets()
+    restartBrokerAndOpenSecrets(1, () => brokerRestartUiRequests)
     cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
       cy.contains('button', /^Reveal\b/).click()
     })
@@ -1231,7 +1257,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
 
-    restartBrokerAndOpenSecrets()
+    restartBrokerAndOpenSecrets(2, () => brokerRestartUiRequests)
     cy.contains('tr', createdRef, { timeout: 20_000 }).within(() => {
       cy.contains('button', /^Reveal\b/).click()
     })
@@ -1389,6 +1415,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Migration dry run ready', { timeout: 20_000 }).should(
         'be.visible'
       )
+      waitForBrokerProviderStatusReadiness(
+        'vault-policy-denied',
+        providerMigrationReadinessAttempts,
+        { checkpoint: 'policy_denied_migration_apply' }
+      )
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'policyDeniedMigration'
@@ -1396,7 +1427,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Apply migration').click()
       cy.wait('@policyDeniedMigration', { timeout: 60_000 }).then(
         ({ response }) => {
-          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.statusCode,
+            providerMigrationApplyDiagnostic(response)
+          ).to.equal(200)
           expect(response?.body).to.include({
             outcome: 'partial_failure',
             applied: false,
@@ -1442,6 +1476,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('Migration dry run ready', { timeout: 20_000 }).should(
         'be.visible'
       )
+      waitForBrokerProviderStatusReadiness(
+        'vault-unavailable',
+        providerPointInTimeApplyReadinessAttempts,
+        { checkpoint: 'unavailable_migration_apply' }
+      )
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'unavailableMigration'
@@ -1449,7 +1488,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Apply migration').click()
       cy.wait('@unavailableMigration', { timeout: 60_000 }).then(
         ({ response }) => {
-          expect(response?.statusCode).to.equal(200)
+          expect(
+            response?.statusCode,
+            providerMigrationApplyDiagnostic(response)
+          ).to.equal(200)
           expect(response?.body).to.include({
             outcome: 'partial_failure',
             applied: false,
@@ -1735,12 +1777,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     })
     qualificationCheckpoint('provider_validation_complete')
 
-    cy.request({
-      method: 'POST',
-      url: '/api/services/%40secretsbroker/restart',
-      body: { confirm: true },
-      timeout: 120_000,
-    }).its('status').should('equal', 200)
+    restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()
     cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
     openSecrets()

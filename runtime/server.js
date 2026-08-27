@@ -129,7 +129,7 @@ export function runtimeApiTimeoutMs(method, pathname) {
   }
   if (
     method === 'POST' &&
-    /^\/api\/services\/[^/]+\/(?:install|config|start|stop|restart)$/.test(pathname)
+    /^\/api\/services\/[^/]+\/(?:install|config|start|stop|restart|reload)$/.test(pathname)
   ) {
     return 120_000
   }

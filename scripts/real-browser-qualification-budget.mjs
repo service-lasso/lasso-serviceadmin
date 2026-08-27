@@ -11,6 +11,7 @@ export const managedServiceStopRetryDelayMs = 1_000
 export const providerUiConvergenceAttempts = 3
 export const providerReadinessAttempts = 3
 export const providerMigrationReadinessAttempts = 6
+export const providerPointInTimeApplyReadinessAttempts = 1
 export const providerReadinessDiagnosticMaxAttempts =
   providerMigrationReadinessAttempts
 // Keep each qualification sample inside the existing eight-second browser cap.
@@ -19,8 +20,9 @@ export const providerReadinessDiagnosticMaxAttempts =
 export const providerReadinessRequestTimeoutMs = 8_000
 export const providerReadinessRetryDelayMs = 1_000
 export const providerReadinessCheckpointCount = 4
-export const providerReadinessCallCount = 9
-export const providerMigrationReadinessCallCount = 2
+export const providerReadinessCallCount = 11
+export const providerMigrationReadinessCallCount = 3
+export const providerPointInTimeApplyReadinessCallCount = 1
 export const providerFinalLifecycleDiagnosticCount = 1
 export const providerFinalLifecycleDiagnosticTimeoutMs = 5_000
 export const providerReadinessDiagnosticEventCap = 64
@@ -30,7 +32,9 @@ const providerUiConvergenceSchema = 'service-admin.provider-ui-convergence.v1'
 const providerUiConvergenceCheckpoints = new Set([
   'single_migration',
   'single_migration_apply',
+  'policy_denied_migration_apply',
   'unavailable_migration',
+  'unavailable_migration_apply',
   'bulk_migration',
   'post_rotation',
 ])
@@ -380,12 +384,23 @@ export function providerMigrationReadinessWorstCaseMs() {
   )
 }
 
+export function providerPointInTimeApplyReadinessWorstCaseMs() {
+  return (
+    providerPointInTimeApplyReadinessAttempts *
+    providerReadinessRequestTimeoutMs
+  )
+}
+
 export function providerReadinessReservedLifecycleMs() {
   return (
-    (providerReadinessCallCount - providerMigrationReadinessCallCount) *
+    (providerReadinessCallCount -
+      providerMigrationReadinessCallCount -
+      providerPointInTimeApplyReadinessCallCount) *
       providerReadinessWorstCaseMs() +
     providerMigrationReadinessCallCount *
-      providerMigrationReadinessWorstCaseMs()
+      providerMigrationReadinessWorstCaseMs() +
+    providerPointInTimeApplyReadinessCallCount *
+      providerPointInTimeApplyReadinessWorstCaseMs()
   )
 }
 
