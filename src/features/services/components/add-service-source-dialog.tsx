@@ -25,6 +25,15 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AddServiceProgressList } from './add-service-progress'
+import {
+  archiveProgressItem,
+  catalogItemsFromInstallPayload,
+  createPendingCatalogItems,
+  markCatalogItemsDownloading,
+  markCatalogItemsRequestFailed,
+  type AddServiceProgressItem,
+} from './add-service-progress-model'
 
 type AddServiceSource = 'catalog' | 'archive'
 type ArchiveUploadState = 'idle' | 'uploading' | 'uploaded' | 'error'
@@ -76,12 +85,6 @@ type CatalogPackage = {
   tags: string[]
   versions: CatalogVersion[]
   defaultVersion: string
-}
-
-type InstallOutcome = {
-  id: string
-  status: 'registered' | 'conflict' | 'failed' | 'pending' | 'skipped'
-  message: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -197,45 +200,6 @@ function normalizePackagesPayload(payload: unknown) {
     .filter((item): item is CatalogPackage => item !== null)
 }
 
-function normalizeInstallOutcomes(payload: unknown): InstallOutcome[] {
-  const items =
-    isRecord(payload) && Array.isArray(payload.results)
-      ? payload.results
-      : isRecord(payload) && Array.isArray(payload.outcomes)
-        ? payload.outcomes
-        : []
-
-  return items.filter(isRecord).map((item) => {
-    const id =
-      typeof item.id === 'string'
-        ? item.id
-        : typeof item.packageId === 'string'
-          ? item.packageId
-          : 'unknown'
-    const status =
-      item.status === 'registered' ||
-      item.status === 'conflict' ||
-      item.status === 'failed' ||
-      item.status === 'pending' ||
-      item.status === 'skipped'
-        ? item.status
-        : item.ok === true
-          ? 'registered'
-          : 'failed'
-
-    return {
-      id,
-      status,
-      message:
-        typeof item.message === 'string'
-          ? item.message
-          : status === 'registered'
-            ? 'Registered successfully.'
-            : 'Install did not complete.',
-    }
-  })
-}
-
 async function fetchCatalogPackages() {
   const response = await fetch('/api/catalog/packages')
 
@@ -247,19 +211,28 @@ async function fetchCatalogPackages() {
 }
 
 async function installCatalogPackages(
-  packages: Array<{ id: string; version: string }>
+  packages: Array<{ id: string; name: string; version: string }>
 ) {
   const response = await fetch('/api/catalog/install', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ packages }),
+    body: JSON.stringify({
+      packages: packages.map((item) => ({
+        id: item.id,
+        version: item.version,
+      })),
+      selections: packages.map((item) => ({
+        packageId: item.id,
+        version: item.version,
+      })),
+    }),
   })
 
   if (!response.ok) {
     throw new Error('Service Catalog install request failed.')
   }
 
-  return normalizeInstallOutcomes(await response.json())
+  return catalogItemsFromInstallPayload(await response.json(), packages)
 }
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -320,7 +293,9 @@ function CatalogInstallPanel({ onBack }: { onBack: () => void }) {
   const [packages, setPackages] = useState<CatalogPackage[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [versions, setVersions] = useState<Record<string, string>>({})
-  const [outcomes, setOutcomes] = useState<InstallOutcome[]>([])
+  const [progressItems, setProgressItems] = useState<AddServiceProgressItem[]>(
+    []
+  )
   const [searchValue, setSearchValue] = useState('')
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState(false)
@@ -369,20 +344,36 @@ function CatalogInstallPanel({ onBack }: { onBack: () => void }) {
   }, [packages, searchValue])
 
   async function onInstallSelected() {
-    const installSelection = selectedIds.map((id) => ({
-      id,
-      version: versions[id] ?? 'latest',
-    }))
+    const installSelection = selectedIds.map((id) => {
+      const selectedPackage = packages.find((item) => item.id === id)
+
+      return {
+        id,
+        name: selectedPackage?.name ?? id,
+        version: versions[id] ?? selectedPackage?.defaultVersion ?? 'latest',
+      }
+    })
+    const pendingItems = createPendingCatalogItems(installSelection)
 
     setInstalling(true)
-    setError(null)
-    setOutcomes([])
+    setProgressItems(markCatalogItemsDownloading(pendingItems))
 
     try {
-      setOutcomes(await installCatalogPackages(installSelection))
+      const results = await installCatalogPackages(installSelection)
+      setProgressItems(
+        results.length > 0
+          ? results
+          : markCatalogItemsRequestFailed(
+              pendingItems,
+              'Catalog install returned no per-service results.'
+            )
+      )
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Catalog install request failed.'
+      setProgressItems(
+        markCatalogItemsRequestFailed(
+          pendingItems,
+          err instanceof Error ? err.message : 'Catalog install request failed.'
+        )
       )
     } finally {
       setInstalling(false)
@@ -517,32 +508,7 @@ function CatalogInstallPanel({ onBack }: { onBack: () => void }) {
             </Button>
           </div>
 
-          {outcomes.length ? (
-            <div className='space-y-2' aria-label='Install outcomes'>
-              {outcomes.map((outcome) => (
-                <div
-                  key={outcome.id}
-                  className='flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm'
-                >
-                  <span className='font-medium'>{outcome.id}</span>
-                  <Badge
-                    variant={
-                      outcome.status === 'registered'
-                        ? 'default'
-                        : outcome.status === 'conflict'
-                          ? 'secondary'
-                          : 'destructive'
-                    }
-                  >
-                    {outcome.status}
-                  </Badge>
-                  <span className='basis-full text-muted-foreground'>
-                    {outcome.message}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <AddServiceProgressList items={progressItems} />
         </>
       )}
     </div>
@@ -639,6 +605,22 @@ function ArchiveUploadPanel({ onBack }: { onBack: () => void }) {
     }
   }
 
+  const progressItem = archiveProgressItem({
+    fileName: archiveFile?.name,
+    uploadState,
+    importState,
+    serviceId: uploadResult?.service.id ?? importResult?.serviceId,
+    displayName: uploadResult?.service.displayName,
+    validationStatus: uploadResult?.validation.status,
+    validationMessages: uploadResult?.validation.messages,
+    conflictExists: uploadResult?.conflict?.exists,
+    conflictMessage: uploadResult?.conflict?.message,
+    importStatus: importResult?.status,
+    importMessage: importResult?.message,
+    importServiceUrl: importResult?.serviceUrl,
+    errorMessage,
+  })
+
   return (
     <div className='space-y-4'>
       <Button type='button' variant='ghost' size='sm' onClick={onBack}>
@@ -734,7 +716,7 @@ function ArchiveUploadPanel({ onBack }: { onBack: () => void }) {
         </div>
       ) : null}
 
-      {errorMessage ? (
+      {errorMessage && uploadState === 'idle' && importState === 'idle' ? (
         <Alert variant='destructive'>
           <TriangleAlert />
           <AlertTitle>Archive action failed</AlertTitle>
@@ -742,23 +724,7 @@ function ArchiveUploadPanel({ onBack }: { onBack: () => void }) {
         </Alert>
       ) : null}
 
-      {importResult?.status === 'imported' ? (
-        <Alert>
-          <CheckCircle2 />
-          <AlertTitle>Service imported</AlertTitle>
-          <AlertDescription>
-            {importResult.message}{' '}
-            {importResult.serviceUrl ? (
-              <a
-                className='font-medium underline'
-                href={importResult.serviceUrl}
-              >
-                Open service
-              </a>
-            ) : null}
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      <AddServiceProgressList items={progressItem ? [progressItem] : []} />
 
       <div className='flex flex-wrap gap-2'>
         <Button
