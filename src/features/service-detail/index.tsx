@@ -74,6 +74,11 @@ import {
   providerSupportsMigrationApply,
   serviceLassoApiBaseUrl,
 } from '@/lib/service-lasso-dashboard/stub'
+import {
+  classifyMigrationRefOutcome,
+  migrationApplyBlocked,
+  migrationPlansMatch,
+} from '@/lib/service-lasso-dashboard/broker-migration'
 import type {
   BrokerBulkCampaignResult,
   BrokerMigrationResult,
@@ -1164,6 +1169,7 @@ function SecretsBrokerSecretsPanel({
   const [migrationOperationId, setMigrationOperationId] = useState('')
   const [migrationReason, setMigrationReason] = useState('')
   const [migrationConfirmed, setMigrationConfirmed] = useState(false)
+  const [migrationRevalidated, setMigrationRevalidated] = useState(false)
   const [migrationPreview, setMigrationPreview] =
     useState<BrokerMigrationResult | null>(null)
   const [migrationReceipt, setMigrationReceipt] =
@@ -1487,6 +1493,7 @@ function SecretsBrokerSecretsPanel({
     setMigrationOperationId('')
     setMigrationReason('')
     setMigrationConfirmed(false)
+    setMigrationRevalidated(false)
     setMigrationPreview(null)
     setMigrationReceipt(null)
     setMigrationError(null)
@@ -1513,6 +1520,11 @@ function SecretsBrokerSecretsPanel({
     selectedMigrationProvider &&
     providerSupportsMigrationApply(selectedMigrationProvider)
   )
+  const migrationApplyGate = migrationApplyBlocked({
+    target: selectedMigrationProvider,
+    revalidated: migrationRevalidated,
+    confirmed: migrationConfirmed,
+  })
 
   const clearBulkCampaign = () => {
     setBulkCampaignOpen(false)
@@ -1677,6 +1689,7 @@ function SecretsBrokerSecretsPanel({
     setMigrationError(null)
     setMigrationReceipt(null)
     setMigrationConfirmed(false)
+    setMigrationRevalidated(false)
     try {
       const result = await previewMigration.mutateAsync({
         operationId: migrationOperationId,
@@ -1690,16 +1703,45 @@ function SecretsBrokerSecretsPanel({
         result.applied ||
         !result.requiresConfirmation ||
         result.auditStatus !== 'audit_recorded' ||
-        result.results.length !== 1 ||
-        result.results[0]?.outcome !== 'dry_run_ready'
+        result.results.length < 1
       ) {
         throw new Error('Migration preview was not safely executable.')
       }
       setMigrationPreview(result)
     } catch {
       setMigrationPreview(null)
+      setMigrationRevalidated(false)
       setMigrationError(
         'The broker did not return a safe migration plan. Revalidate provider readiness and audit state.'
+      )
+    }
+  }
+
+  const runMigrationRevalidate = async () => {
+    if (!migrationTarget || !migrationPreview) return
+    setMigrationError(null)
+    setMigrationConfirmed(false)
+    try {
+      const result = await previewMigration.mutateAsync({
+        operationId: migrationOperationId,
+        sourceProviderId: migrationSourceProviderId(migrationTarget),
+        targetProviderId: migrationTargetProviderId,
+        refs: [migrationTarget.ref],
+        reason: migrationReason,
+      })
+      if (
+        result.applied ||
+        result.auditStatus !== 'audit_recorded' ||
+        !migrationPlansMatch(migrationPreview.results, result.results)
+      ) {
+        throw new Error('Migration revalidation did not match the dry-run.')
+      }
+      setMigrationPreview(result)
+      setMigrationRevalidated(true)
+    } catch {
+      setMigrationRevalidated(false)
+      setMigrationError(
+        'Fresh revalidation failed closed. Source data remains authoritative; preview again after provider readiness is stable.'
       )
     }
   }
@@ -1709,6 +1751,7 @@ function SecretsBrokerSecretsPanel({
       !migrationTarget ||
       !migrationPreview ||
       !migrationApplyExecutable ||
+      !migrationRevalidated ||
       !migrationConfirmed
     )
       return
@@ -1720,7 +1763,19 @@ function SecretsBrokerSecretsPanel({
         targetProviderId: migrationTargetProviderId,
         refs: [migrationTarget.ref],
         reason: migrationReason,
+        revalidated: true,
+        planRequestId: migrationPreview.requestId,
       })
+      if (result.outcome === 'stale_plan' || result.results.some((item) => item.outcome === 'stale')) {
+        setMigrationReceipt(result)
+        setMigrationPreview(null)
+        setMigrationRevalidated(false)
+        setMigrationConfirmed(false)
+        setMigrationError(
+          'The Broker plan is stale. Source data remains authoritative; preview and revalidate before apply.'
+        )
+        return
+      }
       if (
         !['applied', 'partial_failure'].includes(result.outcome) ||
         result.auditStatus !== 'audit_recorded'
@@ -1730,8 +1785,10 @@ function SecretsBrokerSecretsPanel({
       setMigrationReceipt(result)
       setMigrationPreview(null)
       setMigrationConfirmed(false)
+      setMigrationRevalidated(false)
     } catch {
       setMigrationConfirmed(false)
+      setMigrationRevalidated(false)
       setMigrationError(
         'The broker did not complete the migration. Source data remains authoritative; follow the metadata-only recovery guidance.'
       )
@@ -2737,6 +2794,7 @@ function SecretsBrokerSecretsPanel({
                 onChange={(event) => {
                   setMigrationTargetProviderId(event.target.value)
                   setMigrationPreview(null)
+                  setMigrationRevalidated(false)
                   setMigrationConfirmed(false)
                   setMigrationError(null)
                 }}
@@ -2768,6 +2826,7 @@ function SecretsBrokerSecretsPanel({
                 onChange={(event) => {
                   setMigrationReason(event.target.value)
                   setMigrationPreview(null)
+                  setMigrationRevalidated(false)
                   setMigrationConfirmed(false)
                 }}
                 placeholder='Approved provider migration'
@@ -2778,34 +2837,47 @@ function SecretsBrokerSecretsPanel({
               <div className='space-y-3 rounded-md border p-3 text-sm'>
                 <div className='flex items-center justify-between gap-2'>
                   <span className='font-medium'>Migration dry run ready</span>
-                  <Badge variant='secondary'>audit recorded</Badge>
+                  <Badge variant='secondary'>
+                    {migrationRevalidated ? 'revalidated' : 'audit recorded'}
+                  </Badge>
                 </div>
-                <p>
-                  {migrationPreview.results[0]?.expectedAction}. Risk:{' '}
-                  {migrationPreview.results[0]?.risk}.
-                </p>
+                <ul className='space-y-1' data-testid='migration-ref-outcomes'>
+                  {migrationPreview.results.map((item) => (
+                    <li key={item.ref} className='text-xs'>
+                      {item.ref}: {classifyMigrationRefOutcome(item.outcome)} ·{' '}
+                      {item.recovery}
+                    </li>
+                  ))}
+                </ul>
                 <p className='text-xs text-muted-foreground'>
                   Recovery: {migrationPreview.rollback}
                 </p>
                 {!migrationApplyExecutable ? (
                   <div className='rounded-md border border-amber-500/40 bg-amber-500/5 p-2'>
-                    This target does not advertise a validated migration apply
-                    operation. Apply remains disabled.
+                    {migrationApplyGate.reason}
                   </div>
                 ) : (
-                  <label className='flex items-start gap-3'>
-                    <Checkbox
-                      checked={migrationConfirmed}
-                      onCheckedChange={(checked) =>
-                        setMigrationConfirmed(checked === true)
-                      }
-                      aria-label='Confirm provider migration'
-                    />
-                    <span>
-                      I confirm this exact provider, reference, operation ID,
-                      and audit reason.
-                    </span>
-                  </label>
+                  <>
+                    {!migrationRevalidated ? (
+                      <p className='text-xs text-muted-foreground'>
+                        Revalidate this exact dry-run before confirmation.
+                      </p>
+                    ) : (
+                      <label className='flex items-start gap-3'>
+                        <Checkbox
+                          checked={migrationConfirmed}
+                          onCheckedChange={(checked) =>
+                            setMigrationConfirmed(checked === true)
+                          }
+                          aria-label='Confirm provider migration'
+                        />
+                        <span>
+                          I confirm this exact provider, reference, operation ID,
+                          and audit reason.
+                        </span>
+                      </label>
+                    )}
+                  </>
                 )}
               </div>
             ) : null}
@@ -2867,17 +2939,26 @@ function SecretsBrokerSecretsPanel({
               </Button>
             ) : null}
             {migrationPreview ? (
-              <Button
-                type='button'
-                disabled={
-                  !migrationApplyExecutable ||
-                  !migrationConfirmed ||
-                  applyMigration.isPending
-                }
-                onClick={() => void runMigrationApply()}
-              >
-                Apply migration
-              </Button>
+              <>
+                <Button
+                  type='button'
+                  variant='outline'
+                  disabled={previewMigration.isPending}
+                  onClick={() => void runMigrationRevalidate()}
+                >
+                  Revalidate plan
+                </Button>
+                <Button
+                  type='button'
+                  disabled={
+                    migrationApplyGate.blocked || applyMigration.isPending
+                  }
+                  title={migrationApplyGate.reason}
+                  onClick={() => void runMigrationApply()}
+                >
+                  Apply migration
+                </Button>
+              </>
             ) : null}
           </DialogFooter>
         </DialogContent>

@@ -323,12 +323,18 @@ describe('canonical Broker provider and migration client', () => {
     }
 
     await client.previewBrokerMigration(request)
-    await client.applyBrokerMigration(request)
+    await client.applyBrokerMigration({
+      ...request,
+      revalidated: true,
+      planRequestId: 'migration-preview-request',
+    })
 
     const previewBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
     const applyBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))
     expect(previewBody.confirm).toBe(false)
     expect(applyBody.confirm).toBe(true)
+    expect(applyBody.revalidated).toBe(true)
+    expect(applyBody.planRequestId).toBe('migration-preview-request')
     expect(previewBody).not.toHaveProperty('value')
     expect(applyBody).not.toHaveProperty('value')
     await expect(client.previewBrokerMigration(request)).rejects.toThrow(
@@ -621,5 +627,131 @@ describe('canonical Broker provider and migration client', () => {
     expect(status.summary).toContain('fixture/demo')
     expect(disable.phase).toBe('blocked')
     expect(disable.summary).toMatch(/cannot be disabled or removed/i)
+  })
+
+  it('refuses apply until a fresh revalidation plan id is supplied', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    const client = await runtimeClient()
+
+    await expect(
+      client.applyBrokerMigration({
+        operationId: 'serviceadmin-migration-fixed',
+        sourceProviderId: 'local',
+        targetProviderId: 'vault-target',
+        refs: ['services/app/runtime/API_KEY'],
+        reason: 'approved migration',
+      })
+    ).rejects.toThrow(/Fresh revalidation is required/i)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('keeps source authoritative on a stale apply plan', async () => {
+    const stale = {
+      ...migrationResponse(true),
+      outcome: 'stale_plan',
+      applied: false,
+      results: [
+        {
+          ...migrationResponse(true).results[0],
+          state: 'stale',
+          outcome: 'stale',
+          expectedAction: 'revalidate_exact_plan',
+          recovery: 'preview_and_revalidate_before_apply',
+        },
+      ],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(stale), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const result = await client.applyBrokerMigration({
+      operationId: 'serviceadmin-migration-fixed',
+      sourceProviderId: 'local',
+      targetProviderId: 'vault-target',
+      refs: ['services/app/runtime/API_KEY'],
+      reason: 'approved migration',
+      revalidated: true,
+      planRequestId: 'migration-preview-request',
+    })
+
+    expect(result.applied).toBe(false)
+    expect(result.outcome).toBe('stale_plan')
+    expect(result.results[0]?.outcome).toBe('stale')
+    expect(JSON.stringify(result)).not.toMatch(/password|Bearer |token=/i)
+  })
+
+  it('preserves skipped, denied, unsupported, and failed per-ref outcomes from the broker', async () => {
+    const mixed = {
+      ...migrationResponse(false),
+      results: [
+        {
+          ...migrationResponse(false).results[0],
+          ref: 'services/app/runtime/API_KEY',
+          outcome: 'dry_run_ready',
+        },
+        {
+          ...migrationResponse(false).results[0],
+          ref: 'services/app/runtime/SKIPPED_KEY',
+          outcome: 'skipped',
+          state: 'skipped',
+          policyResult: 'not_applicable',
+        },
+        {
+          ...migrationResponse(false).results[0],
+          ref: 'services/app/runtime/DENIED_KEY',
+          outcome: 'denied',
+          state: 'denied',
+          policyResult: 'denied',
+        },
+        {
+          ...migrationResponse(false).results[0],
+          ref: 'services/app/runtime/REMOTE_KEY',
+          outcome: 'unsupported',
+          state: 'unsupported',
+        },
+        {
+          ...migrationResponse(false).results[0],
+          ref: 'services/app/runtime/FAILED_KEY',
+          outcome: 'failed',
+          state: 'failed',
+        },
+      ],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(mixed), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const result = await client.previewBrokerMigration({
+      operationId: 'serviceadmin-migration-fixed',
+      sourceProviderId: 'local',
+      targetProviderId: 'vault-target',
+      refs: [
+        'services/app/runtime/API_KEY',
+        'services/app/runtime/SKIPPED_KEY',
+        'services/app/runtime/DENIED_KEY',
+        'services/app/runtime/REMOTE_KEY',
+        'services/app/runtime/FAILED_KEY',
+      ],
+      reason: 'approved migration',
+    })
+
+    expect(result.results.map((item) => item.outcome)).toEqual([
+      'dry_run_ready',
+      'skipped',
+      'denied',
+      'unsupported',
+      'failed',
+    ])
+    expect(JSON.stringify(result)).not.toMatch(/password|Bearer |secretValue/i)
   })
 })

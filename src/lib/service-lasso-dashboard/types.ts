@@ -394,6 +394,10 @@ export type BrokerMigrationRequest = {
   targetProviderId: string
   refs: string[]
   reason: string
+  /** True only after a fresh dry-run revalidation of this exact plan. */
+  revalidated?: boolean
+  /** Broker request id from the latest accepted dry-run. */
+  planRequestId?: string
 }
 
 export type BrokerMigrationItem = {
