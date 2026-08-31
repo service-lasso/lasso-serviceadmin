@@ -104,7 +104,7 @@ function restartBrokerFromUi(expectedRequestCount, requestCount) {
   cy.reload()
   unlockTrustedIdentity()
   cy.get('[data-testid="service-detail-lifecycle-controls"]').within(() => {
-    cy.get('button[aria-label="Restart service"]', { timeout: 20_000 })
+    cy.contains('button', /^Restart service$/, { timeout: 20_000 })
       .should('be.visible')
       .and('be.enabled')
       .click()
