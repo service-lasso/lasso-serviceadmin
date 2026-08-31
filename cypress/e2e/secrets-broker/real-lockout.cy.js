@@ -192,10 +192,15 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
             })
           )
         cy.contains('[data-slot="card"]', 'Operational controls').within(() => {
-          cy.contains('td', 'lockout_clear', { timeout: 30_000 }).should(
-            'be.visible'
+          cy.contains('tr', 'lockout_clear', { timeout: 30_000 }).then(
+            ($row) => {
+              $row[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+            }
           )
-          cy.contains('td', 'cleared').should('be.visible')
+          cy.contains('tr', 'lockout_clear', { timeout: 30_000 }).within(() => {
+            cy.contains('td', 'lockout_clear').should('be.visible')
+            cy.contains('td', 'cleared').should('be.visible')
+          })
         })
       })
     })
