@@ -496,18 +496,36 @@ describe('app screens', () => {
       await screen.findByText('Service Manifest Secret Access')
     ).toBeVisible()
     expect(
-      screen.getByText(/enforced Broker access contract, not a simulation/i)
+      screen.getByText(/Live broker.accessPolicy grants from installed service manifests/i)
     ).toBeVisible()
     expect(screen.getByText('@serviceadmin')).toBeVisible()
+    expect(screen.getByText('services/@serviceadmin')).toBeVisible()
+    expect(screen.getByText('serviceadmin.SESSION_SIGNING_KEY')).toBeVisible()
     expect(
-      screen.getByText(
-        'services/@serviceadmin/serviceadmin.SESSION_SIGNING_KEY'
-      )
+      screen.getByText('sign Service Admin sessions at runtime')
     ).toBeVisible()
+    expect(screen.getByText('Assigned')).toBeVisible()
+    expect(screen.getByText('echo-service')).toBeVisible()
+    expect(screen.getByText('database.ROOT_PASSWORD')).toBeVisible()
+    expect(screen.getByText('Missing')).toBeVisible()
+  })
+
+  it('redirects leftover policy-simulation onto the live assignment inspector', async () => {
+    const { router } = await renderRoute(
+      '/secrets-broker/policy-simulation'
+    )
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/security')
+    })
+    expect(router.state.location.search).toMatchObject({
+      tab: 'secret-access',
+    })
     expect(
-      screen.getByText('services/@serviceadmin/service.json')
+      await screen.findByText('Service Manifest Secret Access')
     ).toBeVisible()
-    expect(screen.getByText('Allowed')).toBeVisible()
+    expect(screen.queryByText(/Policy Simulation/i)).toBeNull()
+    expect(screen.queryByText(/Simulation scenario/i)).toBeNull()
   })
 
   it('shows metadata-only secret rotation impact plans', async () => {

@@ -1229,6 +1229,36 @@ export type SecretAccessAssignmentFinding = {
   }
 }
 
+/**
+ * One `broker.accessPolicy.grants[]` row from Core
+ * `docs/reference/service-secret-access-policy.md`.
+ */
+export type SecretAccessPolicyOperation =
+  | 'resolve'
+  | 'create'
+  | 'update'
+  | 'rotate'
+  | 'delete'
+
+export type SecretAccessPolicyScope =
+  | 'workspace'
+  | 'service'
+  | 'app'
+  | 'shared'
+  | 'global'
+
+export type SecretAccessPolicyGrant = {
+  id: string
+  serviceId: string
+  workspace: string | null
+  namespace: string
+  scope: SecretAccessPolicyScope | null
+  refs: string[]
+  namespaceWide: boolean
+  operations: SecretAccessPolicyOperation[]
+  purpose: string
+}
+
 export type SecretAccessAssignmentAudit = {
   services: Array<{
     serviceId: string
@@ -1243,6 +1273,7 @@ export type SecretAccessAssignmentAudit = {
     missing: number
     malformed: number
   }
+  grants: SecretAccessPolicyGrant[]
 }
 
 export type McpRole =
