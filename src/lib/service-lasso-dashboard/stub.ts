@@ -5680,7 +5680,10 @@ function normalizeBrokerMigrationResponse(
   }
 }
 
-function validateBrokerMigrationRequest(request: BrokerMigrationRequest) {
+function validateBrokerMigrationRequest(
+  request: BrokerMigrationRequest,
+  apply: boolean
+) {
   requireSafeBrokerIdentifier(request.operationId, 'migration operation id')
   requireSafeBrokerIdentifier(request.sourceProviderId, 'source provider id')
   requireSafeBrokerIdentifier(request.targetProviderId, 'target provider id')
@@ -5693,6 +5696,16 @@ function validateBrokerMigrationRequest(request: BrokerMigrationRequest) {
   request.refs.forEach((ref) =>
     requireSafeBrokerIdentifier(ref, 'migration ref')
   )
+  if (apply && request.revalidated !== true) {
+    throw new Error(
+      'Fresh revalidation is required before provider migration apply.'
+    )
+  }
+  if (apply && !request.planRequestId?.trim()) {
+    throw new Error(
+      'A dry-run plan request id is required before provider migration apply.'
+    )
+  }
 }
 
 async function runBrokerMigration(
@@ -5700,12 +5713,42 @@ async function runBrokerMigration(
   apply: boolean
 ) {
   await wait(120)
-  validateBrokerMigrationRequest(request)
+  validateBrokerMigrationRequest(request, apply)
   if (serviceLassoStubDataEnabled) {
     const target = brokerProviderStatusFixture.providers.find(
       (provider) => provider.providerId === request.targetProviderId
     )
     const executable = Boolean(target && providerSupportsMigrationApply(target))
+    if (apply && request.planRequestId === 'stale-plan') {
+      return structuredClone({
+        serviceId: secretsBrokerServiceId,
+        apiVersion: brokerProviderStatusFixture.apiVersion,
+        requestId: `stub-migration-stale-${Date.now()}`,
+        operationId: request.operationId,
+        operation: 'migration_apply',
+        outcome: 'stale_plan',
+        applied: false,
+        requiresConfirmation: true,
+        auditStatus: 'audit_recorded',
+        nextAction: 'revalidate_exact_plan',
+        sourceProviderId: request.sourceProviderId,
+        targetProviderId: request.targetProviderId,
+        results: request.refs.map((ref) => ({
+          ref,
+          sourceProviderId: request.sourceProviderId,
+          targetProviderId: request.targetProviderId,
+          ownerServiceId: 'app',
+          state: 'stale',
+          outcome: 'stale',
+          risk: 'high',
+          expectedAction: 'revalidate_exact_plan',
+          policyResult: 'allowed',
+          auditRequirement: 'required',
+          recovery: 'preview_and_revalidate_before_apply',
+        })),
+        rollback: 'source remains authoritative; restore from encrypted backup if needed',
+      } satisfies BrokerMigrationResult)
+    }
     const nowOutcome = apply
       ? executable
         ? 'applied'
@@ -5757,6 +5800,8 @@ async function runBrokerMigration(
         refs: request.refs,
         reason: request.reason.trim(),
         confirm: apply,
+        revalidated: apply ? true : false,
+        planRequestId: request.planRequestId,
       }),
     }
   )

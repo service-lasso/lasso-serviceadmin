@@ -932,6 +932,10 @@ describe('app screens', () => {
     })
     expect(apply).toBeDisabled()
     await user.click(
+      within(dialog).getByRole('button', { name: /Revalidate plan/i })
+    )
+    expect(await within(dialog).findByText(/revalidated/i)).toBeVisible()
+    await user.click(
       within(dialog).getByLabelText(/Confirm provider migration/i)
     )
     expect(apply).toBeEnabled()
