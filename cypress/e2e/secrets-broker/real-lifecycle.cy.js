@@ -15,6 +15,7 @@ import {
   providerReadinessRequestOptions,
   providerReadinessRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
+import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
@@ -73,6 +74,9 @@ function openSecrets() {
       cy.contains('button', 'Retry inventory').click()
     }
   })
+  cy.contains(expectedRef, { timeout: 20_000 }).then(($cell) => {
+    $cell[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+  })
   cy.contains(expectedRef, { timeout: 20_000 }).should('be.visible')
 }
 
@@ -80,16 +84,31 @@ function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
 }
 
+function visibleManagedInventoryRow(content) {
+  return managedSecretsInventory()
+    .contains('tr', content)
+    .then(($row) => {
+      $row[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+    })
+}
+
+function visibleTableRow(content, timeout = 20_000) {
+  cy.contains('tr', content, { timeout }).then(($row) => {
+    $row[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+  })
+  return cy.contains('tr', content, { timeout }).should('be.visible')
+}
+
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
-  cy.contains('[role="tab"]', /^Overview\b/).click()
-  cy.contains('[data-slot="card-title"]', /^\s*Actions\s*$/)
-    .closest('[data-slot="card"]')
-    .within(() => {
-    cy.contains('button', /^Restart service$/, { timeout: 20_000 })
+  waitForManagedServiceReadiness('@secretsbroker')
+  cy.reload()
+  unlockTrustedIdentity()
+  cy.get('[data-testid="service-detail-lifecycle-controls"]').within(() => {
+    cy.get('button[aria-label="Restart service"]', { timeout: 20_000 })
       .should('be.visible')
       .and('be.enabled')
       .click()
-    })
+  })
   cy.contains('[role="alertdialog"]', 'Confirm elevated action').within(() => {
     cy.contains('button', /^Restart service$/).click()
   })
@@ -106,7 +125,7 @@ function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount) {
   restartBrokerFromUi(expectedRequestCount, requestCount)
   waitForManagedServiceReadiness('@secretsbroker')
   cy.reload()
-  cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+  unlockTrustedIdentity()
   openSecrets()
 }
 
@@ -414,7 +433,7 @@ function waitForProviderUiStatusAfterBackendReady({
     )
   }
   cy.reload()
-  cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+  unlockTrustedIdentity()
   openSecrets()
   return waitForSuccessfulProviderUiStatusResponse(targetProviderId).then(
     (providerReadiness) =>
@@ -776,7 +795,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     expect(expectedRef).to.be.a('string').and.not.be.empty
     cy.visit('/services/%40secretsbroker')
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    unlockTrustedIdentity()
     cy.request({
       method: 'POST',
       url: '/api/services/sample-service/start',
@@ -786,19 +805,21 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     waitForManagedServiceReadiness('sample-service')
     waitForBrokerProviderStatusReadiness()
     cy.visit('/services/%40secretsbroker')
-    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    cy.get('main').contains('h2', 'Secrets Broker', { timeout: 20_000 }).should(
+      'be.visible'
+    )
     cy.intercept('GET', '**/operations/telemetry').as('brokerTelemetry')
     cy.intercept('GET', '**/operations/events*').as('brokerEvents')
     openSecrets()
     cy.contains('Provider status is unavailable; migration remains disabled.').should(
       'not.exist'
     )
-    managedSecretsInventory().contains('tr', 'vault-auth-required').within(() => {
+    visibleManagedInventoryRow('vault-auth-required').within(() => {
       cy.contains('source_auth_required').should('be.visible')
       cy.contains('metadata').should('exist')
       cy.contains('reveal').should('exist')
     })
-    managedSecretsInventory().contains('tr', 'vault-invalid').within(() => {
+    visibleManagedInventoryRow('vault-invalid').within(() => {
       cy.contains('invalid_ref').should('be.visible')
       cy.contains('metadata').should('exist')
       cy.contains('reveal').should('exist')
@@ -839,6 +860,9 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     )
     cy.get('#broker-event-family').select('lockout_cleared')
     cy.wait('@brokerEvents', { timeout: 60_000 })
+    cy.contains('td', 'lockout_clear', { timeout: 20_000 }).then(($cell) => {
+      $cell[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+    })
     cy.contains('td', 'lockout_clear', { timeout: 20_000 }).should('be.visible')
     cy.get('#broker-event-family').select('all')
 
@@ -900,8 +924,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     waitForManagedServiceReadiness('sample-service')
     waitForBrokerProviderStatusReadiness()
     cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
-    cy.contains('Secrets Broker', { timeout: 20_000 }).should('be.visible')
+    unlockTrustedIdentity()
+    cy.get('main').contains('h2', 'Secrets Broker', { timeout: 20_000 }).should(
+      'be.visible'
+    )
     openSecrets()
 
     cy.contains('tr', expectedRef, { timeout: 20_000 }).within(() => {
@@ -1134,19 +1160,13 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.get('#secret-create-value').should('not.exist')
       cy.contains('button', 'Close').click()
     })
-    cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
-      timeout: 20_000,
-    })
-      .scrollIntoView()
-      .should('be.visible')
+    visibleTableRow(createdRef)
 
     cy.get('#secret-inventory-search').type('browser.CREATED_TOKEN')
-    cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
-      timeout: 20_000,
-    }).should('be.visible')
+    visibleTableRow(createdRef)
     cy.contains('tr', expectedRef).should('not.exist')
     cy.get('#secret-inventory-search').clear()
-    cy.contains('tr', expectedRef, { timeout: 20_000 }).should('be.visible')
+    visibleTableRow(expectedRef)
     cy.get('#secret-inventory-provider option')
       .eq(1)
       .invoke('val')
@@ -1162,7 +1182,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.contains('2 results · page 1 of 2').should('be.visible')
     cy.get('[aria-label="Next secrets page"]').click()
     cy.contains('2 results · page 2 of 2').should('be.visible')
-    cy.contains('tr', expectedRef).should('be.visible')
+    visibleTableRow(expectedRef)
     cy.get('[aria-label="Previous secrets page"]').click()
     cy.contains('2 results · page 1 of 2').should('be.visible')
     cy.get('#secret-inventory-page-size').select('5')
@@ -1637,7 +1657,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     waitForBrokerProviderStatusReadiness()
     cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    unlockTrustedIdentity()
     openSecrets()
     cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN', {
       timeout: 20_000,
@@ -1779,12 +1799,10 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    unlockTrustedIdentity()
     openSecrets()
-    cy.contains('tr', expectedRef, { timeout: 20_000 }).should('be.visible')
-    cy.contains('tr', 'services/sample-service/browser.CREATED_TOKEN').should(
-      'be.visible'
-    )
+    visibleTableRow(expectedRef)
+    visibleTableRow(createdRef)
     cy.contains('Master key').parent().contains('Available').should('be.visible')
     cy.env(['qualificationPlatform']).then(({ qualificationPlatform }) => {
       if (qualificationPlatform === 'win32') {
@@ -1793,7 +1811,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
           .should('not.contain', 'unavailable')
       }
     })
-    cy.contains('tr', 'verified').should('be.visible')
+    visibleTableRow('verified')
     cy.contains('[data-slot="card"]', 'Operational controls').within(() => {
       cy.contains('button', 'Next').should('not.be.disabled').click()
       cy.contains('button', 'Previous').should('not.be.disabled')
@@ -1827,9 +1845,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         .its('status')
         .should('equal', 200)
       cy.reload()
-      cy.contains('Trusted identity verified', { timeout: 20_000 }).should(
-        'exist'
-      )
+      unlockTrustedIdentity()
       cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
       cy.contains('Master key', { timeout: 30_000 })
         .parent()
@@ -1858,9 +1874,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         .its('status')
         .should('equal', 200)
       cy.reload()
-      cy.contains('Trusted identity verified', { timeout: 20_000 }).should(
-        'exist'
-      )
+      unlockTrustedIdentity()
       openSecrets()
       cy.contains('Master key', { timeout: 30_000 })
         .parent()

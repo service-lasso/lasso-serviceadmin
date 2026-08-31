@@ -33,6 +33,7 @@ import {
   saveServiceConfigDocument as saveStubServiceConfigDocument,
   serviceLassoApiBaseUrl,
   isServiceAdminStubModeEnabled,
+  normalizeRuntimeServiceAction,
 } from './stub'
 import type {
   AuditEventsFilters,
@@ -143,21 +144,44 @@ async function fetchRuntimeJson<T>(pathname: string, init?: RequestInit) {
 async function fetchRuntimeDashboardSummary() {
   const payload =
     await fetchRuntimeJson<DashboardSummaryResponse>('/api/dashboard')
-  return payload.summary
+  return {
+    ...payload.summary,
+    favorites: payload.summary.favorites.map(normalizeRuntimeDashboardService),
+    others: payload.summary.others.map(normalizeRuntimeDashboardService),
+    problemServices: payload.summary.problemServices.map(
+      normalizeRuntimeDashboardService
+    ),
+  }
 }
 
 async function fetchRuntimeServices() {
   const payload = await fetchRuntimeJson<DashboardServicesResponse>(
     '/api/dashboard/services'
   )
-  return payload.services
+  return payload.services.map(normalizeRuntimeDashboardService)
 }
 
 async function fetchRuntimeDashboardService(serviceId: string) {
   const payload = await fetchRuntimeJson<DashboardServiceDetailResponse>(
     `/api/dashboard/services/${encodeServiceId(serviceId)}`
   )
-  return payload.service ?? null
+  return payload.service
+    ? normalizeRuntimeDashboardService(payload.service)
+    : null
+}
+
+function normalizeRuntimeDashboardService(
+  service: DashboardService
+): DashboardService {
+  const actions = Array.isArray(service.actions) ? service.actions : []
+  return {
+    ...service,
+    actions: actions
+      .map(normalizeRuntimeServiceAction)
+      .filter(
+        (action): action is NonNullable<typeof action> => action !== null
+      ),
+  }
 }
 
 async function fetchRuntimeTelemetryPreview() {

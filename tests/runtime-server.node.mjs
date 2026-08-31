@@ -623,6 +623,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const directTwentySecondWaitCount = [
     ...lateLifecycleSource.matchAll(/timeout:\s*20_000/g),
   ].length
+  const trustedIdentityWaitCount = [
+    ...lateLifecycleSource.matchAll(/unlockTrustedIdentity\(\)/g),
+  ].length
   const directThirtySecondWaitCount = [
     ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
   ].length
@@ -640,7 +643,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(sharedStopMutationCount, 0)
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
-  assert.equal(directTwentySecondWaitCount, 7)
+  assert.equal(directTwentySecondWaitCount, 4)
+  assert.equal(trustedIdentityWaitCount, 3)
   assert.equal(directThirtySecondWaitCount, 4)
   assert.equal(openSecretsCount, 2)
   assert.equal(
@@ -665,6 +669,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const reloadWaitMs = reloadCount * 60_000
   const longUiWaitMs =
     (directTwentySecondWaitCount +
+      trustedIdentityWaitCount +
       openSecretsCount * 2 +
       validationDialogCount) *
       20_000 +
@@ -699,18 +704,24 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const stoppedLifecycleTwentySecondWaitCount = [
     ...stoppedLifecycleSource.matchAll(/timeout:\s*20_000/g),
   ].length
+  const stoppedLifecycleTrustedIdentityWaitCount = [
+    ...stoppedLifecycleSource.matchAll(/unlockTrustedIdentity\(\)/g),
+  ].length
   const stoppedLifecycleThirtySecondWaitCount = [
     ...stoppedLifecycleSource.matchAll(/timeout:\s*30_000/g),
   ].length
   assert.equal(stoppedLifecycleMutationCount, 2)
   assert.equal(stoppedLifecycleReloadCount, 1)
-  assert.equal(stoppedLifecycleTwentySecondWaitCount, 5)
+  assert.equal(stoppedLifecycleTwentySecondWaitCount, 3)
+  assert.equal(stoppedLifecycleTrustedIdentityWaitCount, 2)
   assert.equal(stoppedLifecycleThirtySecondWaitCount, 3)
   const stoppedLifecycleEnumeratedWaitMs =
     stoppedLifecycleMutationCount * 120_000 +
     managedServiceStopReadinessWorstCaseMs() +
     stoppedLifecycleReloadCount * 60_000 +
-    stoppedLifecycleTwentySecondWaitCount * 20_000 +
+    (stoppedLifecycleTwentySecondWaitCount +
+      stoppedLifecycleTrustedIdentityWaitCount) *
+      20_000 +
     stoppedLifecycleThirtySecondWaitCount * 30_000
   assert.equal(stoppedLifecycleEnumeratedWaitMs, 544_000)
   assert.ok(stoppedLifecycleEnumeratedWaitMs < cypressQualificationTimeoutMs)

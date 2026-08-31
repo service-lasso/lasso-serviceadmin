@@ -143,6 +143,17 @@ describe('service lasso dashboard runtime client', () => {
         'Service Broker API process is accepting requests.',
       ]),
     ]
+    services[0].actions.push({
+      id: 'restart',
+      label: 'Restart service',
+      kind: 'restart',
+      permission: 'service:restart',
+      granted: true,
+      requiresConfirmation: true,
+      unavailableReason: null,
+      actor: 'local-root',
+      mode: 'local-root',
+    } as unknown as DashboardService['actions'][number])
 
     const fetchMock = vi.fn(async (url: string) => {
       if (url === 'http://runtime.test/api/dashboard') {
@@ -184,6 +195,22 @@ describe('service lasso dashboard runtime client', () => {
       ['service-broker', 'running'],
     ])
     expect(traefik?.runtimeHealth.health).toBe('critical')
+    expect(
+      traefik?.actions.find((action) => action.kind === 'restart')
+    ).toEqual({
+      id: 'restart',
+      label: 'Restart service',
+      kind: 'restart',
+      permission: {
+        key: 'service:restart',
+        allowed: true,
+        actor: 'local-root',
+        mode: 'local-root',
+        requiresConfirmation: true,
+        confirmationLabel: 'Restart service',
+        reason: 'The runtime requires explicit confirmation.',
+      },
+    })
     expect(buildServiceLogUrl('@traefik')).toBe(
       'http://runtime.test/api/logs/read?service=%40traefik&type=default'
     )
