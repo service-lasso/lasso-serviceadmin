@@ -1,4 +1,16 @@
+import {
+  OPERATOR_BACKUP_DESTINATION,
+  assertSafeLifecycleMutation,
+  restorePlanIsStale,
+} from './broker-lifecycle-gates'
+import {
+  actionResultFromRuntimeError,
+  buildProviderActionResult,
+  gatedProviderActionResult,
+  mapBrokerOutcomeToUiState,
+} from './broker-provider-actions'
 import { countOperatorInboxItems, unreadBadgeCount } from './inbox'
+import { parseManifestAccessPolicyGrants } from './secret-access-policy'
 import {
   containsUnsafeBrokerText,
   requireSafeBrokerIdentifier,
@@ -24,10 +36,18 @@ import {
   type BrokerLifecycleRotateResult,
   type BrokerLifecycleStatus,
   type BrokerOperationCapability,
+  type BrokerProviderActionResult,
+  type BrokerProviderCapabilitiesState,
+  type BrokerProviderCapabilityRecord,
+  type BrokerProviderConfigureRequest,
+  type BrokerProviderConfigureResult,
   type BrokerProviderStatus,
   type BrokerProviderStatusState,
+  type BrokerProviderRowActionRequest,
   type BrokerProviderValidationRequest,
   type BrokerProviderValidationResult,
+  type BrokerSourceStatus,
+  type BrokerSourceStatusState,
   type BrokerTelemetry,
   type DashboardAction,
   type DashboardService,
@@ -41,6 +61,7 @@ import {
   type InboxSummary,
   type McpState,
   type SecretAccessAssignmentAudit,
+  type SecretAccessPolicyGrant,
   type ServiceSecurityState,
   type ServiceRecoveryDoctorActionResult,
   type ServiceRecoveryHistoryState,
@@ -2275,6 +2296,8 @@ const firstRunSetupStatuses = new Set<FirstRunSetupStatus>([
   'setup_in_progress',
   'setup_complete',
   'setup_failed',
+  'lost_key',
+  'recreate_required',
 ])
 
 function createDefaultFirstRunSetupState(): FirstRunSetupState {
@@ -4347,22 +4370,92 @@ const secretAccessAssignmentAudit: SecretAccessAssignmentAudit = {
       ],
       summary: { present: 1, missing: 0, malformed: 0 },
     },
+    {
+      serviceId: 'echo-service',
+      manifestPath: 'services/echo-service/service.json',
+      findings: [
+        {
+          serviceId: 'echo-service',
+          ref: 'database.ROOT_PASSWORD',
+          namespace: 'shared/database',
+          status: 'present',
+          source: 'broker.import',
+          location: 'broker.imports[0].ref',
+          required: true,
+          reason: 'Broker reference is declared in the service manifest.',
+          accessPolicy: {
+            operation: 'resolve',
+            status: 'missing',
+            reason:
+              'No broker.accessPolicy assignment declares resolve access for this import.',
+          },
+        },
+      ],
+      summary: { present: 1, missing: 0, malformed: 0 },
+    },
   ],
   summary: {
-    services: 1,
-    references: 1,
-    present: 1,
+    services: 2,
+    references: 2,
+    present: 2,
     missing: 0,
     malformed: 0,
   },
+  grants: [
+    {
+      id: '@serviceadmin:services/@serviceadmin:0',
+      serviceId: '@serviceadmin',
+      workspace: 'local-demo',
+      namespace: 'services/@serviceadmin',
+      scope: 'service',
+      refs: ['serviceadmin.SESSION_SIGNING_KEY'],
+      namespaceWide: false,
+      operations: ['resolve'],
+      purpose: 'sign Service Admin sessions at runtime',
+    },
+  ],
+}
+
+async function loadLiveAccessPolicyGrants(): Promise<
+  SecretAccessPolicyGrant[]
+> {
+  const services = await fetchServices()
+  const documents = await Promise.allSettled(
+    services.map((service) =>
+      fetchRuntimeJson<{ content?: string }>(
+        `/api/services/${encodeURIComponent(service.id)}/config`
+      )
+    )
+  )
+
+  const grants: SecretAccessPolicyGrant[] = []
+  for (const [index, result] of documents.entries()) {
+    const service = services[index]
+    if (!service || result.status !== 'fulfilled') continue
+    const content = result.value.content
+    if (typeof content !== 'string') continue
+    grants.push(...parseManifestAccessPolicyGrants(content, service.id))
+  }
+  return grants
 }
 
 export async function fetchSecretAccessAssignments() {
   await wait(120)
   if (!serviceLassoStubDataEnabled) {
-    return await fetchRuntimeJson<SecretAccessAssignmentAudit>(
-      '/api/secrets/audit'
-    )
+    const audit =
+      await fetchRuntimeJson<SecretAccessAssignmentAudit>('/api/secrets/audit')
+    const grants = await loadLiveAccessPolicyGrants()
+    return {
+      services: Array.isArray(audit.services) ? audit.services : [],
+      summary: audit.summary ?? {
+        services: 0,
+        references: 0,
+        present: 0,
+        missing: 0,
+        malformed: 0,
+      },
+      grants,
+    } satisfies SecretAccessAssignmentAudit
   }
   return structuredClone(secretAccessAssignmentAudit)
 }
@@ -4417,6 +4510,10 @@ function buildSecretsManagementApiPath(section: string, search?: string) {
 
 function buildBrokerProviderApiPath(section: string) {
   return `/api/services/${encodeURIComponent(secretsBrokerServiceId)}/providers/${section}`
+}
+
+function buildBrokerSourcesApiPath(section: string) {
+  return `/api/services/${encodeURIComponent(secretsBrokerServiceId)}/sources/${section}`
 }
 
 function buildBrokerLifecycleApiPath(section: string) {
@@ -5786,7 +5883,7 @@ function normalizeProviderValidationResponse(
 
 export async function validateBrokerProviderConfiguration(
   request: BrokerProviderValidationRequest
-) {
+): Promise<BrokerProviderValidationResult> {
   await wait(120)
   for (const [label, value] of [
     ['provider id', request.providerId],
@@ -5863,6 +5960,525 @@ export async function validateBrokerProviderConfiguration(
     }
   )
   return normalizeProviderValidationResponse(payload, request)
+}
+
+function sourceFromProviderStatus(
+  provider: BrokerProviderStatus
+): BrokerSourceStatus {
+  return {
+    sourceId: provider.providerId,
+    kind: provider.providerKind,
+    displayName: provider.displayName,
+    enabled: true,
+    critical: provider.providerKind === 'local-encrypted-store',
+    state:
+      provider.outcome === 'source_auth_required'
+        ? 'auth_required'
+        : provider.state,
+    outcome: provider.outcome,
+    namespaces: provider.namespaces,
+    capabilities: provider.capabilities,
+    operations: provider.operations,
+    nextAction: provider.nextAction,
+    auditStatus: provider.auditStatus,
+  }
+}
+
+function brokerSourceStatusFixture(): BrokerSourceStatusState {
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: brokerProviderStatusFixture.apiVersion,
+    contractVersion: brokerProviderStatusFixture.contractVersion,
+    manifestVersion: brokerProviderStatusFixture.manifestVersion,
+    sources: brokerProviderStatusFixture.providers.map(
+      sourceFromProviderStatus
+    ),
+  }
+}
+
+function brokerProviderCapabilitiesFixture(): BrokerProviderCapabilitiesState {
+  const byKind = new Map<string, BrokerProviderCapabilityRecord>()
+  for (const provider of brokerProviderStatusFixture.providers) {
+    if (byKind.has(provider.providerKind)) continue
+    byKind.set(provider.providerKind, {
+      providerKind: provider.providerKind,
+      displayName: provider.displayName,
+      supported: provider.providerKind !== 'env',
+      capabilities: provider.capabilities,
+      operations: provider.operations,
+      limitations:
+        provider.providerKind === 'local-encrypted-store'
+          ? ['local-first development backend']
+          : [],
+    })
+  }
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: brokerProviderStatusFixture.apiVersion,
+    contractVersion: brokerProviderStatusFixture.contractVersion,
+    manifestVersion: brokerProviderStatusFixture.manifestVersion,
+    outcome: 'ready',
+    capabilities: [...byKind.values()],
+  }
+}
+
+function normalizeBrokerSourceStatus(value: unknown): BrokerSourceStatus {
+  const input = requireRecord(
+    value,
+    'Secrets Broker returned an invalid source status.'
+  )
+  if (!Array.isArray(input.operations)) {
+    throw new Error('Secrets Broker returned an invalid source status.')
+  }
+  return {
+    sourceId: requireSafeBrokerIdentifier(input.sourceId, 'source id'),
+    kind: requireSafeBrokerIdentifier(input.kind, 'source kind'),
+    displayName:
+      sanitizeBrokerDisplayText(input.displayName) ?? '[missing source name]',
+    enabled: input.enabled === true,
+    critical: input.critical === true,
+    state: sanitizeBrokerDisplayText(input.state) ?? '[missing source state]',
+    outcome:
+      sanitizeBrokerDisplayText(input.outcome) ?? '[missing source outcome]',
+    namespaces: requireIdentifierArray(input.namespaces, 'source namespaces', {
+      allowWildcard: true,
+    }),
+    capabilities: requireIdentifierArray(
+      input.capabilities,
+      'source capabilities'
+    ),
+    operations: input.operations.map(normalizeBrokerOperationCapability),
+    nextAction: sanitizeBrokerDisplayText(input.nextAction),
+    auditStatus:
+      sanitizeBrokerDisplayText(input.auditStatus) ??
+      '[missing broker audit status]',
+    retryable:
+      typeof input.retryable === 'boolean' ? input.retryable : undefined,
+    priority:
+      typeof input.priority === 'number' && Number.isSafeInteger(input.priority)
+        ? input.priority
+        : undefined,
+  }
+}
+
+export async function fetchBrokerSourceStatus(): Promise<BrokerSourceStatusState> {
+  await wait(120)
+  if (serviceLassoStubDataEnabled) {
+    return structuredClone(brokerSourceStatusFixture())
+  }
+  const payload = await fetchRuntimeJson<unknown>(
+    buildBrokerSourcesApiPath('status')
+  )
+  assertNoBrokerSecretMaterial(payload)
+  const input = requireRecord(
+    payload,
+    'Secrets Broker returned an invalid source status response.'
+  )
+  if (!Array.isArray(input.sources)) {
+    throw new Error(
+      'Secrets Broker returned an invalid source status response.'
+    )
+  }
+  return {
+    serviceId: requireSafeBrokerIdentifier(input.serviceId, 'service id'),
+    apiVersion: requireSafeBrokerIdentifier(input.apiVersion, 'API version'),
+    contractVersion: requireSafeBrokerIdentifier(
+      input.contractVersion,
+      'contract version'
+    ),
+    manifestVersion: requireSafeBrokerIdentifier(
+      input.manifestVersion,
+      'manifest version'
+    ),
+    sources: input.sources.map(normalizeBrokerSourceStatus),
+  }
+}
+
+function normalizeBrokerProviderCapabilityRecord(
+  value: unknown
+): BrokerProviderCapabilityRecord {
+  const input = requireRecord(
+    value,
+    'Secrets Broker returned an invalid provider capability record.'
+  )
+  if (
+    !Array.isArray(input.operations) ||
+    typeof input.supported !== 'boolean'
+  ) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider capability record.'
+    )
+  }
+  return {
+    providerKind: requireSafeBrokerIdentifier(
+      input.providerKind,
+      'provider kind'
+    ),
+    displayName:
+      sanitizeBrokerDisplayText(input.displayName) ?? '[missing provider name]',
+    supported: input.supported,
+    capabilities: requireIdentifierArray(
+      input.capabilities,
+      'provider capabilities'
+    ),
+    operations: input.operations.map(normalizeBrokerOperationCapability),
+    limitations: Array.isArray(input.limitations)
+      ? input.limitations.map(
+          (item) =>
+            sanitizeBrokerDisplayText(item) ?? '[unsafe metadata withheld]'
+        )
+      : [],
+  }
+}
+
+export async function fetchBrokerProviderCapabilities(): Promise<BrokerProviderCapabilitiesState> {
+  await wait(120)
+  if (serviceLassoStubDataEnabled) {
+    return structuredClone(brokerProviderCapabilitiesFixture())
+  }
+  const payload = await fetchRuntimeJson<unknown>(
+    buildBrokerProviderApiPath('capabilities')
+  )
+  assertNoBrokerSecretMaterial(payload)
+  const input = requireRecord(
+    payload,
+    'Secrets Broker returned an invalid provider capabilities response.'
+  )
+  if (!Array.isArray(input.capabilities)) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider capabilities response.'
+    )
+  }
+  return {
+    serviceId: requireSafeBrokerIdentifier(input.serviceId, 'service id'),
+    apiVersion: requireSafeBrokerIdentifier(input.apiVersion, 'API version'),
+    contractVersion: requireSafeBrokerIdentifier(
+      input.contractVersion,
+      'contract version'
+    ),
+    manifestVersion: requireSafeBrokerIdentifier(
+      input.manifestVersion,
+      'manifest version'
+    ),
+    outcome:
+      sanitizeBrokerDisplayText(input.outcome) ?? '[missing broker outcome]',
+    capabilities: input.capabilities.map(
+      normalizeBrokerProviderCapabilityRecord
+    ),
+  }
+}
+
+function normalizeProviderConfigureResponse(
+  payload: unknown,
+  request: BrokerProviderConfigureRequest
+): BrokerProviderConfigureResult {
+  const input = requireRecord(
+    payload,
+    'Secrets Broker returned an invalid provider configure response.'
+  )
+  assertNoProviderSecretFields(input)
+  const provider = normalizeBrokerProviderStatus(input.provider)
+  if (
+    input.serviceId !== secretsBrokerServiceId ||
+    input.operation !== 'configure' ||
+    typeof input.applied !== 'boolean' ||
+    typeof input.requiresConfirmation !== 'boolean' ||
+    provider.providerId !== request.providerId ||
+    provider.providerKind !== request.providerKind
+  ) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider configure response.'
+    )
+  }
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: requireSafeBrokerIdentifier(input.apiVersion, 'API version'),
+    requestId: requireSafeBrokerIdentifier(input.requestId, 'request id'),
+    operation: 'configure',
+    outcome:
+      sanitizeBrokerDisplayText(input.outcome) ?? '[missing broker outcome]',
+    applied: input.applied,
+    requiresConfirmation: input.requiresConfirmation,
+    auditStatus:
+      sanitizeBrokerDisplayText(input.auditStatus) ??
+      '[missing broker audit status]',
+    nextAction: sanitizeBrokerDisplayText(input.nextAction),
+    provider,
+  }
+}
+
+export async function applyBrokerProviderConfiguration(
+  request: BrokerProviderConfigureRequest
+): Promise<BrokerProviderConfigureResult> {
+  await wait(120)
+  for (const [label, value] of [
+    ['provider id', request.providerId],
+    ['provider kind', request.providerKind],
+    ['operation id', request.operationId],
+  ] as const) {
+    requireSafeBrokerIdentifier(value, label)
+  }
+  const displayName = sanitizeBrokerDisplayText(request.displayName)
+  if (!displayName || displayName === withheldBrokerText) {
+    throw new Error('Provider display name is invalid or unsafe.')
+  }
+  if (!request.reason.trim()) {
+    throw new Error('Audit reason is required before provider apply.')
+  }
+  if (!request.confirm) {
+    throw new Error(
+      'Explicit confirmation is required before provider configuration apply.'
+    )
+  }
+  if (request.address) {
+    const address = new URL(request.address)
+    if (
+      !['http:', 'https:'].includes(address.protocol) ||
+      address.username ||
+      address.password ||
+      address.pathname !== '/' ||
+      address.search ||
+      address.hash
+    ) {
+      throw new Error('Provider address must be a safe HTTP(S) origin.')
+    }
+  }
+  if (request.credentialRef) {
+    requireSafeBrokerIdentifier(request.credentialRef, 'credential ref')
+  }
+  request.namespaces.forEach((namespace) => {
+    if (namespace !== '*') {
+      requireSafeBrokerIdentifier(namespace, 'provider namespace')
+    }
+  })
+
+  if (serviceLassoStubDataEnabled) {
+    const provider = brokerProviderStatusFixture.providers.find(
+      (candidate) => candidate.providerId === request.providerId
+    ) ?? {
+      ...brokerProviderStatusFixture.providers[1],
+      providerId: request.providerId,
+      providerKind: request.providerKind,
+      displayName,
+    }
+    return structuredClone({
+      serviceId: secretsBrokerServiceId,
+      apiVersion: brokerProviderStatusFixture.apiVersion,
+      requestId: `stub-provider-configure-${Date.now()}`,
+      operation: 'configure',
+      outcome: 'ready',
+      applied: true,
+      requiresConfirmation: false,
+      auditStatus: 'audit_recorded',
+      nextAction: 'inspect_provider_status',
+      provider,
+    } satisfies BrokerProviderConfigureResult)
+  }
+
+  const payload = await fetchRuntimeJson<unknown>(
+    buildBrokerProviderApiPath('config/apply'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: `serviceadmin-provider-apply-${Date.now()}`,
+        serviceId: '@serviceadmin',
+        providerId: request.providerId,
+        providerKind: request.providerKind,
+        displayName,
+        address: request.address,
+        credentialRef: request.credentialRef,
+        namespaces: request.namespaces,
+        reason: request.reason.trim(),
+        operationId: request.operationId,
+        confirm: true,
+        validationMode: 'connectivity_and_capabilities',
+      }),
+    }
+  )
+  return normalizeProviderConfigureResponse(payload, request)
+}
+
+function rowActionReason(request: BrokerProviderRowActionRequest) {
+  const provided = request.reason?.trim()
+  if (provided) return provided
+  return `operator_${request.action}_row_action`
+}
+
+function rowActionNamespaces(request: BrokerProviderRowActionRequest) {
+  if (request.namespaces && request.namespaces.length > 0) {
+    return request.namespaces
+  }
+  return request.provider.namespaces
+}
+
+export async function runBrokerProviderRowAction(
+  request: BrokerProviderRowActionRequest
+): Promise<BrokerProviderActionResult> {
+  await wait(80)
+  const fixtureDemo = serviceLassoStubDataEnabled
+  const blocked = gatedProviderActionResult(request, fixtureDemo)
+  if (blocked) return blocked
+
+  try {
+    if (request.action === 'status') {
+      const status = await fetchBrokerProviderStatus()
+      const provider =
+        status.providers.find(
+          (candidate) => candidate.providerId === request.provider.providerId
+        ) ?? status.currentProvider
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: provider.providerId,
+        operation: 'status',
+        state: mapBrokerOutcomeToUiState(provider.outcome),
+        summary: `Provider status ${provider.outcome}.`,
+        nextAction: provider.nextAction ?? 'inspect_provider_status',
+        correlationId: status.contractVersion,
+        fixtureDemo,
+      })
+    }
+
+    if (request.action === 'capabilities') {
+      const catalog = await fetchBrokerProviderCapabilities()
+      const record = catalog.capabilities.find(
+        (candidate) => candidate.providerKind === request.provider.providerKind
+      )
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: request.provider.providerId,
+        operation: 'capabilities',
+        state: mapBrokerOutcomeToUiState(catalog.outcome),
+        summary: record
+          ? `Provider capabilities ${record.supported ? 'supported' : 'unsupported'}.`
+          : 'Provider kind is not in the capability catalog.',
+        nextAction: 'inspect_provider_capabilities',
+        correlationId: catalog.contractVersion,
+        fixtureDemo,
+      })
+    }
+
+    if (request.action === 'reconnect') {
+      const sources = await fetchBrokerSourceStatus()
+      const source = sources.sources.find(
+        (candidate) => candidate.sourceId === request.provider.providerId
+      )
+      if (!source) {
+        return buildProviderActionResult({
+          providerId: request.provider.providerId,
+          sourceId: request.provider.providerId,
+          operation: 'reconnect',
+          state: 'unavailable',
+          summary: 'Source status did not include this provider.',
+          nextAction: 'inspect_source_status',
+          fixtureDemo,
+        })
+      }
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: source.sourceId,
+        operation: 'reconnect',
+        state: mapBrokerOutcomeToUiState(source.outcome),
+        summary: `Reconnect status ${source.outcome}.`,
+        nextAction: source.nextAction ?? 'reconnect_source',
+        correlationId: sources.contractVersion,
+        fixtureDemo,
+      })
+    }
+
+    if (
+      request.action === 'validate' ||
+      request.action === 'configure-dry-run'
+    ) {
+      const result = await validateBrokerProviderConfiguration({
+        providerId: request.provider.providerId,
+        providerKind: request.provider.providerKind,
+        displayName: request.provider.displayName,
+        address: request.address ?? request.provider.address,
+        credentialRef:
+          request.credentialRef ?? request.provider.credentialHandle,
+        namespaces: rowActionNamespaces(request),
+        reason: rowActionReason(request),
+      })
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: result.provider.providerId,
+        operation: request.action,
+        state: mapBrokerOutcomeToUiState(result.outcome),
+        summary: `Provider ${request.action} ${result.outcome}.`,
+        nextAction:
+          result.nextAction ??
+          result.provider.nextAction ??
+          'review_plan_before_apply',
+        correlationId: result.requestId,
+        fixtureDemo,
+      })
+    }
+
+    if (request.action === 'configure-apply') {
+      if (!request.confirm) {
+        return buildProviderActionResult({
+          providerId: request.provider.providerId,
+          sourceId: request.provider.providerId,
+          operation: 'configure-apply',
+          state: 'policy-denied',
+          summary:
+            'Configuration apply requires explicit confirmation and an audit reason.',
+          nextAction: 'confirm_with_operation_id_and_audit_reason',
+          fixtureDemo,
+        })
+      }
+      const result = await applyBrokerProviderConfiguration({
+        providerId: request.provider.providerId,
+        providerKind: request.provider.providerKind,
+        displayName: request.provider.displayName,
+        address: request.address ?? request.provider.address,
+        credentialRef:
+          request.credentialRef ?? request.provider.credentialHandle,
+        namespaces: rowActionNamespaces(request),
+        reason: rowActionReason(request),
+        confirm: true,
+        operationId: `serviceadmin-provider-apply-${request.provider.providerId}`,
+      })
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: result.provider.providerId,
+        operation: 'configure-apply',
+        state: mapBrokerOutcomeToUiState(result.outcome),
+        summary: `Provider configure-apply ${result.outcome}.`,
+        nextAction: result.nextAction ?? 'inspect_provider_status',
+        correlationId: result.requestId,
+        fixtureDemo,
+      })
+    }
+
+    return buildProviderActionResult({
+      providerId: request.provider.providerId,
+      sourceId: request.provider.providerId,
+      operation: request.action,
+      state: 'unsupported',
+      summary: 'Provider action is not advertised.',
+      nextAction: 'wait_for_advertised_source_operation',
+      fixtureDemo,
+    })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /credential-bearing metadata/i.test(error.message)
+    ) {
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: request.provider.providerId,
+        operation: request.action,
+        state: 'unavailable',
+        summary:
+          'Provider action failed closed after unsafe metadata was dropped.',
+        nextAction: 'inspect_broker_safety_contract',
+        fixtureDemo,
+      })
+    }
+    return actionResultFromRuntimeError(request, error, fixtureDemo)
+  }
 }
 
 function normalizeBrokerMigrationItem(value: unknown): BrokerMigrationItem {
@@ -5960,7 +6576,10 @@ function normalizeBrokerMigrationResponse(
   }
 }
 
-function validateBrokerMigrationRequest(request: BrokerMigrationRequest) {
+function validateBrokerMigrationRequest(
+  request: BrokerMigrationRequest,
+  apply: boolean
+) {
   requireSafeBrokerIdentifier(request.operationId, 'migration operation id')
   requireSafeBrokerIdentifier(request.sourceProviderId, 'source provider id')
   requireSafeBrokerIdentifier(request.targetProviderId, 'target provider id')
@@ -5973,6 +6592,16 @@ function validateBrokerMigrationRequest(request: BrokerMigrationRequest) {
   request.refs.forEach((ref) =>
     requireSafeBrokerIdentifier(ref, 'migration ref')
   )
+  if (apply && request.revalidated !== true) {
+    throw new Error(
+      'Fresh revalidation is required before provider migration apply.'
+    )
+  }
+  if (apply && !request.planRequestId?.trim()) {
+    throw new Error(
+      'A dry-run plan request id is required before provider migration apply.'
+    )
+  }
 }
 
 async function runBrokerMigration(
@@ -5980,12 +6609,43 @@ async function runBrokerMigration(
   apply: boolean
 ) {
   await wait(120)
-  validateBrokerMigrationRequest(request)
+  validateBrokerMigrationRequest(request, apply)
   if (serviceLassoStubDataEnabled) {
     const target = brokerProviderStatusFixture.providers.find(
       (provider) => provider.providerId === request.targetProviderId
     )
     const executable = Boolean(target && providerSupportsMigrationApply(target))
+    if (apply && request.planRequestId === 'stale-plan') {
+      return structuredClone({
+        serviceId: secretsBrokerServiceId,
+        apiVersion: brokerProviderStatusFixture.apiVersion,
+        requestId: `stub-migration-stale-${Date.now()}`,
+        operationId: request.operationId,
+        operation: 'migration_apply',
+        outcome: 'stale_plan',
+        applied: false,
+        requiresConfirmation: true,
+        auditStatus: 'audit_recorded',
+        nextAction: 'revalidate_exact_plan',
+        sourceProviderId: request.sourceProviderId,
+        targetProviderId: request.targetProviderId,
+        results: request.refs.map((ref) => ({
+          ref,
+          sourceProviderId: request.sourceProviderId,
+          targetProviderId: request.targetProviderId,
+          ownerServiceId: 'app',
+          state: 'stale',
+          outcome: 'stale',
+          risk: 'high',
+          expectedAction: 'revalidate_exact_plan',
+          policyResult: 'allowed',
+          auditRequirement: 'required',
+          recovery: 'preview_and_revalidate_before_apply',
+        })),
+        rollback:
+          'source remains authoritative; restore from encrypted backup if needed',
+      } satisfies BrokerMigrationResult)
+    }
     const nowOutcome = apply
       ? executable
         ? 'applied'
@@ -6037,6 +6697,8 @@ async function runBrokerMigration(
         refs: request.refs,
         reason: request.reason.trim(),
         confirm: apply,
+        revalidated: apply ? true : false,
+        planRequestId: request.planRequestId,
       }),
     }
   )
@@ -6747,6 +7409,56 @@ function validateLifecycleOperationRequest(
   }
 }
 
+function requireBackupDestinationPolicy(
+  request: BrokerLifecycleOperationRequest
+) {
+  if (request.destinationPolicy !== OPERATOR_BACKUP_DESTINATION) {
+    throw new Error(
+      'An explicit operator-retained encrypted backup destination is required.'
+    )
+  }
+}
+
+function requireSafeLifecycleMutation<
+  T extends {
+    auditStatus: string
+    outcome: string
+  },
+>(result: T, extras?: { verification?: string }): T {
+  assertSafeLifecycleMutation({
+    auditStatus: result.auditStatus,
+    outcome: result.outcome,
+    verification: extras?.verification,
+  })
+  return result
+}
+
+function requireSafeRestoreResult(
+  result: BrokerLifecycleRestoreResult,
+  request: BrokerLifecycleOperationRequest,
+  applied: boolean
+): BrokerLifecycleRestoreResult {
+  requireSafeLifecycleMutation(result, {
+    verification: result.backup?.verification,
+  })
+  if (!applied && restorePlanIsStale(result.planExpiresAt)) {
+    throw new Error('Lifecycle mutation failed closed: stale_plan.')
+  }
+  if (
+    request.expectedKeyId &&
+    result.expectedKeyId &&
+    request.expectedKeyId !== result.expectedKeyId
+  ) {
+    throw new Error('Lifecycle mutation failed closed: wrong_key.')
+  }
+  if (applied && result.applied !== true) {
+    throw new Error(
+      'Lifecycle mutation failed closed: restore was not applied.'
+    )
+  }
+  return result
+}
+
 async function postBrokerLifecycle(
   section: string,
   request: BrokerLifecycleOperationRequest
@@ -6817,6 +7529,7 @@ export async function createBrokerLifecycleBackup(
   request: BrokerLifecycleOperationRequest
 ) {
   validateLifecycleOperationRequest(request)
+  requireBackupDestinationPolicy(request)
   if (serviceLassoStubDataEnabled) {
     const now = new Date().toISOString()
     return structuredClone({
@@ -6840,15 +7553,22 @@ export async function createBrokerLifecycleBackup(
       nextAction: 'retain_backup_separately_from_recovery_material',
     } satisfies BrokerLifecycleBackupResult)
   }
-  return normalizeLifecycleBackupResult(
+  const result = normalizeLifecycleBackupResult(
     await postBrokerLifecycle('backups/create', request)
   )
+  return requireSafeLifecycleMutation(result, {
+    verification: result.backup?.verification,
+  })
 }
 
 export async function verifyBrokerLifecycleBackup(
   request: BrokerLifecycleOperationRequest
 ) {
   validateLifecycleOperationRequest(request, true)
+  const backupId = request.backupId
+  if (!backupId) {
+    throw new Error('A backup selection is required.')
+  }
   if (serviceLassoStubDataEnabled) {
     return structuredClone({
       serviceId: '@secretsbroker',
@@ -6857,7 +7577,7 @@ export async function verifyBrokerLifecycleBackup(
       applied: false,
       backup: {
         schema: 'service-lasso.secretsbroker.backup-metadata.v1',
-        backupId: request.backupId!,
+        backupId,
         createdAt: new Date().toISOString(),
         storeKeyId: 'mk-stub',
         storeKeyVersion: 'v1',
@@ -6871,9 +7591,12 @@ export async function verifyBrokerLifecycleBackup(
       nextAction: 'backup_verified',
     } satisfies BrokerLifecycleBackupResult)
   }
-  return normalizeLifecycleBackupResult(
+  const result = normalizeLifecycleBackupResult(
     await postBrokerLifecycle('backups/verify', request)
   )
+  return requireSafeLifecycleMutation(result, {
+    verification: result.backup?.verification,
+  })
 }
 
 export async function previewBrokerLifecycleRestore(
@@ -6895,8 +7618,15 @@ export async function previewBrokerLifecycleRestore(
       nextAction: 'confirm_exact_restore_plan',
     } satisfies BrokerLifecycleRestoreResult)
   }
-  return normalizeLifecycleRestoreResult(
-    await postBrokerLifecycle('restore/dry-run', { ...request, confirm: false })
+  return requireSafeRestoreResult(
+    normalizeLifecycleRestoreResult(
+      await postBrokerLifecycle('restore/dry-run', {
+        ...request,
+        confirm: false,
+      })
+    ),
+    request,
+    false
   )
 }
 
@@ -6923,8 +7653,12 @@ export async function applyBrokerLifecycleRestore(
       nextAction: 'restart_and_verify_broker',
     } satisfies BrokerLifecycleRestoreResult)
   }
-  return normalizeLifecycleRestoreResult(
-    await postBrokerLifecycle('restore/apply', request)
+  return requireSafeRestoreResult(
+    normalizeLifecycleRestoreResult(
+      await postBrokerLifecycle('restore/apply', request)
+    ),
+    request,
+    true
   )
 }
 
@@ -6951,8 +7685,10 @@ export async function rotateBrokerLifecycleKey(
       nextAction: 'create_and_verify_rotated_backup',
     } satisfies BrokerLifecycleRotateResult)
   }
-  return normalizeLifecycleRotateResult(
-    await postBrokerLifecycle('key/rotate', request)
+  return requireSafeLifecycleMutation(
+    normalizeLifecycleRotateResult(
+      await postBrokerLifecycle('key/rotate', request)
+    )
   )
 }
 

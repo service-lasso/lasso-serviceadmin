@@ -131,6 +131,7 @@ import {
 } from './release-capability-panels'
 import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
 import { SecretsBrokerOperationsPanel } from './secrets-operations-panel'
+import { SecretsBrokerTopologyPanel } from './secrets-topology-panel'
 import { ServiceConfigEditor } from './service-config-editor'
 import {
   defaultServiceDetailTab,
@@ -1858,6 +1859,7 @@ export function ServiceDetail({
                     >
                       <SecretsBrokerOperationsPanel />
                       <SecretsBrokerLifecyclePanel />
+                      <SecretsBrokerTopologyPanel />
                       <SecretsBrokerSecretsPanel
                         rotationOperationId={rotationOperationId}
                         onRotationOperationChange={onRotationOperationChange}

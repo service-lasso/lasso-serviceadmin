@@ -42,7 +42,7 @@ import { Route as AuthenticatedSecretsBrokerBackupKeysRouteImport } from './rout
 import { Route as AuthenticatedSecretsBrokerConfigurationRouteImport } from './routes/_authenticated/secrets-broker/configuration'
 import { Route as AuthenticatedSecretsBrokerDiagnosticsRouteImport } from './routes/_authenticated/secrets-broker/diagnostics'
 import { Route as AuthenticatedSecretsBrokerOperationalControlsRouteImport } from './routes/_authenticated/secrets-broker/operational-controls'
-import { Route as AuthenticatedSecretsBrokerPolicySimulationRouteImport } from './routes/_authenticated/secrets-broker/policy-simulation'
+import { Route as AuthenticatedSecretsBrokerPolicySimulationRouteImport } from './routes/_authenticated/secrets-broker.policy-simulation'
 import { Route as AuthenticatedSecretsBrokerProviderConnectionsRouteImport } from './routes/_authenticated/secrets-broker/provider-connections'
 import { Route as AuthenticatedSecretsBrokerReviewRouteImport } from './routes/_authenticated/secrets-broker/review'
 import { Route as AuthenticatedSecretsBrokerSecretInventoryRouteImport } from './routes/_authenticated/secrets-broker/secret-inventory'

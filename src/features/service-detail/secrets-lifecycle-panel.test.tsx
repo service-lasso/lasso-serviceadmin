@@ -50,6 +50,7 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
           shareFingerprints: ['fp-1', 'fp-2', 'fp-3'],
         },
       },
+      auditStatus: 'audit_recorded',
     },
   }),
   useBrokerLifecycleBackups: () => ({
@@ -97,7 +98,7 @@ beforeEach(() => {
     applied: false,
     requiresConfirmation: true,
     planToken: 'restore-plan-safe',
-    planExpiresAt: '2026-08-14T00:05:00Z',
+    planExpiresAt: '2099-01-01T00:05:00Z',
     expectedKeyId: 'mk-safe',
     expectedStoreHash: 'sha256-safe-store-hash',
     auditStatus: 'audit_recorded',
@@ -134,7 +135,10 @@ describe('Secrets Broker lifecycle panel', () => {
     )
     expect(await screen.findByText(/created and verified/i)).toBeVisible()
     expect(mutations.create).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'release lifecycle verification' })
+      expect.objectContaining({
+        reason: 'release lifecycle verification',
+        destinationPolicy: 'operator-retained-encrypted-artifact',
+      })
     )
 
     await user.click(screen.getByRole('button', { name: /^Verify$/i }))

@@ -28,6 +28,7 @@ import {
   applyBrokerBulkCampaign,
   applyBrokerLifecycleRestore,
   applyBrokerMigration,
+  applyBrokerProviderConfiguration,
   applyManagedSecretCreate,
   applyManagedSecretMutation,
   applySecretDecommission,
@@ -41,6 +42,8 @@ import {
   fetchBrokerLifecycleBackups,
   fetchBrokerLifecycleStatus,
   fetchBrokerProviderStatus,
+  fetchBrokerProviderCapabilities,
+  fetchBrokerSourceStatus,
   fetchBrokerTelemetry,
   fetchCoreSecretRotationExecutionState,
   fetchCoreSecretRotationImpactPlan,
@@ -63,6 +66,7 @@ import {
   revalidateBrokerBulkCampaign,
   rotateBrokerLifecycleKey,
   runInboxMessageAction,
+  runBrokerProviderRowAction,
   runSecretRotationVersionAction,
   runServiceLifecycleAction,
   runServiceRecoveryDoctorAction,
@@ -79,6 +83,8 @@ import type {
   BrokerLifecycleOperationRequest,
   BrokerLockoutClearRequest,
   BrokerMigrationRequest,
+  BrokerProviderConfigureRequest,
+  BrokerProviderRowActionRequest,
   BrokerProviderValidationRequest,
   CoreSecretRotationExecutionRequest,
   DashboardAction,
@@ -489,6 +495,45 @@ export function useBrokerProviderValidation() {
       validateBrokerProviderConfiguration(request),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: brokerProviderQueryKey }),
+  })
+}
+
+export function useBrokerProviderConfigure() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerProviderConfigureRequest) =>
+      applyBrokerProviderConfiguration(request),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: brokerProviderQueryKey }),
+  })
+}
+
+export function useBrokerSourceStatus() {
+  return useQuery({
+    queryKey: [...brokerProviderQueryKey, 'sources'],
+    queryFn: fetchBrokerSourceStatus,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useBrokerProviderCapabilities() {
+  return useQuery({
+    queryKey: [...brokerProviderQueryKey, 'capabilities'],
+    queryFn: fetchBrokerProviderCapabilities,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useBrokerProviderRowAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: BrokerProviderRowActionRequest) =>
+      runBrokerProviderRowAction(request),
+    onSuccess: (result) => {
+      if (result.phase === 'success') {
+        queryClient.invalidateQueries({ queryKey: brokerProviderQueryKey })
+      }
+    },
   })
 }
 

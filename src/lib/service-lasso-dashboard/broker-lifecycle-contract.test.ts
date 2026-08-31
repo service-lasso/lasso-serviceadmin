@@ -52,7 +52,7 @@ function restoreResult(applied: boolean) {
     applied,
     backup,
     planToken: applied ? undefined : 'restore-plan-safe',
-    planExpiresAt: applied ? undefined : '2026-08-14T00:05:00Z',
+    planExpiresAt: applied ? undefined : '2099-01-01T00:05:00Z',
     expectedKeyId: 'mk-safe',
     expectedStoreHash: 'sha256-safe-store-hash',
     requiresConfirmation: !applied,
@@ -127,6 +127,7 @@ describe('canonical Broker lifecycle client', () => {
     await client.createBrokerLifecycleBackup({
       operationId: 'serviceadmin-backup-create',
       reason: 'release backup',
+      destinationPolicy: 'operator-retained-encrypted-artifact',
     })
     await client.verifyBrokerLifecycleBackup({
       operationId: 'serviceadmin-backup-verify',
@@ -145,6 +146,10 @@ describe('canonical Broker lifecycle client', () => {
       expect(body).not.toHaveProperty('recoveryShare')
       expect(body).not.toHaveProperty('passphrase')
     }
+    const createBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(createBody.destinationPolicy).toBe(
+      'operator-retained-encrypted-artifact'
+    )
   })
 
   it('binds restore apply to the exact dry-run plan and explicit confirmation', async () => {
@@ -245,4 +250,98 @@ describe('canonical Broker lifecycle client', () => {
       )
     }
   )
+
+  it('fails closed when audit is unavailable', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        ...backupResult(true),
+        auditStatus: 'audit_unavailable',
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await expect(
+      client.createBrokerLifecycleBackup({
+        operationId: 'serviceadmin-backup-create',
+        reason: 'release backup',
+        destinationPolicy: 'operator-retained-encrypted-artifact',
+      })
+    ).rejects.toThrow(/audit is unavailable/i)
+  })
+
+  it('fails closed when backup verification is invalid', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        ...backupResult(false),
+        backup: { ...backup, verification: 'invalid' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await expect(
+      client.verifyBrokerLifecycleBackup({
+        operationId: 'serviceadmin-backup-verify',
+        reason: 'release verification',
+        backupId: backup.backupId,
+      })
+    ).rejects.toThrow(/corrupted/i)
+  })
+
+  it('fails closed when the restore plan is stale', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        ...restoreResult(false),
+        planExpiresAt: '2000-01-01T00:00:00.000Z',
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await expect(
+      client.previewBrokerLifecycleRestore({
+        operationId: 'serviceadmin-restore-stale',
+        reason: 'approved recovery',
+        backupId: backup.backupId,
+      })
+    ).rejects.toThrow(/stale_plan/i)
+  })
+
+  it('fails closed when the expected restore key does not match', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        ...restoreResult(true),
+        expectedKeyId: 'mk-other',
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await expect(
+      client.applyBrokerLifecycleRestore({
+        operationId: 'serviceadmin-restore-wrong-key',
+        reason: 'approved recovery',
+        backupId: backup.backupId,
+        planToken: 'restore-plan-safe',
+        expectedKeyId: 'mk-safe',
+        expectedStoreHash: 'sha256-safe-store-hash',
+        confirm: true,
+      })
+    ).rejects.toThrow(/wrong_key/i)
+  })
+
+  it('rejects backup create without an explicit destination policy', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await expect(
+      client.createBrokerLifecycleBackup({
+        operationId: 'serviceadmin-backup-create',
+        reason: 'release backup',
+      })
+    ).rejects.toThrow(/destination/i)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

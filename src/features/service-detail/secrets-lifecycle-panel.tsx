@@ -6,6 +6,11 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import {
+  OPERATOR_BACKUP_DESTINATION,
+  lifecycleAuditIsRecorded,
+  restorePlanIsStale,
+} from '@/lib/service-lasso-dashboard/broker-lifecycle-gates'
+import {
   useBrokerLifecycleBackupCreate,
   useBrokerLifecycleBackups,
   useBrokerLifecycleBackupVerify,
@@ -15,6 +20,7 @@ import {
   useBrokerLifecycleStatus,
   useRuntimeIdentity,
 } from '@/lib/service-lasso-dashboard/hooks'
+import { serviceLassoStubDataEnabled } from '@/lib/service-lasso-dashboard/stub'
 import type {
   BrokerLifecycleBackup,
   BrokerLifecycleRestoreResult,
@@ -77,8 +83,11 @@ export function SecretsBrokerLifecyclePanel() {
   const canRestore = permitted('backup:restore')
   const canManageKeys = permitted('security:manage')
   const status = useBrokerLifecycleStatus(canManageKeys)
+  const auditRecorded = lifecycleAuditIsRecorded(status.data?.auditStatus ?? '')
+  const mutationsLocked = Boolean(status.data) && !auditRecorded
   const canRotateManagedKey =
     canManageKeys &&
+    !mutationsLocked &&
     status.data?.wrapper.supported === true &&
     status.data.wrapper.available === true &&
     status.data.wrapper.state === 'ready'
@@ -117,6 +126,7 @@ export function SecretsBrokerLifecyclePanel() {
       const result = await createBackup.mutateAsync({
         operationId: backupOperationId,
         reason: reason.trim(),
+        destinationPolicy: OPERATOR_BACKUP_DESTINATION,
       })
       if (
         result.outcome !== 'ready' ||
@@ -194,6 +204,13 @@ export function SecretsBrokerLifecyclePanel() {
 
   const runRestore = async () => {
     if (!selectedBackup || !restorePlan || !restoreConfirmed) return
+    if (restorePlanIsStale(restorePlan.planExpiresAt)) {
+      setRestoreConfirmed(false)
+      setError(
+        'Restore did not reach a verified terminal state. Inspect Broker audit and current store status, then create a fresh plan before retrying.'
+      )
+      return
+    }
     setError(null)
     try {
       const result = await applyRestore.mutateAsync({
@@ -269,9 +286,22 @@ export function SecretsBrokerLifecyclePanel() {
         <CardDescription>
           Live Broker lifecycle metadata and audited operations. Key bytes,
           recovery shares, passphrases and backup paths never enter this page.
+          Encrypted backups are retained as operator-held artifacts, separate
+          from recovery material.
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-5'>
+        {serviceLassoStubDataEnabled ? (
+          <p className='text-sm text-amber-700 dark:text-amber-300'>
+            Stub/fixture mode. These results are labelled fixtures, not live
+            Broker lifecycle operations.
+          </p>
+        ) : null}
+        {mutationsLocked ? (
+          <p className='text-sm text-destructive'>
+            Lifecycle mutations are locked because Broker audit is unavailable.
+          </p>
+        ) : null}
         <div className='grid gap-3 md:grid-cols-3'>
           <div className='rounded-lg border p-3'>
             <div className='flex items-center gap-2 font-medium'>
@@ -320,7 +350,9 @@ export function SecretsBrokerLifecyclePanel() {
           <Button
             type='button'
             variant='outline'
-            disabled={!canCreateBackup || createBackup.isPending}
+            disabled={
+              !canCreateBackup || mutationsLocked || createBackup.isPending
+            }
             onClick={runBackupCreate}
           >
             <DatabaseBackup className='mr-2 size-4' /> Create encrypted backup
@@ -397,6 +429,7 @@ export function SecretsBrokerLifecyclePanel() {
                       variant='outline'
                       disabled={
                         !canReadBackups ||
+                        mutationsLocked ||
                         backup.verification !== 'verified' ||
                         verifyBackup.isPending
                       }
@@ -409,7 +442,9 @@ export function SecretsBrokerLifecyclePanel() {
                       size='sm'
                       variant='outline'
                       disabled={
-                        !canRestore || backup.verification !== 'verified'
+                        !canRestore ||
+                        mutationsLocked ||
+                        backup.verification !== 'verified'
                       }
                       onClick={() => openRestore(backup)}
                     >
@@ -480,7 +515,10 @@ export function SecretsBrokerLifecyclePanel() {
             <Button
               type='button'
               disabled={
-                !restorePlan || !restoreConfirmed || applyRestore.isPending
+                !restorePlan ||
+                !restoreConfirmed ||
+                restorePlanIsStale(restorePlan.planExpiresAt) ||
+                applyRestore.isPending
               }
               onClick={runRestore}
             >

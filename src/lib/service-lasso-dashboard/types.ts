@@ -749,12 +749,138 @@ export type BrokerProviderValidationResult = {
   provider: BrokerProviderStatus
 }
 
+export type BrokerProviderConfigureRequest = BrokerProviderValidationRequest & {
+  confirm: boolean
+  operationId: string
+}
+
+export type BrokerProviderConfigureResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operation: 'configure'
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction?: string
+  provider: BrokerProviderStatus
+}
+
+export type BrokerProviderCapabilityRecord = {
+  providerKind: string
+  displayName: string
+  supported: boolean
+  capabilities: string[]
+  operations: BrokerOperationCapability[]
+  limitations: string[]
+}
+
+export type BrokerProviderCapabilitiesState = {
+  serviceId: string
+  apiVersion: string
+  contractVersion: string
+  manifestVersion: string
+  outcome: string
+  capabilities: BrokerProviderCapabilityRecord[]
+}
+
+export type BrokerSourceStatus = {
+  sourceId: string
+  kind: string
+  displayName: string
+  enabled: boolean
+  critical: boolean
+  state: string
+  outcome: string
+  namespaces: string[]
+  capabilities: string[]
+  operations: BrokerOperationCapability[]
+  nextAction?: string
+  auditStatus: string
+  retryable?: boolean
+  priority?: number
+}
+
+export type BrokerSourceStatusState = {
+  serviceId: string
+  apiVersion: string
+  contractVersion: string
+  manifestVersion: string
+  sources: BrokerSourceStatus[]
+}
+
+/**
+ * Typed UI states for Secrets Broker provider row actions.
+ */
+export type BrokerProviderActionUiState =
+  | 'ready'
+  | 'loading'
+  | 'unavailable'
+  | 'setup-needed'
+  | 'locked'
+  | 'auth-required'
+  | 'policy-denied'
+  | 'unsupported'
+  | 'degraded'
+  | 'audit-unavailable'
+
+/**
+ * Clicked-row chrome for a provider action attempt.
+ */
+export type BrokerProviderActionPhase =
+  | 'pending'
+  | 'success'
+  | 'failure'
+  | 'blocked'
+
+export type BrokerProviderRowActionName =
+  | 'status'
+  | 'capabilities'
+  | 'validate'
+  | 'reconnect'
+  | 'configure-dry-run'
+  | 'configure-apply'
+  | 'disable'
+  | 'remove'
+
+export type BrokerProviderRowActionRequest = {
+  action: BrokerProviderRowActionName
+  provider: BrokerProviderStatus
+  reason?: string
+  confirm?: boolean
+  address?: string
+  credentialRef?: string
+  namespaces?: string[]
+}
+
+/**
+ * Safe metadata only. Never include credentials, tokens, headers, secret
+ * values, env, keys, cookies, or request/response bodies.
+ */
+export type BrokerProviderActionResult = {
+  providerId: string
+  sourceId: string
+  operation: BrokerProviderRowActionName
+  phase: BrokerProviderActionPhase
+  state: BrokerProviderActionUiState
+  summary: string
+  nextAction: string
+  correlationId?: string
+  checkedAt: string
+  fixtureDemo: boolean
+}
+
 export type BrokerMigrationRequest = {
   operationId: string
   sourceProviderId: string
   targetProviderId: string
   refs: string[]
   reason: string
+  /** True only after a fresh dry-run revalidation of this exact plan. */
+  revalidated?: boolean
+  /** Broker request id from the latest accepted dry-run. */
+  planRequestId?: string
 }
 
 export type BrokerMigrationItem = {
@@ -837,6 +963,8 @@ export type BrokerLifecycleOperationRequest = {
   expectedKeyId?: string
   expectedStoreHash?: string
   confirm?: boolean
+  /** Explicit destination for created encrypted backups. */
+  destinationPolicy?: string
 }
 
 export type BrokerLifecycleBackupResult = {
@@ -1032,6 +1160,8 @@ export type BrokerOperationalEvent = {
   refHash?: string
   outcome: string
   requestId?: string
+  lockoutScope?: string
+  retryAfterSeconds?: number
 }
 
 export type BrokerEventFilters = {
@@ -1386,6 +1516,8 @@ export type FirstRunSetupStatus =
   | 'setup_in_progress'
   | 'setup_complete'
   | 'setup_failed'
+  | 'lost_key'
+  | 'recreate_required'
 
 export type FirstRunSetupState = {
   contractVersion: 'service-lasso.setup-status.v1'
@@ -1663,6 +1795,36 @@ export type SecretAccessAssignmentFinding = {
   }
 }
 
+/**
+ * One `broker.accessPolicy.grants[]` row from Core
+ * `docs/reference/service-secret-access-policy.md`.
+ */
+export type SecretAccessPolicyOperation =
+  | 'resolve'
+  | 'create'
+  | 'update'
+  | 'rotate'
+  | 'delete'
+
+export type SecretAccessPolicyScope =
+  | 'workspace'
+  | 'service'
+  | 'app'
+  | 'shared'
+  | 'global'
+
+export type SecretAccessPolicyGrant = {
+  id: string
+  serviceId: string
+  workspace: string | null
+  namespace: string
+  scope: SecretAccessPolicyScope | null
+  refs: string[]
+  namespaceWide: boolean
+  operations: SecretAccessPolicyOperation[]
+  purpose: string
+}
+
 export type SecretAccessAssignmentAudit = {
   services: Array<{
     serviceId: string
@@ -1681,6 +1843,7 @@ export type SecretAccessAssignmentAudit = {
     missing: number
     malformed: number
   }
+  grants: SecretAccessPolicyGrant[]
 }
 
 export type McpRole =

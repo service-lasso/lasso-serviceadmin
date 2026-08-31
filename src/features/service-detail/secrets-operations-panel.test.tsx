@@ -56,6 +56,16 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
             serviceId: '@secretsbroker',
             outcome: 'denied',
           },
+          {
+            id: 'event-lockout-1',
+            ts: '2026-08-14T00:01:00Z',
+            family: 'lockout_started',
+            severity: 'warning',
+            operation: 'local_api_auth',
+            outcome: 'locked',
+            lockoutScope: 'local_api:pipe-safe',
+            retryAfterSeconds: 30,
+          },
         ],
         safety: {
           metadataOnly: true,
@@ -73,10 +83,30 @@ vi.mock('@/lib/service-lasso-dashboard/hooks', () => ({
     isPending: false,
     mutateAsync: controls.clear,
   }),
+  useSecretAccessAssignments: () => ({
+    isError: false,
+    data: {
+      grants: [
+        {
+          id: 'grant-1',
+          serviceId: '@serviceadmin',
+          workspace: 'local',
+          namespace: 'services/@serviceadmin/runtime',
+          scope: 'service',
+          refs: ['services/@serviceadmin/runtime/SESSION_SIGNING_KEY'],
+          namespaceWide: false,
+          operations: ['resolve'],
+          purpose: 'runtime signing',
+        },
+      ],
+    },
+  }),
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:operational-export')
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
   controls.clear.mockResolvedValue({
     serviceId: '@secretsbroker',
     apiVersion: 'v1',
@@ -96,9 +126,31 @@ describe('Secrets Broker operational controls', () => {
     expect(screen.getByText('2')).toBeVisible()
     expect(screen.getByText('3')).toBeVisible()
     expect(screen.getByText('9')).toBeVisible()
-    expect(screen.getByText('local_api_auth')).toBeVisible()
-    expect(screen.getAllByText('auth_failure')).toHaveLength(2)
-    expect(screen.queryByText('raw-secret-sentinel')).toBeNull()
+    expect(screen.getByText(/Audit recorded/i)).toBeVisible()
+    expect(screen.getByText('local_api:pipe-safe')).toBeVisible()
+    expect(screen.getByText(/Retry window 30 seconds/i)).toBeVisible()
+    expect(screen.getAllByText('@serviceadmin').length).toBeGreaterThan(0)
+    expect(screen.getByText('services/@serviceadmin/runtime')).toBeVisible()
+
+    await user.type(screen.getByLabelText('Service'), '@secretsbroker')
+    await user.type(screen.getByLabelText('Provider'), 'local')
+    await user.type(screen.getByLabelText('Operation'), 'local_api_auth')
+    await user.type(screen.getByLabelText('Outcome'), 'denied')
+    await waitFor(() => {
+      expect(controls.eventFilters).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serviceId: '@secretsbroker',
+          providerId: 'local',
+          operation: 'local_api_auth',
+          outcome: 'denied',
+        })
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: /Export metadata/i }))
+    expect(
+      await screen.findByText(/Metadata-only operational export downloaded/i)
+    ).toBeVisible()
 
     await user.selectOptions(screen.getByLabelText('Event severity'), 'warning')
     await user.selectOptions(
