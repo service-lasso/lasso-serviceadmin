@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  clearLocalOperatorSession,
+  writeLocalOperatorSession,
+} from './local-operator-session'
+import {
   RuntimeApiUnavailableError,
   fetchRuntimeJson,
   getRuntimeApiUnavailableCopy,
@@ -8,7 +12,31 @@ import {
 
 describe('runtime API unavailable handling', () => {
   afterEach(() => {
+    clearLocalOperatorSession()
     vi.unstubAllGlobals()
+  })
+
+  it('attaches the local-operator session to shared runtime requests', async () => {
+    writeLocalOperatorSession('test-session-token')
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers)
+        expect(headers.get('x-service-lasso-admin-token')).toBe(
+          'test-session-token'
+        )
+        expect(init?.credentials).toBe('same-origin')
+        return Response.json({ ok: true })
+      }
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      fetchRuntimeJson('/api/runtime/security', {
+        apiBaseUrl: '',
+        mode: 'packaged-runtime',
+      })
+    ).resolves.toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses packaged runtime guidance without Vite env variables', () => {

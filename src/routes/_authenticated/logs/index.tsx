@@ -4,6 +4,7 @@ import { Logs } from '@/features/logs'
 
 const logsSearchSchema = z.object({
   service: z.string().optional().catch(undefined),
+  source: z.string().optional().catch(undefined),
 })
 
 export const Route = createFileRoute('/_authenticated/logs/')({

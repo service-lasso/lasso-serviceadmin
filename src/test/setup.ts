@@ -4,8 +4,6 @@ import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth-store'
 
-import.meta.env.VITE_SERVICE_LASSO_ENABLE_STUB_DATA = 'true'
-
 class ResizeObserverMock {
   observe() {}
   unobserve() {}
@@ -24,6 +22,7 @@ class IntersectionObserverMock {
   unobserve() {}
 }
 
+// eslint-disable-next-line no-console
 const originalConsoleError = console.error
 
 beforeAll(() => {
@@ -76,9 +75,14 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
   cleanup()
+
+  // input-otp schedules unmanaged jsdom timers up to 50 ms after render.
+  // Let them drain before Vitest tears down `window` on fast Linux runners.
+  await new Promise((resolve) => setTimeout(resolve, 60))
+
   window.localStorage?.clear?.()
   window.sessionStorage?.clear?.()
   document.cookie = ''

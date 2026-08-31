@@ -6,6 +6,7 @@ import {
   managedServiceStopRequestOptions,
   managedServiceStopRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
+import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 
@@ -39,8 +40,11 @@ describe('packaged Service Admin stopped Broker recovery', () => {
 
   it('renders unavailable management and recovers inventory after one restart', () => {
     cy.visit('/services/%40secretsbroker')
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    unlockTrustedIdentity()
     cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
+    cy.contains(expectedRef, { timeout: 30_000 }).then(($cell) => {
+      $cell[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+    })
     cy.contains(expectedRef, { timeout: 30_000 }).should('be.visible')
 
     cy.request(
@@ -56,7 +60,7 @@ describe('packaged Service Admin stopped Broker recovery', () => {
       'stoppedBrokerManagement'
     )
     cy.reload()
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    unlockTrustedIdentity()
     cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
     cy.wait('@stoppedBrokerManagement', { timeout: 20_000 }).then(
       ({ response }) => {
@@ -76,6 +80,9 @@ describe('packaged Service Admin stopped Broker recovery', () => {
       .its('status')
       .should('equal', 200)
     cy.contains('button', 'Retry inventory').click()
+    cy.contains(expectedRef, { timeout: 30_000 }).then(($cell) => {
+      $cell[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+    })
     cy.contains(expectedRef, { timeout: 30_000 }).should('be.visible')
 
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')

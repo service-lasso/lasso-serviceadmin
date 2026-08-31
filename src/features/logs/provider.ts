@@ -1,29 +1,173 @@
 import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
-import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
+import type {
+  DashboardService,
+  ServiceLogType,
+} from '@/lib/service-lasso-dashboard/types'
 
 const logsDebugEnabled =
-  import.meta.env.DEV ||
+  (import.meta.env.DEV && import.meta.env.MODE !== 'test') ||
   import.meta.env.VITE_SERVICE_LASSO_LOGS_DEBUG === 'true'
 const relativeLogsApiBaseUrl = ''
 
+/** Canonical Logs tab id for merged stdout, stderr, and service.log content. */
+export const ALL_LOG_SOURCE = 'default'
+
+/**
+ * Maps advertised combined/all source ids onto the Core `default` log type.
+ */
+export function canonicalLogSourceId(
+  sourceId: string | undefined
+): ServiceLogType {
+  if (!sourceId || sourceId === 'combined' || sourceId === 'all') {
+    return ALL_LOG_SOURCE
+  }
+
+  return sourceId
+}
+
+/**
+ * Query `type` value Core accepts for a Logs source tab.
+ */
+export function resolveServiceLogReadType(
+  type: ServiceLogType
+): ServiceLogType {
+  return canonicalLogSourceId(type)
+}
+
 export type ServiceLogInfo = {
   serviceId: string
-  type: 'default' | 'access' | 'error'
-  path: string
-  availableTypes: string[]
+  type: ServiceLogType
+  path?: string | null
+  available?: boolean
+  availableTypes: ServiceLogType[]
+  source?: ServiceLogSource
+  sources?: ServiceLogSource[]
+  stdin?: ServiceTerminalStdinCapability
+  capabilities?: {
+    stdin?: ServiceTerminalStdinCapability
+  }
 }
 
 export type ServiceLogChunk = {
   serviceId: string
-  type: 'default' | 'access' | 'error'
-  path: string
+  type: ServiceLogType
+  path?: string | null
+  available?: boolean
+  source?: ServiceLogSource
   totalLines: number
   start: number
   end: number
   hasMore: boolean
   nextBefore: number
+  cursor?: string | null
+  nextCursor?: string | null
   limit: number
   lines: string[]
+  entries?: Array<{
+    stream?: 'stdout' | 'stderr' | 'unknown' | string
+    message: string
+    text?: string
+  }>
+}
+
+export type ServiceLogSource = {
+  kind?: 'current' | 'archive' | string
+  stream?: 'combined' | 'stdout' | 'stderr' | string
+  id?: string
+  label?: string
+  name?: string
+  fileName?: string
+  runId?: string
+  path?: string | null
+  available?: boolean
+  cursor?: string | number | null
+  offset?: string | number | null
+}
+
+export type ServiceTerminalStdinCapability = {
+  available: boolean
+  reason?: string
+  auditRequired?: boolean
+  policy?: 'allowed' | 'denied' | 'unavailable' | string
+  provider?: string
+}
+
+export type ServiceTerminalInputResult = {
+  serviceId: string
+  accepted: boolean
+  auditId?: string
+  message?: string
+}
+
+export type ServiceLogOverviewEntry = {
+  timestamp?: string
+  level: string
+  message: string
+}
+
+export type ServiceLogOverview = {
+  serviceId: string
+  runId?: string
+  logPath?: string
+  stdoutPath?: string
+  stderrPath?: string
+  entries: ServiceLogOverviewEntry[]
+  archives: unknown[]
+  retention?: {
+    maxArchives?: number
+  }
+}
+
+type ServiceLogOverviewResponse = {
+  logs: ServiceLogOverview
+}
+
+export function redactLogLine(line: string) {
+  return line
+    .replace(
+      /\b(authorization)(\s*[:=]\s*)Bearer\s+([A-Za-z0-9._~+/-]+=*)/gi,
+      '$1$2[redacted]'
+    )
+    .replace(
+      /\b(password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key|cookie|authorization)(\s*[:=]\s*)([^\s,;]+)/gi,
+      '$1$2[redacted]'
+    )
+    .replace(/\b(Bearer)\s+([A-Za-z0-9._~+/-]+=*)/gi, '$1 [redacted]')
+}
+
+/**
+ * Decode Core combined/default NDJSON into display text for the Terminal I/O view.
+ */
+export function decodeCombinedTerminalLine(line: string) {
+  try {
+    const parsed: unknown = JSON.parse(line)
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      'message' in parsed &&
+      typeof parsed.message === 'string'
+    ) {
+      return parsed.message
+    }
+  } catch {
+    // Plain stdout/stderr lines are already display-ready.
+  }
+
+  return line
+}
+
+/**
+ * Build redacted Terminal scrollback from a combined log chunk.
+ */
+export function terminalLinesFromChunk(chunk: ServiceLogChunk) {
+  if (chunk.entries && chunk.entries.length > 0) {
+    return chunk.entries.map((entry) => redactLogLine(entry.message))
+  }
+
+  return chunk.lines.map((line) =>
+    redactLogLine(decodeCombinedTerminalLine(line))
+  )
 }
 
 export function debugLogs(message: string, details?: Record<string, unknown>) {
@@ -50,26 +194,40 @@ function resolveLogsApiBaseUrl() {
   return serviceLassoApiBaseUrl ?? relativeLogsApiBaseUrl
 }
 
-function buildLogsApiUrl(
-  pathname: '/api/services/log-info' | '/api/logs/read',
-  params: URLSearchParams
-) {
+function buildLogsApiUrl(pathname: string, params: URLSearchParams) {
   return `${resolveLogsApiBaseUrl()}${pathname}?${params.toString()}`
+}
+
+function encodeServiceId(serviceId: string) {
+  return encodeURIComponent(serviceId)
+}
+
+function buildServiceLogsOverviewUrl(serviceId: string) {
+  return `${resolveLogsApiBaseUrl()}/api/services/${encodeServiceId(
+    serviceId
+  )}/logs`
+}
+
+function buildServiceTerminalInputUrl(serviceId: string) {
+  return `${resolveLogsApiBaseUrl()}/api/services/${encodeServiceId(
+    serviceId
+  )}/stdin`
 }
 
 export async function fetchServiceLogInfo(
   service: DashboardService,
-  type: 'default' | 'access' | 'error'
+  type: ServiceLogType
 ) {
+  const readType = resolveServiceLogReadType(type)
   const params = new URLSearchParams({
     service: service.id,
-    type,
+    type: readType,
   })
   const infoUrl = buildLogsApiUrl('/api/services/log-info', params)
 
   debugLogs('requesting log info', {
     serviceId: service.id,
-    type,
+    type: readType,
     infoUrl,
   })
 
@@ -86,15 +244,37 @@ export async function fetchServiceLogInfo(
   return info
 }
 
+export async function fetchServiceLogsOverview(service: DashboardService) {
+  const overviewUrl = buildServiceLogsOverviewUrl(service.id)
+
+  debugLogs('requesting service logs overview', {
+    serviceId: service.id,
+    overviewUrl,
+  })
+
+  const response = await fetch(overviewUrl)
+  const payload = await parseJsonResponse<ServiceLogOverviewResponse>(response)
+  const overview = payload.logs
+
+  return {
+    ...overview,
+    entries: overview.entries.map((entry) => ({
+      ...entry,
+      message: redactLogLine(entry.message),
+    })),
+  }
+}
+
 export async function fetchServiceLogChunk(
   service: DashboardService,
-  type: 'default' | 'access' | 'error',
+  type: ServiceLogType,
   before?: number,
   limit = 100
 ) {
+  const readType = resolveServiceLogReadType(type)
   const params = new URLSearchParams({
     service: service.id,
-    type,
+    type: readType,
     limit: String(limit),
   })
 
@@ -106,7 +286,7 @@ export async function fetchServiceLogChunk(
 
   debugLogs('requesting log chunk', {
     serviceId: service.id,
-    type,
+    type: readType,
     before: before ?? null,
     limit,
     chunkUrl,
@@ -114,17 +294,45 @@ export async function fetchServiceLogChunk(
 
   const response = await fetch(chunkUrl)
   const chunk = await parseJsonResponse<ServiceLogChunk>(response)
+  const safeChunk = {
+    ...chunk,
+    lines: chunk.lines.map(redactLogLine),
+    entries: chunk.entries?.map((entry) => ({
+      ...entry,
+      message: redactLogLine(entry.message),
+      text: entry.text ? redactLogLine(entry.text) : entry.text,
+    })),
+  }
 
   debugLogs('log chunk loaded', {
-    serviceId: chunk.serviceId,
-    type: chunk.type,
+    serviceId: safeChunk.serviceId,
+    type: safeChunk.type,
     before: before ?? null,
-    lineCount: chunk.lines.length,
-    totalLines: chunk.totalLines,
-    hasMore: chunk.hasMore,
-    nextBefore: chunk.nextBefore,
-    firstLinePreview: chunk.lines[0]?.slice(0, 120) ?? null,
+    lineCount: safeChunk.lines.length,
+    totalLines: safeChunk.totalLines,
+    hasMore: safeChunk.hasMore,
+    nextBefore: safeChunk.nextBefore,
+    firstLinePreview: safeChunk.lines[0]?.slice(0, 120) ?? null,
   })
 
-  return chunk
+  return safeChunk
+}
+
+export async function sendServiceTerminalInput(
+  service: DashboardService,
+  input: string
+) {
+  const response = await fetch(buildServiceTerminalInputUrl(service.id), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      input,
+      stream: 'stdin',
+      actor: 'service-admin-web',
+    }),
+  })
+
+  return parseJsonResponse<ServiceTerminalInputResult>(response)
 }

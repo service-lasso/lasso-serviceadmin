@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  OPERATOR_BACKUP_DESTINATION,
   assertSafeLifecycleMutation,
   lifecycleAuditIsRecorded,
   restorePlanIsStale,
@@ -38,11 +37,5 @@ describe('Broker lifecycle fail-closed gates', () => {
     expect(
       restorePlanIsStale(new Date(Date.now() + 60_000).toISOString())
     ).toBe(false)
-  })
-
-  it('names the operator-retained encrypted backup destination', () => {
-    expect(OPERATOR_BACKUP_DESTINATION).toBe(
-      'operator-retained-encrypted-artifact'
-    )
   })
 })

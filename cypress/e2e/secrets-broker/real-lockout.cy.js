@@ -1,3 +1,5 @@
+import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
+
 function safeTransportToken(value) {
   return typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(value)
     ? value
@@ -24,7 +26,7 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
 
   it('clears the exact active IPC scope and renders its durable event', () => {
     cy.visit('/services/%40secretsbroker')
-    cy.contains('Trusted identity verified', { timeout: 20_000 }).should('exist')
+    unlockTrustedIdentity()
     cy.request({
       method: 'POST',
       url: '/api/services/%40secretsbroker/start',
@@ -46,9 +48,7 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
         expect(body.lockoutScope).to.be.a('string').and.match(/^local_api:/)
 
         cy.reload()
-        cy.contains('Trusted identity verified', { timeout: 20_000 }).should(
-          'exist'
-        )
+        unlockTrustedIdentity()
         cy.visit('/services/%40secretsbroker')
         cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
         cy.contains('[data-slot="card"]', 'Operational controls', {
@@ -192,10 +192,15 @@ describe('packaged Service Admin active Broker lockout recovery', () => {
             })
           )
         cy.contains('[data-slot="card"]', 'Operational controls').within(() => {
-          cy.contains('td', 'lockout_clear', { timeout: 30_000 }).should(
-            'be.visible'
+          cy.contains('tr', 'lockout_clear', { timeout: 30_000 }).then(
+            ($row) => {
+              $row[0].scrollIntoView({ block: 'center', inline: 'nearest' })
+            }
           )
-          cy.contains('td', 'cleared').should('be.visible')
+          cy.contains('tr', 'lockout_clear', { timeout: 30_000 }).within(() => {
+            cy.contains('td', 'lockout_clear').should('be.visible')
+            cy.contains('td', 'cleared').should('be.visible')
+          })
         })
       })
     })

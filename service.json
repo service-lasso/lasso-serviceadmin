@@ -2,7 +2,7 @@
   "id": "@serviceadmin",
   "name": "Core Service Admin",
   "description": "Authenticated operator UI for Service Lasso and its Secrets Broker.",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "enabled": true,
   "depend_on": ["@node"],
   "ports": { "ui": 17700 },

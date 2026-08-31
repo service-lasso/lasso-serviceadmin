@@ -1,0 +1,66 @@
+{
+  "id": "@serviceadmin",
+  "name": "Service Admin UI",
+  "description": "Operator UI for inspecting and controlling Service Lasso services.",
+  "enabled": true,
+  "version": "1.0.0-rc.1",
+  "logoutput": true,
+  "icon": "layout-dashboard",
+  "servicetype": 20,
+  "servicelocation": 10,
+  "logo": "./logo.svg",
+  "logs": {
+    "default": {
+      "path": "./service.log"
+    }
+  },
+  "actions": {
+    "install": {
+      "description": "Install or refresh the Service Admin UI assets."
+    },
+    "config": {
+      "description": "Generate the effective Service Admin runtime configuration."
+    },
+    "start": {
+      "description": "Start the Service Admin UI."
+    },
+    "stop": {
+      "description": "Stop the Service Admin UI gracefully."
+    }
+  },
+  "endpoints": [
+    {
+      "id": "web",
+      "kind": "network",
+      "label": "Web UI",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "http",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 17700,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    }
+  ],
+  "execconfig": {
+    "serviceorder": 100,
+    "execcwd": ".",
+    "executable": "@serviceadmin",
+    "env": {
+      "SERVICE_LASSO_MODE": "stub"
+    },
+    "depend_on": [
+      "@traefik"
+    ],
+    "healthchecks": [
+      {
+        "id": "process-ready",
+        "type": "process"
+      }
+    ]
+  }
+}

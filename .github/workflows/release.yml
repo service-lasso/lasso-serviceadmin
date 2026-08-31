@@ -58,6 +58,10 @@ jobs:
         run: pnpm format:check
       - name: Run unit tests
         run: pnpm test:unit
+      - name: Install Chromium for browser qualification
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser qualification
+        run: pnpm test:ui
       - name: Build UI
         run: pnpm build
 

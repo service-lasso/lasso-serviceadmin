@@ -1,4 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import {
+  buildServiceLogUrl,
+  fetchAuditEvents,
+  fetchDashboardService,
+  fetchDashboardSummary,
+  fetchFleetMetrics,
+  fetchInbox,
+  fetchInboxCounts,
+  fetchNetworkHome,
+  fetchRuntimeInstanceHome,
+  fetchServiceTelemetryPreview,
+  fetchServices,
+  fetchTelemetryPreview,
+  hideInboxItem,
+  markInboxItemsRead,
+  markInboxRead,
+  runDashboardAction,
+  unhideInboxItem,
+} from './client'
 import {
   fetchRuntimeIdentity,
   runtimeIdentityAuditContext,
@@ -6,114 +26,87 @@ import {
 } from './runtime-auth'
 import {
   applyBrokerBulkCampaign,
-  applyManagedSecretMutation,
-  applyManagedSecretCreate,
-  applyBrokerMigration,
   applyBrokerLifecycleRestore,
+  applyBrokerMigration,
+  applyBrokerProviderConfiguration,
+  applyManagedSecretCreate,
+  applyManagedSecretMutation,
   applySecretDecommission,
   bootstrapFirstRunSetup,
-  buildStubServiceLogUrl,
-  favoritesMutationEnabled,
-  fetchDashboardService,
-  fetchDashboardSummary,
-  fetchSecurityState,
-  fetchSecretAccessAssignments,
+  clearBrokerLockout,
+  createBrokerBulkCampaign,
+  createBrokerLifecycleBackup,
+  executeCoreSecretRotation,
+  fetchBrokerBulkCampaignStatus,
+  fetchBrokerEvents,
+  fetchBrokerLifecycleBackups,
+  fetchBrokerLifecycleStatus,
+  fetchBrokerProviderStatus,
+  fetchBrokerProviderCapabilities,
+  fetchBrokerSourceStatus,
+  fetchBrokerTelemetry,
+  fetchCoreSecretRotationExecutionState,
+  fetchCoreSecretRotationImpactPlan,
   fetchFirstRunSetupState,
   fetchInboxSummary,
   fetchMcpState,
-  fetchBrokerProviderStatus,
-  fetchBrokerSourceStatus,
-  fetchBrokerProviderCapabilities,
-  fetchBrokerLifecycleStatus,
-  fetchBrokerLifecycleBackups,
-  fetchBrokerTelemetry,
-  fetchBrokerEvents,
-  clearBrokerLockout,
+  fetchSecretAccessAssignments,
   fetchSecretsManagementState,
+  fetchSecurityState,
   fetchServiceSetup,
-  fetchServices,
-  revealManagedSecret,
-  previewManagedSecretMutation,
-  previewManagedSecretCreate,
-  previewBrokerMigration,
   previewBrokerLifecycleRestore,
+  previewBrokerMigration,
+  previewManagedSecretCreate,
+  previewManagedSecretMutation,
   previewManagedSecretPolicy,
   previewSecretDecommission,
   previewSecretRotation,
-  fetchCoreSecretRotationImpactPlan,
-  fetchCoreSecretRotationExecutionState,
-  executeCoreSecretRotation,
   restoreSecretDecommission,
-  createBrokerLifecycleBackup,
-  createBrokerBulkCampaign,
-  fetchBrokerBulkCampaignStatus,
-  rotateBrokerLifecycleKey,
+  revealManagedSecret,
   revalidateBrokerBulkCampaign,
-  runSecretRotationVersionAction,
-  runDashboardAction,
+  rotateBrokerLifecycleKey,
   runInboxMessageAction,
-  runServiceRecoveryDoctorAction,
+  runBrokerProviderRowAction,
+  runSecretRotationVersionAction,
   runServiceLifecycleAction,
+  runServiceRecoveryDoctorAction,
   runServiceSetupAction,
   runServiceUpdateAction,
+  isFavoritesFeatureEnabled,
   validateBrokerProviderConfiguration,
-  applyBrokerProviderConfiguration,
-  runBrokerProviderRowAction,
   verifyBrokerLifecycleBackup,
 } from './stub'
 import type {
+  AuditEventsFilters,
   BrokerBulkCampaignRequest,
-  BrokerMigrationRequest,
+  BrokerEventFilters,
   BrokerLifecycleOperationRequest,
-  BrokerProviderValidationRequest,
+  BrokerLockoutClearRequest,
+  BrokerMigrationRequest,
   BrokerProviderConfigureRequest,
   BrokerProviderRowActionRequest,
-  BrokerEventFilters,
-  BrokerLockoutClearRequest,
+  BrokerProviderValidationRequest,
+  CoreSecretRotationExecutionRequest,
   DashboardAction,
   DashboardService,
   InboxMessageActionKind,
+  InboxQuery,
   McpState,
-  SecretRevealRequest,
+  SecretAccessAssignmentAudit,
   SecretCreateRequest,
+  SecretDecommissionRequest,
   SecretMutationRequest,
   SecretPolicyPreviewRequest,
-  SecretDecommissionRequest,
+  SecretRevealRequest,
   SecretRotationPreviewRequest,
   SecretRotationVersionRequest,
-  CoreSecretRotationExecutionRequest,
+  ServiceLifecycleActionKind,
   ServiceSecurityState,
-  SecretAccessAssignmentAudit,
   ServiceSetupRunResult,
   ServiceUpdateAction,
-  ServiceLifecycleActionKind,
 } from './types'
 
 const dashboardQueryKey = ['service-lasso-dashboard']
-const inboxQueryKey = ['service-lasso-inbox']
-const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
-const brokerProviderQueryKey = [
-  ...dashboardQueryKey,
-  'secrets-broker-providers',
-]
-const brokerLifecycleQueryKey = [
-  ...dashboardQueryKey,
-  'secrets-broker-lifecycle',
-]
-const brokerOperationsQueryKey = [
-  ...dashboardQueryKey,
-  'secrets-broker-operations',
-]
-export const runtimeIdentityQueryKey = ['service-lasso-runtime-identity']
-
-export function useRuntimeIdentity() {
-  return useQuery<RuntimeIdentity>({
-    queryKey: runtimeIdentityQueryKey,
-    queryFn: fetchRuntimeIdentity,
-    retry: false,
-    staleTime: 5_000,
-  })
-}
 
 export function useDashboardSummary() {
   return useQuery({
@@ -129,47 +122,143 @@ export function useServices() {
   })
 }
 
-export function useInboxSummary() {
+export function useTelemetryPreview() {
   return useQuery({
-    queryKey: inboxQueryKey,
-    queryFn: fetchInboxSummary,
+    queryKey: [...dashboardQueryKey, 'telemetry-preview'],
+    queryFn: fetchTelemetryPreview,
   })
 }
 
-export function useInboxMessageAction() {
-  const queryClient = useQueryClient()
+export function useServiceTelemetryPreview(serviceId: string) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, serviceId, 'telemetry-preview'],
+    queryFn: () => fetchServiceTelemetryPreview(serviceId),
+  })
+}
 
+export function useAuditEvents(filters: AuditEventsFilters = {}) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, 'audit-events', filters],
+    queryFn: () => fetchAuditEvents(filters),
+  })
+}
+
+const inboxQueryKey = ['service-lasso-inbox']
+
+const inboxCountsQueryKey = [...dashboardQueryKey, 'inbox-counts']
+
+/**
+ * Loads durable operator Inbox messages for the Inbox page.
+ */
+export function useInbox(query: InboxQuery = {}) {
+  return useQuery({
+    queryKey: [...inboxQueryKey, query],
+    queryFn: () => fetchInbox(query),
+  })
+}
+
+/**
+ * Loads unread Inbox counts for header and sidebar badges.
+ */
+export function useInboxCounts() {
+  return useQuery({
+    queryKey: inboxCountsQueryKey,
+    queryFn: fetchInboxCounts,
+    refetchInterval: 30000,
+  })
+}
+
+const fleetMetricsQueryKey = [...dashboardQueryKey, 'fleet-metrics']
+
+const runtimeInstanceHomeQueryKey = [...dashboardQueryKey, 'runtime-instance']
+
+const networkHomeQueryKey = [...dashboardQueryKey, 'network-home']
+
+/**
+ * Loads GET /api/metrics for crash and log-volume chips on Dashboard home.
+ */
+export function useFleetMetrics() {
+  return useQuery({
+    queryKey: fleetMetricsQueryKey,
+    queryFn: fetchFleetMetrics,
+    refetchInterval: 30000,
+  })
+}
+
+/**
+ * Loads GET /api/runtime/instance for the generation-lane chip.
+ */
+export function useRuntimeInstanceHome() {
+  return useQuery({
+    queryKey: runtimeInstanceHomeQueryKey,
+    queryFn: fetchRuntimeInstanceHome,
+    refetchInterval: 30000,
+  })
+}
+
+/**
+ * Loads GET /api/network for Traefik reserved-route counting on home.
+ */
+export function useNetworkHome() {
+  return useQuery({
+    queryKey: networkHomeQueryKey,
+    queryFn: fetchNetworkHome,
+    refetchInterval: 30000,
+  })
+}
+
+/**
+ * Marks one Inbox item read and refreshes list plus badge counts.
+ */
+export function useMarkInboxRead() {
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (options: {
-      messageId: string
-      action: InboxMessageActionKind
-    }) => runInboxMessageAction(options),
-    onSuccess: (result) => {
-      queryClient.setQueryData(inboxQueryKey, result.inbox)
+    mutationFn: (itemId: string) => markInboxRead(itemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
     },
   })
 }
 
-export function useFirstRunSetupState() {
-  return useQuery({
-    queryKey: firstRunSetupQueryKey,
-    queryFn: fetchFirstRunSetupState,
-    refetchInterval: (query) =>
-      query.state.data?.state === 'setup_in_progress' ? 1_000 : false,
+/**
+ * Marks many Inbox items read and refreshes list plus badge counts.
+ */
+export function useMarkInboxItemsRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (itemIds: string[]) => markInboxItemsRead(itemIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
+    },
   })
 }
 
-export function useFirstRunSetupBootstrap() {
+/**
+ * Hides one Inbox item and refreshes list plus badge counts.
+ */
+export function useHideInboxItem() {
   const queryClient = useQueryClient()
-
   return useMutation({
-    mutationFn: (setupToken?: string) => bootstrapFirstRunSetup(setupToken),
-    onSuccess: (result) => {
-      queryClient.setQueryData(firstRunSetupQueryKey, result.setup)
-      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    mutationFn: (itemId: string) => hideInboxItem(itemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: firstRunSetupQueryKey })
+  })
+}
+
+/**
+ * Restores one hidden Inbox item and refreshes list plus badge counts.
+ */
+export function useUnhideInboxItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (itemId: string) => unhideInboxItem(itemId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+      void queryClient.invalidateQueries({ queryKey: inboxCountsQueryKey })
     },
   })
 }
@@ -181,33 +270,111 @@ export function useDashboardService(serviceId: string) {
   })
 }
 
-export function useServiceSetup(serviceId: string) {
-  return useQuery({
-    queryKey: [...dashboardQueryKey, serviceId, 'setup'],
-    queryFn: () => fetchServiceSetup(serviceId),
+export function getServiceLogStubUrl(
+  serviceId: string,
+  options?: {
+    type?: 'default' | 'access' | 'error'
+  }
+) {
+  return buildServiceLogUrl(serviceId, options)
+}
+
+export function useDashboardAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (action: DashboardAction) => runDashboardAction(action),
+    onSuccess: (data, action) => {
+      queryClient.setQueryData(dashboardQueryKey, data)
+      const allServices = [
+        ...data.favorites,
+        ...data.others,
+      ] satisfies DashboardService[]
+      queryClient.setQueryData([...dashboardQueryKey, 'services'], allServices)
+      for (const service of allServices) {
+        queryClient.setQueryData([...dashboardQueryKey, service.id], service)
+      }
+
+      if (action === 'reload-runtime') {
+        toast.success('Runtime reloaded and health data refreshed.')
+      }
+
+      if (action === 'start-services') {
+        toast.success(
+          'Start services request accepted. Services status refreshed.'
+        )
+      }
+
+      if (typeof action === 'object' && action.kind === 'service-lifecycle') {
+        const label = {
+          start: 'Start service',
+          stop: 'Stop service',
+          restart: 'Restart service',
+        }[action.action]
+
+        toast.success(`${label} request accepted. Service status refreshed.`)
+      }
+    },
+    onError: (error, action) => {
+      const isLifecycleAction =
+        typeof action === 'object' && action.kind === 'service-lifecycle'
+
+      if (
+        action !== 'reload-runtime' &&
+        action !== 'start-services' &&
+        !isLifecycleAction
+      ) {
+        return
+      }
+
+      const fallback =
+        action === 'reload-runtime'
+          ? 'Runtime reload failed. Check the Service Lasso runtime API logs.'
+          : action === 'start-services'
+            ? 'Start services failed. Check the Service Lasso runtime API logs.'
+            : 'Service lifecycle action failed. Check the Service Lasso runtime API logs.'
+
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : fallback
+
+      toast.error(message)
+    },
   })
 }
 
-export function useSecurityState() {
-  return useQuery<ServiceSecurityState>({
-    queryKey: [...dashboardQueryKey, 'security'],
-    queryFn: fetchSecurityState,
+export function useToggleFavorite() {
+  const dashboardAction = useDashboardAction()
+  return useMutation({
+    mutationFn: async (serviceId: string) => {
+      if (!isFavoritesFeatureEnabled()) {
+        return null
+      }
+      return dashboardAction.mutateAsync({ kind: 'toggle-favorite', serviceId })
+    },
   })
 }
 
-export function useSecretAccessAssignments() {
-  return useQuery<SecretAccessAssignmentAudit>({
-    queryKey: [...dashboardQueryKey, 'secret-access-assignments'],
-    queryFn: fetchSecretAccessAssignments,
-  })
+export function useFavoriteFeatureState() {
+  return {
+    enabled: isFavoritesFeatureEnabled(),
+  }
 }
 
-export function useMcpState() {
-  return useQuery<McpState>({
-    queryKey: [...dashboardQueryKey, 'mcp'],
-    queryFn: fetchMcpState,
-  })
-}
+const brokerProviderQueryKey = [
+  ...dashboardQueryKey,
+  'secrets-broker-providers',
+]
+
+const brokerLifecycleQueryKey = [
+  ...dashboardQueryKey,
+  'secrets-broker-lifecycle',
+]
+
+const brokerOperationsQueryKey = [
+  ...dashboardQueryKey,
+  'secrets-broker-operations',
+]
 
 export function useSecretsManagement(search = '') {
   return useQuery({
@@ -296,7 +463,7 @@ export function useBrokerTelemetry(enabled = true) {
     queryKey: [...brokerOperationsQueryKey, 'telemetry'],
     queryFn: fetchBrokerTelemetry,
     enabled,
-    refetchInterval: 30_000,
+    refetchInterval: 30000,
   })
 }
 
@@ -428,7 +595,6 @@ export function useBrokerBulkCampaignApply() {
 
 export function useSecretReveal() {
   const identity = useRuntimeIdentity()
-
   return useMutation({
     mutationFn: (request: SecretRevealRequest) => {
       if (!identity.data) {
@@ -442,13 +608,6 @@ export function useSecretReveal() {
   })
 }
 
-export function useSecretMutationPreview() {
-  return useMutation({
-    mutationFn: (request: SecretMutationRequest) =>
-      previewManagedSecretMutation(request),
-  })
-}
-
 export function useSecretCreatePreview() {
   return useMutation({
     mutationFn: (request: SecretCreateRequest) =>
@@ -458,7 +617,6 @@ export function useSecretCreatePreview() {
 
 export function useSecretCreateApply() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (request: SecretCreateRequest) =>
       applyManagedSecretCreate(request),
@@ -470,9 +628,15 @@ export function useSecretCreateApply() {
   })
 }
 
+export function useSecretMutationPreview() {
+  return useMutation({
+    mutationFn: (request: SecretMutationRequest) =>
+      previewManagedSecretMutation(request),
+  })
+}
+
 export function useSecretMutationApply() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (request: SecretMutationRequest) =>
       applyManagedSecretMutation(request),
@@ -531,6 +695,116 @@ export function useSecretRotationPreview() {
   })
 }
 
+export function useSecretRotationVersionAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: SecretRotationVersionRequest) =>
+      runSecretRotationVersionAction(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...dashboardQueryKey, 'secrets-management'],
+      })
+    },
+  })
+}
+
+export function useCoreSecretRotationImpactPlan() {
+  return useMutation({
+    mutationFn: (ref: string) => fetchCoreSecretRotationImpactPlan(ref),
+  })
+}
+
+export function useCoreSecretRotationExecute() {
+  return useMutation({
+    mutationFn: (request: CoreSecretRotationExecutionRequest) =>
+      executeCoreSecretRotation(request),
+  })
+}
+
+const firstRunSetupQueryKey = ['service-lasso-first-run-setup']
+
+export const runtimeIdentityQueryKey = ['service-lasso-runtime-identity']
+
+export function useRuntimeIdentity() {
+  return useQuery<RuntimeIdentity>({
+    queryKey: runtimeIdentityQueryKey,
+    queryFn: fetchRuntimeIdentity,
+    retry: false,
+    staleTime: 5000,
+  })
+}
+
+export function useInboxSummary() {
+  return useQuery({
+    queryKey: inboxQueryKey,
+    queryFn: fetchInboxSummary,
+  })
+}
+
+export function useInboxMessageAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (options: {
+      messageId: string
+      action: InboxMessageActionKind
+    }) => runInboxMessageAction(options),
+    onSuccess: (result) => {
+      queryClient.setQueryData(inboxQueryKey, result.inbox)
+    },
+  })
+}
+
+export function useFirstRunSetupState() {
+  return useQuery({
+    queryKey: firstRunSetupQueryKey,
+    queryFn: fetchFirstRunSetupState,
+    refetchInterval: (query) =>
+      query.state.data?.state === 'setup_in_progress' ? 1000 : false,
+  })
+}
+
+export function useFirstRunSetupBootstrap() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (setupToken?: string) => bootstrapFirstRunSetup(setupToken),
+    onSuccess: (result) => {
+      queryClient.setQueryData(firstRunSetupQueryKey, result.setup)
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: firstRunSetupQueryKey })
+    },
+  })
+}
+
+export function useServiceSetup(serviceId: string) {
+  return useQuery({
+    queryKey: [...dashboardQueryKey, serviceId, 'setup'],
+    queryFn: () => fetchServiceSetup(serviceId),
+  })
+}
+
+export function useSecurityState() {
+  return useQuery<ServiceSecurityState>({
+    queryKey: [...dashboardQueryKey, 'security'],
+    queryFn: fetchSecurityState,
+  })
+}
+
+export function useSecretAccessAssignments() {
+  return useQuery<SecretAccessAssignmentAudit>({
+    queryKey: [...dashboardQueryKey, 'secret-access-assignments'],
+    queryFn: fetchSecretAccessAssignments,
+  })
+}
+
+export function useMcpState() {
+  return useQuery<McpState>({
+    queryKey: [...dashboardQueryKey, 'mcp'],
+    queryFn: fetchMcpState,
+  })
+}
+
 export function useCoreSecretRotationPlan() {
   return useMutation({
     mutationFn: (ref: string) => fetchCoreSecretRotationImpactPlan(ref),
@@ -547,7 +821,7 @@ export function useCoreSecretRotationOperation(
     enabled: enabled && Boolean(operationId),
     retry: false,
     refetchInterval: (query) =>
-      query.state.data?.outcome === 'in_progress' ? 2_000 : false,
+      query.state.data?.outcome === 'in_progress' ? 2000 : false,
   })
 }
 
@@ -568,72 +842,8 @@ export function useCoreSecretRotationExecution() {
   })
 }
 
-export function useSecretRotationVersionAction() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (request: SecretRotationVersionRequest) =>
-      runSecretRotationVersionAction(request),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [...dashboardQueryKey, 'secrets-management'],
-      })
-    },
-  })
-}
-
-export function getServiceLogStubUrl(
-  serviceId: string,
-  options?: {
-    type?: 'default' | 'access' | 'error'
-  }
-) {
-  return buildStubServiceLogUrl(serviceId, options)
-}
-
-export function useDashboardAction() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (action: DashboardAction) => runDashboardAction(action),
-    onSuccess: (data) => {
-      queryClient.setQueryData(dashboardQueryKey, data)
-
-      const allServices = [
-        ...data.favorites,
-        ...data.others,
-      ] satisfies DashboardService[]
-      queryClient.setQueryData([...dashboardQueryKey, 'services'], allServices)
-
-      for (const service of allServices) {
-        queryClient.setQueryData([...dashboardQueryKey, service.id], service)
-      }
-    },
-  })
-}
-
-export function useToggleFavorite() {
-  const dashboardAction = useDashboardAction()
-
-  return useMutation({
-    mutationFn: async (serviceId: string) => {
-      if (!favoritesMutationEnabled) {
-        return null
-      }
-
-      return dashboardAction.mutateAsync({ kind: 'toggle-favorite', serviceId })
-    },
-  })
-}
-
-export function useFavoriteFeatureState() {
-  return {
-    enabled: favoritesMutationEnabled,
-  }
-}
-
 export function useServiceUpdateAction() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (options: {
       action: ServiceUpdateAction
@@ -642,13 +852,11 @@ export function useServiceUpdateAction() {
     }) => runServiceUpdateAction(options),
     onSuccess: (data) => {
       queryClient.setQueryData(dashboardQueryKey, data)
-
       const allServices = [
         ...data.favorites,
         ...data.others,
       ] satisfies DashboardService[]
       queryClient.setQueryData([...dashboardQueryKey, 'services'], allServices)
-
       for (const service of allServices) {
         queryClient.setQueryData([...dashboardQueryKey, service.id], service)
       }
@@ -658,7 +866,6 @@ export function useServiceUpdateAction() {
 
 export function useServiceLifecycleAction() {
   const queryClient = useQueryClient()
-
   const refreshLifecycleViews = async (serviceId: string) => {
     await Promise.all([
       queryClient.invalidateQueries({
@@ -675,7 +882,6 @@ export function useServiceLifecycleAction() {
       }),
     ])
   }
-
   return useMutation({
     mutationFn: (options: {
       action: ServiceLifecycleActionKind
@@ -689,7 +895,6 @@ export function useServiceLifecycleAction() {
 
 export function useServiceSetupAction() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (options: {
       serviceId: string
@@ -721,7 +926,6 @@ export function useServiceSetupAction() {
 
 export function useServiceRecoveryDoctorAction() {
   const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: (serviceId: string) =>
       runServiceRecoveryDoctorAction(serviceId),
@@ -730,7 +934,6 @@ export function useServiceRecoveryDoctorAction() {
         service.id === result.serviceId
           ? { ...service, recovery: result.recovery }
           : service
-
       queryClient.setQueryData<DashboardService[]>(
         [...dashboardQueryKey, 'services'],
         (services) => services?.map(patchService)

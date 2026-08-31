@@ -22,7 +22,11 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton size='lg' asChild>
-          <Link to='/' onClick={() => setOpenMobile(false)}>
+          <Link
+            to='/'
+            aria-label='Open Service Lasso dashboard'
+            onClick={() => setOpenMobile(false)}
+          >
             <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
               <activeTeam.logo className='size-4' />
             </div>

@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import z from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
 import { Security } from '@/features/security'

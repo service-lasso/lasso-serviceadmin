@@ -22,7 +22,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DataTablePagination, DataTableToolbar } from '@/components/data-table'
+import {
+  DataTablePagination,
+  DataTableScrollRegion,
+  DataTableToolbar,
+  dataTableStickyHeaderClassName,
+} from '@/components/data-table'
 import { priorities, statuses } from '../data/data'
 import { type Task } from '../data/schema'
 import { DataTableBulkActions } from './data-table-bulk-actions'
@@ -108,7 +113,7 @@ export function TasksTable({ data }: DataTableProps) {
     <div
       className={cn(
         'max-sm:has-[div[role="toolbar"]]:mb-16', // Add margin bottom to the table on mobile when the toolbar is visible
-        'flex flex-1 flex-col gap-4'
+        'flex min-h-0 flex-1 flex-col gap-4'
       )}
     >
       <DataTableToolbar
@@ -127,9 +132,9 @@ export function TasksTable({ data }: DataTableProps) {
           },
         ]}
       />
-      <div className='overflow-hidden rounded-md border'>
-        <Table className='min-w-xl'>
-          <TableHeader>
+      <DataTableScrollRegion>
+        <Table contained={false} className='min-w-xl'>
+          <TableHeader className={dataTableStickyHeaderClassName}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -189,7 +194,7 @@ export function TasksTable({ data }: DataTableProps) {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableScrollRegion>
       <DataTablePagination table={table} className='mt-auto' />
       <DataTableBulkActions table={table} />
     </div>

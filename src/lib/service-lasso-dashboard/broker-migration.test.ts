@@ -48,7 +48,10 @@ function provider(
   }
 }
 
-function item(outcome: string, ref = 'services/app/runtime/API_KEY'): BrokerMigrationItem {
+function item(
+  outcome: string,
+  ref = 'services/app/runtime/API_KEY'
+): BrokerMigrationItem {
   return {
     ref,
     sourceProviderId: 'local',
@@ -75,7 +78,9 @@ describe('live provider migration gates', () => {
       confirmed: true,
     })
     expect(gate.blocked).toBe(true)
-    expect(gate.reason).toMatch(/does not advertise a validated migration apply/i)
+    expect(gate.reason).toMatch(
+      /does not advertise a validated migration apply/i
+    )
   })
 
   it('requires fresh revalidation before confirmation can unlock apply', () => {

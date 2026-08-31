@@ -46,9 +46,12 @@ That means:
 - Service Details should link into Logs
 - Runtime may link into Logs
 - Services table may link into Logs
-- the full live stream should live here, not be duplicated everywhere else
+- the Logs page remains the fleet-wide live stream surface, with a service picker
 
-Service Details may show a small log preview, but not the full stream experience.
+Service Details Logs reuses the same LazyLog/file-editor viewer, scoped to the
+current service. It lists that service's log sources and toggles STDOUT/STDERR
+instead of duplicating a diagnostics-card preview. Combined/All still maps to
+Core `type=default`.
 
 ## Data model
 

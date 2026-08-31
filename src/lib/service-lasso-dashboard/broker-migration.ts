@@ -1,7 +1,4 @@
-import type {
-  BrokerMigrationItem,
-  BrokerProviderStatus,
-} from './types'
+import type { BrokerMigrationItem, BrokerProviderStatus } from './types'
 
 /**
  * True when the provider advertises a validated or executable migration apply.
@@ -10,7 +7,8 @@ function targetSupportsMigrationApply(provider: BrokerProviderStatus): boolean {
   return provider.operations.some(
     (operation) =>
       operation.path === '/v1/providers/migration/apply' &&
-      (operation.maturity === 'validated' || operation.maturity === 'executable')
+      (operation.maturity === 'validated' ||
+        operation.maturity === 'executable')
   )
 }
 
@@ -54,18 +52,28 @@ export function migrationApplyBlocked(input: {
   if (!input.confirmed) {
     return {
       blocked: true,
-      reason: 'Confirm this exact provider, reference, operation ID, and audit reason.',
+      reason:
+        'Confirm this exact provider, reference, operation ID, and audit reason.',
     }
   }
-  return { blocked: false, reason: 'Apply the revalidated Broker migration plan.' }
+  return {
+    blocked: false,
+    reason: 'Apply the revalidated Broker migration plan.',
+  }
 }
 
 /**
  * Normalizes a per-ref Broker outcome onto the accepted result set.
  */
-export function classifyMigrationRefOutcome(outcome: string): MigrationRefOutcome {
+export function classifyMigrationRefOutcome(
+  outcome: string
+): MigrationRefOutcome {
   const normalized = outcome.trim().toLowerCase().replace(/-/g, '_')
-  if (normalized === 'migrated' || normalized === 'applied' || normalized === 'success') {
+  if (
+    normalized === 'migrated' ||
+    normalized === 'applied' ||
+    normalized === 'success'
+  ) {
     return 'migrated'
   }
   if (normalized === 'dry_run_ready' || normalized === 'planned') {

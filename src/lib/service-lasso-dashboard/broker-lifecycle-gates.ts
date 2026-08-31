@@ -2,9 +2,6 @@
  * Fail-closed gates for Broker backup, restore, and key rotation.
  */
 
-export const OPERATOR_BACKUP_DESTINATION =
-  'operator-retained-encrypted-artifact'
-
 /**
  * True when the Broker recorded a safe audit event for the mutation.
  */

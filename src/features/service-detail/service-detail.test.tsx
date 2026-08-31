@@ -1,0 +1,1762 @@
+import { renderRoute } from '@/test/render-route'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  __setStubConfigRevisionsForTest,
+  __resetStubServicesForTest,
+  __setStubServicesForTest,
+} from '@/lib/service-lasso-dashboard/stub'
+import type {
+  DashboardService,
+  ServiceConfigRevision,
+} from '@/lib/service-lasso-dashboard/types'
+import { buildServiceEndpointDisplayRows } from './index'
+import { buildMetadataTableRows } from './metadata-table'
+
+vi.mock('@/lib/service-lasso-dashboard/client', async () => {
+  const stub = await vi.importActual<
+    typeof import('@/lib/service-lasso-dashboard/stub')
+  >('@/lib/service-lasso-dashboard/stub')
+
+  return {
+    buildServiceLogUrl: stub.buildStubServiceLogUrl,
+    fetchDashboardService: stub.fetchDashboardService,
+    fetchDashboardSummary: stub.fetchDashboardSummary,
+    fetchServiceConfigDocument: stub.fetchServiceConfigDocument,
+    fetchServices: stub.fetchServices,
+    runDashboardAction: stub.runDashboardAction,
+    saveServiceConfigDocument: stub.saveServiceConfigDocument,
+    serviceLassoApiBaseUrl: stub.serviceLassoApiBaseUrl,
+    fetchInbox: stub.fetchInbox,
+    fetchInboxCounts: stub.fetchInboxCounts,
+    markInboxRead: stub.markInboxRead,
+    markInboxItemsRead: stub.markInboxItemsRead,
+  }
+})
+
+vi.mock('@monaco-editor/react', () => ({
+  DiffEditor: ({
+    original,
+    modified,
+  }: {
+    original?: string
+    modified?: string
+  }) => (
+    <div aria-label='server.json backup diff editor' role='region'>
+      <pre data-testid='server-json-diff-original'>{original ?? ''}</pre>
+      <pre data-testid='server-json-diff-modified'>{modified ?? ''}</pre>
+    </div>
+  ),
+  default: ({
+    value,
+    onChange,
+  }: {
+    value?: string
+    onChange?: (value?: string) => void
+  }) => (
+    <textarea
+      aria-label='server.json editor'
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.currentTarget.value)}
+    />
+  ),
+}))
+
+afterEach(() => {
+  __resetStubServicesForTest()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+function buildNodeSampleService(
+  overrides: Partial<DashboardService> = {}
+): DashboardService {
+  return {
+    id: 'node-sample-service',
+    name: 'Node Sample Service',
+    status: 'running',
+    favorite: false,
+    role: 'Canonical terminal and logs validation target',
+    note: 'Managed process is running with pid 4242.',
+    installed: true,
+    links: [{ label: 'Local', url: 'http://127.0.0.1:4020', kind: 'local' }],
+    runtimeHealth: {
+      state: 'running',
+      health: 'healthy',
+      uptime: '3m',
+      lastCheckAt: '2026-07-02T08:25:00Z',
+      lastRestartAt: '2026-07-02T08:22:00Z',
+      summary: 'Runtime process pid 4242 is healthy.',
+      pid: 4242,
+      runId: 'node-sample-run-1',
+    },
+    endpoints: [
+      {
+        label: 'Local HTTP',
+        url: 'http://127.0.0.1:4020',
+        bind: '127.0.0.1',
+        port: 4020,
+        protocol: 'http',
+        exposure: 'local',
+      },
+    ],
+    metadata: {
+      serviceType: 'sample',
+      runtime: 'node',
+      version: 'demo',
+      build: 'local',
+      packageId: '@service-lasso/node-sample-service',
+      installPath:
+        'C:\\projects\\service-lasso\\service-lasso\\services\\node-sample-service',
+      configPath:
+        'C:\\projects\\service-lasso\\service-lasso\\services\\node-sample-service\\service.json',
+      logPath: 'C:\\runtime\\node-sample-service\\service.log',
+      workPath:
+        'C:\\projects\\service-lasso\\service-lasso\\services\\node-sample-service',
+      profile: 'canonical-demo',
+    },
+    dependencies: [],
+    dependents: [],
+    environmentVariables: [],
+    recentLogs: [
+      {
+        timestamp: '2026-07-02T08:22:00Z',
+        level: 'info',
+        source: 'stdout',
+        message: 'node-sample-service starting',
+      },
+    ],
+    actions: [
+      { id: 'start', label: 'Start service', kind: 'start' },
+      { id: 'stop', label: 'Stop service', kind: 'stop' },
+      { id: 'restart', label: 'Restart service', kind: 'restart' },
+      { id: 'open_logs', label: 'Open logs', kind: 'open_logs' },
+    ],
+    ...overrides,
+  }
+}
+
+describe('service detail overview metadata table', () => {
+  it('renders runtime metadata under the overview summary without a duplicate metadata tab', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(screen.queryByRole('tab', { name: /metadata/i })).toBeNull()
+
+    const metadataRegion = screen.getByTestId(
+      'service-detail-overview-metadata'
+    )
+    const metadataTable = within(metadataRegion).getByTestId(
+      'service-detail-metadata-table'
+    )
+
+    expect(within(metadataRegion).getByText('Metadata')).toBeVisible()
+    expect(
+      within(metadataTable).getByRole('columnheader', { name: 'Key' })
+    ).toBeVisible()
+    expect(within(metadataTable).getByText('Package')).toBeVisible()
+    expect(within(metadataTable).getByText('lasso-@serviceadmin')).toBeVisible()
+    expect(within(metadataTable).getByText('Install path')).toBeVisible()
+    expect(
+      within(metadataTable).getAllByText(
+        'C:\\projects\\service-lasso\\lasso-@serviceadmin'
+      )[0]
+    ).toBeVisible()
+  })
+
+  it('shows State, Started, PID, and Run on Overview instead of Terminal', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const runStatus = screen.getByTestId('service-detail-overview-run-status')
+    expect(within(runStatus).getByText('State')).toBeVisible()
+    expect(within(runStatus).getByText('running')).toBeVisible()
+    expect(within(runStatus).getByText('PID')).toBeVisible()
+    expect(within(runStatus).getByText('17701')).toBeVisible()
+    expect(within(runStatus).getByText('Run')).toBeVisible()
+    expect(
+      within(runStatus).getByText('2026-04-11T08-03-00-000Z')
+    ).toBeVisible()
+    expect(
+      within(runStatus).queryByText('Not recorded')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const terminalCard = await screen.findByTestId('service-detail-terminal')
+    expect(within(terminalCard).queryByText(/^State$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^PID$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Run$/i)).toBeNull()
+    expect(
+      screen.getByRole('textbox', { name: /terminal input/i })
+    ).toBeInTheDocument()
+  })
+
+  it('keeps full metadata values available for wrapped or truncated table cells', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const metadataTable = screen.getByTestId('service-detail-metadata-table')
+    const configPathCell = within(metadataTable).getByText(
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts'
+    )
+
+    expect(configPathCell).toHaveAttribute(
+      'title',
+      'C:\\projects\\service-lasso\\lasso-@serviceadmin\\vite.config.ts'
+    )
+  })
+
+  it('omits empty metadata fields for a compact empty state', () => {
+    expect(
+      buildMetadataTableRows({
+        serviceType: 'app',
+        runtime: 'node',
+        version: '1.0.0',
+        build: 'build-id',
+      })
+    ).toEqual([])
+  })
+})
+
+describe('service detail quick actions', () => {
+  it('keeps stop/restart in the header and shows Start on Overview Actions', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const lifecycleControls = within(
+      screen.getByTestId('service-detail-lifecycle-controls')
+    )
+    const overviewActions = within(
+      screen.getByTestId('service-detail-overview-actions')
+    )
+
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Start service' })
+    ).toBeDisabled()
+    expect(
+      overviewActions.getByRole('button', { name: 'Start service' })
+    ).toBeDisabled()
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Stop service' })
+    ).toBeEnabled()
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Restart service' })
+    ).toBeDisabled()
+
+    expect(
+      screen.getAllByRole('button', { name: 'Start service' })
+    ).toHaveLength(2)
+    expect(
+      screen.getAllByRole('button', { name: 'Stop service' })
+    ).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: 'Restart service' })
+    ).toHaveLength(1)
+
+    await user.click(
+      lifecycleControls.getByRole('button', { name: 'Stop service' })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Stopped')).toBeVisible()
+    })
+  })
+
+  it('enables header and Overview Start when the services list would', async () => {
+    __setStubServicesForTest([
+      buildNodeSampleService({
+        status: 'stopped',
+        installed: false,
+        note: 'Managed process is stopped.',
+        runtimeHealth: {
+          state: 'stopped',
+          health: 'critical',
+          uptime: '0m',
+          lastCheckAt: '2026-07-02T08:25:00Z',
+          lastRestartAt: '2026-07-02T08:22:00Z',
+          summary: 'Required healthcheck(s) failed: http-health. Uptime: 0m.',
+          pid: null,
+          runId: null,
+        },
+      }),
+    ])
+
+    await renderRoute('/services/node-sample-service')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Node Sample Service$/i })
+      ).toBeVisible()
+    })
+
+    const lifecycleControls = within(
+      screen.getByTestId('service-detail-lifecycle-controls')
+    )
+    const overviewActions = within(
+      screen.getByTestId('service-detail-overview-actions')
+    )
+
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Start service' })
+    ).toBeEnabled()
+    expect(
+      overviewActions.getByRole('button', { name: 'Start service' })
+    ).toBeEnabled()
+    expect(
+      lifecycleControls.getByRole('button', { name: 'Stop service' })
+    ).toBeDisabled()
+  })
+
+  it('omits the redundant config-path copy from Overview Actions', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const overviewActions = within(
+      screen.getByTestId('service-detail-overview-actions')
+    )
+    const metadataTable = screen.getByTestId('service-detail-metadata-table')
+
+    expect(
+      overviewActions.queryByRole('button', { name: 'Open config' })
+    ).toBeNull()
+    expect(
+      within(metadataTable).getByRole('button', { name: 'Copy Config path' })
+    ).toBeEnabled()
+    expect(screen.getByRole('tab', { name: /config/i })).toBeVisible()
+  })
+
+  it('exposes an enabled favorite toggle on the service heading', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(
+      screen.getByRole('button', { name: 'Remove favorite' })
+    ).toBeEnabled()
+  })
+
+  it('keeps jump actions in the header and removes duplicate log-panel actions', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const quickActions = within(
+      screen.getByTestId('service-detail-quick-actions')
+    )
+
+    expect(
+      quickActions.getByRole('link', { name: /open logs/i })
+    ).toHaveAttribute('href', '/logs?service=%40serviceadmin')
+    expect(
+      quickActions.getByRole('link', { name: /open dependencies/i })
+    ).toHaveAttribute('href', '/dependencies?service=%40serviceadmin')
+    expect(
+      quickActions.getByRole('link', { name: /open variables/i })
+    ).toHaveAttribute('href', '/variables?service=%40serviceadmin')
+    expect(
+      quickActions.getByRole('link', { name: /open secrets/i })
+    ).toHaveAttribute(
+      'href',
+      '/secrets-broker/secrets?path=services%2F%40serviceadmin'
+    )
+    expect(
+      quickActions.getByRole('link', { name: /open network/i })
+    ).toHaveAttribute('href', '/network?service=%40serviceadmin')
+    expect(
+      quickActions.getByRole('link', { name: /open runtime/i })
+    ).toHaveAttribute('href', '/runtime?service=%40serviceadmin')
+    expect(quickActions.queryByText(/^Logs$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Dependencies$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Variables$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Secrets$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Network$/i)).toBeNull()
+    expect(quickActions.queryByText(/^Runtime$/i)).toBeNull()
+    expect(
+      quickActions.queryByRole('button', { name: /view full config json/i })
+    ).toBeNull()
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    const logsPanel = within(screen.getByRole('tabpanel'))
+
+    expect(
+      logsPanel.queryByRole('link', { name: /open live logs/i })
+    ).toBeNull()
+    expect(
+      logsPanel.queryByRole('link', { name: /open dependencies/i })
+    ).toBeNull()
+    expect(
+      logsPanel.queryByRole('link', { name: /open network view/i })
+    ).toBeNull()
+    expect(
+      logsPanel.queryByRole('link', { name: /open runtime view/i })
+    ).toBeNull()
+    expect(screen.getByTestId('service-detail-logs-workspace')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDOUT' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDERR' })).toBeVisible()
+    expect(
+      screen.queryByText('Diagnostics + recent logs')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText('Search services...')
+    ).not.toBeInTheDocument()
+  })
+
+  it('links service details Secrets to the KV bucket path for this service', async () => {
+    __setStubServicesForTest([buildNodeSampleService()])
+
+    await renderRoute('/services/node-sample-service')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Node Sample Service$/i })
+      ).toBeVisible()
+    })
+
+    const quickActions = within(
+      screen.getByTestId('service-detail-quick-actions')
+    )
+
+    expect(
+      quickActions.getByRole('link', { name: /open secrets/i })
+    ).toHaveAttribute(
+      'href',
+      '/secrets-broker/secrets?path=services%2Fnode-sample-service'
+    )
+  })
+
+  it('keeps the Config tab focused on the server.json editor', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+
+    expect(screen.getByTestId('service-config-editor')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /view full config json/i })
+    ).toBeNull()
+    expect(screen.queryByText(/runtime safety/i)).toBeNull()
+    expect(screen.queryByText(/resolved environment values/i)).toBeNull()
+    expect(screen.queryByText(/provider credentials/i)).toBeNull()
+    expect(screen.queryByText(/authorization headers/i)).toBeNull()
+  })
+
+  it('shows stdout and stderr through the shared log viewer without leaking sensitive values', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+        const type = parsed.searchParams.get('type') ?? 'default'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              availableTypes: ['default', 'stdout', 'stderr'],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          const lines =
+            type === 'stderr'
+              ? [
+                  '2026-06-23T05:20:01Z ERROR startup password=hunter2',
+                  '2026-06-23T05:20:02Z WARN retrying',
+                ]
+              : [
+                  '2026-06-23T05:20:00Z INFO stdout server listening token=hidden-value',
+                ]
+
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              totalLines: lines.length,
+              start: 0,
+              end: lines.length,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 80,
+              lines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    expect(screen.getByTestId('service-detail-logs-workspace')).toBeVisible()
+    expect(
+      screen.queryByPlaceholderText('Search services...')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDOUT' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /stdout server listening/
+      )
+    })
+
+    expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+      /token=\[redacted\]/
+    )
+    expect(screen.queryByText(/hidden-value/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDERR' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /ERROR startup/
+      )
+    })
+
+    expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+      /password=\[redacted\]/
+    )
+    expect(screen.queryByText(/hunter2/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the file editor for empty stderr and does not request combined', async () => {
+    const user = userEvent.setup()
+    const requestedTypes: string[] = []
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+        const type = parsed.searchParams.get('type') ?? 'default'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          requestedTypes.push(`info:${type}`)
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'default',
+              path: `C:\\runtime\\${serviceId}\\service.log`,
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              sources: [
+                {
+                  id: 'combined',
+                  label: 'Combined runtime log',
+                  stream: 'combined',
+                  runId: 'run-1',
+                  path: `C:\\runtime\\${serviceId}\\service.log`,
+                  available: true,
+                },
+                {
+                  kind: 'current',
+                  stream: 'stdout',
+                  runId: 'run-1',
+                  path: `C:\\runtime\\${serviceId}\\stdout.log`,
+                  available: true,
+                },
+                {
+                  kind: 'current',
+                  stream: 'stderr',
+                  runId: 'run-1',
+                  path: `C:\\runtime\\${serviceId}\\stderr.log`,
+                  available: true,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          requestedTypes.push(type)
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: `C:\\runtime\\${serviceId}\\${type}.log`,
+              available: true,
+              totalLines: 0,
+              start: 0,
+              end: 0,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 80,
+              lines: [],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/services/%40serviceadmin/logs') {
+          return new Response(
+            JSON.stringify({
+              logs: {
+                serviceId: '@serviceadmin',
+                runId: 'run-1',
+                logPath: 'C:\\runtime\\@serviceadmin\\service.log',
+                stdoutPath: 'C:\\runtime\\@serviceadmin\\stdout.log',
+                stderrPath: 'C:\\runtime\\@serviceadmin\\stderr.log',
+                entries: [
+                  {
+                    level: 'info',
+                    message:
+                      'serviceadmin:start token=review-secret should be redacted',
+                  },
+                ],
+                archives: [],
+                retention: { maxArchives: 3 },
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer')).toBeVisible()
+      expect(screen.getByText('0 loaded lines')).toBeVisible()
+    })
+
+    expect(requestedTypes).toContain('default')
+    expect(requestedTypes).toContain('info:default')
+    expect(requestedTypes).not.toContain('combined')
+    expect(requestedTypes).not.toContain('info:combined')
+    expect(screen.queryByText('Combined runtime log')).not.toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('service-detail-log-sources')).getByText('All')
+    ).toBeVisible()
+    expect(
+      screen.queryByText('Diagnostics + recent logs')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('No recent log preview entries yet.')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/No stdout entries are recorded/i)
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/No stderr entries are recorded/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/review-secret/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDERR' }))
+
+    await waitFor(() => {
+      expect(requestedTypes).toContain('stderr')
+      expect(screen.getByText('0 loaded lines')).toBeVisible()
+    })
+
+    expect(screen.getByTestId('logs-viewer')).toBeVisible()
+    expect(
+      screen.queryByText('No current log entries yet')
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders the Terminal tab from safe stdout history without leaking values', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+        const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'stdout',
+              path: `C:\\runtime\\${serviceId}\\stdout.log`,
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              sources: [
+                {
+                  kind: 'current',
+                  stream: 'stdout',
+                  runId: 'run-2026-06-25T05-00-00Z',
+                  path: `C:\\runtime\\${serviceId}\\stdout.log`,
+                  available: true,
+                },
+              ],
+              stdin: {
+                available: false,
+                reason: 'Provider does not expose stdin.',
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type: 'default',
+              path: `C:\\runtime\\${serviceId}\\service.log`,
+              available: true,
+              source: {
+                kind: 'current',
+                stream: 'combined',
+                runId: 'run-2026-06-25T05-00-00Z',
+                path: `C:\\runtime\\${serviceId}\\service.log`,
+                available: true,
+              },
+              totalLines: 3,
+              start: 0,
+              end: 3,
+              hasMore: false,
+              nextBefore: 0,
+              cursor: '3',
+              nextCursor: null,
+              limit: 240,
+              lines: [
+                '{"level":"stdout","message":"service ready token=hidden-value"}',
+                '{"level":"stdout","message":"listening on http://127.0.0.1:17700"}',
+                '{"level":"stderr","message":"startup warning token=hidden-value"}',
+              ],
+              entries: [
+                {
+                  stream: 'stdout',
+                  message: 'service ready token=hidden-value',
+                },
+                {
+                  stream: 'stdout',
+                  message: 'listening on http://127.0.0.1:17700',
+                },
+                {
+                  stream: 'stderr',
+                  message: 'startup warning token=hidden-value',
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const terminal = screen.getByTestId('service-detail-terminal-lines')
+    const visibleTerminal = screen.getByTestId(
+      'service-detail-terminal-visible-lines'
+    )
+
+    await waitFor(() => {
+      expect(terminal).toHaveTextContent(/service ready/)
+    })
+
+    expect(visibleTerminal).toBeVisible()
+    expect(visibleTerminal).toHaveTextContent(/service ready/)
+    expect(visibleTerminal).toHaveTextContent(/listening on/)
+    expect(visibleTerminal).toHaveTextContent(/startup warning/)
+    expect(visibleTerminal).toHaveTextContent(/token=\[redacted\]/)
+    expect(visibleTerminal).not.toHaveTextContent(/hidden-value/)
+    expect(terminal).toHaveTextContent(/token=\[redacted\]/)
+    expect(terminal).not.toHaveTextContent(/hidden-value/)
+    const terminalCard = screen.getByTestId('service-detail-terminal')
+    expect(within(terminalCard).queryByText(/^State$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^PID$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Run$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Stdout$/i)).toBeNull()
+    expect(screen.queryByPlaceholderText(/^Search$/i)).toBeNull()
+    expect(screen.queryByText('run-2026-06-25T05-00-00Z')).toBeNull()
+    expect(
+      screen.getByRole('textbox', { name: /terminal input/i })
+    ).toBeDisabled()
+    expect(screen.getByText(/Provider does not expose stdin/i)).toBeVisible()
+  })
+
+  it('validates Node Sample Service Terminal and Logs with safe stdout and stderr fixtures', async () => {
+    const user = userEvent.setup()
+    __setStubServicesForTest([buildNodeSampleService()])
+
+    const stdoutLines = [
+      'node-sample-service starting',
+      'node-sample-service listening on 127.0.0.1:4020',
+      'node-sample-service heartbeat count=1 uptimeMs=5000',
+    ]
+    const stderrLines = [
+      'node-sample-service demo error message="canonical error"',
+    ]
+    const combinedEntries = [
+      { stream: 'stdout', message: stdoutLines[0] },
+      { stream: 'stdout', message: stdoutLines[1] },
+      { stream: 'stdout', message: stdoutLines[2] },
+      { stream: 'stderr', message: stderrLines[0] },
+    ]
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const parsed = new URL(url, 'http://localhost')
+      const serviceId =
+        parsed.searchParams.get('service') ?? 'node-sample-service'
+      const type = parsed.searchParams.get('type') ?? 'stdout'
+
+      if (parsed.pathname === '/api/services/log-info') {
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type,
+            path: `C:\\runtime\\node-sample-service\\${type}.log`,
+            available: true,
+            availableTypes: ['default', 'stdout', 'stderr'],
+            sources: [
+              {
+                kind: 'current',
+                stream: type,
+                runId: 'node-sample-run-1',
+                path: `C:\\runtime\\node-sample-service\\${type}.log`,
+                available: true,
+              },
+            ],
+            stdin: {
+              available: true,
+              provider: 'direct',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/logs/read') {
+        if (type === 'stderr') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: 'C:\\runtime\\node-sample-service\\stderr.log',
+              available: true,
+              source: {
+                kind: 'current',
+                stream: 'stderr',
+                runId: 'node-sample-run-1',
+                path: 'C:\\runtime\\node-sample-service\\stderr.log',
+                available: true,
+              },
+              totalLines: stderrLines.length,
+              start: 0,
+              end: stderrLines.length,
+              hasMore: false,
+              nextBefore: 0,
+              cursor: String(stderrLines.length),
+              nextCursor: null,
+              limit: Number(parsed.searchParams.get('limit') ?? '240'),
+              lines: stderrLines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (type === 'stdout') {
+          return new Response(
+            JSON.stringify({
+              serviceId,
+              type,
+              path: 'C:\\runtime\\node-sample-service\\stdout.log',
+              available: true,
+              source: {
+                kind: 'current',
+                stream: 'stdout',
+                runId: 'node-sample-run-1',
+                path: 'C:\\runtime\\node-sample-service\\stdout.log',
+                available: true,
+              },
+              totalLines: stdoutLines.length,
+              start: 0,
+              end: stdoutLines.length,
+              hasMore: false,
+              nextBefore: 0,
+              cursor: String(stdoutLines.length),
+              nextCursor: null,
+              limit: Number(parsed.searchParams.get('limit') ?? '240'),
+              lines: stdoutLines,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type: 'default',
+            path: 'C:\\runtime\\node-sample-service\\service.log',
+            available: true,
+            source: {
+              kind: 'current',
+              stream: 'combined',
+              runId: 'node-sample-run-1',
+              path: 'C:\\runtime\\node-sample-service\\service.log',
+              available: true,
+            },
+            totalLines: combinedEntries.length,
+            start: 0,
+            end: combinedEntries.length,
+            hasMore: false,
+            nextBefore: 0,
+            cursor: String(combinedEntries.length),
+            nextCursor: null,
+            limit: Number(parsed.searchParams.get('limit') ?? '240'),
+            lines: combinedEntries.map((entry) =>
+              JSON.stringify({ level: entry.stream, message: entry.message })
+            ),
+            entries: combinedEntries,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/services/node-sample-service/logs') {
+        return new Response(
+          JSON.stringify({
+            logs: {
+              serviceId: 'node-sample-service',
+              runId: 'node-sample-run-1',
+              logPath: 'C:\\runtime\\node-sample-service\\service.log',
+              stdoutPath: 'C:\\runtime\\node-sample-service\\stdout.log',
+              stderrPath: 'C:\\runtime\\node-sample-service\\stderr.log',
+              entries: [
+                {
+                  level: 'info',
+                  message:
+                    'node-sample-service demo log message="canonical normal"',
+                },
+                {
+                  level: 'error',
+                  message:
+                    'node-sample-service demo error message="canonical error"',
+                },
+              ],
+              archives: [],
+              retention: { maxArchives: 3 },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/services/node-sample-service/stdin') {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          input: 'ping',
+          stream: 'stdin',
+          actor: 'service-admin-web',
+        })
+        stdoutLines.push('node-sample-service command pong')
+        combinedEntries.push({
+          stream: 'stdout',
+          message: 'node-sample-service command pong',
+        })
+
+        return new Response(
+          JSON.stringify({
+            serviceId: 'node-sample-service',
+            accepted: true,
+            auditId: 'node-sample-audit-1',
+            message: 'Input accepted.',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      return new Response('not found', { status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/services/node-sample-service?tab=terminal')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Node Sample Service$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /overview/i }))
+    const runStatus = screen.getByTestId('service-detail-overview-run-status')
+    expect(within(runStatus).getByText('4242')).toBeVisible()
+    expect(within(runStatus).getByText('node-sample-run-1')).toBeVisible()
+    expect(
+      within(runStatus).queryByText('Not recorded')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const visibleTerminal = await screen.findByTestId(
+      'service-detail-terminal-visible-lines'
+    )
+    const terminalCard = screen.getByTestId('service-detail-terminal')
+
+    expect(visibleTerminal).toHaveTextContent(/node-sample-service starting/)
+    expect(visibleTerminal).toHaveTextContent(/listening on 127\.0\.0\.1:4020/)
+    expect(visibleTerminal).toHaveTextContent(/heartbeat count=1/)
+    expect(visibleTerminal).toHaveTextContent(
+      /demo error message="canonical error"/
+    )
+    expect(within(terminalCard).queryByText('node-sample-run-1')).toBeNull()
+    expect(within(terminalCard).queryByText(/^State$/i)).toBeNull()
+    expect(within(terminalCard).queryByText(/^Stdout$/i)).toBeNull()
+    expect(screen.queryByPlaceholderText(/^Search$/i)).toBeNull()
+
+    const terminalInput = screen.getByRole('textbox', {
+      name: /terminal input/i,
+    })
+    expect(terminalInput).toBeEnabled()
+
+    await user.type(terminalInput, 'ping')
+    await user.click(screen.getByRole('button', { name: /send input/i }))
+    await screen.findByText('Input accepted.')
+    await user.click(screen.getByRole('button', { name: /refresh/i }))
+
+    await waitFor(() => {
+      expect(visibleTerminal).toHaveTextContent(/command pong/)
+    })
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    await screen.findByTestId('service-detail-logs-workspace')
+
+    expect(
+      within(screen.getByTestId('service-detail-log-sources')).getByText('All')
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDOUT' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'STDERR' })).toBeVisible()
+    expect(
+      screen.queryByPlaceholderText('Search services...')
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'STDOUT' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /node-sample-service starting/
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: 'STDERR' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('logs-viewer-lines')).toHaveTextContent(
+        /demo error message="canonical error"/
+      )
+    })
+    expect(
+      screen.queryByText(/ACTUAL_SECRET|CLIENT_SECRET|PASSWORD=/)
+    ).toBeNull()
+  })
+
+  it('keeps Terminal input disabled when the managed service is stopped', async () => {
+    const user = userEvent.setup()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const parsed = new URL(url, 'http://localhost')
+
+        if (parsed.pathname === '/api/services/log-info') {
+          return new Response(
+            JSON.stringify({
+              serviceId: 'dagu',
+              type: 'stdout',
+              path: 'C:\\runtime\\dagu\\stdout.log',
+              available: true,
+              availableTypes: ['default', 'stdout', 'stderr'],
+              stdin: { available: true },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        if (parsed.pathname === '/api/logs/read') {
+          return new Response(
+            JSON.stringify({
+              serviceId: 'dagu',
+              type: 'stdout',
+              path: 'C:\\runtime\\dagu\\stdout.log',
+              available: true,
+              totalLines: 0,
+              start: 0,
+              end: 0,
+              hasMore: false,
+              nextBefore: 0,
+              limit: 240,
+              lines: [],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        }
+
+        return new Response('not found', { status: 404 })
+      })
+    )
+
+    await renderRoute('/services/dagu')
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^Dagu$/i })).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('textbox', { name: /terminal input/i })
+      ).toBeDisabled()
+    })
+
+    expect(screen.getByText(/managed process is not running/i)).toBeVisible()
+  })
+
+  it('sends Terminal input only through the managed stdin endpoint', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const parsed = new URL(url, 'http://localhost')
+      const serviceId = parsed.searchParams.get('service') ?? '@serviceadmin'
+
+      if (parsed.pathname === '/api/services/log-info') {
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type: 'stdout',
+            path: `C:\\runtime\\${serviceId}\\stdout.log`,
+            available: true,
+            availableTypes: ['default', 'stdout', 'stderr'],
+            stdin: {
+              available: true,
+              auditRequired: true,
+              provider: 'direct',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (parsed.pathname === '/api/logs/read') {
+        return new Response(
+          JSON.stringify({
+            serviceId,
+            type: 'stdout',
+            path: `C:\\runtime\\${serviceId}\\stdout.log`,
+            available: true,
+            totalLines: 1,
+            start: 0,
+            end: 1,
+            hasMore: false,
+            nextBefore: 0,
+            limit: 240,
+            lines: ['interactive app ready'],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      if (
+        parsed.pathname === '/api/services/%40serviceadmin/stdin' ||
+        parsed.pathname === '/api/services/@serviceadmin/stdin'
+      ) {
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          input: 'status',
+          stream: 'stdin',
+          actor: 'service-admin-web',
+        })
+
+        return new Response(
+          JSON.stringify({
+            serviceId: '@serviceadmin',
+            accepted: true,
+            auditId: 'audit-1',
+            message: 'Input accepted.',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      return new Response('not found', { status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /terminal/i }))
+
+    const terminalInput = await screen.findByRole('textbox', {
+      name: /terminal input/i,
+    })
+    await user.type(terminalInput, 'status')
+    await user.click(screen.getByRole('button', { name: /send input/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Input accepted/i)).toBeVisible()
+    })
+
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => {
+        const parsed = new URL(String(url), 'http://localhost')
+        return (
+          parsed.pathname.endsWith('/stdin') &&
+          init?.method === 'POST' &&
+          String(init?.body).includes('"input":"status"')
+        )
+      })
+    ).toBe(true)
+  })
+})
+
+describe('service detail tab keyboard shortcuts', () => {
+  it('opens a Service Details tab from the route search state', async () => {
+    await renderRoute('/services/@serviceadmin?tab=variables')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(screen.getByRole('tab', { name: /variables/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.getByText('VITE_SERVICE_LASSO_API_BASE_URL')).toBeVisible()
+  })
+
+  it('updates URL search state on tab changes and falls back from unknown tabs', async () => {
+    const user = userEvent.setup()
+    const { router } = await renderRoute('/services/@serviceadmin?tab=unknown')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    expect(screen.getByRole('tab', { name: /overview/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+
+    await user.click(screen.getByRole('tab', { name: /logs/i }))
+
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ tab: 'logs' })
+    })
+
+    await user.click(screen.getByRole('tab', { name: /overview/i }))
+
+    await waitFor(() => {
+      expect(router.state.location.search).not.toHaveProperty('tab')
+    })
+  })
+
+  it('uses Ctrl+1 through Ctrl+7 for the visible tab order', async () => {
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    const shortcuts = [
+      ['1', /overview/i],
+      ['2', /dependencies/i],
+      ['3', /endpoints/i],
+      ['4', /variables/i],
+      ['5', /config/i],
+      ['6', /logs/i],
+      ['7', /terminal/i],
+    ] as const
+
+    for (const [key, tabName] of shortcuts) {
+      fireEvent.keyDown(document.body, { key, ctrlKey: true })
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: tabName })).toHaveAttribute(
+          'aria-selected',
+          'true'
+        )
+      })
+    }
+
+    expect(screen.getByRole('tab', { name: /overview.*\(1\)/i })).toBeVisible()
+    expect(screen.getByRole('tab', { name: /logs.*\(6\)/i })).toBeVisible()
+    expect(screen.getByRole('tab', { name: /terminal.*\(7\)/i })).toBeVisible()
+    expect(
+      screen.queryByRole('tab', { name: /overview.*ctrl\+1/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('ignores unmodified number keys and Ctrl+number inside the config editor', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    fireEvent.keyDown(document.body, { key: '4' })
+    expect(screen.getByRole('tab', { name: /overview/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+
+    fireEvent.keyDown(document.body, { key: '5', ctrlKey: true })
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /config/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    })
+
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+    await user.click(editor)
+    fireEvent.keyDown(editor, { key: '6', ctrlKey: true })
+
+    expect(screen.getByRole('tab', { name: /config/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.getByRole('tab', { name: /logs/i })).toHaveAttribute(
+      'aria-selected',
+      'false'
+    )
+  })
+})
+
+describe('service detail server.json config editor', () => {
+  it('loads server.json into the Config tab with backup metadata', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect((editor as HTMLTextAreaElement).value).toContain(
+        '"id": "@serviceadmin"'
+      )
+    })
+
+    expect(screen.getByTestId('service-config-editor')).toBeVisible()
+    expect(screen.getByText(/Valid JSON/i)).toBeVisible()
+    expect(screen.getByText(/0 backups/i)).toBeVisible()
+    expect(screen.getAllByText(/server\.json/i).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Runtime safety/i)).toBeNull()
+    expect(screen.queryByText(/resolved environment values/i)).toBeNull()
+    expect(screen.queryByText(/provider credentials/i)).toBeNull()
+    expect(screen.queryByText(/authorization headers/i)).toBeNull()
+  })
+
+  it('blocks invalid JSON saves and dirty reloads until confirmed', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect((editor as HTMLTextAreaElement).value).toContain(
+        '"id": "@serviceadmin"'
+      )
+    })
+
+    fireEvent.change(editor, { target: { value: '{bad-json' } })
+
+    expect(screen.getByText(/Invalid JSON/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /^Save$/i })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: /^Reload$/i }))
+    expect(
+      screen.getByRole('dialog', {
+        name: /Discard unsaved server\.json changes/i,
+      })
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Keep editing/i }))
+    expect(screen.getByText(/Invalid JSON/i)).toBeVisible()
+  })
+
+  it('saves valid JSON, records a backup, and compares the revision', async () => {
+    const user = userEvent.setup()
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+    const editor = await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect((editor as HTMLTextAreaElement).value).toContain(
+        '"id": "@serviceadmin"'
+      )
+    })
+    const nextConfig = JSON.stringify(
+      {
+        id: '@serviceadmin',
+        name: 'Service Admin UI',
+        description: 'Saved from config editor test',
+        enabled: true,
+      },
+      null,
+      2
+    )
+
+    fireEvent.change(editor, { target: { value: nextConfig } })
+    await user.type(screen.getByLabelText(/Audit reason/i), 'test config save')
+    await user.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Saved server\.json and created a backup revision/i)
+      ).toBeVisible()
+    })
+
+    expect(screen.getByText(/1 backups/i)).toBeVisible()
+    expect(screen.getByText(/test config save/i)).toBeVisible()
+    expect(screen.getAllByText(/Backup history/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Monaco diff editor/i)).toBeVisible()
+    expect(
+      screen.getByRole('region', { name: /server\.json backup diff editor/i })
+    ).toBeVisible()
+    expect(screen.getByText(/Modified: current editor buffer/i)).toBeVisible()
+    expect(screen.getByTestId('server-json-diff-modified')).toHaveTextContent(
+      /Saved from config editor test/i
+    )
+    expect(
+      screen.queryByText(/config-backups\\server\.json/i)
+    ).not.toBeInTheDocument()
+  })
+
+  it('filters and paginates backup history while keeping compare selection stable', async () => {
+    const user = userEvent.setup()
+    const revisions: ServiceConfigRevision[] = Array.from(
+      { length: 12 },
+      (_, index) => {
+        const revisionNumber = index + 1
+        return {
+          id: `stub-revision-${revisionNumber}`,
+          createdAt: `2026-07-${String(18 - index).padStart(2, '0')}T03:00:00.000Z`,
+          actor: index === 10 ? 'release-operator' : 'service-admin-web',
+          reason:
+            index === 10
+              ? 'release rollback review'
+              : `config adjustment ${revisionNumber}`,
+          path: `@serviceadmin\\.state\\config-backups\\server-${revisionNumber}.json`,
+          previousHash: `hash-${String(revisionNumber).padStart(2, '0')}-abcdef1234567890`,
+          currentHash: `current-${String(revisionNumber).padStart(2, '0')}`,
+          validationStatus: 'valid',
+          content: `{"revision":${revisionNumber}}`,
+        }
+      }
+    )
+
+    __setStubConfigRevisionsForTest('@serviceadmin', revisions)
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /config/i }))
+
+    await screen.findByRole('textbox', {
+      name: /server\.json editor/i,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Showing\s+1-10\s+of\s+12/i)).toBeVisible()
+    })
+    expect(screen.getByText('config adjustment 1')).toBeVisible()
+    expect(screen.queryByText(/release rollback review/i)).toBeNull()
+    expect(screen.getByTestId('server-json-diff-original')).toHaveTextContent(
+      /"revision":1/i
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Next backup history page/i })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Showing\s+11-12\s+of\s+12/i)).toBeVisible()
+    })
+    expect(screen.getByText(/release rollback review/i)).toBeVisible()
+
+    await user.type(
+      screen.getByLabelText(/Search backup history/i),
+      'release-operator'
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Showing\s+1-1\s+of\s+1\s+matching\s+12\s+total/i)
+      ).toBeVisible()
+    })
+    expect(screen.getByText(/release rollback review/i)).toBeVisible()
+    expect(screen.queryByText('config adjustment 1')).toBeNull()
+    expect(screen.getByTestId('server-json-diff-original')).toHaveTextContent(
+      /"revision":1/i
+    )
+
+    await user.clear(screen.getByLabelText(/Search backup history/i))
+    await user.type(screen.getByLabelText(/Search backup history/i), 'missing')
+
+    expect(
+      screen.getByText(/No backup revisions match the current filter/i)
+    ).toBeVisible()
+  })
+})
+
+describe('service detail endpoints table', () => {
+  it('builds host-aware endpoint URLs for non-local admin access', () => {
+    const [row] = buildServiceEndpointDisplayRows(
+      [
+        {
+          label: 'Local HTTP',
+          url: 'http://127.0.0.1:4020/health?probe=1#ready',
+          bind: '127.0.0.1',
+          port: 4020,
+          protocol: 'http',
+          exposure: 'local',
+        },
+      ],
+      {
+        protocol: 'http:',
+        hostname: '192.168.1.53',
+        host: '192.168.1.53:17700',
+      } as Location
+    )
+
+    expect(row.endpointUrl).toBe(
+      'http://192.168.1.53:4020/health?probe=1#ready'
+    )
+    expect(row.showSourceUrl).toBe(true)
+  })
+
+  it('renders actual endpoint URLs with open, copy, and route inventory actions', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    await renderRoute('/services/@serviceadmin')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /^Service Admin UI$/i })
+      ).toBeVisible()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /endpoints/i }))
+
+    const localUrlCell = screen.getByText('http://localhost:17700')
+    const localEndpointRow = localUrlCell.closest('tr')
+    expect(localEndpointRow).not.toBeNull()
+    const row = within(localEndpointRow as HTMLTableRowElement)
+
+    expect(row.getByText('Local UI')).toBeVisible()
+    expect(row.getByText('HTTP')).toBeVisible()
+    expect(row.getByText('0.0.0.0')).toBeVisible()
+    expect(row.getByText('17700')).toBeVisible()
+    expect(row.getByText('local')).toBeVisible()
+    expect(localUrlCell).toBeVisible()
+
+    expect(
+      row.getByRole('link', { name: 'Open Local UI endpoint' })
+    ).toHaveAttribute('href', 'http://localhost:17700')
+
+    await user.click(row.getByRole('button', { name: 'Copy Local UI URL' }))
+    expect(writeText).toHaveBeenCalledWith('http://localhost:17700')
+
+    expect(
+      row.getByRole('link', { name: 'Open Local UI in route inventory' })
+    ).toHaveAttribute(
+      'href',
+      expect.stringContaining('route=http%3A%2F%2Flocalhost%3A17700')
+    )
+  })
+})

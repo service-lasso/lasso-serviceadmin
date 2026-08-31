@@ -1,0 +1,4 @@
+2026-04-16T16:00:01.001Z INFO @serviceadmin Service Admin boot sequence started
+2026-04-16T16:00:01.415Z INFO @serviceadmin Route manifest loaded
+2026-04-16T16:00:01.922Z INFO @serviceadmin Stub api middleware ready
+2026-04-16T16:00:02.203Z INFO @serviceadmin Waiting for operator traffic

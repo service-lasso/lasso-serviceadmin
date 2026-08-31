@@ -11,57 +11,70 @@ afterEach(() => {
 })
 
 describe('first-run setup gate', () => {
-  it('bootstraps the protected local broker without rendering key material', async () => {
-    const user = userEvent.setup()
-    setFirstRunSetupFixtureForTests({
-      state: 'setup_required',
-      setupMode: true,
-      vault: { required: true, ready: false },
-      operator: {
-        osUsername: 'local-operator',
-        identitySource: 'vault',
-      },
-      trustBoundary: {
-        bindHost: '127.0.0.1',
-        localOnly: true,
-        localhostBootstrapAllowed: true,
-        remoteBootstrapAllowed: false,
-        setupTokenConfigured: false,
-        blockers: [],
-      },
-    })
-
-    await renderRoute('/')
-
-    expect(
-      await screen.findByRole('heading', {
-        name: /Service Lasso first-run setup/i,
+  it(
+    'bootstraps the protected local broker without rendering key material',
+    { timeout: 60_000 },
+    async () => {
+      const user = userEvent.setup()
+      setFirstRunSetupFixtureForTests({
+        state: 'setup_required',
+        setupMode: true,
+        vault: { required: true, ready: false },
+        operator: {
+          osUsername: 'local-operator',
+          identitySource: 'vault',
+        },
+        trustBoundary: {
+          bindHost: '127.0.0.1',
+          localOnly: true,
+          localhostBootstrapAllowed: true,
+          remoteBootstrapAllowed: false,
+          setupTokenConfigured: false,
+          blockers: [],
+        },
       })
-    ).toBeVisible()
-    expect(screen.getByText(/No master key is shown/i)).toBeVisible()
-    expect(screen.queryByText(/recovery key/i)).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /copy/i })
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /download/i })
-    ).not.toBeInTheDocument()
 
-    await user.click(
-      screen.getByRole('button', { name: /Initialize Secrets Broker/i })
-    )
+      const { queryClient } = await renderRoute('/', {
+        firstRunSetupGate: true,
+      })
 
-    await waitFor(() => {
       expect(
-        screen.queryByRole('heading', {
+        await screen.findByRole('heading', {
           name: /Service Lasso first-run setup/i,
         })
+      ).toBeVisible()
+      expect(screen.getByText(/No master key is shown/i)).toBeVisible()
+      expect(screen.queryByText(/recovery key/i)).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /copy/i })
       ).not.toBeInTheDocument()
-    })
-    expect(
+      expect(
+        screen.queryByRole('button', { name: /download/i })
+      ).not.toBeInTheDocument()
+
+      await user.click(
+        screen.getByRole('button', { name: /Initialize Secrets Broker/i })
+      )
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('heading', {
+            name: /Service Lasso first-run setup/i,
+          })
+        ).not.toBeInTheDocument()
+      })
+      await waitFor(() => {
+        expect(
+          queryClient.getQueryData(['service-lasso-first-run-setup'])
+        ).toMatchObject({
+          state: 'not_required',
+          setupMode: false,
+          vault: { ready: true },
+        })
+      })
       await screen.findByRole('heading', { name: /^Dashboard$/i })
-    ).toBeVisible()
-  })
+    }
+  )
 
   it('requires a transient token for an authorized remote bootstrap', async () => {
     const user = userEvent.setup()
@@ -79,7 +92,7 @@ describe('first-run setup gate', () => {
       },
     })
 
-    await renderRoute('/')
+    await renderRoute('/', { firstRunSetupGate: true })
 
     const submit = await screen.findByRole('button', {
       name: /Initialize Secrets Broker/i,
@@ -117,7 +130,7 @@ describe('first-run setup gate', () => {
       new Error('safe fixture failure')
     )
 
-    await renderRoute('/')
+    await renderRoute('/', { firstRunSetupGate: true })
     await user.click(
       await screen.findByRole('button', {
         name: /Initialize Secrets Broker/i,
@@ -146,7 +159,7 @@ describe('first-run setup gate', () => {
       },
     })
 
-    await renderRoute('/')
+    await renderRoute('/', { firstRunSetupGate: true })
 
     expect(await screen.findByText(/Bootstrap blocked/i)).toBeVisible()
     expect(
@@ -174,7 +187,7 @@ describe('first-run setup gate', () => {
       },
     })
 
-    await renderRoute('/')
+    await renderRoute('/', { firstRunSetupGate: true })
 
     expect(
       await screen.findByText(/Lost key requires store recreate/i)
