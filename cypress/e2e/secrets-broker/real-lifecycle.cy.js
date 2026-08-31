@@ -48,6 +48,20 @@ function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
 }
 
+function revalidateMigrationPlan(alias) {
+  cy.intercept('POST', '**/providers/migration/dry-run').as(alias)
+  cy.contains('button', 'Revalidate plan').click()
+  cy.wait(`@${alias}`, { timeout: 60_000 }).then(({ response }) => {
+    expect(response?.statusCode).to.equal(200)
+    expect(response?.body).to.include({
+      outcome: 'dry_run_ready',
+      applied: false,
+      auditStatus: 'audit_recorded',
+    })
+  })
+  cy.contains('revalidated', { timeout: 20_000 }).should('be.visible')
+}
+
 function waitForVerifiedBackupCreation(alias) {
   return cy.wait(`@${alias}`, { timeout: 60_000 }).then(({ response }) => {
     const safeBackupResult = {
@@ -1381,6 +1395,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         providerMigrationReadinessAttempts,
         { checkpoint: 'single_migration_apply' }
       )
+      revalidateMigrationPlan('migrationRevalidation')
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'migrationApply'
@@ -1440,6 +1455,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         providerMigrationReadinessAttempts,
         { checkpoint: 'policy_denied_migration_apply' }
       )
+      revalidateMigrationPlan('policyDeniedMigrationRevalidation')
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'policyDeniedMigration'
@@ -1501,6 +1517,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         providerPointInTimeApplyReadinessAttempts,
         { checkpoint: 'unavailable_migration_apply' }
       )
+      revalidateMigrationPlan('unavailableMigrationRevalidation')
       cy.get('[aria-label="Confirm provider migration"]').click()
       cy.intercept('POST', '**/providers/migration/apply').as(
         'unavailableMigration'
@@ -1840,28 +1857,28 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
         method: 'POST',
         url: '/api/services/%40secretsbroker/start',
         body: { confirm: false },
+        failOnStatusCode: false,
         timeout: 120_000,
       })
-        .its('status')
-        .should('equal', 200)
+        .then(({ status, body }) => {
+          expect(status).to.equal(409)
+          expect(body).to.include({
+            error: 'invalid_lifecycle_state',
+            statusCode: 409,
+          })
+          expect(body?.message).to.match(
+            /root exited during ownership enrollment/i
+          )
+        })
       cy.reload()
       unlockTrustedIdentity()
       cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
-      cy.contains('Master key', { timeout: 30_000 })
-        .parent()
-        .contains('Locked', { timeout: 30_000 })
-        .should('be.visible')
+      cy.contains('Secrets Broker management is unavailable.', {
+        timeout: 30_000,
+      }).should('be.visible')
       cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
       cy.get('input[type="password"]').should('not.exist')
       qualificationCheckpoint('wrapper_locked')
-      cy.request({
-        method: 'POST',
-        url: '/api/services/%40secretsbroker/stop',
-        body: { confirm: true },
-        timeout: 120_000,
-      })
-        .its('status')
-        .should('equal', 200)
       cy.request('POST', `${controlUrl}/unlock-wrapper`).then(({ body }) => {
         expect(body).to.deep.equal({ outcome: 'wrapper_restored' })
       })

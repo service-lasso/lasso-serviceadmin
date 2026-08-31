@@ -203,9 +203,10 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.ok(restartUiSource.length > 0)
   assert.ok(restartHelperSource.length > 0)
   for (const uiRestartProof of [
-    'cy.contains(\'[role="tab"]\', /^Overview\\b/).click()',
-    'cy.contains(\'[data-slot="card-title"]\', /^\\s*Actions\\s*$/)',
-    '.closest(\'[data-slot="card"]\')',
+    'cy.reload()',
+    'unlockTrustedIdentity()',
+    'cy.get(\'[data-testid="service-detail-lifecycle-controls"]\').within(() => {',
+    "cy.contains('button', /^Restart service$/, { timeout: 20_000 })",
     "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
     "cy.wait('@restartBrokerFromUi', { timeout: 120_000 })",
     'expect(request.body).to.deep.equal({ confirm: true })',
@@ -505,11 +506,15 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const confirmMigrationIndex = lifecycleSource.indexOf(
     'cy.get(\'[aria-label="Confirm provider migration"]\').click()'
   )
+  const migrationRevalidationIndex = lifecycleSource.indexOf(
+    "revalidateMigrationPlan('migrationRevalidation')"
+  )
   const applyMigrationIndex = lifecycleSource.indexOf(
     "cy.contains('button', 'Apply migration').click()"
   )
   assert.ok(dryRunReadyIndex < applyReadinessIndex)
-  assert.ok(applyReadinessIndex < confirmMigrationIndex)
+  assert.ok(applyReadinessIndex < migrationRevalidationIndex)
+  assert.ok(migrationRevalidationIndex < confirmMigrationIndex)
   assert.ok(confirmMigrationIndex < applyMigrationIndex)
   const policyDeniedDryRunIndex = lifecycleSource.indexOf(
     "cy.wait('@policyDeniedMigrationPreview'"
@@ -521,6 +526,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'cy.get(\'[aria-label="Confirm provider migration"]\').click()',
     policyDeniedApplyReadinessIndex
   )
+  const policyDeniedRevalidationIndex = lifecycleSource.indexOf(
+    "revalidateMigrationPlan('policyDeniedMigrationRevalidation')"
+  )
   const policyDeniedApplyIndex = lifecycleSource.indexOf(
     "cy.contains('button', 'Apply migration').click()",
     policyDeniedConfirmIndex
@@ -530,7 +538,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     policyDeniedApplyIndex
   )
   assert.ok(policyDeniedDryRunIndex < policyDeniedApplyReadinessIndex)
-  assert.ok(policyDeniedApplyReadinessIndex < policyDeniedConfirmIndex)
+  assert.ok(policyDeniedApplyReadinessIndex < policyDeniedRevalidationIndex)
+  assert.ok(policyDeniedRevalidationIndex < policyDeniedConfirmIndex)
   assert.ok(policyDeniedConfirmIndex < policyDeniedApplyIndex)
   assert.ok(policyDeniedApplyIndex < policyDeniedResponseIndex)
   const unavailableDryRunIndex = lifecycleSource.indexOf(
@@ -543,6 +552,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'cy.get(\'[aria-label="Confirm provider migration"]\').click()',
     unavailableApplyReadinessIndex
   )
+  const unavailableRevalidationIndex = lifecycleSource.indexOf(
+    "revalidateMigrationPlan('unavailableMigrationRevalidation')"
+  )
   const unavailableApplyIndex = lifecycleSource.indexOf(
     "cy.contains('button', 'Apply migration').click()",
     unavailableConfirmIndex
@@ -552,7 +564,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     unavailableApplyIndex
   )
   assert.ok(unavailableDryRunIndex < unavailableApplyReadinessIndex)
-  assert.ok(unavailableApplyReadinessIndex < unavailableConfirmIndex)
+  assert.ok(unavailableApplyReadinessIndex < unavailableRevalidationIndex)
+  assert.ok(unavailableRevalidationIndex < unavailableConfirmIndex)
   assert.ok(unavailableConfirmIndex < unavailableApplyIndex)
   assert.ok(unavailableApplyIndex < unavailableResponseIndex)
   // Bulk campaign apply is a distinct durable-campaign contract. Its exact
@@ -639,14 +652,24 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const lateCheckpointCount = [
     ...lateLifecycleSource.matchAll(/qualificationCheckpoint\('/g),
   ].length
-  assert.equal(rawLifecycleRequestCount, 4)
+  assert.equal(rawLifecycleRequestCount, 3)
   assert.equal(sharedStopMutationCount, 0)
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
-  assert.equal(directTwentySecondWaitCount, 4)
+  assert.equal(directTwentySecondWaitCount, 3)
   assert.equal(trustedIdentityWaitCount, 3)
-  assert.equal(directThirtySecondWaitCount, 4)
+  assert.equal(directThirtySecondWaitCount, 3)
   assert.equal(openSecretsCount, 2)
+  for (const lockedWrapperProof of [
+    'failOnStatusCode: false',
+    'expect(status).to.equal(409)',
+    "error: 'invalid_lifecycle_state'",
+    '/root exited during ownership enrollment/i',
+    "cy.contains('Secrets Broker management is unavailable.'",
+    "expect(body).to.deep.equal({ outcome: 'wrapper_restored' })",
+  ]) {
+    assert.equal(lateLifecycleSource.split(lockedWrapperProof).length - 1, 1)
+  }
   assert.equal(
     lateLifecycleSource.split(
       'restartBrokerFromUi(3, () => brokerRestartUiRequests)'
@@ -688,7 +711,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     longUiWaitMs +
     progressTaskWaitMs +
     uiRestartActionWaitMs
-  assert.equal(enumeratedLateLifecycleWaitMs, 1_520_000)
+  assert.equal(enumeratedLateLifecycleWaitMs, 1_350_000)
   assert.ok(enumeratedLateLifecycleWaitMs > cypressQualificationTimeoutMs)
   // Default four-second UI commands and Cypress's implicit network retries are
   // deliberately excluded, so this is not a whole-spec maximum either.
@@ -714,7 +737,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(stoppedLifecycleReloadCount, 1)
   assert.equal(stoppedLifecycleTwentySecondWaitCount, 3)
   assert.equal(stoppedLifecycleTrustedIdentityWaitCount, 2)
-  assert.equal(stoppedLifecycleThirtySecondWaitCount, 3)
+  assert.equal(stoppedLifecycleThirtySecondWaitCount, 5)
   const stoppedLifecycleEnumeratedWaitMs =
     stoppedLifecycleMutationCount * 120_000 +
     managedServiceStopReadinessWorstCaseMs() +
@@ -723,7 +746,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
       stoppedLifecycleTrustedIdentityWaitCount) *
       20_000 +
     stoppedLifecycleThirtySecondWaitCount * 30_000
-  assert.equal(stoppedLifecycleEnumeratedWaitMs, 544_000)
+  assert.equal(stoppedLifecycleEnumeratedWaitMs, 604_000)
   assert.ok(stoppedLifecycleEnumeratedWaitMs < cypressQualificationTimeoutMs)
 })
 
