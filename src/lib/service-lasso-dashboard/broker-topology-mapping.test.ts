@@ -5,6 +5,7 @@ import {
   classifyBrokerValidationStatus,
   classifyLocalMappingStatus,
   filterTopologyMappingRows,
+  topologyGraphFromRows,
   topologyNextAction,
 } from './broker-topology-mapping'
 import type { SecretManagementRecord } from './types'
@@ -231,5 +232,33 @@ describe('Broker topology mapping statuses', () => {
     expect(serialized).not.toContain('recoveryShare')
     expect(topologyNextAction('unknown')).toMatch(/not certain/i)
     expect(classifyBrokerValidationStatus({ outcome: 'ready' })).toBe('mapped')
+  })
+
+  it('derives graph nodes and edges from the same mapping rows as the table', () => {
+    const rows = buildTopologyMappingRows({
+      services: [
+        service([
+          {
+            key: 'SESSION_SIGNING_KEY',
+            secret: true,
+            source: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          },
+        ]),
+      ],
+      inventory: [
+        record({
+          ref: 'services/@serviceadmin/runtime/SESSION_SIGNING_KEY',
+          name: 'SESSION_SIGNING_KEY',
+          outcome: 'ready',
+        }),
+      ],
+      brokerMetadataAvailable: true,
+    })
+    const graph = topologyGraphFromRows(rows)
+    expect(graph.edges.map((edge) => edge.id)).toEqual(
+      rows.map((row) => row.id)
+    )
+    expect(graph.nodes.some((node) => node.kind === 'service')).toBe(true)
+    expect(graph.nodes.some((node) => node.kind === 'ref')).toBe(true)
   })
 })

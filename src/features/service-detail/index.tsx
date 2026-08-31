@@ -162,6 +162,7 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
 import { SecretsBrokerOperationsPanel } from './secrets-operations-panel'
 import { SecretsBrokerProvidersPanel } from './secrets-providers-panel'
+import { SecretsBrokerTopologyPanel } from './secrets-topology-panel'
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   if (status === 'running') {
@@ -5110,6 +5111,7 @@ export function ServiceDetail({
                     <TabsContent value='secrets' className='mt-0 space-y-4'>
                       <SecretsBrokerOperationsPanel />
                       <SecretsBrokerLifecyclePanel />
+                      <SecretsBrokerTopologyPanel />
                       <SecretsBrokerSecretsPanel
                         rotationOperationId={rotationOperationId}
                         onRotationOperationChange={onRotationOperationChange}

@@ -274,3 +274,47 @@ export function filterTopologyMappingRows(
     return haystack.includes(query)
   })
 }
+
+export type TopologyGraphNode = {
+  id: string
+  label: string
+  kind: 'service' | 'ref'
+}
+
+export type TopologyGraphEdge = {
+  id: string
+  source: string
+  target: string
+  status: TopologyMappingStatus
+}
+
+/**
+ * Builds graph nodes and edges from the same mapping rows as the table.
+ */
+export function topologyGraphFromRows(rows: readonly TopologyMappingRow[]): {
+  nodes: TopologyGraphNode[]
+  edges: TopologyGraphEdge[]
+} {
+  const nodes = new Map<string, TopologyGraphNode>()
+  const edges: TopologyGraphEdge[] = []
+  for (const row of rows) {
+    nodes.set(row.serviceId, {
+      id: row.serviceId,
+      label: row.serviceName,
+      kind: 'service',
+    })
+    const targetId = row.secretRef || `${row.serviceId}:${row.variableKey}`
+    nodes.set(targetId, {
+      id: targetId,
+      label: row.secretRef ?? row.variableKey,
+      kind: 'ref',
+    })
+    edges.push({
+      id: row.id,
+      source: row.serviceId,
+      target: targetId,
+      status: row.status,
+    })
+  }
+  return { nodes: [...nodes.values()], edges }
+}
