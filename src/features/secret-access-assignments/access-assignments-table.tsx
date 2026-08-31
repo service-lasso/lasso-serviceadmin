@@ -12,9 +12,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
 import type { SecretAccessAssignmentRow } from '@/lib/service-lasso-dashboard/secret-access-policy'
 import { cn } from '@/lib/utils'
+import { type NavigateFn, useTableUrlState } from '@/hooks/use-table-url-state'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -42,7 +42,9 @@ function AssignmentStatusBadge({
   status: SecretAccessAssignmentRow['status']
 }) {
   if (status === 'assigned') {
-    return <Badge className='bg-emerald-600 hover:bg-emerald-600'>Assigned</Badge>
+    return (
+      <Badge className='bg-emerald-600 hover:bg-emerald-600'>Assigned</Badge>
+    )
   }
   if (status === 'malformed') {
     return <Badge variant='destructive'>Malformed</Badge>
@@ -88,7 +90,9 @@ const columns: ColumnDef<SecretAccessAssignmentRow>[] = [
       <DataTableColumnHeader column={column} title='Namespace' />
     ),
     cell: ({ row }) => (
-      <div className='font-mono text-sm break-all'>{row.original.namespace}</div>
+      <div className='font-mono text-sm break-all'>
+        {row.original.namespace}
+      </div>
     ),
   },
   {
@@ -97,7 +101,9 @@ const columns: ColumnDef<SecretAccessAssignmentRow>[] = [
       <DataTableColumnHeader column={column} title='Refs' />
     ),
     cell: ({ row }) => (
-      <div className='font-mono text-sm break-all'>{row.original.refsLabel}</div>
+      <div className='font-mono text-sm break-all'>
+        {row.original.refsLabel}
+      </div>
     ),
   },
   {

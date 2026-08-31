@@ -3285,7 +3285,9 @@ const secretAccessAssignmentAudit: SecretAccessAssignmentAudit = {
 /**
  * Load broker.accessPolicy grants from live service.json documents.
  */
-async function loadLiveAccessPolicyGrants(): Promise<SecretAccessPolicyGrant[]> {
+async function loadLiveAccessPolicyGrants(): Promise<
+  SecretAccessPolicyGrant[]
+> {
   const services = await fetchServices()
   const documents = await Promise.allSettled(
     services.map((service) =>
@@ -3310,9 +3312,8 @@ export async function fetchSecretAccessAssignments() {
   await wait(120)
 
   if (!serviceLassoStubDataEnabled) {
-    const audit = await fetchRuntimeJson<SecretAccessAssignmentAudit>(
-      '/api/secrets/audit'
-    )
+    const audit =
+      await fetchRuntimeJson<SecretAccessAssignmentAudit>('/api/secrets/audit')
     const grants = await loadLiveAccessPolicyGrants()
     return {
       services: Array.isArray(audit.services) ? audit.services : [],

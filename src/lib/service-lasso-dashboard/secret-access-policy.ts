@@ -112,8 +112,10 @@ export function parseManifestAccessPolicyGrants(
   if (!isRecord(accessPolicy)) return []
 
   const policyServiceId =
-    safeOptionalIdentifier(accessPolicy.serviceId, 'broker.accessPolicy.serviceId') ??
-    manifestId
+    safeOptionalIdentifier(
+      accessPolicy.serviceId,
+      'broker.accessPolicy.serviceId'
+    ) ?? manifestId
   if (policyServiceId !== manifestId) return []
 
   const workspace =
@@ -201,9 +203,7 @@ export function buildSecretAccessAssignmentRows(
     serviceId: grant.serviceId,
     workspace: grant.workspace,
     namespace: grant.namespace,
-    refsLabel: grant.namespaceWide
-      ? 'namespace-wide'
-      : grant.refs.join(', '),
+    refsLabel: grant.namespaceWide ? 'namespace-wide' : grant.refs.join(', '),
     operationsLabel: grant.operations.join(', '),
     purpose: grant.purpose,
     status: 'assigned',

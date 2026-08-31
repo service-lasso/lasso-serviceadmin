@@ -496,7 +496,9 @@ describe('app screens', () => {
       await screen.findByText('Service Manifest Secret Access')
     ).toBeVisible()
     expect(
-      screen.getByText(/Live broker.accessPolicy grants from installed service manifests/i)
+      screen.getByText(
+        /Live broker.accessPolicy grants from installed service manifests/i
+      )
     ).toBeVisible()
     expect(screen.getByText('@serviceadmin')).toBeVisible()
     expect(screen.getByText('services/@serviceadmin')).toBeVisible()
@@ -511,9 +513,7 @@ describe('app screens', () => {
   })
 
   it('redirects leftover policy-simulation onto the live assignment inspector', async () => {
-    const { router } = await renderRoute(
-      '/secrets-broker/policy-simulation'
-    )
+    const { router } = await renderRoute('/secrets-broker/policy-simulation')
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/security')

@@ -53,7 +53,10 @@ function emptyAudit(
 
 describe('broker.accessPolicy assignment parser', () => {
   it('reads grant metadata from a live service.json without env values', () => {
-    const grants = parseManifestAccessPolicyGrants(grantedManifest, 'api-service')
+    const grants = parseManifestAccessPolicyGrants(
+      grantedManifest,
+      'api-service'
+    )
 
     expect(grants).toEqual([
       {
@@ -87,7 +90,10 @@ describe('broker.accessPolicy assignment parser', () => {
   })
 
   it('builds assigned and missing inspector rows without secret material', () => {
-    const grants = parseManifestAccessPolicyGrants(grantedManifest, 'api-service')
+    const grants = parseManifestAccessPolicyGrants(
+      grantedManifest,
+      'api-service'
+    )
     const audit: SecretAccessAssignmentAudit = {
       services: [
         {
@@ -126,9 +132,7 @@ describe('broker.accessPolicy assignment parser', () => {
 
     const rows = buildSecretAccessAssignmentRows(audit)
     expect(rows.map((row) => row.status)).toEqual(['assigned', 'missing'])
-    expect(rows[0]?.purpose).toBe(
-      'connect api-service to the shared database'
-    )
+    expect(rows[0]?.purpose).toBe('connect api-service to the shared database')
     expect(secretAccessAssignmentsHaveSecretMaterial(audit)).toBe(false)
     expect(secretAccessAssignmentsHaveSecretMaterial(emptyAudit())).toBe(false)
   })
