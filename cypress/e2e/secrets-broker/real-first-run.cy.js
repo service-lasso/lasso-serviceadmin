@@ -37,7 +37,40 @@ describe('packaged Service Admin first-run Secrets Broker enrollment', () => {
     cy.contains('Service Lasso first-run setup', { timeout: 30_000 }).should(
       'not.exist'
     )
-    cy.contains('Trusted identity verified', { timeout: 30_000 }).should('exist')
+
+    cy.contains('Save your local-operator token', { timeout: 30_000 }).should(
+      'be.visible'
+    )
+    cy.get('#first-run-token').then(($tokenInput) => {
+      const localAdminToken = $tokenInput.val()
+      expect(typeof localAdminToken).to.equal('string')
+      expect(localAdminToken.length).to.be.greaterThan(0)
+
+      cy.intercept('POST', '**/api/runtime/auth/first-run/acknowledge').as(
+        'acknowledgeFirstRunCredentials'
+      )
+      cy.get('button[aria-label="Copy local-admin token"]').click()
+      cy.get('button[aria-label="Copy local-operator password"]').click()
+      cy.get('#saved-first-run-token').click()
+      cy.contains('button', 'Continue after saving').click()
+      cy.wait('@acknowledgeFirstRunCredentials', { timeout: 30_000 }).then(
+        ({ response }) => {
+          expect(response?.statusCode).to.equal(200)
+          expect(response?.body?.firstRun).to.include({
+            pending: false,
+            credentialsAcknowledged: true,
+          })
+        }
+      )
+
+      cy.get('#local-admin-token', { timeout: 30_000 })
+        .should('be.visible')
+        .type(localAdminToken, { log: false })
+      cy.contains('button', 'Continue with token').click()
+      cy.contains('Trusted identity verified', { timeout: 30_000 }).should(
+        'exist'
+      )
+    })
     cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 30_000 }).click()
     cy.contains(expectedRef, { timeout: 60_000 }).should('be.visible')
 

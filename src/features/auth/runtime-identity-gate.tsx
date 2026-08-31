@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useReducer } from 'react'
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
@@ -47,6 +47,7 @@ export function RuntimeIdentityGate({
 }) {
   const identityQuery = useRuntimeIdentity()
   const setUser = useAuthStore((state) => state.auth.setUser)
+  const [, refreshAuthSurface] = useReducer((value: number) => value + 1, 0)
   const hostname = browserHostname()
   const identity = identityQuery.data
   const surface = identity
@@ -57,6 +58,7 @@ export function RuntimeIdentityGate({
   const unlocked = surface === 'unlocked'
   const refetchIdentity = identityQuery.refetch
   const onAuthenticated = useCallback(() => {
+    refreshAuthSurface()
     void refetchIdentity()
   }, [refetchIdentity])
 

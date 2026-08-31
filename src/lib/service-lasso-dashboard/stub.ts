@@ -10,6 +10,7 @@ import {
   mapBrokerOutcomeToUiState,
 } from './broker-provider-actions'
 import { countOperatorInboxItems, unreadBadgeCount } from './inbox'
+import { withLocalOperatorRequestInit } from './local-operator-session'
 import { parseManifestAccessPolicyGrants } from './secret-access-policy'
 import {
   containsUnsafeBrokerText,
@@ -3579,11 +3580,11 @@ export async function fetchRuntimeJson<T>(
     ...detailsBase,
     endpoint,
   }
-  const requestInit: RequestInit = {
+  const requestInit = withLocalOperatorRequestInit({
     method: options?.method,
     headers: options?.headers,
     body: options?.body,
-  }
+  })
   try {
     response = await fetch(endpoint, requestInit)
   } catch (error) {
