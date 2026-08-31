@@ -153,4 +153,50 @@ describe('first-run setup gate', () => {
       screen.getByRole('button', { name: /Initialize Secrets Broker/i })
     ).toBeDisabled()
   })
+
+  it('recreates from first-run when the master key is lost without collecting key material', async () => {
+    const user = userEvent.setup()
+    setFirstRunSetupFixtureForTests({
+      state: 'lost_key',
+      setupMode: true,
+      vault: { required: true, ready: false },
+      operator: {
+        osUsername: 'local-operator',
+        identitySource: 'vault',
+      },
+      trustBoundary: {
+        bindHost: '127.0.0.1',
+        localOnly: true,
+        localhostBootstrapAllowed: true,
+        remoteBootstrapAllowed: false,
+        setupTokenConfigured: false,
+        blockers: [],
+      },
+    })
+
+    await renderRoute('/')
+
+    expect(
+      await screen.findByText(/Lost key requires store recreate/i)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/previous master key is never entered/i)
+    ).toBeVisible()
+    expect(screen.queryByLabelText(/master key/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/recovery share/i)).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /Initialize Secrets Broker from a new store/i,
+      })
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', {
+          name: /Service Lasso first-run setup/i,
+        })
+      ).not.toBeInTheDocument()
+    })
+  })
 })
