@@ -927,6 +927,7 @@ describe('app screens', () => {
     expect(
       await within(dialog).findByText(/Migration dry run ready/i)
     ).toBeVisible()
+    expect(within(dialog).getByText(/copy_value_inside_broker/i)).toBeVisible()
     const apply = within(dialog).getByRole('button', {
       name: /Apply migration/i,
     })

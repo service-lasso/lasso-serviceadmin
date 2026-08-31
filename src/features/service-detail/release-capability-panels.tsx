@@ -2849,7 +2849,7 @@ export function SecretsBrokerSecretsPanel({
                   {migrationPreview.results.map((item) => (
                     <li key={item.ref} className='text-xs'>
                       {item.ref}: {classifyMigrationRefOutcome(item.outcome)} ·{' '}
-                      {item.recovery}
+                      {item.expectedAction} · {item.recovery}
                     </li>
                   ))}
                 </ul>
