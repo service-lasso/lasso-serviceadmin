@@ -1,12 +1,20 @@
-# Shadcn Admin Dashboard
+# Service Lasso Admin
 
-Admin Dashboard UI crafted with Shadcn and Vite. Built with responsiveness and accessibility in mind.
+Service Lasso Admin is the browser interface for operating a Service Lasso runtime. It provides the Release 1 dashboard, service lifecycle, dependencies, logs, runtime, MCP, installed services, variables, network, security, settings, and help surfaces.
 
-## Service Lasso runtime API endpoint
+## Release 1 product boundary
 
-This admin UI should discover the Service Lasso runtime/API endpoint from env, not from hardcoded localhost assumptions.
+- Fleet is retired.
+- Sessions is retired; identity sessions belong to ZITADEL.
+- Policy Simulation is not a product surface. Security shows the service manifest secret-access assignments that Core actually enforces.
+- Support Bundle is not a GA control and remains hidden until it has released-artifact evidence.
+- Capabilities without GA evidence remain hidden or are explicitly labelled preview.
 
-Current env contract:
+The full decision record and validation contract are in [`docs/release/release-1-product-decisions.md`](docs/release/release-1-product-decisions.md).
+
+## Runtime endpoint contract
+
+Admin discovers the Service Lasso runtime API through configuration rather than a fixed host assumption:
 
 - `VITE_SERVICE_LASSO_API_BASE_URL`
 - `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
@@ -14,156 +22,39 @@ Current env contract:
 
 Example:
 
-- `VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001`
-- `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
-
-Current UI runtime behavior:
-
-- if `VITE_SERVICE_LASSO_API_BASE_URL` is set, the dashboard stub layer can call the Service Lasso API for service metadata
-- favorites editing is only enabled when `VITE_SERVICE_LASSO_FAVORITES_ENABLED=true`
-- favorites are expected to load from `GET /api/services/meta`
-- favorites are expected to update through `PATCH /api/services/:serviceId/meta`
-- set `VITE_SERVICE_LASSO_LOGS_DEBUG=true` to enable Logs screen debug output in the browser console outside dev mode
-- if the endpoint env var is missing or the favorites flag is not enabled, favorite controls stay visible but disabled
-
-Service update UI contract:
-
-- the dashboard, services table, and service detail page display update states from the Service Lasso runtime
-- the stub layer loads update state from `GET /api/updates`
-- the UI surfaces `installed`, `available`, `downloadedCandidate`, `installDeferred`, and `failed` states
-- the dashboard shows a global update message banner when updates are available, downloaded, deferred by install window, or failed
-- service detail actions call `POST /api/updates/check`, `POST /api/services/:serviceId/update/download`, and `POST /api/services/:serviceId/update/install`
-- when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, update actions are visible against the local stub data but do not call a runtime API
-
-Recovery UI contract:
-
-- the dashboard, services table, and service detail page display recovery states from Service Lasso runtime history
-- the stub layer loads recovery state from `GET /api/recovery`
-- the dashboard shows a global recovery message banner when monitor, doctor, restart, or hook events need review
-- service detail exposes a bounded doctor/preflight action that calls `POST /api/services/:serviceId/recovery/doctor`
-- when `VITE_SERVICE_LASSO_API_BASE_URL` is not set, recovery actions are visible against local stub data but do not call a runtime API
-
-![alt text](public/images/shadcn-admin.png)
-
-I've been creating dashboard UIs at work and for my personal projects. I always wanted to make a reusable collection of dashboard UI for future projects; and here it is now. While I've created a few custom components, some of the code is directly adapted from ShadcnUI examples.
-
-> This is not a starter project (template) though. I'll probably make one in the future.
-
-## Features
-
-- Light/dark mode
-- Responsive
-- Accessible
-- With built-in Sidebar component
-- Global search command
-- 10+ pages
-- Extra custom components
-- RTL support
-
-<details>
-<summary>Customized Components (click to expand)</summary>
-
-This project uses Shadcn UI components, but some have been slightly modified for better RTL (Right-to-Left) support and other improvements. These customized components differ from the original Shadcn UI versions.
-
-If you want to update components using the Shadcn CLI (e.g., `npx shadcn@latest add <component>`), it's generally safe for non-customized components. For the listed customized ones, you may need to manually merge changes to preserve the project's modifications and avoid overwriting RTL support or other updates.
-
-> If you don't require RTL support, you can safely update the 'RTL Updated Components' via the Shadcn CLI, as these changes are primarily for RTL compatibility. The 'Modified Components' may have other customizations to consider.
-
-### Modified Components
-
-- scroll-area
-- sonner
-- separator
-
-### RTL Updated Components
-
-- alert-dialog
-- calendar
-- command
-- dialog
-- dropdown-menu
-- select
-- table
-- sheet
-- sidebar
-- switch
-
-**Notes:**
-
-- **Modified Components**: These have general updates, potentially including RTL adjustments.
-- **RTL Updated Components**: These have specific changes for RTL language support (e.g., layout, positioning).
-- For implementation details, check the source files in `src/components/ui/`.
-- All other Shadcn UI components in the project are standard and can be safely updated via the CLI.
-
-</details>
-
-## Tech Stack
-
-**UI:** [ShadcnUI](https://ui.shadcn.com) (TailwindCSS + RadixUI)
-
-**Build Tool:** [Vite](https://vitejs.dev/)
-
-**Routing:** [TanStack Router](https://tanstack.com/router/latest)
-
-**Type Checking:** [TypeScript](https://www.typescriptlang.org/)
-
-**Linting/Formatting:** [ESLint](https://eslint.org/) & [Prettier](https://prettier.io/)
-
-**Icons:** [Lucide Icons](https://lucide.dev/icons/), [Tabler Icons](https://tabler.io/icons) (Brand icons only)
-
-**Auth:** Service Lasso runtime identity, authenticated by the loopback-only Service Admin proxy.
-
-## Service Lasso migration rule
-
-For this repo, the `shadcn-admin` page shape is a hard invariant, not just inspiration.
-
-Every Service Lasso page must keep the shared template structure:
-
-- template `Header`
-- template `Main` content container
-- consistent content spacing and section rhythm
-- template-native patterns for cards, tables, forms, dialogs, drawers, and empty/loading/error states
-
-Do not cut a route down to a bare card or ad-hoc layout just because the feature slice is small. If a page exists, it must fit the same proper template content space as the other pages.
-
-See `docs/reference/MIGRATION-REPORT.md` for the stricter migration rules.
-
-## Run Locally
-
-Clone the project
-
-```bash
-  git clone https://github.com/satnaing/shadcn-admin.git
+```text
+VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001
+VITE_SERVICE_LASSO_FAVORITES_ENABLED=true
 ```
 
-Go to the project directory
+The runtime is responsible for authentication, authorization, bind identity, and client-visible endpoint policy. Admin must not invent or weaken those controls.
 
-```bash
-  cd shadcn-admin
+## Local development
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-Install dependencies
+Validate the application:
 
-```bash
-  pnpm install --frozen-lockfile
+```powershell
+pnpm run lint
+pnpm run format:check
+pnpm run test
+pnpm run build
+pnpm run package:artifact
+pnpm run package:verify
 ```
 
-Start the server
+## Packaging
 
-```bash
-  pnpm run dev
-```
+The release workflow produces one archive per supported operating system, a CycloneDX SBOM for every archive, a checksum manifest, provenance attestations, and a service manifest. Publication is manual, environment-protected, and bound to the exact reviewed candidate commit.
 
-## Sponsoring this project ❤️
+## Design provenance
 
-If you find this project helpful or use this in your own work, consider [sponsoring me](https://github.com/sponsors/satnaing) to support development and maintenance. You can [buy me a coffee](https://buymeacoffee.com/satnaing) as well. Don’t worry, every penny helps. Thank you! 🙏
-
-For questions or sponsorship inquiries, feel free to reach out at [satnaingdev@gmail.com](mailto:satnaingdev@gmail.com).
-
-## Author
-
-Crafted with 🤍 by [@satnaing](https://github.com/satnaing)
+The interface is derived from the MIT-licensed `shadcn-admin` project by satnaing. Service Lasso keeps its shared responsive, accessible Shadcn/Tailwind page structure; Service Lasso product behavior, runtime contracts, tests, and release controls are maintained here.
 
 ## License
 
-Licensed under the [MIT License](https://choosealicense.com/licenses/mit/)
+MIT. See [`LICENSE`](LICENSE).

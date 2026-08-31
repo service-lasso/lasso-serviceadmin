@@ -68,6 +68,8 @@ try {
   for (const required of ['dist/index.html', 'runtime/server.js', 'service.json']) {
     assert.equal(entries.includes(required), true, `archive is missing ${required}`)
   }
+  const sbomName = `serviceadmin-${platform}.cdx.json`
+  assert.equal(entries.includes(sbomName), true, `archive is missing ${sbomName}`)
   for (const entry of entries) {
     assert.equal(path.isAbsolute(entry), false, `absolute archive entry: ${entry}`)
     assert.equal(entry.split(/[\\/]+/).includes('..'), false, `escaping archive entry: ${entry}`)
@@ -82,6 +84,15 @@ try {
   assert.equal(extraction.status, 0, extraction.stderr)
   await auditExtracted(extractionRoot)
   const manifest = JSON.parse(await readFile(path.join(extractionRoot, 'service.json'), 'utf8'))
+  const embeddedSbomBytes = await readFile(path.join(extractionRoot, sbomName))
+  const sidecarSbomBytes = await readFile(path.join(root, 'output', 'release', sbomName))
+  assert.deepEqual(sidecarSbomBytes, embeddedSbomBytes, 'SBOM sidecar must exactly match the archive SBOM')
+  const sbom = JSON.parse(embeddedSbomBytes.toString('utf8'))
+  assert.equal(sbom.bomFormat, 'CycloneDX')
+  assert.equal(sbom.specVersion, '1.6')
+  assert.equal(sbom.metadata.component.type, 'application')
+  assert.equal(Array.isArray(sbom.components) && sbom.components.length > 0, true)
+  assert.equal(JSON.stringify(sbom).includes(root), false, 'SBOM must not contain build-host paths')
   assert.equal(manifest.id, '@serviceadmin')
   assert.equal(manifest.env.SERVICE_HOST, '127.0.0.1')
   assert.deepEqual(manifest.execconfig.args, ['runtime/server.js'])

@@ -17,6 +17,7 @@ import {
   fetchDashboardService,
   fetchDashboardSummary,
   fetchSecurityState,
+  fetchSecretAccessAssignments,
   fetchFirstRunSetupState,
   fetchInboxSummary,
   fetchMcpState,
@@ -76,6 +77,7 @@ import type {
   SecretRotationVersionRequest,
   CoreSecretRotationExecutionRequest,
   ServiceSecurityState,
+  SecretAccessAssignmentAudit,
   ServiceSetupRunResult,
   ServiceUpdateAction,
   ServiceLifecycleActionKind,
@@ -184,6 +186,13 @@ export function useSecurityState() {
   return useQuery<ServiceSecurityState>({
     queryKey: [...dashboardQueryKey, 'security'],
     queryFn: fetchSecurityState,
+  })
+}
+
+export function useSecretAccessAssignments() {
+  return useQuery<SecretAccessAssignmentAudit>({
+    queryKey: [...dashboardQueryKey, 'secret-access-assignments'],
+    queryFn: fetchSecretAccessAssignments,
   })
 }
 

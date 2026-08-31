@@ -39,6 +39,7 @@ import type {
   InboxMessageActionResult,
   InboxSummary,
   McpState,
+  SecretAccessAssignmentAudit,
   ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
@@ -3206,6 +3207,53 @@ export async function fetchSecurityState() {
   }
 
   return structuredClone(securityState)
+}
+
+const secretAccessAssignmentAudit: SecretAccessAssignmentAudit = {
+  services: [
+    {
+      serviceId: '@serviceadmin',
+      manifestPath: 'services/@serviceadmin/service.json',
+      findings: [
+        {
+          serviceId: '@serviceadmin',
+          ref: 'serviceadmin.SESSION_SIGNING_KEY',
+          namespace: 'services/@serviceadmin',
+          status: 'present',
+          source: 'broker.import',
+          location: 'broker.imports[0].ref',
+          required: true,
+          reason: 'Broker reference is declared in the service manifest.',
+          accessPolicy: {
+            operation: 'resolve',
+            status: 'allowed',
+            reason:
+              'broker.accessPolicy grants resolve access for this namespace/ref.',
+          },
+        },
+      ],
+      summary: { present: 1, missing: 0, malformed: 0 },
+    },
+  ],
+  summary: {
+    services: 1,
+    references: 1,
+    present: 1,
+    missing: 0,
+    malformed: 0,
+  },
+}
+
+export async function fetchSecretAccessAssignments() {
+  await wait(120)
+
+  if (!serviceLassoStubDataEnabled) {
+    return await fetchRuntimeJson<SecretAccessAssignmentAudit>(
+      '/api/secrets/audit'
+    )
+  }
+
+  return structuredClone(secretAccessAssignmentAudit)
 }
 
 export async function fetchMcpState() {

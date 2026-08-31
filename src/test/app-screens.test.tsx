@@ -485,6 +485,31 @@ describe('app screens', () => {
     expect(screen.getByText('Zitadel, Generic OIDC')).toBeVisible()
   })
 
+  it('shows enforced service manifest secret-access assignments instead of policy simulation', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/security')
+
+    expect(screen.queryByText(/Policy Simulation/i)).toBeNull()
+    await user.click(await screen.findByRole('tab', { name: /Secret access/i }))
+
+    expect(
+      await screen.findByText('Service Manifest Secret Access')
+    ).toBeVisible()
+    expect(
+      screen.getByText(/enforced Broker access contract, not a simulation/i)
+    ).toBeVisible()
+    expect(screen.getByText('@serviceadmin')).toBeVisible()
+    expect(
+      screen.getByText(
+        'services/@serviceadmin/serviceadmin.SESSION_SIGNING_KEY'
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByText('services/@serviceadmin/service.json')
+    ).toBeVisible()
+    expect(screen.getByText('Allowed')).toBeVisible()
+  })
+
   it('shows metadata-only secret rotation impact plans', async () => {
     const user = userEvent.setup()
     await renderRoute('/security')
