@@ -1206,6 +1206,45 @@ export type ServiceSecurityState = {
   }
 }
 
+export type SecretAccessAssignmentFinding = {
+  serviceId: string
+  ref: string
+  namespace?: string
+  status: 'present' | 'missing' | 'malformed'
+  source:
+    | 'env'
+    | 'globalenv'
+    | 'install'
+    | 'config'
+    | 'broker.import'
+    | 'broker.export'
+    | 'broker.writeback'
+  location: string
+  required?: boolean
+  reason: string
+  accessPolicy: {
+    operation: 'resolve'
+    status: 'allowed' | 'missing' | 'not_applicable'
+    reason: string
+  }
+}
+
+export type SecretAccessAssignmentAudit = {
+  services: Array<{
+    serviceId: string
+    manifestPath: string
+    findings: SecretAccessAssignmentFinding[]
+    summary: { present: number; missing: number; malformed: number }
+  }>
+  summary: {
+    services: number
+    references: number
+    present: number
+    missing: number
+    malformed: number
+  }
+}
+
 export type McpRole =
   | 'Observer'
   | 'Operator'

@@ -4,33 +4,54 @@ on:
   pull_request:
     branches:
       - develop
-      - master
   push:
     branches:
       - develop
-      - master
   workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact protected develop commit to release
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  authorize:
+    name: authorize-release
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bind dispatch to protected develop head
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/develop"
+          test "${CANDIDATE_SHA}" = "${GITHUB_SHA}"
+
   quality:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10.34.5
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Reject production dependency vulnerabilities
+        run: pnpm audit --prod
+      - name: Reject critical and high tooling vulnerabilities
+        run: pnpm audit --audit-level high
       - name: Lint
         run: pnpm lint
       - name: Check formatting
@@ -48,22 +69,25 @@ jobs:
           - os: windows-latest
             platform: win32
             artifact: output/release/@serviceadmin-win32.zip
+            sbom: output/release/serviceadmin-win32.cdx.json
           - os: ubuntu-latest
             platform: linux
             artifact: output/release/@serviceadmin-linux.tar.gz
+            sbom: output/release/serviceadmin-linux.cdx.json
           - os: macos-14
             platform: darwin
             artifact: output/release/@serviceadmin-darwin.tar.gz
+            sbom: output/release/serviceadmin-darwin.cdx.json
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10.34.5
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: pnpm
@@ -78,26 +102,33 @@ jobs:
       - name: Verify extracted artifact
         run: pnpm package:verify -- ${{ matrix.platform }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: serviceadmin-${{ matrix.platform }}
           path: |
             ${{ matrix.artifact }}
             ${{ matrix.artifact }}.sha256
+            ${{ matrix.sbom }}
+          if-no-files-found: error
+          retention-days: 90
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop'
     needs:
+      - authorize
       - quality
       - package
     runs-on: ubuntu-latest
+    environment: release
     permissions:
+      attestations: write
       contents: write
+      id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Download artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: release-assets
           pattern: serviceadmin-*
@@ -110,11 +141,46 @@ jobs:
           cp service.json release-assets/service.json
           (
             cd release-assets
-            sha256sum @serviceadmin-win32.zip @serviceadmin-linux.tar.gz @serviceadmin-darwin.tar.gz service.json > SHA256SUMS.txt
+            sha256sum @serviceadmin-win32.zip @serviceadmin-linux.tar.gz @serviceadmin-darwin.tar.gz serviceadmin-win32.cdx.json serviceadmin-linux.cdx.json serviceadmin-darwin.cdx.json service.json > SHA256SUMS.txt
           )
           short_sha="${GITHUB_SHA::7}"
           version="$(date -u +%Y.%-m.%-d)-${short_sha}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Attest exact release assets
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            release-assets/@serviceadmin-win32.zip
+            release-assets/@serviceadmin-linux.tar.gz
+            release-assets/@serviceadmin-darwin.tar.gz
+            release-assets/serviceadmin-win32.cdx.json
+            release-assets/serviceadmin-linux.cdx.json
+            release-assets/serviceadmin-darwin.cdx.json
+            release-assets/service.json
+            release-assets/SHA256SUMS.txt
+      - name: Verify signed provenance before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            @serviceadmin-win32.zip
+            @serviceadmin-linux.tar.gz
+            @serviceadmin-darwin.tar.gz
+            serviceadmin-win32.cdx.json
+            serviceadmin-linux.cdx.json
+            serviceadmin-darwin.cdx.json
+            service.json
+            SHA256SUMS.txt
+          )
+          for asset in "${assets[@]}"; do
+            gh attestation verify "release-assets/$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-digest "$GITHUB_SHA" \
+              --source-ref "$GITHUB_REF" >/dev/null
+          done
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -122,11 +188,50 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.release.outputs.version }}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes "Release-grade Service Admin UI artifacts."
-          gh release upload "$tag" \
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists and is immutable." >&2
+            exit 1
+          fi
+          gh release create "$tag" \
             release-assets/@serviceadmin-win32.zip \
             release-assets/@serviceadmin-linux.tar.gz \
             release-assets/@serviceadmin-darwin.tar.gz \
+            release-assets/serviceadmin-win32.cdx.json \
+            release-assets/serviceadmin-linux.cdx.json \
+            release-assets/serviceadmin-darwin.cdx.json \
             release-assets/service.json \
             release-assets/SHA256SUMS.txt \
-            --clobber
+            --target "$GITHUB_SHA" \
+            --title "$tag" \
+            --notes "Release-grade Service Admin UI artifacts."
+      - name: Verify immutable release readback
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.version }}"
+          release_json="$(gh release view "$tag" --json tagName,name,targetCommitish,isDraft,isPrerelease,assets)"
+          test "$(jq -r '.tagName' <<<"$release_json")" = "$tag"
+          test "$(jq -r '.name' <<<"$release_json")" = "$tag"
+          test "$(jq -r '.targetCommitish' <<<"$release_json")" = "$GITHUB_SHA"
+          test "$(jq -r '.isDraft' <<<"$release_json")" = "false"
+          test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
+          assets=(
+            @serviceadmin-win32.zip
+            @serviceadmin-linux.tar.gz
+            @serviceadmin-darwin.tar.gz
+            serviceadmin-win32.cdx.json
+            serviceadmin-linux.cdx.json
+            serviceadmin-darwin.cdx.json
+            service.json
+            SHA256SUMS.txt
+          )
+          test "$(jq '.assets | length' <<<"$release_json")" -eq "${#assets[@]}"
+          for asset in "${assets[@]}"; do
+            local_digest="$(sha256sum "release-assets/$asset" | cut -d' ' -f1)"
+            remote_digest="$(jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            remote_size="$(jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .size' <<<"$release_json")"
+            test "$remote_digest" = "sha256:${local_digest}"
+            test "$remote_size" -gt 0
+          done

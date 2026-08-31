@@ -14,12 +14,16 @@ import {
   XCircle,
 } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
-import { useSecurityState } from '@/lib/service-lasso-dashboard/hooks'
+import {
+  useSecretAccessAssignments,
+  useSecurityState,
+} from '@/lib/service-lasso-dashboard/hooks'
 import { getRuntimeApiUnavailableCopy } from '@/lib/service-lasso-dashboard/stub'
 import type {
   SecurityGroup,
   SecurityPermission,
   SecretBulkCampaignPlan,
+  SecretAccessAssignmentAudit,
   SecretRotationImpactPlan,
   SecretRotationImpactServiceAction,
   SecretRotationOperation,
@@ -488,6 +492,93 @@ function ActorsTable({ state }: { state: ServiceSecurityState }) {
   )
 }
 
+function SecretAccessAssignments({
+  audit,
+}: {
+  audit: SecretAccessAssignmentAudit
+}) {
+  const assignments = audit.services.flatMap((service) =>
+    service.findings
+      .filter((finding) => finding.source === 'broker.import')
+      .map((finding) => ({ ...finding, manifestPath: service.manifestPath }))
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Service Manifest Secret Access</CardTitle>
+        <CardDescription>
+          Read-only assignments compiled from each installed service manifest.
+          This is the enforced Broker access contract, not a simulation.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className='overflow-hidden rounded-md border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Service</TableHead>
+                <TableHead>Secret reference</TableHead>
+                <TableHead>Operation</TableHead>
+                <TableHead>Assignment</TableHead>
+                <TableHead>Required</TableHead>
+                <TableHead>Manifest source</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {assignments.map((assignment) => (
+                <TableRow
+                  key={`${assignment.serviceId}-${assignment.location}-${assignment.ref}`}
+                >
+                  <TableCell className='font-medium'>
+                    {assignment.serviceId}
+                  </TableCell>
+                  <TableCell className='min-w-[260px] font-mono text-sm'>
+                    {assignment.namespace
+                      ? `${assignment.namespace}/${assignment.ref}`
+                      : assignment.ref}
+                  </TableCell>
+                  <TableCell>{assignment.accessPolicy.operation}</TableCell>
+                  <TableCell>
+                    {assignment.status === 'present' &&
+                    assignment.accessPolicy.status === 'allowed' ? (
+                      <Badge className='bg-emerald-600'>Allowed</Badge>
+                    ) : (
+                      <Badge variant='destructive'>
+                        {assignment.status === 'malformed'
+                          ? 'Malformed'
+                          : 'Missing'}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {assignment.required === false ? 'Optional' : 'Required'}
+                  </TableCell>
+                  <TableCell className='min-w-[240px]'>
+                    <div className='font-mono text-xs'>
+                      {assignment.manifestPath}
+                    </div>
+                    <div className='text-xs text-muted-foreground'>
+                      {assignment.location}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {assignments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className='text-muted-foreground'>
+                    No service manifest Broker imports are installed.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function RotationOperationBadge({
   operation,
 }: {
@@ -903,6 +994,7 @@ export function Security() {
   })
 
   const securityQuery = useSecurityState()
+  const secretAccessQuery = useSecretAccessAssignments()
 
   return (
     <>
@@ -920,7 +1012,8 @@ export function Security() {
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>Security</h2>
             <p className='text-muted-foreground'>
-              Groups, permission catalogue, actor access, and provider mappings.
+              Groups, permissions, provider mappings, and enforced service
+              manifest secret access.
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
@@ -958,11 +1051,12 @@ export function Security() {
             <SecuritySummary state={securityQuery.data} />
 
             <Tabs defaultValue='groups' className='space-y-4'>
-              <TabsList className='grid w-full grid-cols-2 sm:w-auto sm:grid-cols-5'>
+              <TabsList className='grid w-full grid-cols-2 sm:w-auto sm:grid-cols-6'>
                 <TabsTrigger value='groups'>Groups</TabsTrigger>
                 <TabsTrigger value='permissions'>Permissions</TabsTrigger>
                 <TabsTrigger value='mappings'>Mappings</TabsTrigger>
                 <TabsTrigger value='actors'>Actors</TabsTrigger>
+                <TabsTrigger value='secret-access'>Secret access</TabsTrigger>
                 <TabsTrigger value='rotations'>Rotations</TabsTrigger>
               </TabsList>
               <TabsContent value='groups'>
@@ -978,6 +1072,15 @@ export function Security() {
               </TabsContent>
               <TabsContent value='actors'>
                 <ActorsTable state={securityQuery.data} />
+              </TabsContent>
+              <TabsContent value='secret-access'>
+                {secretAccessQuery.isLoading ? (
+                  <SecurityLoading />
+                ) : secretAccessQuery.isError ? (
+                  <SecurityUnavailable error={secretAccessQuery.error} />
+                ) : secretAccessQuery.data ? (
+                  <SecretAccessAssignments audit={secretAccessQuery.data} />
+                ) : null}
               </TabsContent>
               <TabsContent value='rotations'>
                 <div className='space-y-6'>
