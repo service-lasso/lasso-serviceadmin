@@ -429,4 +429,197 @@ describe('canonical Broker provider and migration client', () => {
       })
     ).rejects.toThrow(/credential-bearing metadata/i)
   })
+
+  it('loads live source status and provider capabilities through canonical routes', async () => {
+    const sourceStatus = {
+      serviceId: '@secretsbroker',
+      apiVersion: 'secretsbroker.local/v1',
+      contractVersion: '1.1.0',
+      manifestVersion: '1.0.0',
+      sourceConfig: { configured: true },
+      sources: [
+        {
+          sourceId: 'vault-target',
+          kind: 'vault',
+          displayName: 'vault-target',
+          enabled: true,
+          critical: false,
+          state: 'connected',
+          outcome: 'ready',
+          namespaces: ['services'],
+          capabilities: ['read'],
+          operations: [operation('read-only', '/v1/sources/status')],
+          auditStatus: 'audit_available',
+          affectedRefs: [],
+          affectedServices: [],
+        },
+      ],
+    }
+    const capabilities = {
+      serviceId: '@secretsbroker',
+      apiVersion: 'secretsbroker.local/v1',
+      contractVersion: '1.1.0',
+      manifestVersion: '1.0.0',
+      outcome: 'ready',
+      capabilities: [
+        {
+          providerKind: 'vault',
+          displayName: 'Vault',
+          supported: true,
+          capabilities: ['read'],
+          operations: [operation('read-only', '/v1/providers/capabilities')],
+          limitations: [],
+        },
+      ],
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(sourceStatus), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(capabilities), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const sources = await client.fetchBrokerSourceStatus()
+    const catalog = await client.fetchBrokerProviderCapabilities()
+
+    expect(sources.sources[0]?.sourceId).toBe('vault-target')
+    expect(catalog.capabilities[0]?.providerKind).toBe('vault')
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      'http://runtime.test/api/services/%40secretsbroker/sources/status',
+      'http://runtime.test/api/services/%40secretsbroker/providers/capabilities',
+    ])
+  })
+
+  it('runs a ready validate row action against the live broker validate route', async () => {
+    const target = provider()
+    target.operations = [operation('dry-run', '/v1/providers/config/validate')]
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          serviceId: '@secretsbroker',
+          apiVersion: 'secretsbroker.local/v1',
+          requestId: 'provider-row-validate',
+          operation: 'validate',
+          outcome: 'ready',
+          applied: false,
+          requiresConfirmation: false,
+          auditStatus: 'audit_recorded',
+          provider: target,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const result = await client.runBrokerProviderRowAction({
+      action: 'validate',
+      provider: target,
+      reason: 'operator_validate_row_action',
+    })
+
+    expect(result).toMatchObject({
+      providerId: 'vault-target',
+      operation: 'validate',
+      phase: 'success',
+      state: 'ready',
+      fixtureDemo: false,
+    })
+    expect(JSON.stringify(result)).not.toMatch(
+      /token|password|credentialValue|Bearer /i
+    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      'http://runtime.test/api/services/%40secretsbroker/providers/config/validate'
+    )
+  })
+
+  it('fails closed when a provider action route is missing', async () => {
+    const target = provider()
+    target.operations = [operation('dry-run', '/v1/providers/config/validate')]
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'not_found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const result = await client.runBrokerProviderRowAction({
+      action: 'validate',
+      provider: target,
+      reason: 'operator_validate_row_action',
+    })
+
+    expect(result.phase).toBe('failure')
+    expect(result.state).toBe('unavailable')
+    expect(result.summary).not.toMatch(/token|password|secret/i)
+  })
+
+  it('drops credential-bearing validate payloads from row action results', async () => {
+    const target = provider()
+    target.operations = [operation('dry-run', '/v1/providers/config/validate')]
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          serviceId: '@secretsbroker',
+          apiVersion: 'secretsbroker.local/v1',
+          requestId: 'provider-row-unsafe',
+          operation: 'validate',
+          outcome: 'ready',
+          applied: false,
+          requiresConfirmation: false,
+          auditStatus: 'audit_recorded',
+          credentialValue: 'must-not-cross-provider-row-contract',
+          provider: target,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const result = await client.runBrokerProviderRowAction({
+      action: 'validate',
+      provider: target,
+      reason: 'operator_validate_row_action',
+    })
+
+    expect(result.state).toBe('unavailable')
+    expect(JSON.stringify(result)).not.toContain(
+      'must-not-cross-provider-row-contract'
+    )
+  })
+
+  it('labels stub provider row actions as fixture/demo and blocks local disable', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', 'true')
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    const client = await import('./stub')
+    const local = (await client.fetchBrokerProviderStatus()).providers[0]
+    if (!local) throw new Error('missing local provider fixture')
+
+    const status = await client.runBrokerProviderRowAction({
+      action: 'status',
+      provider: local,
+    })
+    const disable = await client.runBrokerProviderRowAction({
+      action: 'disable',
+      provider: local,
+    })
+
+    expect(status.fixtureDemo).toBe(true)
+    expect(status.summary).toContain('fixture/demo')
+    expect(disable.phase).toBe('blocked')
+    expect(disable.summary).toMatch(/cannot be disabled or removed/i)
+  })
 })

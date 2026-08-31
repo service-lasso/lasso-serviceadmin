@@ -1,3 +1,9 @@
+import {
+  actionResultFromRuntimeError,
+  buildProviderActionResult,
+  gatedProviderActionResult,
+  mapBrokerOutcomeToUiState,
+} from './broker-provider-actions'
 import { parseManifestAccessPolicyGrants } from './secret-access-policy'
 import {
   containsUnsafeBrokerText,
@@ -24,10 +30,18 @@ import type {
   BrokerLifecycleRotateResult,
   BrokerLifecycleStatus,
   BrokerOperationCapability,
+  BrokerProviderActionResult,
+  BrokerProviderCapabilitiesState,
+  BrokerProviderCapabilityRecord,
+  BrokerProviderConfigureRequest,
+  BrokerProviderConfigureResult,
   BrokerProviderStatus,
   BrokerProviderStatusState,
+  BrokerProviderRowActionRequest,
   BrokerProviderValidationRequest,
   BrokerProviderValidationResult,
+  BrokerSourceStatus,
+  BrokerSourceStatusState,
   BrokerTelemetry,
   DashboardAction,
   DashboardService,
@@ -409,37 +423,188 @@ const secretsManagementFixture: SecretsManagementState = {
   ],
 }
 
+function fixtureProviderOperation(
+  operationId: string,
+  method: 'GET' | 'POST',
+  path: string,
+  maturity: BrokerOperationCapability['maturity'],
+  extras: Pick<
+    BrokerOperationCapability,
+    'limitationCode' | 'reasonCode' | 'nextAction' | 'scope'
+  > & { classification?: BrokerOperationCapability['classification'] } = {
+    limitationCode: '',
+    reasonCode: maturity,
+    nextAction: 'inspect_source_or_provider_status',
+    scope: 'mixed',
+  }
+): BrokerOperationCapability {
+  const classification =
+    extras.classification ?? (maturity === 'read-only' ? 'read' : 'mutation')
+  return {
+    operationId,
+    method,
+    path,
+    maturity,
+    classification,
+    authenticationRequired: method !== 'GET',
+    policyRequired: classification === 'mutation',
+    auditRequired: classification === 'mutation',
+    scope: extras.scope,
+    completionMode: 'synchronous',
+    limitationCode: extras.limitationCode,
+    reasonCode: extras.reasonCode,
+    nextAction: extras.nextAction,
+  }
+}
+
+const localProviderFixtureOperations: BrokerOperationCapability[] = [
+  fixtureProviderOperation(
+    'getv1_providers_config_status',
+    'GET',
+    '/v1/providers/config/status',
+    'read-only',
+    {
+      limitationCode: 'metadata_only',
+      reasonCode: 'implemented_read_only',
+      nextAction: 'read_when_authorized',
+      scope: 'mixed',
+      classification: 'read',
+    }
+  ),
+  fixtureProviderOperation(
+    'getv1_sources_status',
+    'GET',
+    '/v1/sources/status',
+    'read-only',
+    {
+      limitationCode: 'metadata_only',
+      reasonCode: 'implemented_read_only',
+      nextAction: 'read_when_authorized',
+      scope: 'mixed',
+      classification: 'read',
+    }
+  ),
+  fixtureProviderOperation(
+    'postv1_providers_config_validate',
+    'POST',
+    '/v1/providers/config/validate',
+    'dry-run',
+    {
+      limitationCode: 'configuration_validation_only',
+      reasonCode: 'implemented_dry_run',
+      nextAction: 'review_plan_before_apply',
+      scope: 'mixed',
+    }
+  ),
+]
+
+const vaultProviderFixtureOperations: BrokerOperationCapability[] = [
+  ...localProviderFixtureOperations,
+  fixtureProviderOperation(
+    'postv1_providers_config_apply',
+    'POST',
+    '/v1/providers/config/apply',
+    'validated',
+    {
+      limitationCode: 'persisted_source_registry',
+      reasonCode: 'implemented_and_validated',
+      nextAction: 'invoke_with_required_controls',
+      scope: 'mixed',
+    }
+  ),
+  fixtureProviderOperation(
+    'post_v1_providers_migration_apply',
+    'POST',
+    '/v1/providers/migration/apply',
+    'validated',
+    {
+      limitationCode: 'runtime_auth_policy_audit_revalidated',
+      reasonCode: 'validated',
+      nextAction: 'execute_guarded_operation',
+      scope: 'provider-remote',
+    }
+  ),
+]
+
+const openbaoAuthFixtureOperations: BrokerOperationCapability[] = [
+  fixtureProviderOperation(
+    'getv1_providers_config_status',
+    'GET',
+    '/v1/providers/config/status',
+    'read-only',
+    {
+      limitationCode: 'metadata_only',
+      reasonCode: 'implemented_read_only',
+      nextAction: 'reconnect_source',
+      scope: 'mixed',
+      classification: 'read',
+    }
+  ),
+  fixtureProviderOperation(
+    'getv1_sources_status',
+    'GET',
+    '/v1/sources/status',
+    'read-only',
+    {
+      limitationCode: 'source_auth_required',
+      reasonCode: 'source_operation_blocked',
+      nextAction: 'reconnect_source',
+      scope: 'mixed',
+      classification: 'read',
+    }
+  ),
+  fixtureProviderOperation(
+    'postv1_providers_config_validate',
+    'POST',
+    '/v1/providers/config/validate',
+    'unavailable',
+    {
+      limitationCode: 'source_auth_required',
+      reasonCode: 'source_operation_blocked',
+      nextAction: 'reconnect_source',
+      scope: 'mixed',
+    }
+  ),
+]
+
+const envUnsupportedFixtureOperations: BrokerOperationCapability[] = [
+  fixtureProviderOperation(
+    'getv1_providers_config_status',
+    'GET',
+    '/v1/providers/config/status',
+    'read-only',
+    {
+      limitationCode: 'metadata_only',
+      reasonCode: 'implemented_read_only',
+      nextAction: 'read_when_authorized',
+      scope: 'mixed',
+      classification: 'read',
+    }
+  ),
+]
+
+const localProviderFixture: BrokerProviderStatus = {
+  providerId: 'local',
+  providerKind: 'local-encrypted-store',
+  displayName: 'Local encrypted store',
+  state: 'ready',
+  outcome: 'ready',
+  credentialHandle: 'local-master-key',
+  namespaces: ['services'],
+  capabilities: ['read', 'migration_source'],
+  operations: localProviderFixtureOperations,
+  auditStatus: 'audit_available',
+}
+
 const brokerProviderStatusFixture: BrokerProviderStatusState = {
   serviceId: secretsBrokerServiceId,
   apiVersion: 'secretsbroker.local/v1',
   contractVersion: '1.0.0',
   manifestVersion: '1.0.0',
   outcome: 'ready',
-  currentProvider: {
-    providerId: 'local',
-    providerKind: 'local-encrypted-store',
-    displayName: 'Local encrypted store',
-    state: 'ready',
-    outcome: 'ready',
-    credentialHandle: 'local-master-key',
-    namespaces: ['services'],
-    capabilities: ['read', 'migration_source'],
-    operations: [],
-    auditStatus: 'audit_available',
-  },
+  currentProvider: localProviderFixture,
   providers: [
-    {
-      providerId: 'local',
-      providerKind: 'local-encrypted-store',
-      displayName: 'Local encrypted store',
-      state: 'ready',
-      outcome: 'ready',
-      credentialHandle: 'local-master-key',
-      namespaces: ['services'],
-      capabilities: ['read', 'migration_source'],
-      operations: [],
-      auditStatus: 'audit_available',
-    },
+    localProviderFixture,
     {
       providerId: 'vault-target',
       providerKind: 'vault',
@@ -450,23 +615,31 @@ const brokerProviderStatusFixture: BrokerProviderStatusState = {
       address: 'https://vault.example.invalid',
       namespaces: ['services'],
       capabilities: ['read', 'migration'],
-      operations: [
-        {
-          operationId: 'post_v1_providers_migration_apply',
-          method: 'POST',
-          path: '/v1/providers/migration/apply',
-          maturity: 'validated',
-          classification: 'mutation',
-          authenticationRequired: true,
-          policyRequired: true,
-          auditRequired: true,
-          scope: 'provider-remote',
-          completionMode: 'synchronous',
-          limitationCode: 'runtime_auth_policy_audit_revalidated',
-          reasonCode: 'validated',
-          nextAction: 'execute_guarded_operation',
-        },
-      ],
+      operations: vaultProviderFixtureOperations,
+      auditStatus: 'audit_available',
+    },
+    {
+      providerId: 'openbao-auth',
+      providerKind: 'openbao',
+      displayName: 'OpenBao auth required',
+      state: 'auth_required',
+      outcome: 'source_auth_required',
+      credentialHandle: 'configured-ref-or-env',
+      namespaces: ['services'],
+      capabilities: ['read', 'reconnect', 'auth-required'],
+      operations: openbaoAuthFixtureOperations,
+      nextAction: 'reconnect_source',
+      auditStatus: 'audit_available',
+    },
+    {
+      providerId: 'env-readonly',
+      providerKind: 'env',
+      displayName: 'Environment source',
+      state: 'ready',
+      outcome: 'ready',
+      namespaces: ['env'],
+      capabilities: ['read'],
+      operations: envUnsupportedFixtureOperations,
       auditStatus: 'audit_available',
     },
   ],
@@ -3407,6 +3580,10 @@ function buildBrokerProviderApiPath(section: string) {
   return `/api/services/${encodeURIComponent(secretsBrokerServiceId)}/providers/${section}`
 }
 
+function buildBrokerSourcesApiPath(section: string) {
+  return `/api/services/${encodeURIComponent(secretsBrokerServiceId)}/sources/${section}`
+}
+
 function buildBrokerLifecycleApiPath(section: string) {
   return `/api/services/${encodeURIComponent(secretsBrokerServiceId)}/lifecycle/${section}`
 }
@@ -4793,7 +4970,7 @@ function normalizeProviderValidationResponse(
 
 export async function validateBrokerProviderConfiguration(
   request: BrokerProviderValidationRequest
-) {
+): Promise<BrokerProviderValidationResult> {
   await wait(120)
   for (const [label, value] of [
     ['provider id', request.providerId],
@@ -4872,6 +5049,540 @@ export async function validateBrokerProviderConfiguration(
     }
   )
   return normalizeProviderValidationResponse(payload, request)
+}
+
+function sourceFromProviderStatus(
+  provider: BrokerProviderStatus
+): BrokerSourceStatus {
+  return {
+    sourceId: provider.providerId,
+    kind: provider.providerKind,
+    displayName: provider.displayName,
+    enabled: true,
+    critical: provider.providerKind === 'local-encrypted-store',
+    state:
+      provider.outcome === 'source_auth_required'
+        ? 'auth_required'
+        : provider.state,
+    outcome: provider.outcome,
+    namespaces: provider.namespaces,
+    capabilities: provider.capabilities,
+    operations: provider.operations,
+    nextAction: provider.nextAction,
+    auditStatus: provider.auditStatus,
+  }
+}
+
+function brokerSourceStatusFixture(): BrokerSourceStatusState {
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: brokerProviderStatusFixture.apiVersion,
+    contractVersion: brokerProviderStatusFixture.contractVersion,
+    manifestVersion: brokerProviderStatusFixture.manifestVersion,
+    sources: brokerProviderStatusFixture.providers.map(
+      sourceFromProviderStatus
+    ),
+  }
+}
+
+function brokerProviderCapabilitiesFixture(): BrokerProviderCapabilitiesState {
+  const byKind = new Map<string, BrokerProviderCapabilityRecord>()
+  for (const provider of brokerProviderStatusFixture.providers) {
+    if (byKind.has(provider.providerKind)) continue
+    byKind.set(provider.providerKind, {
+      providerKind: provider.providerKind,
+      displayName: provider.displayName,
+      supported: provider.providerKind !== 'env',
+      capabilities: provider.capabilities,
+      operations: provider.operations,
+      limitations:
+        provider.providerKind === 'local-encrypted-store'
+          ? ['local-first development backend']
+          : [],
+    })
+  }
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: brokerProviderStatusFixture.apiVersion,
+    contractVersion: brokerProviderStatusFixture.contractVersion,
+    manifestVersion: brokerProviderStatusFixture.manifestVersion,
+    outcome: 'ready',
+    capabilities: [...byKind.values()],
+  }
+}
+
+function normalizeBrokerSourceStatus(value: unknown): BrokerSourceStatus {
+  const input = requireRecord(
+    value,
+    'Secrets Broker returned an invalid source status.'
+  )
+  if (!Array.isArray(input.operations)) {
+    throw new Error('Secrets Broker returned an invalid source status.')
+  }
+  return {
+    sourceId: requireSafeBrokerIdentifier(input.sourceId, 'source id'),
+    kind: requireSafeBrokerIdentifier(input.kind, 'source kind'),
+    displayName:
+      sanitizeBrokerDisplayText(input.displayName) ?? '[missing source name]',
+    enabled: input.enabled === true,
+    critical: input.critical === true,
+    state: sanitizeBrokerDisplayText(input.state) ?? '[missing source state]',
+    outcome:
+      sanitizeBrokerDisplayText(input.outcome) ?? '[missing source outcome]',
+    namespaces: requireIdentifierArray(input.namespaces, 'source namespaces', {
+      allowWildcard: true,
+    }),
+    capabilities: requireIdentifierArray(
+      input.capabilities,
+      'source capabilities'
+    ),
+    operations: input.operations.map(normalizeBrokerOperationCapability),
+    nextAction: sanitizeBrokerDisplayText(input.nextAction),
+    auditStatus:
+      sanitizeBrokerDisplayText(input.auditStatus) ??
+      '[missing broker audit status]',
+    retryable:
+      typeof input.retryable === 'boolean' ? input.retryable : undefined,
+    priority:
+      typeof input.priority === 'number' && Number.isSafeInteger(input.priority)
+        ? input.priority
+        : undefined,
+  }
+}
+
+/**
+ * Reads live GET /v1/sources/status through the Core broker proxy.
+ */
+export async function fetchBrokerSourceStatus(): Promise<BrokerSourceStatusState> {
+  await wait(120)
+  if (serviceLassoStubDataEnabled) {
+    return structuredClone(brokerSourceStatusFixture())
+  }
+  const payload = await fetchRuntimeJson<unknown>(
+    buildBrokerSourcesApiPath('status')
+  )
+  assertNoBrokerSecretMaterial(payload)
+  const input = requireRecord(
+    payload,
+    'Secrets Broker returned an invalid source status response.'
+  )
+  if (!Array.isArray(input.sources)) {
+    throw new Error(
+      'Secrets Broker returned an invalid source status response.'
+    )
+  }
+  return {
+    serviceId: requireSafeBrokerIdentifier(input.serviceId, 'service id'),
+    apiVersion: requireSafeBrokerIdentifier(input.apiVersion, 'API version'),
+    contractVersion: requireSafeBrokerIdentifier(
+      input.contractVersion,
+      'contract version'
+    ),
+    manifestVersion: requireSafeBrokerIdentifier(
+      input.manifestVersion,
+      'manifest version'
+    ),
+    sources: input.sources.map(normalizeBrokerSourceStatus),
+  }
+}
+
+function normalizeBrokerProviderCapabilityRecord(
+  value: unknown
+): BrokerProviderCapabilityRecord {
+  const input = requireRecord(
+    value,
+    'Secrets Broker returned an invalid provider capability record.'
+  )
+  if (
+    !Array.isArray(input.operations) ||
+    typeof input.supported !== 'boolean'
+  ) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider capability record.'
+    )
+  }
+  return {
+    providerKind: requireSafeBrokerIdentifier(
+      input.providerKind,
+      'provider kind'
+    ),
+    displayName:
+      sanitizeBrokerDisplayText(input.displayName) ?? '[missing provider name]',
+    supported: input.supported,
+    capabilities: requireIdentifierArray(
+      input.capabilities,
+      'provider capabilities'
+    ),
+    operations: input.operations.map(normalizeBrokerOperationCapability),
+    limitations: Array.isArray(input.limitations)
+      ? input.limitations.map(
+          (item) =>
+            sanitizeBrokerDisplayText(item) ?? '[unsafe metadata withheld]'
+        )
+      : [],
+  }
+}
+
+/**
+ * Reads live GET /v1/providers/capabilities through the Core broker proxy.
+ */
+export async function fetchBrokerProviderCapabilities(): Promise<BrokerProviderCapabilitiesState> {
+  await wait(120)
+  if (serviceLassoStubDataEnabled) {
+    return structuredClone(brokerProviderCapabilitiesFixture())
+  }
+  const payload = await fetchRuntimeJson<unknown>(
+    buildBrokerProviderApiPath('capabilities')
+  )
+  assertNoBrokerSecretMaterial(payload)
+  const input = requireRecord(
+    payload,
+    'Secrets Broker returned an invalid provider capabilities response.'
+  )
+  if (!Array.isArray(input.capabilities)) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider capabilities response.'
+    )
+  }
+  return {
+    serviceId: requireSafeBrokerIdentifier(input.serviceId, 'service id'),
+    apiVersion: requireSafeBrokerIdentifier(input.apiVersion, 'API version'),
+    contractVersion: requireSafeBrokerIdentifier(
+      input.contractVersion,
+      'contract version'
+    ),
+    manifestVersion: requireSafeBrokerIdentifier(
+      input.manifestVersion,
+      'manifest version'
+    ),
+    outcome:
+      sanitizeBrokerDisplayText(input.outcome) ?? '[missing broker outcome]',
+    capabilities: input.capabilities.map(
+      normalizeBrokerProviderCapabilityRecord
+    ),
+  }
+}
+
+function normalizeProviderConfigureResponse(
+  payload: unknown,
+  request: BrokerProviderConfigureRequest
+): BrokerProviderConfigureResult {
+  const input = requireRecord(
+    payload,
+    'Secrets Broker returned an invalid provider configure response.'
+  )
+  assertNoProviderSecretFields(input)
+  const provider = normalizeBrokerProviderStatus(input.provider)
+  if (
+    input.serviceId !== secretsBrokerServiceId ||
+    input.operation !== 'configure' ||
+    typeof input.applied !== 'boolean' ||
+    typeof input.requiresConfirmation !== 'boolean' ||
+    provider.providerId !== request.providerId ||
+    provider.providerKind !== request.providerKind
+  ) {
+    throw new Error(
+      'Secrets Broker returned an invalid provider configure response.'
+    )
+  }
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: requireSafeBrokerIdentifier(input.apiVersion, 'API version'),
+    requestId: requireSafeBrokerIdentifier(input.requestId, 'request id'),
+    operation: 'configure',
+    outcome:
+      sanitizeBrokerDisplayText(input.outcome) ?? '[missing broker outcome]',
+    applied: input.applied,
+    requiresConfirmation: input.requiresConfirmation,
+    auditStatus:
+      sanitizeBrokerDisplayText(input.auditStatus) ??
+      '[missing broker audit status]',
+    nextAction: sanitizeBrokerDisplayText(input.nextAction),
+    provider,
+  }
+}
+
+/**
+ * Calls POST /v1/providers/config/apply with handle-only metadata.
+ * Persistence is the broker's advertised apply; Admin never sends secret values.
+ */
+export async function applyBrokerProviderConfiguration(
+  request: BrokerProviderConfigureRequest
+): Promise<BrokerProviderConfigureResult> {
+  await wait(120)
+  for (const [label, value] of [
+    ['provider id', request.providerId],
+    ['provider kind', request.providerKind],
+    ['operation id', request.operationId],
+  ] as const) {
+    requireSafeBrokerIdentifier(value, label)
+  }
+  const displayName = sanitizeBrokerDisplayText(request.displayName)
+  if (!displayName || displayName === withheldBrokerText) {
+    throw new Error('Provider display name is invalid or unsafe.')
+  }
+  if (!request.reason.trim()) {
+    throw new Error('Audit reason is required before provider apply.')
+  }
+  if (!request.confirm) {
+    throw new Error(
+      'Explicit confirmation is required before provider configuration apply.'
+    )
+  }
+  if (request.address) {
+    const address = new URL(request.address)
+    if (
+      !['http:', 'https:'].includes(address.protocol) ||
+      address.username ||
+      address.password ||
+      address.pathname !== '/' ||
+      address.search ||
+      address.hash
+    ) {
+      throw new Error('Provider address must be a safe HTTP(S) origin.')
+    }
+  }
+  if (request.credentialRef) {
+    requireSafeBrokerIdentifier(request.credentialRef, 'credential ref')
+  }
+  request.namespaces.forEach((namespace) => {
+    if (namespace !== '*') {
+      requireSafeBrokerIdentifier(namespace, 'provider namespace')
+    }
+  })
+
+  if (serviceLassoStubDataEnabled) {
+    const provider = brokerProviderStatusFixture.providers.find(
+      (candidate) => candidate.providerId === request.providerId
+    ) ?? {
+      ...brokerProviderStatusFixture.providers[1],
+      providerId: request.providerId,
+      providerKind: request.providerKind,
+      displayName,
+    }
+    return structuredClone({
+      serviceId: secretsBrokerServiceId,
+      apiVersion: brokerProviderStatusFixture.apiVersion,
+      requestId: `stub-provider-configure-${Date.now()}`,
+      operation: 'configure',
+      outcome: 'ready',
+      applied: true,
+      requiresConfirmation: false,
+      auditStatus: 'audit_recorded',
+      nextAction: 'inspect_provider_status',
+      provider,
+    } satisfies BrokerProviderConfigureResult)
+  }
+
+  const payload = await fetchRuntimeJson<unknown>(
+    buildBrokerProviderApiPath('config/apply'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: `serviceadmin-provider-apply-${Date.now()}`,
+        serviceId: '@serviceadmin',
+        providerId: request.providerId,
+        providerKind: request.providerKind,
+        displayName,
+        address: request.address,
+        credentialRef: request.credentialRef,
+        namespaces: request.namespaces,
+        reason: request.reason.trim(),
+        operationId: request.operationId,
+        confirm: true,
+        validationMode: 'connectivity_and_capabilities',
+      }),
+    }
+  )
+  return normalizeProviderConfigureResponse(payload, request)
+}
+
+function rowActionReason(request: BrokerProviderRowActionRequest) {
+  const provided = request.reason?.trim()
+  if (provided) return provided
+  return `operator_${request.action}_row_action`
+}
+
+function rowActionNamespaces(request: BrokerProviderRowActionRequest) {
+  if (request.namespaces && request.namespaces.length > 0) {
+    return request.namespaces
+  }
+  return request.provider.namespaces
+}
+
+/**
+ * Executes a Secrets Broker > Providers row action against live advertised
+ * routes, or returns a labelled fixture/demo result in explicit stub mode.
+ * Missing or unadvertised routes fail closed.
+ */
+export async function runBrokerProviderRowAction(
+  request: BrokerProviderRowActionRequest
+): Promise<BrokerProviderActionResult> {
+  await wait(80)
+  const fixtureDemo = serviceLassoStubDataEnabled
+  const blocked = gatedProviderActionResult(request, fixtureDemo)
+  if (blocked) return blocked
+
+  try {
+    if (request.action === 'status') {
+      const status = await fetchBrokerProviderStatus()
+      const provider =
+        status.providers.find(
+          (candidate) => candidate.providerId === request.provider.providerId
+        ) ?? status.currentProvider
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: provider.providerId,
+        operation: 'status',
+        state: mapBrokerOutcomeToUiState(provider.outcome),
+        summary: `Provider status ${provider.outcome}.`,
+        nextAction: provider.nextAction ?? 'inspect_provider_status',
+        correlationId: status.contractVersion,
+        fixtureDemo,
+      })
+    }
+
+    if (request.action === 'capabilities') {
+      const catalog = await fetchBrokerProviderCapabilities()
+      const record = catalog.capabilities.find(
+        (candidate) => candidate.providerKind === request.provider.providerKind
+      )
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: request.provider.providerId,
+        operation: 'capabilities',
+        state: mapBrokerOutcomeToUiState(catalog.outcome),
+        summary: record
+          ? `Provider capabilities ${record.supported ? 'supported' : 'unsupported'}.`
+          : 'Provider kind is not in the capability catalog.',
+        nextAction: 'inspect_provider_capabilities',
+        correlationId: catalog.contractVersion,
+        fixtureDemo,
+      })
+    }
+
+    if (request.action === 'reconnect') {
+      const sources = await fetchBrokerSourceStatus()
+      const source = sources.sources.find(
+        (candidate) => candidate.sourceId === request.provider.providerId
+      )
+      if (!source) {
+        return buildProviderActionResult({
+          providerId: request.provider.providerId,
+          sourceId: request.provider.providerId,
+          operation: 'reconnect',
+          state: 'unavailable',
+          summary: 'Source status did not include this provider.',
+          nextAction: 'inspect_source_status',
+          fixtureDemo,
+        })
+      }
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: source.sourceId,
+        operation: 'reconnect',
+        state: mapBrokerOutcomeToUiState(source.outcome),
+        summary: `Reconnect status ${source.outcome}.`,
+        nextAction: source.nextAction ?? 'reconnect_source',
+        correlationId: sources.contractVersion,
+        fixtureDemo,
+      })
+    }
+
+    if (
+      request.action === 'validate' ||
+      request.action === 'configure-dry-run'
+    ) {
+      const result = await validateBrokerProviderConfiguration({
+        providerId: request.provider.providerId,
+        providerKind: request.provider.providerKind,
+        displayName: request.provider.displayName,
+        address: request.address ?? request.provider.address,
+        credentialRef:
+          request.credentialRef ?? request.provider.credentialHandle,
+        namespaces: rowActionNamespaces(request),
+        reason: rowActionReason(request),
+      })
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: result.provider.providerId,
+        operation: request.action,
+        state: mapBrokerOutcomeToUiState(result.outcome),
+        summary: `Provider ${request.action} ${result.outcome}.`,
+        nextAction:
+          result.nextAction ??
+          result.provider.nextAction ??
+          'review_plan_before_apply',
+        correlationId: result.requestId,
+        fixtureDemo,
+      })
+    }
+
+    if (request.action === 'configure-apply') {
+      if (!request.confirm) {
+        return buildProviderActionResult({
+          providerId: request.provider.providerId,
+          sourceId: request.provider.providerId,
+          operation: 'configure-apply',
+          state: 'policy-denied',
+          summary:
+            'Configuration apply requires explicit confirmation and an audit reason.',
+          nextAction: 'confirm_with_operation_id_and_audit_reason',
+          fixtureDemo,
+        })
+      }
+      const result = await applyBrokerProviderConfiguration({
+        providerId: request.provider.providerId,
+        providerKind: request.provider.providerKind,
+        displayName: request.provider.displayName,
+        address: request.address ?? request.provider.address,
+        credentialRef:
+          request.credentialRef ?? request.provider.credentialHandle,
+        namespaces: rowActionNamespaces(request),
+        reason: rowActionReason(request),
+        confirm: true,
+        operationId: `serviceadmin-provider-apply-${request.provider.providerId}`,
+      })
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: result.provider.providerId,
+        operation: 'configure-apply',
+        state: mapBrokerOutcomeToUiState(result.outcome),
+        summary: `Provider configure-apply ${result.outcome}.`,
+        nextAction: result.nextAction ?? 'inspect_provider_status',
+        correlationId: result.requestId,
+        fixtureDemo,
+      })
+    }
+
+    return buildProviderActionResult({
+      providerId: request.provider.providerId,
+      sourceId: request.provider.providerId,
+      operation: request.action,
+      state: 'unsupported',
+      summary: 'Provider action is not advertised.',
+      nextAction: 'wait_for_advertised_source_operation',
+      fixtureDemo,
+    })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /credential-bearing metadata/i.test(error.message)
+    ) {
+      return buildProviderActionResult({
+        providerId: request.provider.providerId,
+        sourceId: request.provider.providerId,
+        operation: request.action,
+        state: 'unavailable',
+        summary:
+          'Provider action failed closed after unsafe metadata was dropped.',
+        nextAction: 'inspect_broker_safety_contract',
+        fixtureDemo,
+      })
+    }
+    return actionResultFromRuntimeError(request, error, fixtureDemo)
+  }
 }
 
 function normalizeBrokerMigrationItem(value: unknown): BrokerMigrationItem {
