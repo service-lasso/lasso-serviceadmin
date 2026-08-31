@@ -98,6 +98,26 @@ describe('Secrets Broker operational contracts', () => {
     )
   })
 
+  it('forwards service, provider, operation, outcome, and time-range event filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(events))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await client.fetchBrokerEvents({
+      serviceId: '@secretsbroker',
+      providerId: 'local',
+      operation: 'local_api_auth',
+      outcome: 'denied',
+      since: '2026-08-14T00:00:00.000Z',
+      until: '2026-08-14T01:00:00.000Z',
+      limit: 10,
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://runtime.test/api/services/%40secretsbroker/operations/events?serviceId=%40secretsbroker&providerId=local&operation=local_api_auth&outcome=denied&since=2026-08-14T00%3A00%3A00.000Z&until=2026-08-14T01%3A00%3A00.000Z&limit=10'
+    )
+  })
+
   it('requires exact confirmation locally and sends only scope and audit reason to lockout clearing', async () => {
     const windowsNamedPipeScope =
       'local_api:\\\\.\\pipe\\service-lasso-secretsbroker-safe'
