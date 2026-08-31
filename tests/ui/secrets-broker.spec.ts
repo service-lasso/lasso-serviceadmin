@@ -397,7 +397,7 @@ test.describe('Secrets Broker browser coverage', () => {
       ['/secrets-broker/workflow-boundaries', /\/secrets-broker\/sources$/],
       ['/secrets-broker/single-reveal', /\/secrets-broker\/secrets$/],
       ['/secrets-broker/operational-controls', /\/operations\/audit-logging$/],
-      ['/secrets-broker/policy-simulation', /\/operations\/audit-logging$/],
+      ['/secrets-broker/policy-simulation', /\/security\?tab=secret-access$/],
       ['/secrets-broker/audit-events', /\/operations\/audit-logging$/],
     ] as const
 
