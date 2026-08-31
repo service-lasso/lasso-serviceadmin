@@ -644,6 +644,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   ].length
   const openSecretsCount = [...lateLifecycleSource.matchAll(/openSecrets\(\)/g)]
     .length
+  const visibleTableRowCount = [
+    ...lateLifecycleSource.matchAll(/visibleTableRow\(/g),
+  ].length
   const validationDialogCount = [
     ...lateLifecycleSource.matchAll(
       /dialog\('Validate provider configuration'\)/g
@@ -656,10 +659,11 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(sharedStopMutationCount, 0)
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
-  assert.equal(directTwentySecondWaitCount, 3)
+  assert.equal(directTwentySecondWaitCount, 2)
   assert.equal(trustedIdentityWaitCount, 3)
   assert.equal(directThirtySecondWaitCount, 3)
   assert.equal(openSecretsCount, 2)
+  assert.equal(visibleTableRowCount, 4)
   for (const lockedWrapperProof of [
     'failOnStatusCode: false',
     'expect(status).to.equal(409)',
@@ -694,6 +698,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     (directTwentySecondWaitCount +
       trustedIdentityWaitCount +
       openSecretsCount * 2 +
+      visibleTableRowCount * 2 +
       validationDialogCount) *
       20_000 +
     directThirtySecondWaitCount * 30_000
@@ -711,7 +716,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     longUiWaitMs +
     progressTaskWaitMs +
     uiRestartActionWaitMs
-  assert.equal(enumeratedLateLifecycleWaitMs, 1_350_000)
+  assert.equal(enumeratedLateLifecycleWaitMs, 1_490_000)
   assert.ok(enumeratedLateLifecycleWaitMs > cypressQualificationTimeoutMs)
   // Default four-second UI commands and Cypress's implicit network retries are
   // deliberately excluded, so this is not a whole-spec maximum either.

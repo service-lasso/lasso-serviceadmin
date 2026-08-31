@@ -1793,7 +1793,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.contains('Provider status is unavailable; migration remains disabled.').should(
       'not.exist'
     )
-    cy.contains('tr', 'vault-browser', { timeout: 20_000 }).within(() => {
+    visibleTableRow('vault-browser').within(() => {
       cy.contains('ready').should('be.visible')
       cy.contains('button', 'Validate configuration')
         .scrollIntoView()
