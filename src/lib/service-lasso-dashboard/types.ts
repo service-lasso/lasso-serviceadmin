@@ -674,6 +674,8 @@ export type BrokerOperationalEvent = {
   refHash?: string
   outcome: string
   requestId?: string
+  lockoutScope?: string
+  retryAfterSeconds?: number
 }
 
 export type BrokerEventFilters = {

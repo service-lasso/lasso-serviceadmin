@@ -4741,6 +4741,17 @@ export function normalizeBrokerEvents(payload: unknown): BrokerEventsResult {
         refHash: optionalIdentifier(record.refHash, 'event ref hash'),
         outcome: requireBrokerMetadata(record.outcome, 'event outcome'),
         requestId: optionalIdentifier(record.requestId, 'event request id'),
+        lockoutScope: optionalIdentifier(
+          record.lockoutScope,
+          'event lockout scope'
+        ),
+        retryAfterSeconds:
+          record.retryAfterSeconds === undefined
+            ? undefined
+            : requireBrokerCount(
+                record.retryAfterSeconds,
+                'event retry window'
+              ),
       }
     }),
     safety: {
