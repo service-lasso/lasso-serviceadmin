@@ -307,7 +307,7 @@ describe('app screens', () => {
     await user.click(screen.getByRole('button', { name: /^Upload archive$/i }))
 
     expect(await screen.findByText('echo-import')).toBeVisible()
-    expect(screen.getByText('Echo Import')).toBeVisible()
+    expect(screen.getAllByText('Echo Import').length).toBeGreaterThan(0)
     expect(screen.getByText('1.2.3')).toBeVisible()
     expect(screen.getByText(/Validation passed/i)).toBeVisible()
     expect(screen.queryByText(/conflict/i)).toBeNull()
@@ -315,10 +315,11 @@ describe('app screens', () => {
     await user.click(screen.getByRole('button', { name: /^Import archive$/i }))
 
     expect(await screen.findByText(/Echo Import was added/i)).toBeVisible()
-    expect(screen.getByRole('link', { name: /Open service/i })).toHaveAttribute(
-      'href',
-      '/services/echo-import'
-    )
+    expect(
+      screen.getByRole('link', { name: /Service Details/i })
+    ).toHaveAttribute('href', '/services/echo-import')
+    expect(screen.getByLabelText(/Add Service progress/i)).toBeVisible()
+    expect(screen.getByText('Complete')).toBeVisible()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/service-archives/import',
       expect.objectContaining({
@@ -382,18 +383,119 @@ describe('app screens', () => {
               { id: '@traefik', version: 'v3.6.0-rc.1' },
               { id: '@zitadel', version: 'v2.71.0' },
             ],
+            selections: [
+              { packageId: '@traefik', version: 'v3.6.0-rc.1' },
+              { packageId: '@zitadel', version: 'v2.71.0' },
+            ],
           }),
         })
       )
     })
-    expect(await within(catalogDialog).findByText('registered')).toBeVisible()
+    const progress =
+      await within(catalogDialog).findByLabelText(/Add Service progress/i)
+    expect(within(progress).getByText('Complete')).toBeVisible()
+    expect(within(progress).getByText('Traefik was registered.')).toBeVisible()
     expect(
-      within(catalogDialog).getByText('Traefik was registered.')
-    ).toBeVisible()
-    expect(within(catalogDialog).getByText('conflict')).toBeVisible()
+      within(progress).getByRole('link', { name: /Service Details/i })
+    ).toHaveAttribute('href', '/services/%40traefik')
+    expect(within(progress).getByText('Conflict')).toBeVisible()
+    expect(within(progress).getByText('Zitadel already exists.')).toBeVisible()
     expect(
-      within(catalogDialog).getByText('Zitadel already exists.')
+      within(progress).getByText(/Catalog install does not overwrite/i)
     ).toBeVisible()
+  })
+
+  it('renders Core catalog install progress with Service Details and visible partial failure', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+
+        if (url === '/api/catalog/packages') {
+          return new Response(JSON.stringify({ packages: catalogPackages }), {
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+
+        if (url === '/api/catalog/install' && init?.method === 'POST') {
+          return new Response(
+            JSON.stringify({
+              install: {
+                ok: false,
+                state: 'partial',
+                results: [
+                  {
+                    packageId: '@traefik',
+                    serviceId: 'traefik',
+                    state: 'registered',
+                    ok: true,
+                    progress: [
+                      'pending',
+                      'downloading',
+                      'validating',
+                      'copying',
+                      'registered',
+                    ],
+                    reason: 'Traefik was registered.',
+                  },
+                  {
+                    packageId: '@zitadel',
+                    serviceId: 'zitadel',
+                    state: 'skipped/conflict',
+                    ok: false,
+                    progress: [
+                      'pending',
+                      'downloading',
+                      'validating',
+                      'skipped/conflict',
+                    ],
+                    conflict: { kind: 'target_manifest_exists' },
+                    reason: 'Zitadel already exists.',
+                  },
+                ],
+              },
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+
+        return new Response('{}', { status: 404 })
+      }
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+    await renderRoute('/services')
+    await user.click(
+      await screen.findByRole('button', { name: /^Add Service$/i })
+    )
+    await user.click(screen.getByRole('button', { name: /Service Catalog/i }))
+
+    const catalogDialog = await screen.findByRole('dialog', {
+      name: /^Service Catalog$/i,
+    })
+    await user.click(
+      within(catalogDialog).getByRole('checkbox', { name: /Select Traefik/i })
+    )
+    await user.click(
+      within(catalogDialog).getByRole('checkbox', { name: /Select Zitadel/i })
+    )
+    await user.click(
+      within(catalogDialog).getByRole('button', {
+        name: /^Install selected$/i,
+      })
+    )
+
+    const progress =
+      await within(catalogDialog).findByLabelText(/Add Service progress/i)
+    expect(within(progress).getByText('Complete')).toBeVisible()
+    expect(
+      within(progress).getByRole('link', { name: /Service Details/i })
+    ).toHaveAttribute('href', '/services/traefik')
+    expect(within(progress).getByText('Conflict')).toBeVisible()
+    expect(within(progress).getByText('Zitadel already exists.')).toBeVisible()
+    expect(
+      within(progress).getByRole('link', { name: /Open existing service/i })
+    ).toHaveAttribute('href', '/services/zitadel')
   })
 
   it('shows succeeded and skipped setup steps on service details', async () => {
