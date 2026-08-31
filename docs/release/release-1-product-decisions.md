@@ -8,19 +8,18 @@ This record defines the Admin surfaces shipped for the Service Lasso Release 1 l
 | --- | --- | --- |
 | Fleet | Retired | No navigation or command-menu entry is shipped. |
 | Sessions | Retired | No navigation or command-menu entry is shipped. ZITADEL owns identity sessions. |
-| Policy Simulation | Replaced | The Security page reads `GET /api/secrets/audit` and renders the service manifest secret-access assignments enforced by Core. It does not offer a simulation control. |
+| Policy Simulation | Replaced | Security → Secret access lists live `broker.accessPolicy` grants (service id, namespace, refs, operations, purpose) plus missing Core audit assignments. `/secrets-broker/policy-simulation` redirects there. |
 | Support Bundle | Hidden | No GA navigation or command-menu entry is shipped. Diagnostic bundle capability remains outside the GA surface until released-artifact evidence exists. |
 
 ## Release 1 security assignment contract
 
 The Security page presents a read-only view of actual runtime evidence:
 
-- service identifier and manifest path;
-- declared Broker import assignments;
-- assignment status: allowed, missing, or malformed;
-- the Core audit endpoint and observation time.
+- service id, namespace, refs, operations, and purpose from `broker.accessPolicy`;
+- missing or malformed import assignments from Core `GET /api/secrets/audit`;
+- empty and unavailable states when no grants exist or the runtime cannot be read.
 
-The page must fail visibly when the runtime evidence is unavailable. It must not turn a fixture, prediction, or proposed assignment into an enforcement claim.
+The page must fail visibly when the runtime evidence is unavailable. It must not turn a fixture, prediction, or proposed assignment into an enforcement claim. Leftover `/secrets-broker/policy-simulation` must redirect to this inspector.
 
 ## Validation
 

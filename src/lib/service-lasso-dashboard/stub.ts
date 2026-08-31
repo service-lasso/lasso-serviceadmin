@@ -1,3 +1,4 @@
+import { parseManifestAccessPolicyGrants } from './secret-access-policy'
 import {
   containsUnsafeBrokerText,
   requireSafeBrokerIdentifier,
@@ -40,6 +41,7 @@ import type {
   InboxSummary,
   McpState,
   SecretAccessAssignmentAudit,
+  SecretAccessPolicyGrant,
   ServiceSecurityState,
   ServiceRecoveryDoctorActionResult,
   ServiceRecoveryHistoryState,
@@ -3234,23 +3236,96 @@ const secretAccessAssignmentAudit: SecretAccessAssignmentAudit = {
       ],
       summary: { present: 1, missing: 0, malformed: 0 },
     },
+    {
+      serviceId: 'echo-service',
+      manifestPath: 'services/echo-service/service.json',
+      findings: [
+        {
+          serviceId: 'echo-service',
+          ref: 'database.ROOT_PASSWORD',
+          namespace: 'shared/database',
+          status: 'present',
+          source: 'broker.import',
+          location: 'broker.imports[0].ref',
+          required: true,
+          reason: 'Broker reference is declared in the service manifest.',
+          accessPolicy: {
+            operation: 'resolve',
+            status: 'missing',
+            reason:
+              'No broker.accessPolicy assignment declares resolve access for this import.',
+          },
+        },
+      ],
+      summary: { present: 1, missing: 0, malformed: 0 },
+    },
   ],
   summary: {
-    services: 1,
-    references: 1,
-    present: 1,
+    services: 2,
+    references: 2,
+    present: 2,
     missing: 0,
     malformed: 0,
   },
+  grants: [
+    {
+      id: '@serviceadmin:services/@serviceadmin:0',
+      serviceId: '@serviceadmin',
+      workspace: 'local-demo',
+      namespace: 'services/@serviceadmin',
+      scope: 'service',
+      refs: ['serviceadmin.SESSION_SIGNING_KEY'],
+      namespaceWide: false,
+      operations: ['resolve'],
+      purpose: 'sign Service Admin sessions at runtime',
+    },
+  ],
+}
+
+/**
+ * Load broker.accessPolicy grants from live service.json documents.
+ */
+async function loadLiveAccessPolicyGrants(): Promise<
+  SecretAccessPolicyGrant[]
+> {
+  const services = await fetchServices()
+  const documents = await Promise.allSettled(
+    services.map((service) =>
+      fetchRuntimeJson<{ content?: string }>(
+        `/api/services/${encodeURIComponent(service.id)}/config`
+      )
+    )
+  )
+
+  const grants: SecretAccessPolicyGrant[] = []
+  for (const [index, result] of documents.entries()) {
+    const service = services[index]
+    if (!service || result.status !== 'fulfilled') continue
+    const content = result.value.content
+    if (typeof content !== 'string') continue
+    grants.push(...parseManifestAccessPolicyGrants(content, service.id))
+  }
+  return grants
 }
 
 export async function fetchSecretAccessAssignments() {
   await wait(120)
 
   if (!serviceLassoStubDataEnabled) {
-    return await fetchRuntimeJson<SecretAccessAssignmentAudit>(
-      '/api/secrets/audit'
-    )
+    const audit =
+      await fetchRuntimeJson<SecretAccessAssignmentAudit>('/api/secrets/audit')
+    const grants = await loadLiveAccessPolicyGrants()
+    return {
+      services: Array.isArray(audit.services) ? audit.services : [],
+      summary: audit.summary ?? {
+        services: 0,
+        references: 0,
+        present: 0,
+        missing: 0,
+        malformed: 0,
+      },
+      grants,
+    } satisfies SecretAccessAssignmentAudit
   }
 
   return structuredClone(secretAccessAssignmentAudit)

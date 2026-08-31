@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, getRouteApi } from '@tanstack/react-router'
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -18,6 +18,7 @@ import {
   useSecretAccessAssignments,
   useSecurityState,
 } from '@/lib/service-lasso-dashboard/hooks'
+import { buildSecretAccessAssignmentRows } from '@/lib/service-lasso-dashboard/secret-access-policy'
 import { getRuntimeApiUnavailableCopy } from '@/lib/service-lasso-dashboard/stub'
 import type {
   SecurityGroup,
@@ -55,6 +56,24 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { SecretAccessAssignmentsTable } from '@/features/secret-access-assignments/access-assignments-table'
+
+const securityRoute = getRouteApi('/_authenticated/security/')
+
+const securityTabs = [
+  'groups',
+  'permissions',
+  'mappings',
+  'actors',
+  'secret-access',
+  'rotations',
+] as const
+
+type SecurityTab = (typeof securityTabs)[number]
+
+function isSecurityTab(value: string): value is SecurityTab {
+  return securityTabs.some((tab) => tab === value)
+}
 
 function RiskBadge({ risk }: { risk: SecurityPermission['riskLevel'] }) {
   if (risk === 'critical') {
@@ -497,83 +516,34 @@ function SecretAccessAssignments({
 }: {
   audit: SecretAccessAssignmentAudit
 }) {
-  const assignments = audit.services.flatMap((service) =>
-    service.findings
-      .filter((finding) => finding.source === 'broker.import')
-      .map((finding) => ({ ...finding, manifestPath: service.manifestPath }))
-  )
+  const search = securityRoute.useSearch()
+  const navigate = securityRoute.useNavigate()
+  const rows = buildSecretAccessAssignmentRows(audit)
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Service Manifest Secret Access</CardTitle>
         <CardDescription>
-          Read-only assignments compiled from each installed service manifest.
-          This is the enforced Broker access contract, not a simulation.
+          Live broker.accessPolicy grants from installed service manifests
+          (service id, namespace, refs, operations, purpose). Missing import
+          assignments come from Core secret-reference audit. This is not a
+          dry-run playground.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className='overflow-hidden rounded-md border'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Service</TableHead>
-                <TableHead>Secret reference</TableHead>
-                <TableHead>Operation</TableHead>
-                <TableHead>Assignment</TableHead>
-                <TableHead>Required</TableHead>
-                <TableHead>Manifest source</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {assignments.map((assignment) => (
-                <TableRow
-                  key={`${assignment.serviceId}-${assignment.location}-${assignment.ref}`}
-                >
-                  <TableCell className='font-medium'>
-                    {assignment.serviceId}
-                  </TableCell>
-                  <TableCell className='min-w-[260px] font-mono text-sm'>
-                    {assignment.namespace
-                      ? `${assignment.namespace}/${assignment.ref}`
-                      : assignment.ref}
-                  </TableCell>
-                  <TableCell>{assignment.accessPolicy.operation}</TableCell>
-                  <TableCell>
-                    {assignment.status === 'present' &&
-                    assignment.accessPolicy.status === 'allowed' ? (
-                      <Badge className='bg-emerald-600'>Allowed</Badge>
-                    ) : (
-                      <Badge variant='destructive'>
-                        {assignment.status === 'malformed'
-                          ? 'Malformed'
-                          : 'Missing'}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {assignment.required === false ? 'Optional' : 'Required'}
-                  </TableCell>
-                  <TableCell className='min-w-[240px]'>
-                    <div className='font-mono text-xs'>
-                      {assignment.manifestPath}
-                    </div>
-                    <div className='text-xs text-muted-foreground'>
-                      {assignment.location}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {assignments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className='text-muted-foreground'>
-                    No service manifest Broker imports are installed.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </div>
+        {rows.length === 0 ? (
+          <p className='text-sm text-muted-foreground'>
+            No broker.accessPolicy grants or missing import assignments are
+            declared on this instance.
+          </p>
+        ) : (
+          <SecretAccessAssignmentsTable
+            rows={rows}
+            search={search}
+            navigate={navigate}
+          />
+        )}
       </CardContent>
     </Card>
   )
@@ -995,6 +965,10 @@ export function Security() {
 
   const securityQuery = useSecurityState()
   const secretAccessQuery = useSecretAccessAssignments()
+  const search = securityRoute.useSearch()
+  const navigate = securityRoute.useNavigate()
+  const requestedTab = search.tab ?? 'groups'
+  const activeTab = isSecurityTab(requestedTab) ? requestedTab : 'groups'
 
   return (
     <>
@@ -1050,7 +1024,16 @@ export function Security() {
 
             <SecuritySummary state={securityQuery.data} />
 
-            <Tabs defaultValue='groups' className='space-y-4'>
+            <Tabs
+              value={activeTab}
+              onValueChange={(nextTab) => {
+                if (!isSecurityTab(nextTab)) return
+                void navigate({
+                  search: (previous) => ({ ...previous, tab: nextTab }),
+                })
+              }}
+              className='space-y-4'
+            >
               <TabsList className='grid w-full grid-cols-2 sm:w-auto sm:grid-cols-6'>
                 <TabsTrigger value='groups'>Groups</TabsTrigger>
                 <TabsTrigger value='permissions'>Permissions</TabsTrigger>
