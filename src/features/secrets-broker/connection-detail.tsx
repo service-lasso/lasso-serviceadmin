@@ -1,0 +1,1029 @@
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  KeyRound,
+  Link2,
+  PlugZap,
+  ShieldAlert,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { ConfigDrawer } from '@/components/config-drawer'
+import { Header } from '@/components/layout/header'
+import { Main } from '@/components/layout/main'
+import { HeaderActions } from '@/components/page-toolbar'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  buildProviderReconnectPlan,
+  getSecretsBrokerProviderConnectionDetail,
+  providerReconnectWorkflowStates,
+  secretsBrokerProviderConnections,
+  type SecretsBrokerProviderConnectionAction,
+  type SecretsBrokerProviderConnectionDetail,
+  type SecretsBrokerProviderConnectionState,
+  type SecretsBrokerProviderReconnectWorkflowState,
+  type SecretsBrokerProviderLifecycleStatus,
+  type SecretsBrokerSecretMaterialState,
+} from './provider-connections'
+import {
+  buildSingleConnectionRotationPlan,
+  singleConnectionWorkflowStates,
+  type SingleConnectionWorkflowState,
+} from './single-connection-rotation'
+
+const connectionStateCopy: Record<
+  SecretsBrokerProviderConnectionState,
+  string
+> = {
+  healthy: 'Healthy',
+  degraded: 'Degraded',
+  failed: 'Failed',
+  disabled: 'Disabled',
+  missing: 'Missing',
+}
+
+const connectionStateVariant: Record<
+  SecretsBrokerProviderConnectionState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  healthy: 'default',
+  degraded: 'secondary',
+  failed: 'destructive',
+  disabled: 'outline',
+  missing: 'destructive',
+}
+
+const materialStateCopy: Record<SecretsBrokerSecretMaterialState, string> = {
+  present: 'Present',
+  missing: 'Missing',
+  expired: 'Expired',
+  'rotation-due': 'Rotation due',
+  revoked: 'Revoked',
+}
+
+const lifecycleStatusCopy: Record<
+  SecretsBrokerProviderLifecycleStatus,
+  string
+> = {
+  connected: 'Connected',
+  expiring: 'Expiring',
+  'auth-required': 'Auth required',
+  'reconnect-required': 'Reconnect required',
+  'refresh-failed': 'Refresh failed',
+  revoked: 'Revoked',
+  'permission-changed': 'Permission changed',
+  degraded: 'Degraded',
+}
+
+const lifecycleStatusVariant: Record<
+  SecretsBrokerProviderLifecycleStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  connected: 'default',
+  expiring: 'secondary',
+  'auth-required': 'destructive',
+  'reconnect-required': 'secondary',
+  'refresh-failed': 'destructive',
+  revoked: 'destructive',
+  'permission-changed': 'secondary',
+  degraded: 'secondary',
+}
+
+const actionVariant: Record<
+  SecretsBrokerProviderConnectionAction['state'],
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  available: 'secondary',
+  disabled: 'outline',
+  danger: 'destructive',
+  unsupported: 'outline',
+}
+
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
+function StateIcon({ state }: { state: SecretsBrokerProviderConnectionState }) {
+  if (state === 'healthy') return <CheckCircle2 className='size-4' />
+  if (state === 'degraded') return <AlertTriangle className='size-4' />
+  return <XCircle className='size-4' />
+}
+
+function ConnectionDetailMissing({ connectionId }: { connectionId: string }) {
+  usePageMetadata({
+    title: 'Service Admin - Secrets Broker Connection Missing',
+    description: 'Missing Secrets Broker provider connection detail.',
+  })
+
+  return (
+    <>
+      <Header fixed>
+        <Search />
+        <HeaderActions>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </HeaderActions>
+      </Header>
+      <Main id='content' className='space-y-6'>
+        <Card>
+          <CardHeader>
+            <CardTitle>Provider connection not found</CardTitle>
+            <CardDescription>
+              No safe stub data exists for connection id {connectionId}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant='secondary'>
+              <Link to='/secrets-broker/sources'>Back to Providers</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </Main>
+    </>
+  )
+}
+
+function MetadataGrid({
+  connection,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+}) {
+  return (
+    <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+      {connection.metadata.map((item) => (
+        <div key={item.label} className='rounded-lg border p-3'>
+          <div className='text-xs text-muted-foreground'>{item.label}</div>
+          <div className='font-medium'>{item.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LiveConnectionSourceMetadata({
+  connection,
+  overview,
+  loading,
+  error,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const matchingSource = overview?.sources.find(
+    (source) =>
+      source.id === connection.source ||
+      source.id === connection.id ||
+      source.label === connection.title
+  )
+
+  return (
+    <section
+      aria-label='Live connection source metadata'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live connection source metadata
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker connection metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker source metadata for this connection.'
+                  : 'Broker connection metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Connection source
+          </div>
+          <div>{connection.source}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Live match
+          </div>
+          <div>{matchingSource ? matchingSource.state : 'not advertised'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Provider
+          </div>
+          <div>{matchingSource?.provider ?? connection.provider}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Mutation
+          </div>
+          <div>
+            {matchingSource?.capabilities.mutation ? 'available' : 'blocked'}
+          </div>
+        </div>
+      </div>
+
+      <div className='mt-3 rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground'>
+        {matchingSource
+          ? matchingSource.reason
+          : 'The live broker overview did not advertise this exact connection source. This page keeps fixture detail visible as metadata only and fails closed for live source actions.'}
+      </div>
+    </section>
+  )
+}
+
+function SingleConnectionEditRotationWorkflow({
+  connection,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+}) {
+  const [workflowState, setWorkflowState] =
+    useState<SingleConnectionWorkflowState>('dry-run-ready')
+  const [auditReason, setAuditReason] = useState('')
+  const [confirmedConnectionId, setConfirmedConnectionId] = useState('')
+  const [cancelled, setCancelled] = useState(false)
+
+  const plan = useMemo(
+    () =>
+      buildSingleConnectionRotationPlan(
+        connection,
+        cancelled ? 'cancelled' : workflowState
+      ),
+    [cancelled, connection, workflowState]
+  )
+  const applyReady =
+    plan.applyEnabled &&
+    auditReason.trim().length > 0 &&
+    confirmedConnectionId === connection.id
+
+  return (
+    <Card id='single-connection-edit-rotation'>
+      <CardHeader>
+        <CardTitle>Single-connection edit and rotation workflow</CardTitle>
+        <CardDescription>
+          Focused dry-run/preview/apply surface for one provider connection.
+          Bulk mutation is intentionally out of scope for #81.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <div className='grid gap-4 lg:grid-cols-3'>
+          <div className='space-y-2'>
+            <label
+              htmlFor='single-connection-workflow-state'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Workflow state
+            </label>
+            <select
+              id='single-connection-workflow-state'
+              className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+              value={workflowState}
+              onChange={(event) => {
+                setCancelled(false)
+                setWorkflowState(
+                  event.target.value as SingleConnectionWorkflowState
+                )
+              }}
+            >
+              {singleConnectionWorkflowStates.map((state) => (
+                <option key={state.value} value={state.value}>
+                  {state.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className='space-y-2'>
+            <label
+              htmlFor='single-connection-audit-reason'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Audit reason
+            </label>
+            <Input
+              id='single-connection-audit-reason'
+              value={auditReason}
+              onChange={(event) => setAuditReason(event.target.value)}
+              placeholder='Required before apply'
+            />
+          </div>
+          <div className='space-y-2'>
+            <label
+              htmlFor='single-connection-confirmation'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Confirm connection id
+            </label>
+            <Input
+              id='single-connection-confirmation'
+              value={confirmedConnectionId}
+              onChange={(event) => setConfirmedConnectionId(event.target.value)}
+              placeholder={connection.id}
+            />
+          </div>
+        </div>
+
+        <div className='rounded-lg border p-3 text-sm'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Badge variant='secondary'>{plan.outcome}</Badge>
+            <Badge variant='outline'>Operation {plan.operationId}</Badge>
+            <Badge variant='outline'>Raw values hidden</Badge>
+          </div>
+          <div className='mt-3 font-medium'>{plan.title}</div>
+          <p className='mt-1 text-muted-foreground'>{plan.status}</p>
+          <div className='mt-3 grid gap-2 md:grid-cols-2'>
+            <div>
+              <span className='text-muted-foreground'>Connection:</span>{' '}
+              {plan.connectionId}
+            </div>
+            <div>
+              <span className='text-muted-foreground'>Ref:</span>{' '}
+              {plan.connectionRef}
+            </div>
+            <div>
+              <span className='text-muted-foreground'>Next action:</span>{' '}
+              {plan.nextAction}
+            </div>
+            <div>
+              <span className='text-muted-foreground'>Recovery:</span>{' '}
+              {plan.recovery}
+            </div>
+          </div>
+        </div>
+
+        <div className='space-y-2'>
+          {plan.changes.map((change) => (
+            <div
+              key={`${plan.state}-${change.field}`}
+              className='grid gap-2 rounded-lg border p-3 text-sm lg:grid-cols-[1fr_1fr_auto]'
+            >
+              <div>
+                <div className='font-medium'>{change.field}</div>
+                <div className='break-all text-muted-foreground'>
+                  Current: {change.current}
+                </div>
+                <div className='break-all text-muted-foreground'>
+                  Proposed: {change.proposed}
+                </div>
+              </div>
+              <div>
+                <div>Policy: {change.policy}</div>
+                <div>Risk: {change.risk}</div>
+                <div>Status: {change.status}</div>
+              </div>
+              <Badge
+                variant={
+                  change.status === 'blocked' || change.status === 'failed'
+                    ? 'destructive'
+                    : change.status === 'applied'
+                      ? 'default'
+                      : 'secondary'
+                }
+              >
+                {change.status}
+              </Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className='flex flex-wrap gap-2'>
+          <Button type='button' disabled={!applyReady}>
+            {applyReady
+              ? 'Apply single-connection rotation'
+              : 'Apply blocked until dry-run, audit reason, and exact connection confirmation'}
+          </Button>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => setCancelled(true)}
+          >
+            Cancel operation
+          </Button>
+          <Badge variant='secondary'>Dry-run before apply</Badge>
+          <Badge variant='outline'>Audit required</Badge>
+          <Badge variant='outline'>No bulk mutation</Badge>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProviderReconnectWorkflow({
+  connection,
+}: {
+  connection: SecretsBrokerProviderConnectionDetail
+}) {
+  const [workflowState, setWorkflowState] =
+    useState<SecretsBrokerProviderReconnectWorkflowState>(
+      buildProviderReconnectPlan(connection).state
+    )
+  const plan = useMemo(
+    () => buildProviderReconnectPlan(connection, workflowState),
+    [connection, workflowState]
+  )
+
+  return (
+    <Card id='provider-reconnect-workflow'>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <KeyRound className='size-4' /> Provider reconnect workflow
+        </CardTitle>
+        <CardDescription>
+          Metadata-only reconnect entry point for Secrets Broker sources. This
+          surface uses provider handles/statuses only; it never accepts or
+          renders plaintext provider credentials.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-4 text-sm'>
+        <div className='grid gap-4 lg:grid-cols-[0.7fr_1.3fr]'>
+          <div className='space-y-2'>
+            <label
+              htmlFor='provider-reconnect-state'
+              className='text-sm font-medium text-muted-foreground'
+            >
+              Reconnect scenario
+            </label>
+            <select
+              id='provider-reconnect-state'
+              className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+              value={workflowState}
+              onChange={(event) =>
+                setWorkflowState(
+                  event.target
+                    .value as SecretsBrokerProviderReconnectWorkflowState
+                )
+              }
+            >
+              {providerReconnectWorkflowStates.map((state) => (
+                <option key={state.value} value={state.value}>
+                  {state.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='mb-2 flex flex-wrap items-center gap-2'>
+              <Badge
+                variant={
+                  plan.outcome === 'success'
+                    ? 'default'
+                    : plan.outcome === 'failure' || plan.outcome === 'blocked'
+                      ? 'destructive'
+                      : 'secondary'
+                }
+              >
+                {plan.outcome}
+              </Badge>
+              <Badge variant='outline'>Audit {plan.safeAuditEvent}</Badge>
+              <Badge variant='outline'>Handle only</Badge>
+            </div>
+            <div className='font-medium'>{plan.title}</div>
+            <p className='mt-1 text-muted-foreground'>{plan.status}</p>
+            <div className='mt-2 break-all text-muted-foreground'>
+              Connection handle: {plan.connectionHandle}
+            </div>
+          </div>
+        </div>
+
+        <div className='grid gap-3 md:grid-cols-3'>
+          <div className='rounded-lg border p-3'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected refs
+            </div>
+            {plan.affectedRefs.map((ref) => (
+              <Badge key={ref} variant='outline' className='mt-2 break-all'>
+                {ref}
+              </Badge>
+            ))}
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected services
+            </div>
+            <div className='mt-2 flex flex-wrap gap-1'>
+              {plan.affectedServices.map((service) => (
+                <Badge key={service} variant='outline'>
+                  {service}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className='rounded-lg border p-3'>
+            <div className='text-xs font-medium text-muted-foreground uppercase'>
+              Affected workflows
+            </div>
+            <div className='mt-2 flex flex-wrap gap-1'>
+              {plan.affectedWorkflows.map((workflow) => (
+                <Badge key={workflow} variant='outline'>
+                  {workflow}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className='flex flex-wrap gap-2'>
+          <Button type='button' disabled={!plan.actionEnabled}>
+            {plan.actionLabel}
+          </Button>
+          <Badge variant='secondary'>No credential input</Badge>
+          <Badge variant='outline'>Fail closed unsupported providers</Badge>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ActionButton({
+  action,
+}: {
+  action: SecretsBrokerProviderConnectionAction
+}) {
+  return (
+    <div className='rounded-lg border p-3'>
+      <Button
+        type='button'
+        variant={actionVariant[action.state]}
+        disabled={action.state === 'disabled' || action.state === 'unsupported'}
+        className='w-full justify-start'
+      >
+        {action.label}
+        {action.state === 'unsupported' ? ' unavailable' : ''}
+      </Button>
+      {action.confirmationCopy ? (
+        <p className='mt-2 text-xs text-muted-foreground'>
+          Confirmation: {action.confirmationCopy}
+        </p>
+      ) : null}
+      {action.disabledReason ? (
+        <p className='mt-2 text-xs text-muted-foreground'>
+          {action.state === 'unsupported' ? 'Unavailable' : 'Disabled'}:{' '}
+          {action.disabledReason}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+export function SecretsBrokerProviderConnectionDetailPage({
+  connectionId,
+}: {
+  connectionId: string
+}) {
+  const connection = getSecretsBrokerProviderConnectionDetail(connectionId)
+  const liveOverviewQuery = useQuery({
+    queryKey: ['secrets-broker', 'connection-detail', connectionId, 'overview'],
+    queryFn: fetchSecretsBrokerOverview,
+    enabled: Boolean(connection),
+  })
+
+  usePageMetadata({
+    title: connection
+      ? `Service Admin - ${connection.title}`
+      : 'Service Admin - Secrets Broker Connection Missing',
+    description:
+      'Safe Secrets Broker provider connection detail with metadata-only secret material state.',
+  })
+
+  if (!connection)
+    return <ConnectionDetailMissing connectionId={connectionId} />
+
+  return (
+    <>
+      <Header fixed>
+        <Search />
+        <HeaderActions>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </HeaderActions>
+      </Header>
+
+      <Main id='content' className='space-y-6'>
+        <div className='flex flex-wrap items-start justify-between gap-4'>
+          <div>
+            <div className='mb-2 flex items-center gap-2 text-sm text-muted-foreground'>
+              <Link to='/secrets-broker/secrets' className='hover:underline'>
+                Secrets Broker
+              </Link>
+              <span>/</span>
+              <span>Provider connection detail</span>
+            </div>
+            <h1 className='flex items-center gap-2 text-2xl font-bold tracking-tight'>
+              <KeyRound className='size-5' /> {connection.title}
+            </h1>
+            <p className='mt-1 text-muted-foreground'>
+              Safe metadata, health, material state, usage, and actions for one
+              provider connection. Raw secret values are never rendered or
+              copied.
+            </p>
+          </div>
+          <Badge variant={connectionStateVariant[connection.state]}>
+            <StateIcon state={connection.state} />
+            {connectionStateCopy[connection.state]}
+          </Badge>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <ShieldCheck className='size-4' /> Safe metadata summary
+            </CardTitle>
+            <CardDescription>
+              Provider {connection.provider}, source {connection.source}, ref{' '}
+              {connection.connectionRef}. Values are hidden.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <MetadataGrid connection={connection} />
+          </CardContent>
+        </Card>
+
+        <LiveConnectionSourceMetadata
+          connection={connection}
+          overview={liveOverviewQuery.data}
+          loading={liveOverviewQuery.isLoading}
+          error={liveOverviewQuery.isError}
+        />
+
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center gap-2'>
+                <Clock3 className='size-4' /> Lifecycle status
+              </CardTitle>
+              <CardDescription>
+                Normalized provider lifecycle metadata for reconnect, refresh,
+                and retry decisions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-3 text-sm'>
+              <Badge
+                variant={lifecycleStatusVariant[connection.lifecycle.status]}
+              >
+                {lifecycleStatusCopy[connection.lifecycle.status]}
+              </Badge>
+              <p>{connection.lifecycle.summary}</p>
+              <div className='rounded-lg border p-3'>
+                <div className='text-muted-foreground'>Last check</div>
+                <div className='font-medium'>
+                  {connection.lifecycle.lastCheckedAt}
+                </div>
+              </div>
+              {connection.lifecycle.lastRefreshError ? (
+                <div className='rounded-lg border p-3'>
+                  <div className='text-muted-foreground'>
+                    Last refresh/check error
+                  </div>
+                  <div className='font-medium'>
+                    {connection.lifecycle.lastRefreshError}
+                  </div>
+                </div>
+              ) : null}
+              <div className='flex flex-wrap gap-2'>
+                {connection.lifecycle.auditEventRef ? (
+                  <Button asChild size='sm' variant='outline'>
+                    <a href='#recent-audit-events'>
+                      Audit {connection.lifecycle.auditEventRef}
+                    </a>
+                  </Button>
+                ) : null}
+                {connection.lifecycle.diagnosticRef ? (
+                  <Button asChild size='sm' variant='outline'>
+                    <a href='/secrets-broker/sources'>
+                      Diagnostics {connection.lifecycle.diagnosticRef}
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center gap-2'>
+                <Clock3 className='size-4' /> Status and health
+              </CardTitle>
+              <CardDescription>{connection.health.label}</CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-3 text-sm'>
+              <div className='flex justify-between gap-3 rounded-lg border p-3'>
+                <span className='text-muted-foreground'>Last checked</span>
+                <span className='font-medium'>
+                  {connection.health.checkedAt}
+                </span>
+              </div>
+              {connection.health.failureReason ? (
+                <div className='flex justify-between gap-3 rounded-lg border p-3'>
+                  <span className='text-muted-foreground'>
+                    Last failure reason
+                  </span>
+                  <span className='font-medium'>
+                    {connection.health.failureReason}
+                  </span>
+                </div>
+              ) : null}
+              <div className='rounded-lg border p-3'>
+                <div className='text-muted-foreground'>Next action</div>
+                <div className='font-medium'>
+                  {connection.health.nextAction}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center gap-2'>
+                <ShieldAlert className='size-4' /> Secret material state
+              </CardTitle>
+              <CardDescription>
+                Presence and lifecycle metadata only; no value material is
+                loaded.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-3 text-sm'>
+              <div className='flex flex-wrap gap-2'>
+                <Badge variant='secondary'>
+                  Presence:{' '}
+                  {materialStateCopy[connection.secretMaterial.presence]}
+                </Badge>
+                <Badge variant='outline'>Raw value: hidden</Badge>
+                <Badge variant='outline'>Copy value: unavailable</Badge>
+              </div>
+              <p>{connection.secretMaterial.safeDescriptor}</p>
+              <div className='grid gap-2 md:grid-cols-2'>
+                {connection.secretMaterial.version ? (
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-muted-foreground'>Key version</div>
+                    <div className='font-medium'>
+                      {connection.secretMaterial.version}
+                    </div>
+                  </div>
+                ) : null}
+                {connection.secretMaterial.updatedAt ? (
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-muted-foreground'>Updated</div>
+                    <div className='font-medium'>
+                      {connection.secretMaterial.updatedAt}
+                    </div>
+                  </div>
+                ) : null}
+                {connection.secretMaterial.expiresAt ? (
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-muted-foreground'>Expiry</div>
+                    <div className='font-medium'>
+                      {connection.secretMaterial.expiresAt}
+                    </div>
+                  </div>
+                ) : null}
+                {connection.secretMaterial.refreshWindow ? (
+                  <div className='rounded-lg border p-3'>
+                    <div className='text-muted-foreground'>
+                      Refresh timeline
+                    </div>
+                    <div className='font-medium'>
+                      {connection.secretMaterial.refreshWindow}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Scopes and permissions</CardTitle>
+              <CardDescription>
+                Permission decisions are rendered as policy metadata only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-2'>
+              {connection.scopes.map((scope) => (
+                <div
+                  key={scope.label}
+                  className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm'
+                >
+                  <span>{scope.label}</span>
+                  <Badge
+                    variant={
+                      scope.decision === 'allowed'
+                        ? 'default'
+                        : scope.decision === 'denied'
+                          ? 'destructive'
+                          : 'secondary'
+                    }
+                  >
+                    {scope.decision}
+                  </Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center gap-2'>
+                <Link2 className='size-4' /> Linked services, workflows, and
+                runs
+              </CardTitle>
+              <CardDescription>
+                Consumers that depend on this provider connection.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='grid gap-3 md:grid-cols-3'>
+              <div>
+                <div className='mb-2 text-xs font-medium text-muted-foreground uppercase'>
+                  Services
+                </div>
+                <div className='space-y-1'>
+                  {connection.usage.linkedServices.map((item) => (
+                    <Badge key={item} variant='outline'>
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className='mb-2 text-xs font-medium text-muted-foreground uppercase'>
+                  Workflows
+                </div>
+                <div className='space-y-1'>
+                  {connection.usage.linkedWorkflows.map((item) => (
+                    <Badge key={item} variant='outline'>
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className='mb-2 text-xs font-medium text-muted-foreground uppercase'>
+                  Runs
+                </div>
+                <div className='space-y-1'>
+                  {connection.usage.linkedRuns.map((item) => (
+                    <Badge key={item} variant='outline'>
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div className='grid gap-2 md:col-span-3 md:grid-cols-2'>
+                {connection.usage.lastSuccessfulResolve ? (
+                  <div className='rounded-lg border p-3 text-sm'>
+                    <div className='text-muted-foreground'>
+                      Last successful resolve/use
+                    </div>
+                    <div className='font-medium'>
+                      {connection.usage.lastSuccessfulResolve}
+                    </div>
+                  </div>
+                ) : null}
+                {connection.usage.lastFailure ? (
+                  <div className='rounded-lg border p-3 text-sm'>
+                    <div className='text-muted-foreground'>Last failure</div>
+                    <div className='font-medium'>
+                      {connection.usage.lastFailure}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card id='recent-audit-events'>
+          <CardHeader>
+            <CardTitle>Recent audit events</CardTitle>
+            <CardDescription>
+              Safe event metadata for this connection.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-2'>
+            {connection.recentAuditEvents.map((event) => (
+              <div
+                key={event.id}
+                className='grid gap-2 rounded-lg border p-3 text-sm md:grid-cols-[1fr_auto]'
+              >
+                <div>
+                  <div className='font-medium'>{event.type}</div>
+                  <div className='text-muted-foreground'>
+                    {event.at} · {event.actor} · {event.reason}
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    event.outcome === 'success'
+                      ? 'default'
+                      : event.outcome === 'denied'
+                        ? 'destructive'
+                        : 'secondary'
+                  }
+                >
+                  {event.outcome}
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <ProviderReconnectWorkflow connection={connection} />
+
+        <SingleConnectionEditRotationWorkflow connection={connection} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Connection actions</CardTitle>
+            <CardDescription>
+              Dangerous actions include explicit confirmation copy and do not
+              expose raw secret material.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+            {connection.actions.map((action) => (
+              <ActionButton key={action.id} action={action} />
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Available stub detail connections</CardTitle>
+            <CardDescription>
+              API/stub-backed detail records currently available for tests and
+              local preview.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='flex flex-wrap gap-2'>
+            {secretsBrokerProviderConnections.map((item) => (
+              <Button key={item.id} asChild variant='outline' size='sm'>
+                <Link
+                  to='/secrets-broker/$connectionId'
+                  params={{ connectionId: item.id }}
+                >
+                  {item.title}
+                </Link>
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      </Main>
+    </>
+  )
+}

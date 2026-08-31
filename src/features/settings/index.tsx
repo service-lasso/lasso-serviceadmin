@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { HeaderActions } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -27,27 +28,17 @@ export function Settings() {
 
   return (
     <>
-      {/* ===== Top Heading ===== */}
       <Header>
         <Search />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
       <Main fixed>
-        <div className='flex flex-wrap items-end justify-between gap-3'>
-          <div className='space-y-0.5'>
-            <h1 className='text-2xl font-bold tracking-tight md:text-3xl'>
-              Settings
-            </h1>
-            <p className='text-muted-foreground'>
-              Tune the Service Lasso admin surface without dragging the template
-              back into generic profile/account flows.
-            </p>
-          </div>
+        <div className='flex flex-wrap justify-end gap-3'>
           <div className='flex flex-wrap gap-2'>
             <Button variant='outline' size='sm' asChild>
               <Link to='/runtime'>Runtime</Link>

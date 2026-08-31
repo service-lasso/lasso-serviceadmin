@@ -91,9 +91,12 @@ try {
   assert.equal(sbom.bomFormat, 'CycloneDX')
   assert.equal(sbom.specVersion, '1.6')
   assert.equal(sbom.metadata.component.type, 'application')
+  assert.equal(sbom.metadata.component.name, '@service-lasso/service-admin')
+  assert.equal(sbom.metadata.component.version, manifest.version)
   assert.equal(Array.isArray(sbom.components) && sbom.components.length > 0, true)
   assert.equal(JSON.stringify(sbom).includes(root), false, 'SBOM must not contain build-host paths')
   assert.equal(manifest.id, '@serviceadmin')
+  assert.equal(manifest.version, '1.0.0-rc.1')
   assert.equal(manifest.env.SERVICE_HOST, '127.0.0.1')
   assert.deepEqual(manifest.execconfig.args, ['runtime/server.js'])
   for (const target of ['win32', 'linux', 'darwin']) {

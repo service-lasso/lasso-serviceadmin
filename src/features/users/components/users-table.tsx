@@ -21,7 +21,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DataTablePagination, DataTableToolbar } from '@/components/data-table'
+import {
+  DataTablePagination,
+  DataTableScrollRegion,
+  DataTableToolbar,
+  dataTableStickyHeaderClassName,
+} from '@/components/data-table'
 import { roles } from '../data/data'
 import { type User } from '../data/schema'
 import { DataTableBulkActions } from './data-table-bulk-actions'
@@ -96,7 +101,7 @@ export function UsersTable({ data, search, navigate }: DataTableProps) {
     <div
       className={cn(
         'max-sm:has-[div[role="toolbar"]]:mb-16', // Add margin bottom to the table on mobile when the toolbar is visible
-        'flex flex-1 flex-col gap-4'
+        'flex min-h-0 flex-1 flex-col gap-4'
       )}
     >
       <DataTableToolbar
@@ -121,9 +126,9 @@ export function UsersTable({ data, search, navigate }: DataTableProps) {
           },
         ]}
       />
-      <div className='overflow-hidden rounded-md border'>
-        <Table>
-          <TableHeader>
+      <DataTableScrollRegion>
+        <Table contained={false}>
+          <TableHeader className={dataTableStickyHeaderClassName}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row'>
                 {headerGroup.headers.map((header) => {
@@ -186,7 +191,7 @@ export function UsersTable({ data, search, navigate }: DataTableProps) {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableScrollRegion>
       <DataTablePagination table={table} className='mt-auto' />
       <DataTableBulkActions table={table} />
     </div>

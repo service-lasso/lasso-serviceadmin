@@ -11,13 +11,9 @@ import {
   ArrowDown,
   ArrowRight,
   GitBranch,
-  Link2,
-  Network,
   Save,
   Search,
-  Star,
   Undo2,
-  Workflow,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePageMetadata } from '@/lib/page-metadata'
@@ -30,12 +26,7 @@ import {
   getGraphCategory,
   getServiceNodeImage,
 } from '@/lib/service-graph'
-import {
-  useFavoriteFeatureState,
-  useServices,
-  useToggleFavorite,
-} from '@/lib/service-lasso-dashboard/hooks'
-import { serviceLassoApiBaseUrl } from '@/lib/service-lasso-dashboard/stub'
+import { useServices } from '@/lib/service-lasso-dashboard/hooks'
 import type { DashboardService } from '@/lib/service-lasso-dashboard/types'
 import { useTheme } from '@/context/theme-provider'
 import { Badge } from '@/components/ui/badge'
@@ -44,6 +35,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -55,11 +47,16 @@ import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { HeaderActions, usePageToolbar } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search as GlobalSearch } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { FavoriteToggle } from '@/features/services/components/favorite-toggle'
 
 const route = getRouteApi('/_authenticated/dependencies/')
+
+const serviceLassoApiBaseUrl =
+  import.meta.env.VITE_SERVICE_LASSO_API_BASE_URL?.replace(/\/$/, '') || null
 
 type GraphLayoutMap = Record<string, { x: number; y: number }>
 type GraphOrientation = 'horizontal' | 'vertical'
@@ -69,7 +66,7 @@ async function persistNodeLayoutToMeta(
   x: number,
   y: number
 ) {
-  if (serviceLassoApiBaseUrl === null) {
+  if (!serviceLassoApiBaseUrl) {
     throw new Error('Service Lasso API base URL is not configured')
   }
 
@@ -103,31 +100,39 @@ function StatusBadge({ status }: { status: DashboardService['status'] }) {
       <Badge className='bg-emerald-600 hover:bg-emerald-600'>Running</Badge>
     )
   }
+  if (status === 'available') {
+    return <Badge className='bg-sky-600 hover:bg-sky-600'>Available</Badge>
+  }
   if (status === 'degraded') return <Badge variant='secondary'>Degraded</Badge>
   return <Badge variant='outline'>Stopped</Badge>
 }
 
 function DependenciesLoading() {
   return (
-    <div className='space-y-4'>
-      <div className='grid gap-4 md:grid-cols-4'>
-        <Skeleton className='h-28 w-full' />
-        <Skeleton className='h-28 w-full' />
-        <Skeleton className='h-28 w-full' />
-        <Skeleton className='h-28 w-full' />
-      </div>
-      <div className='grid gap-4 lg:grid-cols-3'>
-        <Skeleton className='h-[620px] w-full lg:col-span-2' />
-        <Skeleton className='h-[620px] w-full' />
+    <div className='flex min-h-0 flex-1 flex-col gap-4'>
+      <Skeleton className='h-28 w-full shrink-0' />
+      <div className='grid min-h-0 flex-1 gap-4 lg:grid-cols-3'>
+        <Skeleton className='min-h-0 w-full flex-1 lg:col-span-2' />
+        <Skeleton className='min-h-0 w-full flex-1' />
       </div>
     </div>
   )
 }
 
+/**
+ * Dependencies page: graph controls stay compact; the graph and selected
+ * service details fill remaining viewport height under those controls.
+ */
 export function Dependencies() {
   usePageMetadata({
     title: 'Service Admin - Dependencies',
     description: 'Service Admin dependency graph and relationship table.',
+  })
+  usePageToolbar({
+    quickNav: [
+      { id: 'services', label: 'Services', to: '/services' },
+      { id: 'logs', label: 'Logs', to: '/logs' },
+    ],
   })
 
   const searchState = route.useSearch()
@@ -148,9 +153,6 @@ export function Dependencies() {
     'all'
   )
   const [hideUtility, setHideUtility] = useState(false)
-
-  const toggleFavorite = useToggleFavorite()
-  const favoriteFeature = useFavoriteFeatureState()
 
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data])
 
@@ -207,23 +209,6 @@ export function Dependencies() {
       .map((item) => byId.get(item.id))
       .filter((service): service is DashboardService => Boolean(service))
   }, [byId, selectedService])
-
-  const relationshipEdges = services.reduce(
-    (count, service) => count + service.dependencies.length,
-    0
-  )
-
-  const inferredApiUsageEdges = services.reduce(
-    (count, service) =>
-      count +
-      service.dependencies.filter((dependency) => {
-        const dependencyService = services.find(
-          (item) => item.id === dependency.id
-        )
-        return (dependencyService?.endpoints.length ?? 0) > 0
-      }).length,
-    0
-  )
 
   const autoLayoutMap = useMemo(() => {
     const map: GraphLayoutMap = {}
@@ -419,11 +404,6 @@ export function Dependencies() {
     })
   }
 
-  const onToggleFavorite = (serviceId: string) => {
-    if (!favoriteFeature.enabled) return
-    void toggleFavorite.mutateAsync(serviceId)
-  }
-
   const onNodeDragStop = (_: unknown, node: Node) => {
     setLayoutMap((previous) => ({
       ...previous,
@@ -458,7 +438,7 @@ export function Dependencies() {
   const saveLayoutToMeta = async () => {
     setSavedLayoutMap(layoutMap)
 
-    if (serviceLassoApiBaseUrl === null) {
+    if (!serviceLassoApiBaseUrl) {
       toast.error(
         'Layout save triggered, but API base URL is not configured, so this will reset after reload.'
       )
@@ -486,98 +466,26 @@ export function Dependencies() {
     <>
       <Header fixed>
         <GlobalSearch />
-        <div className='ms-auto flex items-center space-x-4'>
+        <HeaderActions>
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
-        </div>
+        </HeaderActions>
       </Header>
 
-      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
-        <div className='flex flex-wrap items-end justify-between gap-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>Dependencies</h2>
-            <p className='text-muted-foreground'>
-              Graph rendering is back: inspect dependency topology, then drill
-              into selected service relationships.
-            </p>
-          </div>
-          <div className='flex flex-wrap gap-2'>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/services'>Services</Link>
-            </Button>
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/logs'>Logs</Link>
-            </Button>
-          </div>
+      <Main id='content' fixed className='min-h-0 gap-4'>
+        <div className='shrink-0'>
+          <h2 className='text-2xl font-bold tracking-tight'>Dependencies</h2>
+          <p className='text-muted-foreground'>
+            Inspect dependency topology and drill into selected service
+            relationships.
+          </p>
         </div>
-
         {servicesQuery.isLoading ? (
           <DependenciesLoading />
         ) : (
           <>
-            <div className='grid gap-4 md:grid-cols-4'>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Network className='size-4' /> Services in graph
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {filteredServices.length}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Visible services after filters.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <GitBranch className='size-4' /> Relationship edges
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>{relationshipEdges}</div>
-                  <p className='text-xs text-muted-foreground'>
-                    Structural dependency links.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Link2 className='size-4' /> API usage edges
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {inferredApiUsageEdges}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Inferred from endpoint-exposing dependencies.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className='pb-2'>
-                  <CardTitle className='flex items-center gap-2 text-sm font-medium'>
-                    <Workflow className='size-4' /> Selected service
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className='text-2xl font-bold'>
-                    {selectedService ? selectedService.name : 'None'}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>
-                    Click a node in the graph to focus.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
+            <Card className='shrink-0'>
               <CardHeader>
                 <CardTitle className='flex items-center gap-2'>
                   <GitBranch className='size-4' /> Graph controls
@@ -620,6 +528,7 @@ export function Dependencies() {
                     >
                       <option value='all'>all</option>
                       <option value='running'>running</option>
+                      <option value='available'>available</option>
                       <option value='degraded'>degraded</option>
                       <option value='stopped'>stopped</option>
                     </select>
@@ -680,103 +589,112 @@ export function Dependencies() {
               </CardContent>
             </Card>
 
-            <div className='grid gap-4 lg:grid-cols-3'>
-              <div className='lg:col-span-2'>
-                <DependencyGraphPanel
-                  title='Dependency graph'
-                  description='Relationship map of the currently visible services.'
-                  actions={
-                    <>
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='outline'
-                        className='size-8'
-                        title={`Switch graph to ${graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
-                        onClick={toggleGraphOrientation}
-                      >
-                        {graphOrientation === 'horizontal' ? (
-                          <ArrowDown className='size-4' />
-                        ) : (
-                          <ArrowRight className='size-4' />
-                        )}
-                        <span className='sr-only'>
-                          Switch graph to{' '}
-                          {graphOrientation === 'horizontal'
-                            ? 'vertical'
-                            : 'horizontal'}{' '}
-                          layout
-                        </span>
-                      </Button>
-                      <Separator orientation='vertical' className='h-6' />
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='outline'
-                        className='size-8'
-                        title='Discard unsaved graph layout changes'
-                        disabled={!isLayoutDirty}
-                        onClick={discardLayoutChanges}
-                      >
-                        <Undo2 className='size-4' />
-                        <span className='sr-only'>Discard layout changes</span>
-                      </Button>
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='outline'
-                        className='size-8'
-                        title='Save graph layout to service meta'
-                        disabled={!isLayoutDirty}
-                        onClick={() => void saveLayoutToMeta()}
-                      >
-                        <Save className='size-4' />
-                        <span className='sr-only'>Save layout changes</span>
-                      </Button>
-                    </>
-                  }
-                  graph={
-                    <DependencyGraphCanvas
-                      nodes={nodes}
-                      edges={edges}
-                      onNodesChange={onNodesChange}
-                      onEdgesChange={onEdgesChange}
-                      onNodeDragStop={onNodeDragStop}
-                      onNodeClick={selectService}
-                      legendItems={[
-                        {
-                          label: 'Structural dependency',
-                          color: '#cbd5e1',
-                        },
-                        {
-                          label: 'Selected-path dependency',
-                          color: '#22c55e',
-                        },
-                        {
-                          label: 'Inferred API usage',
-                          color: '#38bdf8',
-                          dashed: true,
-                        },
-                      ]}
-                      miniMapNodeColor={(node) => {
-                        const service = byId.get(node.id)
-                        return service
-                          ? categoryNodeColor(getCategory(service))
-                          : '#6b7280'
-                      }}
-                    />
-                  }
-                />
-              </div>
+            <div className='grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-3'>
+              <DependencyGraphPanel
+                title='Dependency graph'
+                description='Relationship map of the currently visible services.'
+                fill
+                className='h-full min-h-0 lg:col-span-2'
+                cardTestId='dependency-graph-card'
+                actions={
+                  <>
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='outline'
+                      className='size-8'
+                      title={`Switch graph to ${graphOrientation === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+                      onClick={toggleGraphOrientation}
+                    >
+                      {graphOrientation === 'horizontal' ? (
+                        <ArrowDown className='size-4' />
+                      ) : (
+                        <ArrowRight className='size-4' />
+                      )}
+                      <span className='sr-only'>
+                        Switch graph to{' '}
+                        {graphOrientation === 'horizontal'
+                          ? 'vertical'
+                          : 'horizontal'}{' '}
+                        layout
+                      </span>
+                    </Button>
+                    <Separator orientation='vertical' className='h-6' />
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='outline'
+                      className='size-8'
+                      title='Discard unsaved graph layout changes'
+                      disabled={!isLayoutDirty}
+                      onClick={discardLayoutChanges}
+                    >
+                      <Undo2 className='size-4' />
+                      <span className='sr-only'>Discard layout changes</span>
+                    </Button>
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='outline'
+                      className='size-8'
+                      title='Save graph layout to service meta'
+                      disabled={!isLayoutDirty}
+                      onClick={() => void saveLayoutToMeta()}
+                    >
+                      <Save className='size-4' />
+                      <span className='sr-only'>Save layout changes</span>
+                    </Button>
+                  </>
+                }
+                graph={
+                  <DependencyGraphCanvas
+                    nodes={nodes}
+                    edges={edges}
+                    fill
+                    paneTestId='dependency-graph-pane'
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onNodeDragStop={onNodeDragStop}
+                    onNodeClick={selectService}
+                    legendItems={[
+                      {
+                        label: 'Structural dependency',
+                        color: '#cbd5e1',
+                      },
+                      {
+                        label: 'Selected-path dependency',
+                        color: '#22c55e',
+                      },
+                      {
+                        label: 'Inferred API usage',
+                        color: '#38bdf8',
+                        dashed: true,
+                      },
+                    ]}
+                    miniMapNodeColor={(node) => {
+                      const service = byId.get(node.id)
+                      return service
+                        ? categoryNodeColor(getCategory(service))
+                        : '#6b7280'
+                    }}
+                  />
+                }
+              />
 
-              <Card>
-                <CardHeader>
+              <Card
+                className='flex h-full min-h-0 min-w-0 flex-col overflow-hidden'
+                data-testid='selected-service-details'
+              >
+                <CardHeader className='shrink-0'>
                   <CardTitle>Selected service details</CardTitle>
                   <CardDescription>
                     Relationship context and quick actions.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className='space-y-4'>
+                <CardContent
+                  className='min-h-0 flex-1 space-y-4 overflow-auto'
+                  data-testid='selected-service-details-scroll'
+                >
                   {selectedService ? (
                     <>
                       <div className='rounded-lg border p-3'>
@@ -789,28 +707,10 @@ export function Dependencies() {
                               {selectedService.id} · {selectedService.role}
                             </div>
                           </div>
-                          <button
-                            type='button'
-                            aria-label={
-                              selectedService.favorite
-                                ? `Remove ${selectedService.name} from favorites`
-                                : `Add ${selectedService.name} to favorites`
-                            }
-                            title={
-                              favoriteFeature.enabled
-                                ? selectedService.favorite
-                                  ? `Remove ${selectedService.name} from favorites`
-                                  : `Add ${selectedService.name} to favorites`
-                                : 'Favorites editing is disabled until Service Lasso API endpoint and favorites flag are enabled'
-                            }
-                            disabled={!favoriteFeature.enabled}
+                          <FavoriteToggle
+                            service={selectedService}
                             className='rounded-sm text-muted-foreground transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50'
-                            onClick={() => onToggleFavorite(selectedService.id)}
-                          >
-                            <Star
-                              className={`size-4 ${selectedService.favorite ? 'fill-amber-400 text-amber-400' : ''}`}
-                            />
-                          </button>
+                          />
                         </div>
 
                         <div className='mt-3 flex flex-wrap gap-2'>
@@ -869,25 +769,6 @@ export function Dependencies() {
                           </div>
                         )}
                       </div>
-
-                      <div className='flex flex-wrap gap-2'>
-                        <Button variant='outline' size='sm' asChild>
-                          <Link
-                            to='/services/$serviceId'
-                            params={{ serviceId: selectedService.id }}
-                          >
-                            Open service details
-                          </Link>
-                        </Button>
-                        <Button variant='outline' size='sm' asChild>
-                          <Link
-                            to='/logs'
-                            search={{ service: selectedService.id }}
-                          >
-                            Open logs
-                          </Link>
-                        </Button>
-                      </div>
                     </>
                   ) : (
                     <div className='rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
@@ -895,6 +776,23 @@ export function Dependencies() {
                     </div>
                   )}
                 </CardContent>
+                {selectedService ? (
+                  <CardFooter className='shrink-0 flex-wrap gap-2'>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link
+                        to='/services/$serviceId'
+                        params={{ serviceId: selectedService.id }}
+                      >
+                        Open service details
+                      </Link>
+                    </Button>
+                    <Button variant='outline' size='sm' asChild>
+                      <Link to='/logs' search={{ service: selectedService.id }}>
+                        Open logs
+                      </Link>
+                    </Button>
+                  </CardFooter>
+                ) : null}
               </Card>
             </div>
           </>

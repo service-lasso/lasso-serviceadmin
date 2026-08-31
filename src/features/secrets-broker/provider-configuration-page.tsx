@@ -1,0 +1,543 @@
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  DatabaseZap,
+  GitBranch,
+  KeyRound,
+  PlugZap,
+  ShieldCheck,
+} from 'lucide-react'
+import { usePageMetadata } from '@/lib/page-metadata'
+import {
+  fetchSecretsBrokerOverview,
+  type SecretsBrokerLiveState,
+  type SecretsBrokerOverview,
+} from '@/lib/secrets-broker/client'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { ConfigDrawer } from '@/components/config-drawer'
+import { Header } from '@/components/layout/header'
+import { Main } from '@/components/layout/main'
+import { HeaderActions } from '@/components/page-toolbar'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import {
+  configurationSafetyBoundaries,
+  migrationPlans,
+  providerConfigurations,
+  type MigrationState,
+  type ProviderState,
+} from './provider-configuration'
+
+const providerStateLabels: Record<ProviderState, string> = {
+  'local-default': 'No provider configured / local default',
+  healthy: 'Provider configured and healthy',
+  'auth-required': 'Provider auth required',
+  unsupported: 'Provider capability unsupported',
+  'validation-failed': 'Validation failed',
+}
+
+const migrationStateLabels: Record<MigrationState, string> = {
+  'dry-run-ready': 'Migration dry-run ready',
+  'dry-run-partial': 'Migration dry-run denied/partial',
+  'apply-ready': 'Migration apply ready after confirmation',
+  'apply-success': 'Migration success',
+  'apply-partial': 'Migration partial failure',
+}
+
+const liveStateVariant: Record<
+  SecretsBrokerLiveState,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  ready: 'default',
+  loading: 'secondary',
+  unavailable: 'destructive',
+  'setup-needed': 'outline',
+  locked: 'secondary',
+  'auth-required': 'destructive',
+  'policy-denied': 'destructive',
+  unsupported: 'outline',
+  degraded: 'destructive',
+  'audit-unavailable': 'destructive',
+}
+
+function LiveProviderConfigurationMetadata({
+  overview,
+  loading,
+  error,
+}: {
+  overview: SecretsBrokerOverview | undefined
+  loading: boolean
+  error: boolean
+}) {
+  const visibleSources = overview?.sources.slice(0, 3) ?? []
+
+  return (
+    <section
+      aria-label='Live provider configuration metadata'
+      className='rounded-md border p-4'
+    >
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <div className='flex flex-wrap items-center gap-2 font-medium'>
+            <PlugZap className='size-4' /> Live provider configuration metadata
+            {overview ? (
+              <Badge variant={liveStateVariant[overview.state]}>
+                {overview.state}
+              </Badge>
+            ) : error ? (
+              <Badge variant='destructive'>unavailable</Badge>
+            ) : (
+              <Badge variant='secondary'>loading</Badge>
+            )}
+          </div>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {overview
+              ? overview.summary
+              : error
+                ? 'Live broker provider configuration metadata could not be read from the runtime boundary.'
+                : loading
+                  ? 'Checking broker provider configuration metadata.'
+                  : 'Broker provider configuration metadata has not returned yet.'}
+          </p>
+        </div>
+        {overview ? (
+          <Badge variant='outline'>
+            {overview.stubMode ? 'stub fixture metadata' : 'runtime metadata'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className='mt-3 grid gap-3 text-sm md:grid-cols-4'>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Sources
+          </div>
+          <div>{overview?.sourceCount ?? 0}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Provider config
+          </div>
+          <div>
+            {overview?.capabilities.providerConfig ? 'available' : 'blocked'}
+          </div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Audit
+          </div>
+          <div>{overview?.auditAvailable ? 'available' : 'blocked'}</div>
+        </div>
+        <div>
+          <div className='text-xs font-medium text-muted-foreground uppercase'>
+            Next gate
+          </div>
+          <div>
+            {overview?.capabilities.providerConfig
+              ? 'validate handles'
+              : 'inspect broker capability'}
+          </div>
+        </div>
+      </div>
+
+      {visibleSources.length ? (
+        <div className='mt-3 grid gap-2 md:grid-cols-3'>
+          {visibleSources.map((source) => (
+            <div key={source.id} className='rounded-md border bg-muted/30 p-3'>
+              <div className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='font-medium'>{source.label}</span>
+                <Badge variant='outline'>{source.state}</Badge>
+              </div>
+              <div className='mt-1 text-xs text-muted-foreground'>
+                {source.provider} · {source.reason}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+export function ProviderConfigurationPage() {
+  const [providerState, setProviderState] =
+    useState<ProviderState>('local-default')
+  const [migrationState, setMigrationState] =
+    useState<MigrationState>('dry-run-ready')
+  const [auditReason, setAuditReason] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const liveOverview = useQuery({
+    queryKey: ['secrets-broker', 'provider-configuration', 'overview'],
+    queryFn: fetchSecretsBrokerOverview,
+  })
+
+  usePageMetadata({
+    title: 'Service Admin - Secrets Broker Configuration',
+    description:
+      'Safe provider configuration and migration workflow for Secrets Broker using refs, handles, dry-run previews, and audit-gated apply.',
+  })
+
+  const provider = providerConfigurations[providerState]
+  const migration = migrationPlans[migrationState]
+  const applyAllowed = useMemo(
+    () => migration.applyEnabled && confirmed && auditReason.trim().length > 0,
+    [auditReason, confirmed, migration.applyEnabled]
+  )
+  const applyGateLabel = applyAllowed ? 'Ready' : 'Locked'
+
+  return (
+    <>
+      <Header fixed>
+        <Search />
+        <HeaderActions>
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown />
+        </HeaderActions>
+      </Header>
+
+      <Main id='content' className='space-y-6'>
+        <div className='flex flex-wrap justify-end gap-4'>
+          <Badge variant='secondary'>Handles only · dry-run first</Badge>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <ShieldCheck className='size-4' /> Operator queue
+            </CardTitle>
+            <CardDescription>
+              Provider changes are handle-based and apply-gated.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 md:grid-cols-3'>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Validate provider</div>
+              <div className='text-muted-foreground'>
+                Check capability, auth, namespaces, and source status.
+              </div>
+            </div>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Review migration plan</div>
+              <div className='text-muted-foreground'>
+                Inspect refs, risk, policy, recovery, and item outcomes.
+              </div>
+            </div>
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>Unlock apply</div>
+              <div className='text-muted-foreground'>
+                Confirmation and audit reason are required before apply.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <LiveProviderConfigurationMetadata
+          overview={liveOverview.data}
+          loading={liveOverview.isLoading}
+          error={liveOverview.isError}
+        />
+
+        <div className='grid gap-4 md:grid-cols-4'>
+          <Card>
+            <CardHeader className='pb-2'>
+              <CardDescription>Current provider</CardDescription>
+              <CardTitle className='text-xl'>{provider.name}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className='pb-2'>
+              <CardDescription>Credential values shown</CardDescription>
+              <CardTitle className='text-3xl'>0</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className='pb-2'>
+              <CardDescription>Migration items</CardDescription>
+              <CardTitle className='text-3xl'>
+                {migration.items.length}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className='pb-2'>
+              <CardDescription>Apply gate</CardDescription>
+              <CardTitle className='text-xl'>
+                {applyAllowed ? 'ready' : 'locked'}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <KeyRound className='size-4' /> Provider configuration
+            </CardTitle>
+            <CardDescription>
+              Select provider state and validate safe connection handles.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-4 lg:grid-cols-3'>
+            <div className='space-y-2'>
+              <label
+                htmlFor='provider-state'
+                className='text-sm font-medium text-muted-foreground'
+              >
+                Provider state scenario
+              </label>
+              <select
+                id='provider-state'
+                className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                value={providerState}
+                onChange={(event) =>
+                  setProviderState(event.target.value as ProviderState)
+                }
+              >
+                {Object.entries(providerStateLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <div className='rounded-md border p-3 text-sm'>
+                <div className='font-medium'>{provider.status}</div>
+                <div className='mt-2 text-muted-foreground'>
+                  Next action: {provider.nextAction}
+                </div>
+              </div>
+            </div>
+
+            <div className='space-y-2 text-sm'>
+              <div className='font-medium'>
+                Current provider/backend summary
+              </div>
+              <div className='rounded-md border p-3'>
+                <div>Provider id: {provider.id}</div>
+                <div>Kind: {provider.kind}</div>
+                <div>Address/status handle: {provider.address}</div>
+                <div>Credential handle: {provider.credentialHandle}</div>
+                <div>Namespaces: {provider.namespaces.join(', ')}</div>
+                <div>Audit: {provider.auditStatus}</div>
+              </div>
+            </div>
+
+            <div className='space-y-2 text-sm'>
+              <div className='font-medium'>Validation/test connection</div>
+              <div className='rounded-md border p-3'>
+                <Badge
+                  variant={
+                    provider.state === 'healthy' ||
+                    provider.state === 'local-default'
+                      ? 'default'
+                      : 'outline'
+                  }
+                >
+                  {provider.state}
+                </Badge>
+                <p className='mt-3 text-muted-foreground'>
+                  Validation sends provider id, kind, address, namespaces, and a
+                  credential handle/ref. Plaintext provider credentials are not
+                  accepted by this UI.
+                </p>
+                <Button type='button' className='mt-3' disabled>
+                  Test connection preview only
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <DatabaseZap className='size-4' /> Capability summary
+            </CardTitle>
+            <CardDescription>
+              Safe capability metadata from the configuration contract.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className='flex flex-wrap gap-2'>
+              {provider.capabilities.map((capability) => (
+                <Badge
+                  key={capability.id}
+                  variant={capability.supported ? 'default' : 'secondary'}
+                >
+                  {capability.label}: {capability.supported ? 'yes' : 'no'}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <GitBranch className='size-4' /> Migration dry-run / apply
+            </CardTitle>
+            <CardDescription>
+              Review refs, provider targets, policy, risk, audit, and recovery.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid gap-4 lg:grid-cols-3'>
+              <div className='space-y-2'>
+                <label
+                  htmlFor='migration-state'
+                  className='text-sm font-medium text-muted-foreground'
+                >
+                  Migration state scenario
+                </label>
+                <select
+                  id='migration-state'
+                  className='h-9 w-full rounded-md border bg-background px-3 text-sm'
+                  value={migrationState}
+                  onChange={(event) =>
+                    setMigrationState(event.target.value as MigrationState)
+                  }
+                >
+                  {Object.entries(migrationStateLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+              <div className='space-y-2'>
+                <label
+                  htmlFor='audit-reason'
+                  className='text-sm font-medium text-muted-foreground'
+                >
+                  Audit reason
+                </label>
+                <Input
+                  id='audit-reason'
+                  value={auditReason}
+                  onChange={(event) => setAuditReason(event.target.value)}
+                  placeholder='Required before migration apply'
+                />
+              </div>
+              <div className='space-y-2 text-sm'>
+                <div className='font-medium text-muted-foreground'>
+                  Explicit confirmation
+                </div>
+                <Button
+                  type='button'
+                  variant={confirmed ? 'default' : 'outline'}
+                  onClick={() => setConfirmed((value) => !value)}
+                >
+                  {confirmed ? 'Confirmation recorded' : 'Record confirmation'}
+                </Button>
+              </div>
+            </div>
+
+            <div className='rounded-md border p-3 text-sm'>
+              <div className='font-medium'>{migration.title}</div>
+              <div className='text-muted-foreground'>
+                Outcome: {migration.outcome} · Operation id:{' '}
+                {migration.operationId} · Source: {migration.sourceProvider} ·
+                Target: {migration.targetProvider}
+              </div>
+              <div className='mt-2'>Next action: {migration.nextAction}</div>
+              <div>Rollback/recovery: {migration.rollback}</div>
+            </div>
+
+            <div className='overflow-x-auto rounded-md border'>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Secret ref</TableHead>
+                    <TableHead>Source → target</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Policy / risk</TableHead>
+                    <TableHead>Recovery</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {migration.items.map((item) => (
+                    <TableRow key={`${migration.state}-${item.ref}`}>
+                      <TableCell className='min-w-80 align-top'>
+                        <div className='font-medium'>{item.owner}</div>
+                        <div className='break-all text-muted-foreground'>
+                          {item.ref}
+                        </div>
+                      </TableCell>
+                      <TableCell className='align-top'>
+                        {item.source} → {item.target}
+                      </TableCell>
+                      <TableCell className='align-top'>
+                        <Badge variant='outline'>{item.state}</Badge>
+                        <div className='mt-2 text-sm text-muted-foreground'>
+                          {item.expectedAction}
+                        </div>
+                      </TableCell>
+                      <TableCell className='align-top'>
+                        <div>Policy: {item.policyResult}</div>
+                        <div>Risk: {item.risk}</div>
+                        <div>Audit: {item.auditRequirement}</div>
+                      </TableCell>
+                      <TableCell className='min-w-64 align-top text-sm text-muted-foreground'>
+                        {item.recovery}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className='flex flex-wrap gap-2'>
+              <Button type='button' disabled={!applyAllowed}>
+                {applyAllowed
+                  ? 'Migration apply ready'
+                  : 'Migration apply disabled until confirmation and audit reason'}
+              </Button>
+              <Badge variant='secondary'>Raw values hidden</Badge>
+              <Badge variant='outline'>Provider credentials hidden</Badge>
+              <Badge variant='outline'>No spreadsheet plaintext editing</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Guardrails</CardTitle>
+            <CardDescription>
+              Boundaries enforced by this operator surface.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='flex flex-wrap gap-2'>
+            {configurationSafetyBoundaries.slice(0, 5).map((boundary) => (
+              <Badge key={boundary} variant='outline'>
+                {boundary}
+              </Badge>
+            ))}
+            <Badge variant={applyAllowed ? 'default' : 'secondary'}>
+              Apply gate: {applyGateLabel}
+            </Badge>
+          </CardContent>
+        </Card>
+      </Main>
+    </>
+  )
+}

@@ -1,19 +1,14 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import test from 'node:test'
 import {
   rotationProxyLifecycleEvidence,
   runtimeApiTimeoutMs,
   startServiceAdminServer,
 } from '../runtime/server.js'
-import {
-  buildTransportDiagnostic,
-  parseRotationProxyLifecycleDiagnostic,
-  probeAdminReachability,
-} from '../scripts/real-browser-transport-diagnostics.mjs'
 import {
   brokerMetadataEndpointCount,
   brokerMetadataReadinessAttempts,
@@ -63,6 +58,11 @@ import {
   parseQualificationProgressDiagnostic,
   qualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
+import {
+  buildTransportDiagnostic,
+  parseRotationProxyLifecycleDiagnostic,
+  probeAdminReachability,
+} from '../scripts/real-browser-transport-diagnostics.mjs'
 
 test('bounded provider, metadata, and execute network waits retain exact source counts', async () => {
   assert.equal(cypressQualificationTimeoutMs, 720_000)
@@ -100,16 +100,13 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   // Lifecycle transitions, page loads, UI waits, tasks, and cleanup are
   // source-accounted separately against the fixed Cypress wrapper.
   for (const endpoint of ['telemetry', 'events']) {
-    assert.deepEqual(
-      brokerMetadataRequestOptions(`/operations/${endpoint}`),
-      {
-        method: 'GET',
-        url: `/operations/${endpoint}`,
-        failOnStatusCode: false,
-        retryOnNetworkFailure: false,
-        timeout: 10_000,
-      }
-    )
+    assert.deepEqual(brokerMetadataRequestOptions(`/operations/${endpoint}`), {
+      method: 'GET',
+      url: `/operations/${endpoint}`,
+      failOnStatusCode: false,
+      retryOnNetworkFailure: false,
+      timeout: 10_000,
+    })
   }
   assert.deepEqual(managedServiceStopRequestOptions('/api/services/broker'), {
     method: 'GET',
@@ -206,9 +203,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.ok(restartUiSource.length > 0)
   assert.ok(restartHelperSource.length > 0)
   for (const uiRestartProof of [
-    "cy.contains('[role=\"tab\"]', /^Overview\\b/).click()",
-    "cy.contains('[data-slot=\"card-title\"]', /^\\s*Actions\\s*$/)",
-    ".closest('[data-slot=\"card\"]')",
+    'cy.contains(\'[role="tab"]\', /^Overview\\b/).click()',
+    'cy.contains(\'[data-slot="card-title"]\', /^\\s*Actions\\s*$/)',
+    '.closest(\'[data-slot="card"]\')',
     "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
     "cy.wait('@restartBrokerFromUi', { timeout: 120_000 })",
     'expect(request.body).to.deep.equal({ confirm: true })',
@@ -232,8 +229,14 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   ]) {
     assert.equal([...source.matchAll(restartInterceptPattern)].length, 1)
   }
-  assert.equal(lifecycleSource.includes("url: '/api/services/%40secretsbroker/restart'"), false)
-  assert.equal(lifecycleSource.split('brokerRestartUiRequests += 1').length - 1, 1)
+  assert.equal(
+    lifecycleSource.includes("url: '/api/services/%40secretsbroker/restart'"),
+    false
+  )
+  assert.equal(
+    lifecycleSource.split('brokerRestartUiRequests += 1').length - 1,
+    1
+  )
   for (const requestCount of [1, 2]) {
     assert.equal(
       lifecycleSource.split(
@@ -309,13 +312,19 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     1
   )
   assert.equal(
-    [...lifecycleSource.matchAll(/responseTimeout: linkedRotationResponseTimeoutMs/g)]
-      .length,
+    [
+      ...lifecycleSource.matchAll(
+        /responseTimeout: linkedRotationResponseTimeoutMs/g
+      ),
+    ].length,
     2
   )
   assert.equal(
-    [...lifecycleSource.matchAll(/waitForManagedServiceStopped\('@secretsbroker'\)/g)]
-      .length,
+    [
+      ...lifecycleSource.matchAll(
+        /waitForManagedServiceStopped\('@secretsbroker'\)/g
+      ),
+    ].length,
     0
   )
   assert.equal(
@@ -327,7 +336,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     0
   )
   assert.equal(
-    [...lifecycleSource.matchAll(/cy\.wait\('@stoppedBrokerManagement'/g)].length,
+    [...lifecycleSource.matchAll(/cy\.wait\('@stoppedBrokerManagement'/g)]
+      .length,
     0
   )
   assert.equal(
@@ -397,7 +407,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     )
   }
   const standaloneProviderReadinessCalls = [
-    ...lifecycleSource.matchAll(/^\s*waitForBrokerProviderStatusReadiness\(\)$/gm),
+    ...lifecycleSource.matchAll(
+      /^\s*waitForBrokerProviderStatusReadiness\(\)$/gm
+    ),
   ].length
   const checkpointProviderReadinessCalls = providerReadinessCheckpointCount
   const checkpointInventoryReadinessCalls = [
@@ -614,9 +626,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const directThirtySecondWaitCount = [
     ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
   ].length
-  const openSecretsCount = [
-    ...lateLifecycleSource.matchAll(/openSecrets\(\)/g),
-  ].length
+  const openSecretsCount = [...lateLifecycleSource.matchAll(/openSecrets\(\)/g)]
+    .length
   const validationDialogCount = [
     ...lateLifecycleSource.matchAll(
       /dialog\('Validate provider configuration'\)/g
@@ -653,7 +664,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const controlRequestWaitMs = controlRequestCount * 30_000
   const reloadWaitMs = reloadCount * 60_000
   const longUiWaitMs =
-    (directTwentySecondWaitCount + openSecretsCount * 2 +
+    (directTwentySecondWaitCount +
+      openSecretsCount * 2 +
       validationDialogCount) *
       20_000 +
     directThirtySecondWaitCount * 30_000
@@ -1112,15 +1124,9 @@ test('qualification progress call sites are exact, ordered, and bounded', async 
 
 test('qualification failures retain only bounded phase and transport metadata', () => {
   assert.equal(classifyQualificationFailure({ timedOut: true }), 'timeout')
-  assert.equal(
-    classifyQualificationFailure({ exitCode: 1 }),
-    'nonzero_exit'
-  )
+  assert.equal(classifyQualificationFailure({ exitCode: 1 }), 'nonzero_exit')
   assert.equal(classifyQualificationFailure({ exitCode: 0 }), null)
-  assert.equal(
-    classifyQualificationFailure({ exitCode: null }),
-    'nonzero_exit'
-  )
+  assert.equal(classifyQualificationFailure({ exitCode: null }), 'nonzero_exit')
   assert.deepEqual(
     buildQualificationFailureDiagnostic({
       failure: 'timeout',
@@ -1238,36 +1244,69 @@ test('packaged proxy binds loopback and normalizes only safe ingress identity', 
   assert.ok(address && typeof address === 'object')
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/runtime/security`, {
-      headers: {
-        Authorization: 'Bearer browser-token-must-not-forward',
-        Cookie: 'session=must-not-forward',
-        'X-Forwarded-For': '192.0.2.40',
-        'X-Service-Lasso-User': 'usr_trusted_operator',
-        'X-Service-Lasso-Workspace': 'workspace-a',
-        'X-Service-Lasso-Roles': 'operator, VIEWER, invalid role,operator',
-        'X-Service-Lasso-Zitadel-User-Id': 'spoofed-normalized-user',
-        'X-Service-Lasso-Client-Address': '127.0.0.1',
-        'X-Service-Lasso-Proxy': 'spoofed-browser-proxy',
-        'X-Service-Lasso-Trusted-Ingress': 'spoofed-browser-ingress',
-      },
-    })
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/runtime/security`,
+      {
+        headers: {
+          Authorization: 'Bearer browser-token-must-not-forward',
+          Cookie: 'session=must-not-forward',
+          'X-Forwarded-For': '192.0.2.40',
+          'X-Service-Lasso-User': 'usr_trusted_operator',
+          'X-Service-Lasso-Workspace': 'workspace-a',
+          'X-Service-Lasso-Roles': 'operator, VIEWER, invalid role,operator',
+          'X-Service-Lasso-Zitadel-User-Id': 'spoofed-normalized-user',
+          'X-Service-Lasso-Client-Address': '127.0.0.1',
+          'X-Service-Lasso-Proxy': 'spoofed-browser-proxy',
+          'X-Service-Lasso-Trusted-Ingress': 'spoofed-browser-ingress',
+        },
+      }
+    )
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), { auth: 'safe' })
     assert.equal(observed.url, '/api/runtime/security')
-    assert.equal(observed.headers['x-service-lasso-internal-proxy'], 'serviceadmin')
+    assert.equal(
+      observed.headers['x-service-lasso-internal-proxy'],
+      'serviceadmin'
+    )
     assert.equal(observed.headers['x-service-lasso-proxy'], 'serviceadmin')
-    assert.equal(observed.headers['x-service-lasso-trusted-ingress'], 'serviceadmin-loopback')
-    assert.equal(observed.headers['x-service-lasso-client-address'], '192.0.2.40')
-    assert.equal(observed.headers['x-service-lasso-zitadel-user-id'], 'usr_trusted_operator')
-    assert.equal(observed.headers['x-service-lasso-workspace-id'], 'workspace-a')
-    assert.equal(observed.headers['x-service-lasso-zitadel-roles'], 'operator,viewer')
+    assert.equal(
+      observed.headers['x-service-lasso-trusted-ingress'],
+      'serviceadmin-loopback'
+    )
+    assert.equal(
+      observed.headers['x-service-lasso-client-address'],
+      '192.0.2.40'
+    )
+    assert.equal(
+      observed.headers['x-service-lasso-zitadel-user-id'],
+      'usr_trusted_operator'
+    )
+    assert.equal(
+      observed.headers['x-service-lasso-workspace-id'],
+      'workspace-a'
+    )
+    assert.equal(
+      observed.headers['x-service-lasso-zitadel-roles'],
+      'operator,viewer'
+    )
     assert.equal(observed.headers.authorization, undefined)
     assert.equal(observed.headers.cookie, undefined)
-    assert.equal(JSON.stringify(observed).includes('browser-token-must-not-forward'), false)
-    assert.equal(JSON.stringify(observed).includes('spoofed-normalized-user'), false)
-    assert.equal(JSON.stringify(observed).includes('spoofed-browser-proxy'), false)
-    assert.equal(JSON.stringify(observed).includes('spoofed-browser-ingress'), false)
+    assert.equal(
+      JSON.stringify(observed).includes('browser-token-must-not-forward'),
+      false
+    )
+    assert.equal(
+      JSON.stringify(observed).includes('spoofed-normalized-user'),
+      false
+    )
+    assert.equal(
+      JSON.stringify(observed).includes('spoofed-browser-proxy'),
+      false
+    )
+    assert.equal(
+      JSON.stringify(observed).includes('spoofed-browser-ingress'),
+      false
+    )
   } finally {
     await close(serviceAdmin)
     await close(upstream)
@@ -1299,7 +1338,10 @@ test('packaged proxy does not manufacture a trusted ingress marker from incomple
       { 'X-Service-Lasso-User': 'usr_missing_client' },
       { 'X-Forwarded-For': '192.0.2.41' },
     ]) {
-      const response = await fetch(`http://127.0.0.1:${address.port}/api/runtime/security`, { headers })
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/runtime/security`,
+        { headers }
+      )
       assert.equal(response.status, 200)
     }
     assert.equal(observed.length, 2)
@@ -1315,15 +1357,39 @@ test('packaged proxy does not manufacture a trusted ingress marker from incomple
 })
 
 test('packaged proxy gives consumer-converging rotation a bounded cross-platform window', () => {
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/%40secretsbroker/restart'), 120_000)
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/config'), 120_000)
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/reload'), 120_000)
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/start'), 120_000)
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/secrets/rotation/execute'), 300_000)
+  assert.equal(
+    runtimeApiTimeoutMs('POST', '/api/services/%40secretsbroker/restart'),
+    120_000
+  )
+  assert.equal(
+    runtimeApiTimeoutMs('POST', '/api/services/sample/config'),
+    120_000
+  )
+  assert.equal(
+    runtimeApiTimeoutMs('POST', '/api/services/sample/reload'),
+    120_000
+  )
+  assert.equal(
+    runtimeApiTimeoutMs('POST', '/api/services/sample/start'),
+    120_000
+  )
+  assert.equal(
+    runtimeApiTimeoutMs('POST', '/api/secrets/rotation/execute'),
+    300_000
+  )
   assert.equal(runtimeApiTimeoutMs('POST', '/api/setup/bootstrap'), 180_000)
-  assert.equal(runtimeApiTimeoutMs('GET', '/api/services/sample/restart'), 30_000)
-  assert.equal(runtimeApiTimeoutMs('GET', '/api/secrets/rotation/execute'), 30_000)
-  assert.equal(runtimeApiTimeoutMs('POST', '/api/services/sample/secrets/reveal'), 30_000)
+  assert.equal(
+    runtimeApiTimeoutMs('GET', '/api/services/sample/restart'),
+    30_000
+  )
+  assert.equal(
+    runtimeApiTimeoutMs('GET', '/api/secrets/rotation/execute'),
+    30_000
+  )
+  assert.equal(
+    runtimeApiTimeoutMs('POST', '/api/services/sample/secrets/reveal'),
+    30_000
+  )
 })
 
 test('rotation proxy lifecycle evidence is bounded to safe metadata', async () => {
@@ -1460,7 +1526,10 @@ test('rotation proxy reports response lifecycle without request or response mate
       ),
       [200, 200]
     )
-    assert.equal(JSON.stringify(lifecycleEvents).includes(privateMaterial), false)
+    assert.equal(
+      JSON.stringify(lifecycleEvents).includes(privateMaterial),
+      false
+    )
     assert.equal(JSON.stringify(lifecycleEvents).includes('/api/'), false)
   } finally {
     process.stderr.write = originalStderrWrite
@@ -1491,7 +1560,10 @@ test('packaged runtime refuses a non-loopback listener and non-loopback core ori
 
 test('static serving is confined and carries browser hardening headers', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'serviceadmin-static-'))
-  await writeFile(path.join(root, 'index.html'), '<h1>Service Admin safe shell</h1>')
+  await writeFile(
+    path.join(root, 'index.html'),
+    '<h1>Service Admin safe shell</h1>'
+  )
   const server = await startServiceAdminServer({
     host: '127.0.0.1',
     port: 0,
@@ -1502,12 +1574,17 @@ test('static serving is confined and carries browser hardening headers', async (
   assert.ok(address && typeof address === 'object')
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/../../outside`)
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/../../outside`
+    )
     assert.equal(response.status, 200)
     assert.match(await response.text(), /Service Admin safe shell/)
     assert.equal(response.headers.get('x-content-type-options'), 'nosniff')
     assert.equal(response.headers.get('x-frame-options'), 'DENY')
-    assert.match(response.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/)
+    assert.match(
+      response.headers.get('content-security-policy') ?? '',
+      /frame-ancestors 'none'/
+    )
   } finally {
     await close(server)
     await rm(root, { recursive: true, force: true })

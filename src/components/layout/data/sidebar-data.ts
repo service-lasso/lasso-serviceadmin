@@ -1,14 +1,20 @@
 import {
+  Blocks,
+  BookKey,
   Boxes,
+  ClipboardList,
   Command,
+  FileChartColumn,
   GitBranch,
   Globe,
+  Network,
   SlidersHorizontal,
   HardDrive,
   HelpCircle,
   Inbox,
   LayoutDashboard,
   Palette,
+  Route,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -31,7 +37,7 @@ export const sidebarData: SidebarData = {
   ],
   navGroups: [
     {
-      title: 'Operations',
+      title: 'Service Admin',
       items: [
         {
           title: 'Dashboard',
@@ -49,14 +55,14 @@ export const sidebarData: SidebarData = {
           icon: GitBranch,
         },
         {
+          title: 'Routes',
+          url: '/service-routes',
+          icon: Route,
+        },
+        {
           title: 'Logs',
           url: '/logs',
           icon: ScrollText,
-        },
-        {
-          title: 'Inbox',
-          url: '/inbox',
-          icon: Inbox,
         },
         {
           title: 'Runtime',
@@ -87,6 +93,51 @@ export const sidebarData: SidebarData = {
           title: 'Security',
           url: '/security',
           icon: ShieldCheck,
+        },
+      ],
+    },
+    {
+      title: 'Operations',
+      items: [
+        {
+          title: 'Inbox',
+          url: '/inbox',
+          icon: Inbox,
+        },
+        {
+          title: 'Telemetry',
+          url: '/operations/telemetry',
+          icon: FileChartColumn,
+        },
+        {
+          title: 'Audit',
+          url: '/operations/audit-logging',
+          icon: ScrollText,
+        },
+      ],
+    },
+    {
+      title: 'Secrets Broker',
+      items: [
+        {
+          title: 'Secrets',
+          url: '/secrets-broker/secrets',
+          icon: BookKey,
+        },
+        {
+          title: 'Providers',
+          url: '/secrets-broker/sources',
+          icon: Blocks,
+        },
+        {
+          title: 'Topology',
+          url: '/secrets-broker/topology',
+          icon: Network,
+        },
+        {
+          title: 'Review',
+          url: '/secrets-broker/review',
+          icon: ClipboardList,
         },
       ],
     },

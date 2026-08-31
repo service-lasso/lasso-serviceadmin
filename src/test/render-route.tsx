@@ -4,13 +4,23 @@ import {
   createMemoryHistory,
   createRouter,
 } from '@tanstack/react-router'
-import { routeTree } from '@/routeTree.gen'
 import { act, render } from '@testing-library/react'
-import { DirectionProvider } from '@/context/direction-provider'
-import { FontProvider } from '@/context/font-provider'
-import { ThemeProvider } from '@/context/theme-provider'
+import { vi } from 'vitest'
 
-export async function renderRoute(path: string) {
+type RenderRouteOptions = {
+  firstRunSetupGate?: boolean
+  stubData?: boolean
+}
+
+export async function renderRoute(
+  path: string,
+  options: RenderRouteOptions = {}
+) {
+  const stubData = options.stubData !== false
+  vi.stubEnv('VITE_SERVICE_LASSO_ENABLE_STUB_DATA', stubData ? 'true' : 'false')
+
+  const { routeTree } = await import('@/routeTree.gen')
+
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -25,7 +35,10 @@ export async function renderRoute(path: string) {
   const router = createRouter({
     routeTree,
     history,
-    context: { queryClient },
+    context: {
+      queryClient,
+      firstRunSetupGate: options.firstRunSetupGate ?? false,
+    },
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
   })
@@ -35,13 +48,7 @@ export async function renderRoute(path: string) {
   await act(async () => {
     view = render(
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <FontProvider>
-            <DirectionProvider>
-              <RouterProvider router={router} />
-            </DirectionProvider>
-          </FontProvider>
-        </ThemeProvider>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     )
 

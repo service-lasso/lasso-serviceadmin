@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 /output/
+.harness/
+.package/
+.tanstack/
+test-results/
+verify/service-harness.ci.json
 *.local
 
 .env

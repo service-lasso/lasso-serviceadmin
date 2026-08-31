@@ -54,7 +54,7 @@
       "ZITADEL_EXTERNALDOMAIN": "localhost"
     },
     "depend_on": [
-      "traefik"
+      "@traefik"
     ],
     "healthchecks": [
       {

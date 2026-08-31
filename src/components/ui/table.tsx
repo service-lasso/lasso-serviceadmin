@@ -1,17 +1,34 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+type TableProps = React.ComponentProps<'table'> & {
+  /**
+   * When false, skip the overflow wrapper so a parent scroll region
+   * can own both axes and sticky headers can pin to that region.
+   */
+  contained?: boolean
+}
+
+/** Render a table, optionally without the default overflow wrapper. */
+function Table({ className, contained = true, ...props }: TableProps) {
+  const table = (
+    <table
+      data-slot='table'
+      className={cn('w-full caption-bottom text-sm', className)}
+      {...props}
+    />
+  )
+
+  if (!contained) {
+    return table
+  }
+
   return (
     <div
       data-slot='table-container'
       className='relative w-full overflow-x-auto'
     >
-      <table
-        data-slot='table'
-        className={cn('w-full caption-bottom text-sm', className)}
-        {...props}
-      />
+      {table}
     </div>
   )
 }

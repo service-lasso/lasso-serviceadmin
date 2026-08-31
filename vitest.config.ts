@@ -7,11 +7,10 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       globals: true,
+      exclude: ['**/node_modules/**', '**/dist/**', '**/tests/ui/**'],
       setupFiles: './src/test/setup.ts',
-      // Full service-detail flows exercise several modal and mutation states.
-      // Keep the bound explicit so slower Windows runners do not turn successful
-      // interaction sequences into the Vitest five-second default timeout.
-      testTimeout: 15_000,
+      testTimeout: 60000,
+      maxWorkers: 2,
     },
   })
 )

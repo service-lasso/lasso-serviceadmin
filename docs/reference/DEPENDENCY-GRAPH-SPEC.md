@@ -25,7 +25,7 @@ It is meant to help an operator answer questions like:
 Chosen graph surface: **React Flow**
 
 Reason:
-- best fit for a modern React/shadcn admin UI
+- best fit for a modern React/Service Admin UI
 - good node/edge interaction out of the box
 - easier to theme and maintain than raw D3 for this use case
 - strong fit for service dependency maps with clickable nodes and operator actions
@@ -178,21 +178,26 @@ The Dependencies page should have these sections:
    - search input
    - top-level jumps back into other operator pages
 
-2. **Graph summary cards**
-   - service count
-   - edge count
-   - selected node
-   - keep these compact
+2. **Graph controls**
+   - search, status, category, and utility-node filters
+   - stay compact at the top (`shrink-0`) so the graph can use leftover height
 
 3. **Main React Flow canvas**
    - this is the primary surface
    - should dominate the page visually
+   - with the selected-service details card, fill remaining viewport height
+     under Graph controls (`Main fixed` + `min-h-0` flex children, both panes
+     `flex-1 min-h-0`)
+   - canvas uses `fill` plus pane `ResizeObserver` / `fitView` so React Flow
+     uses the taller box instead of a fixed 520px island
 
 4. **Selected service side panel**
    - short summary
    - status badges
    - counts of dependencies/dependents
    - links to service details and logs
+   - grows with the graph and scrolls internally when relationship lists
+     overflow; quick-action buttons stay pinned in the card footer
 
 ## Node design spec
 
@@ -277,7 +282,7 @@ The graph should feel:
 - readable at a glance
 - polished enough for a modern admin UI
 - clearly operator-oriented
-- consistent with the rest of the shadcn-admin visual language
+- consistent with the rest of the Service Admin visual language
 
 If it looks like a generic graph playground instead of a service dependency surface, it is not done.
 
