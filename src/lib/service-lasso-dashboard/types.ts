@@ -963,8 +963,6 @@ export type BrokerLifecycleOperationRequest = {
   expectedKeyId?: string
   expectedStoreHash?: string
   confirm?: boolean
-  /** Explicit destination for created encrypted backups. */
-  destinationPolicy?: string
 }
 
 export type BrokerLifecycleBackupResult = {

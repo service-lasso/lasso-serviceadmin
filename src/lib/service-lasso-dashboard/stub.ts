@@ -1,5 +1,4 @@
 import {
-  OPERATOR_BACKUP_DESTINATION,
   assertSafeLifecycleMutation,
   restorePlanIsStale,
 } from './broker-lifecycle-gates'
@@ -7410,16 +7409,6 @@ function validateLifecycleOperationRequest(
   }
 }
 
-function requireBackupDestinationPolicy(
-  request: BrokerLifecycleOperationRequest
-) {
-  if (request.destinationPolicy !== OPERATOR_BACKUP_DESTINATION) {
-    throw new Error(
-      'An explicit operator-retained encrypted backup destination is required.'
-    )
-  }
-}
-
 function requireSafeLifecycleMutation<
   T extends {
     auditStatus: string
@@ -7530,7 +7519,6 @@ export async function createBrokerLifecycleBackup(
   request: BrokerLifecycleOperationRequest
 ) {
   validateLifecycleOperationRequest(request)
-  requireBackupDestinationPolicy(request)
   if (serviceLassoStubDataEnabled) {
     const now = new Date().toISOString()
     return structuredClone({

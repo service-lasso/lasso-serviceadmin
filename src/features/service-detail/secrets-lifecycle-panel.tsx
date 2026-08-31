@@ -6,7 +6,6 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import {
-  OPERATOR_BACKUP_DESTINATION,
   lifecycleAuditIsRecorded,
   restorePlanIsStale,
 } from '@/lib/service-lasso-dashboard/broker-lifecycle-gates'
@@ -126,7 +125,6 @@ export function SecretsBrokerLifecyclePanel() {
       const result = await createBackup.mutateAsync({
         operationId: backupOperationId,
         reason: reason.trim(),
-        destinationPolicy: OPERATOR_BACKUP_DESTINATION,
       })
       if (
         result.outcome !== 'ready' ||

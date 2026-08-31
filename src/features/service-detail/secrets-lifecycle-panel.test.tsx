@@ -137,8 +137,10 @@ describe('Secrets Broker lifecycle panel', () => {
     expect(mutations.create).toHaveBeenCalledWith(
       expect.objectContaining({
         reason: 'release lifecycle verification',
-        destinationPolicy: 'operator-retained-encrypted-artifact',
       })
+    )
+    expect(mutations.create.mock.calls[0]?.[0]).not.toHaveProperty(
+      'destinationPolicy'
     )
 
     await user.click(screen.getByRole('button', { name: /^Verify$/i }))

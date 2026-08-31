@@ -127,7 +127,6 @@ describe('canonical Broker lifecycle client', () => {
     await client.createBrokerLifecycleBackup({
       operationId: 'serviceadmin-backup-create',
       reason: 'release backup',
-      destinationPolicy: 'operator-retained-encrypted-artifact',
     })
     await client.verifyBrokerLifecycleBackup({
       operationId: 'serviceadmin-backup-verify',
@@ -147,9 +146,10 @@ describe('canonical Broker lifecycle client', () => {
       expect(body).not.toHaveProperty('passphrase')
     }
     const createBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
-    expect(createBody.destinationPolicy).toBe(
-      'operator-retained-encrypted-artifact'
-    )
+    expect(createBody).toEqual({
+      operationId: 'serviceadmin-backup-create',
+      reason: 'release backup',
+    })
   })
 
   it('binds restore apply to the exact dry-run plan and explicit confirmation', async () => {
@@ -265,7 +265,6 @@ describe('canonical Broker lifecycle client', () => {
       client.createBrokerLifecycleBackup({
         operationId: 'serviceadmin-backup-create',
         reason: 'release backup',
-        destinationPolicy: 'operator-retained-encrypted-artifact',
       })
     ).rejects.toThrow(/audit is unavailable/i)
   })
@@ -329,19 +328,5 @@ describe('canonical Broker lifecycle client', () => {
         confirm: true,
       })
     ).rejects.toThrow(/wrong_key/i)
-  })
-
-  it('rejects backup create without an explicit destination policy', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const client = await runtimeClient()
-
-    await expect(
-      client.createBrokerLifecycleBackup({
-        operationId: 'serviceadmin-backup-create',
-        reason: 'release backup',
-      })
-    ).rejects.toThrow(/destination/i)
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
