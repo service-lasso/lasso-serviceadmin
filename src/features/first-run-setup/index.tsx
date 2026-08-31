@@ -24,6 +24,9 @@ function StatusBadge({ setup }: { setup: FirstRunSetupState }) {
   if (setup.state === 'setup_failed') {
     return <Badge variant='destructive'>Setup failed</Badge>
   }
+  if (setup.state === 'lost_key' || setup.state === 'recreate_required') {
+    return <Badge variant='destructive'>Recreate required</Badge>
+  }
   if (setup.state === 'setup_in_progress') {
     return <Badge variant='secondary'>In progress</Badge>
   }
@@ -33,6 +36,10 @@ function StatusBadge({ setup }: { setup: FirstRunSetupState }) {
   return (
     <Badge className='bg-amber-600 hover:bg-amber-600'>Setup required</Badge>
   )
+}
+
+function isLostKeyRecreate(setup: FirstRunSetupState) {
+  return setup.state === 'lost_key' || setup.state === 'recreate_required'
 }
 
 function MetadataItem({
@@ -89,10 +96,9 @@ function BootstrapControl({ setup }: { setup: FirstRunSetupState }) {
         <ShieldCheck className='size-4' />
         <AlertTitle>Protected broker bootstrap</AlertTitle>
         <AlertDescription>
-          Service Lasso will create the encrypted broker store, protect its
-          credentials with the operating system, start authenticated IPC, and
-          provision declared generated secrets. No master key is shown to the
-          browser.
+          {isLostKeyRecreate(setup)
+            ? 'Service Lasso will recreate the encrypted broker store, protect new credentials with the operating system, and start authenticated IPC. The previous master key is never entered, pasted, or shown here.'
+            : 'Service Lasso will create the encrypted broker store, protect its credentials with the operating system, start authenticated IPC, and provision declared generated secrets. No master key is shown to the browser.'}
         </AlertDescription>
       </Alert>
 
@@ -162,6 +168,7 @@ function BootstrapControl({ setup }: { setup: FirstRunSetupState }) {
           <KeyRound className='size-4' />
         )}
         Initialize Secrets Broker
+        {isLostKeyRecreate(setup) ? ' from a new store' : ''}
       </Button>
     </section>
   )
@@ -191,6 +198,18 @@ function FirstRunSetupContent({ setup }: { setup: FirstRunSetupState }) {
             <AlertDescription>
               The runtime reported a failed setup state. Review the runtime
               audit trail and broker health before retrying.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {isLostKeyRecreate(setup) ? (
+          <Alert variant='destructive'>
+            <AlertTriangle className='size-4' />
+            <AlertTitle>Lost key requires store recreate</AlertTitle>
+            <AlertDescription>
+              Recreate the protected store from this first-run screen. Do not
+              enter the previous master key, recovery shares, or backup
+              passphrases here.
             </AlertDescription>
           </Alert>
         ) : null}

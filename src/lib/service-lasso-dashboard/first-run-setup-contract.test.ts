@@ -61,6 +61,20 @@ describe('first-run setup runtime contract', () => {
     ).toThrow(/setup\.contractVersion/i)
   })
 
+  it('accepts lost-key recreate without retaining vault paths or key material', () => {
+    const setup = normalizeFirstRunSetupPayload({
+      ...setupEnvelope(),
+      setup: {
+        ...setupEnvelope().setup,
+        state: 'lost_key',
+      },
+    })
+    expect(setup.state).toBe('lost_key')
+    expect(setup.vault.ready).toBe(false)
+    expect(JSON.stringify(setup)).not.toContain('sensitive')
+    expect(JSON.stringify(setup)).not.toContain('store.json')
+  })
+
   it('validates the bootstrap result and provisioned count', () => {
     const response = {
       ...setupEnvelope(),

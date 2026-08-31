@@ -1,4 +1,9 @@
 import {
+  OPERATOR_BACKUP_DESTINATION,
+  assertSafeLifecycleMutation,
+  restorePlanIsStale,
+} from './broker-lifecycle-gates'
+import {
   actionResultFromRuntimeError,
   buildProviderActionResult,
   gatedProviderActionResult,
@@ -318,6 +323,8 @@ const firstRunSetupStatuses = new Set<FirstRunSetupStatus>([
   'setup_in_progress',
   'setup_complete',
   'setup_failed',
+  'lost_key',
+  'recreate_required',
 ])
 
 function createDefaultFirstRunSetupState(): FirstRunSetupState {
@@ -5746,7 +5753,8 @@ async function runBrokerMigration(
           auditRequirement: 'required',
           recovery: 'preview_and_revalidate_before_apply',
         })),
-        rollback: 'source remains authoritative; restore from encrypted backup if needed',
+        rollback:
+          'source remains authoritative; restore from encrypted backup if needed',
       } satisfies BrokerMigrationResult)
     }
     const nowOutcome = apply
@@ -6512,6 +6520,66 @@ function validateLifecycleOperationRequest(
   }
 }
 
+/**
+ * Requires create-backup requests to name the operator-retained destination.
+ */
+function requireBackupDestinationPolicy(
+  request: BrokerLifecycleOperationRequest
+) {
+  if (request.destinationPolicy !== OPERATOR_BACKUP_DESTINATION) {
+    throw new Error(
+      'An explicit operator-retained encrypted backup destination is required.'
+    )
+  }
+}
+
+/**
+ * Fails closed when a lifecycle mutation is missing a recorded audit event
+ * or reports a corrupted, stale, or wrong-key outcome.
+ */
+function requireSafeLifecycleMutation<
+  T extends {
+    auditStatus: string
+    outcome: string
+  },
+>(result: T, extras?: { verification?: string }): T {
+  assertSafeLifecycleMutation({
+    auditStatus: result.auditStatus,
+    outcome: result.outcome,
+    verification: extras?.verification,
+  })
+  return result
+}
+
+/**
+ * Fails closed when a restore dry-run or apply is stale or bound to the wrong key.
+ */
+function requireSafeRestoreResult(
+  result: BrokerLifecycleRestoreResult,
+  request: BrokerLifecycleOperationRequest,
+  applied: boolean
+): BrokerLifecycleRestoreResult {
+  requireSafeLifecycleMutation(result, {
+    verification: result.backup?.verification,
+  })
+  if (!applied && restorePlanIsStale(result.planExpiresAt)) {
+    throw new Error('Lifecycle mutation failed closed: stale_plan.')
+  }
+  if (
+    request.expectedKeyId &&
+    result.expectedKeyId &&
+    request.expectedKeyId !== result.expectedKeyId
+  ) {
+    throw new Error('Lifecycle mutation failed closed: wrong_key.')
+  }
+  if (applied && result.applied !== true) {
+    throw new Error(
+      'Lifecycle mutation failed closed: restore was not applied.'
+    )
+  }
+  return result
+}
+
 async function postBrokerLifecycle(
   section: string,
   request: BrokerLifecycleOperationRequest
@@ -6582,6 +6650,7 @@ export async function createBrokerLifecycleBackup(
   request: BrokerLifecycleOperationRequest
 ) {
   validateLifecycleOperationRequest(request)
+  requireBackupDestinationPolicy(request)
   if (serviceLassoStubDataEnabled) {
     const now = new Date().toISOString()
     return structuredClone({
@@ -6605,15 +6674,22 @@ export async function createBrokerLifecycleBackup(
       nextAction: 'retain_backup_separately_from_recovery_material',
     } satisfies BrokerLifecycleBackupResult)
   }
-  return normalizeLifecycleBackupResult(
+  const result = normalizeLifecycleBackupResult(
     await postBrokerLifecycle('backups/create', request)
   )
+  return requireSafeLifecycleMutation(result, {
+    verification: result.backup?.verification,
+  })
 }
 
 export async function verifyBrokerLifecycleBackup(
   request: BrokerLifecycleOperationRequest
 ) {
   validateLifecycleOperationRequest(request, true)
+  const backupId = request.backupId
+  if (!backupId) {
+    throw new Error('A backup selection is required.')
+  }
   if (serviceLassoStubDataEnabled) {
     return structuredClone({
       serviceId: '@secretsbroker',
@@ -6622,7 +6698,7 @@ export async function verifyBrokerLifecycleBackup(
       applied: false,
       backup: {
         schema: 'service-lasso.secretsbroker.backup-metadata.v1',
-        backupId: request.backupId!,
+        backupId,
         createdAt: new Date().toISOString(),
         storeKeyId: 'mk-stub',
         storeKeyVersion: 'v1',
@@ -6636,9 +6712,12 @@ export async function verifyBrokerLifecycleBackup(
       nextAction: 'backup_verified',
     } satisfies BrokerLifecycleBackupResult)
   }
-  return normalizeLifecycleBackupResult(
+  const result = normalizeLifecycleBackupResult(
     await postBrokerLifecycle('backups/verify', request)
   )
+  return requireSafeLifecycleMutation(result, {
+    verification: result.backup?.verification,
+  })
 }
 
 export async function previewBrokerLifecycleRestore(
@@ -6660,8 +6739,15 @@ export async function previewBrokerLifecycleRestore(
       nextAction: 'confirm_exact_restore_plan',
     } satisfies BrokerLifecycleRestoreResult)
   }
-  return normalizeLifecycleRestoreResult(
-    await postBrokerLifecycle('restore/dry-run', { ...request, confirm: false })
+  return requireSafeRestoreResult(
+    normalizeLifecycleRestoreResult(
+      await postBrokerLifecycle('restore/dry-run', {
+        ...request,
+        confirm: false,
+      })
+    ),
+    request,
+    false
   )
 }
 
@@ -6688,8 +6774,12 @@ export async function applyBrokerLifecycleRestore(
       nextAction: 'restart_and_verify_broker',
     } satisfies BrokerLifecycleRestoreResult)
   }
-  return normalizeLifecycleRestoreResult(
-    await postBrokerLifecycle('restore/apply', request)
+  return requireSafeRestoreResult(
+    normalizeLifecycleRestoreResult(
+      await postBrokerLifecycle('restore/apply', request)
+    ),
+    request,
+    true
   )
 }
 
@@ -6716,8 +6806,10 @@ export async function rotateBrokerLifecycleKey(
       nextAction: 'create_and_verify_rotated_backup',
     } satisfies BrokerLifecycleRotateResult)
   }
-  return normalizeLifecycleRotateResult(
-    await postBrokerLifecycle('key/rotate', request)
+  return requireSafeLifecycleMutation(
+    normalizeLifecycleRotateResult(
+      await postBrokerLifecycle('key/rotate', request)
+    )
   )
 }
 

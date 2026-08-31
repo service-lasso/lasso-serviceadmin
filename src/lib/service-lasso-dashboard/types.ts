@@ -480,6 +480,8 @@ export type BrokerLifecycleOperationRequest = {
   expectedKeyId?: string
   expectedStoreHash?: string
   confirm?: boolean
+  /** Explicit destination for created encrypted backups. */
+  destinationPolicy?: string
 }
 
 export type BrokerLifecycleBackupResult = {
@@ -1046,6 +1048,8 @@ export type FirstRunSetupStatus =
   | 'setup_in_progress'
   | 'setup_complete'
   | 'setup_failed'
+  | 'lost_key'
+  | 'recreate_required'
 
 export type FirstRunSetupState = {
   contractVersion: 'service-lasso.setup-status.v1'
