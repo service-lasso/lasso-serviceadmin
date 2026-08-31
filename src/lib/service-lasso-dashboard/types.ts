@@ -266,6 +266,128 @@ export type BrokerProviderValidationResult = {
   provider: BrokerProviderStatus
 }
 
+export type BrokerProviderConfigureRequest = BrokerProviderValidationRequest & {
+  confirm: boolean
+  operationId: string
+}
+
+export type BrokerProviderConfigureResult = {
+  serviceId: string
+  apiVersion: string
+  requestId: string
+  operation: 'configure'
+  outcome: string
+  applied: boolean
+  requiresConfirmation: boolean
+  auditStatus: string
+  nextAction?: string
+  provider: BrokerProviderStatus
+}
+
+export type BrokerProviderCapabilityRecord = {
+  providerKind: string
+  displayName: string
+  supported: boolean
+  capabilities: string[]
+  operations: BrokerOperationCapability[]
+  limitations: string[]
+}
+
+export type BrokerProviderCapabilitiesState = {
+  serviceId: string
+  apiVersion: string
+  contractVersion: string
+  manifestVersion: string
+  outcome: string
+  capabilities: BrokerProviderCapabilityRecord[]
+}
+
+export type BrokerSourceStatus = {
+  sourceId: string
+  kind: string
+  displayName: string
+  enabled: boolean
+  critical: boolean
+  state: string
+  outcome: string
+  namespaces: string[]
+  capabilities: string[]
+  operations: BrokerOperationCapability[]
+  nextAction?: string
+  auditStatus: string
+  retryable?: boolean
+  priority?: number
+}
+
+export type BrokerSourceStatusState = {
+  serviceId: string
+  apiVersion: string
+  contractVersion: string
+  manifestVersion: string
+  sources: BrokerSourceStatus[]
+}
+
+/**
+ * Typed UI states for Secrets Broker provider row actions.
+ */
+export type BrokerProviderActionUiState =
+  | 'ready'
+  | 'loading'
+  | 'unavailable'
+  | 'setup-needed'
+  | 'locked'
+  | 'auth-required'
+  | 'policy-denied'
+  | 'unsupported'
+  | 'degraded'
+  | 'audit-unavailable'
+
+/**
+ * Clicked-row chrome for a provider action attempt.
+ */
+export type BrokerProviderActionPhase =
+  | 'pending'
+  | 'success'
+  | 'failure'
+  | 'blocked'
+
+export type BrokerProviderRowActionName =
+  | 'status'
+  | 'capabilities'
+  | 'validate'
+  | 'reconnect'
+  | 'configure-dry-run'
+  | 'configure-apply'
+  | 'disable'
+  | 'remove'
+
+export type BrokerProviderRowActionRequest = {
+  action: BrokerProviderRowActionName
+  provider: BrokerProviderStatus
+  reason?: string
+  confirm?: boolean
+  address?: string
+  credentialRef?: string
+  namespaces?: string[]
+}
+
+/**
+ * Safe metadata only. Never include credentials, tokens, headers, secret
+ * values, env, keys, cookies, or request/response bodies.
+ */
+export type BrokerProviderActionResult = {
+  providerId: string
+  sourceId: string
+  operation: BrokerProviderRowActionName
+  phase: BrokerProviderActionPhase
+  state: BrokerProviderActionUiState
+  summary: string
+  nextAction: string
+  correlationId?: string
+  checkedAt: string
+  fixtureDemo: boolean
+}
+
 export type BrokerMigrationRequest = {
   operationId: string
   sourceProviderId: string
