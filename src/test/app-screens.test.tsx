@@ -681,6 +681,44 @@ describe('app screens', () => {
     expect(screen.queryByText(/provider token/i)).toBeNull()
   })
 
+  it('applies a live migrate campaign after dry-run, revalidation, audit reason, and typed campaign id', async () => {
+    const user = userEvent.setup()
+    await renderRoute('/security')
+    await user.click(await screen.findByRole('tab', { name: /Rotations/i }))
+
+    expect(await screen.findByText('Live migration campaign')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /^Apply campaign$/i })
+    ).toBeDisabled()
+
+    await user.click(
+      await screen.findByLabelText(
+        'Select services/@serviceadmin/runtime/SESSION_SIGNING_KEY for bulk campaign'
+      )
+    )
+    await user.type(
+      screen.getByLabelText(/Audit reason/i),
+      'approved bulk provider migration'
+    )
+    await user.click(screen.getByRole('button', { name: /Dry-run campaign/i }))
+
+    const confirm = await screen.findByLabelText(/Type campaign id to confirm/i)
+    const campaignId = (await screen.findByText(/Campaign stub-campaign-/))
+      .textContent
+    const typedId = campaignId?.replace(/^Campaign\s+/, '') ?? ''
+    expect(typedId.length).toBeGreaterThan(0)
+    await user.type(confirm, typedId)
+    await user.click(
+      screen.getByRole('button', { name: /Apply migration campaign/i })
+    )
+
+    expect(await screen.findByText(/Campaign outcome: applied/i)).toBeVisible()
+    expect(screen.getByText(/1 verified/i)).toBeVisible()
+    expect(screen.queryByText(/fixture-revealed-value/i)).toBeNull()
+    expect(screen.queryByText(/provider token/i)).toBeNull()
+    expect(screen.queryByText(/secret-value/i)).toBeNull()
+  })
+
   it('shows MCP settings, permissions, approvals, and safe diagnostics', async () => {
     const user = userEvent.setup()
     await renderRoute('/mcp')

@@ -1023,11 +1023,18 @@ export type BrokerMigrationResult = {
   rollback: string
 }
 
+export type BrokerBulkCampaignFamily =
+  | 'rotate_reset'
+  | 'update_edit'
+  | 'apply_policy'
+  | 'migrate_remap_provider'
+  | 'mark_action_required'
+
 export type BrokerBulkCampaignRequest = {
   campaignId?: string
   planToken?: string
   operationId: string
-  operation: 'migrate_remap_provider'
+  operation: BrokerBulkCampaignFamily
   refs: string[]
   targetProviderId: string
   reason: string
@@ -1079,7 +1086,7 @@ export type BrokerBulkCampaignResult = {
   campaignId: string
   planToken: string
   operationId: string
-  operation: 'migrate_remap_provider'
+  operation: BrokerBulkCampaignFamily
   mode: 'create' | 'revalidate' | 'apply' | 'status'
   outcome: string
   applied: boolean

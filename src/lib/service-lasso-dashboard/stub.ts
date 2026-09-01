@@ -20,8 +20,10 @@ import {
 } from './secrets-safe-text'
 import {
   type BrokerBulkCampaignItem,
+  type BrokerBulkCampaignFamily,
   type BrokerBulkCampaignRequest,
   type BrokerBulkCampaignResult,
+  type BrokerBulkCampaignSummary,
   type BrokerEventFilters,
   type BrokerEventsResult,
   type BrokerLockoutClearRequest,
@@ -2377,7 +2379,7 @@ const secretsManagementFixture: SecretsManagementState = {
       outcome: 'source_auth_required',
       capabilities: ['metadata'],
       policy: 'provider-policy',
-      auditStatus: 'audit_unavailable',
+      auditStatus: 'audit_available',
       valueSearch: 'unsupported',
     },
     {
@@ -2399,6 +2401,48 @@ const secretsManagementFixture: SecretsManagementState = {
         decommissionOperationId: 'stub-decommission-recoverable',
         decommissionedAt: '2026-08-14T00:00:00.000Z',
       },
+    },
+    {
+      ref: 'services/echo-service/runtime/CONFIG_DIGEST',
+      name: 'CONFIG_DIGEST',
+      sourceId: 'local',
+      providerKind: 'local-encrypted-store',
+      ownerServiceId: 'echo-service',
+      workspaceId: 'local',
+      state: 'present',
+      outcome: 'ready',
+      capabilities: ['metadata', 'reveal', 'edit', 'reset', 'policy'],
+      policy: 'local-writeback-policy',
+      auditStatus: 'audit_available',
+      valueSearch: 'supported',
+    },
+    {
+      ref: 'services/echo-service/env/API_TOKEN',
+      name: 'API_TOKEN',
+      sourceId: 'legacy-env',
+      providerKind: 'legacy-env-file',
+      ownerServiceId: 'echo-service',
+      workspaceId: 'local',
+      state: 'present',
+      outcome: 'policy_denied',
+      capabilities: ['metadata'],
+      policy: 'readonly-deny',
+      auditStatus: 'audit_available',
+      valueSearch: 'unsupported',
+    },
+    {
+      ref: 'services/payments-api/runtime/WEBHOOK_DIGEST',
+      name: 'WEBHOOK_DIGEST',
+      sourceId: 'vault-audit-gap',
+      providerKind: 'vault',
+      ownerServiceId: 'payments-api',
+      workspaceId: 'local',
+      state: 'present',
+      outcome: 'degraded',
+      capabilities: ['metadata'],
+      policy: 'provider-policy',
+      auditStatus: 'audit_unavailable',
+      valueSearch: 'unsupported',
     },
   ],
 }
@@ -6822,6 +6866,15 @@ function normalizeBrokerBulkCampaignResponse(
       'Secrets Broker returned an invalid bulk campaign response.'
     )
   }
+  if (
+    mode === 'apply' &&
+    request.operation !== 'migrate_remap_provider' &&
+    (input.applied === true || input.outcome === 'applied')
+  ) {
+    throw new Error(
+      'Unsupported bulk campaign apply must fail closed rather than report metadata-only success.'
+    )
+  }
   const results = input.results.map(normalizeBrokerBulkCampaignItem)
   const requestedRefs = [...request.refs].sort()
   const returnedRefs = [...(input.affectedRefs as unknown[])].map((ref) =>
@@ -6901,11 +6954,38 @@ function normalizeBrokerBulkCampaignResponse(
   }
 }
 
+const brokerBulkCampaignPlanningFamilies: readonly BrokerBulkCampaignFamily[] =
+  [
+    'rotate_reset',
+    'update_edit',
+    'apply_policy',
+    'migrate_remap_provider',
+    'mark_action_required',
+  ]
+
+const stubBulkCampaignStore = new Map<string, BrokerBulkCampaignResult>()
+
+/**
+ * Clears persisted stub campaigns so Vitest cases cannot replay another
+ * campaign's plan token.
+ */
+export function resetStubBulkCampaigns() {
+  stubBulkCampaignStore.clear()
+}
+
+function isBrokerBulkCampaignFamily(
+  value: string
+): value is BrokerBulkCampaignFamily {
+  return brokerBulkCampaignPlanningFamilies.some((family) => family === value)
+}
+
 function validateBrokerBulkCampaignRequest(request: BrokerBulkCampaignRequest) {
   requireSafeBrokerIdentifier(request.operationId, 'campaign operation id')
-  requireSafeBrokerIdentifier(request.targetProviderId, 'target provider id')
-  if (request.operation !== 'migrate_remap_provider') {
-    throw new Error('Only provider migration campaigns are executable.')
+  if (!isBrokerBulkCampaignFamily(request.operation)) {
+    throw new Error('Unsupported bulk campaign operation family.')
+  }
+  if (request.operation === 'migrate_remap_provider') {
+    requireSafeBrokerIdentifier(request.targetProviderId, 'target provider id')
   }
   if (!request.reason.trim()) {
     throw new Error('Audit reason is required before a bulk campaign.')
@@ -6918,6 +6998,466 @@ function validateBrokerBulkCampaignRequest(request: BrokerBulkCampaignRequest) {
   )
 }
 
+/**
+ * Classifies one stub inventory row into a metadata-only campaign item.
+ * Eligible migrate apply is limited to ready local encrypted-store refs.
+ */
+function classifyStubBulkCampaignItem(
+  ref: string,
+  request: BrokerBulkCampaignRequest,
+  index: number
+): BrokerBulkCampaignItem {
+  const record = secretsManagementFixture.results.find(
+    (item) => item.ref === ref
+  )
+  const operationItemId = `${request.operationId}:item:${index}`
+  const base = {
+    ref,
+    sourceId: record?.sourceId ?? 'unknown',
+    providerKind: record?.providerKind ?? 'unknown',
+    ownerServiceId: record?.ownerServiceId ?? 'unowned',
+    operation: request.operation,
+    auditRequirement: 'required',
+    risk: 'high',
+    idempotencyKey: `${request.operationId}:${index}`,
+    operationItemId,
+    recovery: 'retry_after_fix_or_restore_from_backup',
+    targetProviderId: request.targetProviderId || undefined,
+    providerAction: 'write_and_verify',
+    applied: false,
+    retrySafe: false,
+    verified: false,
+    attempts: 0,
+  }
+
+  if (!record) {
+    return {
+      ...base,
+      capabilityResult: 'unsupported',
+      policyResult: 'denied',
+      expectedAction: 'unknown_ref_cannot_be_planned',
+      outcome: 'unsupported',
+      nextAction: 'remove_unknown_ref_and_create_fresh_plan',
+    }
+  }
+  if (record.auditStatus === 'audit_unavailable') {
+    return {
+      ...base,
+      capabilityResult: 'supported',
+      policyResult: 'allowed',
+      expectedAction: 'restore_audit_before_campaign_apply',
+      outcome: 'audit_unavailable',
+      nextAction: 'restore_audit_persistence',
+      recovery: 'create_a_fresh_plan_after_audit_is_available',
+    }
+  }
+  if (
+    record.outcome === 'source_auth_required' ||
+    record.state === 'auth_required'
+  ) {
+    return {
+      ...base,
+      capabilityResult: 'auth_required',
+      policyResult: 'allowed',
+      expectedAction: 'reconnect_provider_auth_then_fresh_plan',
+      outcome: 'source_auth_required',
+      nextAction: 'complete_provider_auth',
+    }
+  }
+  if (
+    record.outcome === 'policy_denied' ||
+    (record.policy ?? '').includes('deny') ||
+    (record.policy ?? '').includes('readonly')
+  ) {
+    return {
+      ...base,
+      capabilityResult: 'supported',
+      policyResult: 'denied',
+      expectedAction: 'request_policy_change_or_remove_ref',
+      outcome: 'policy_denied',
+      nextAction: 'review_denied_refs',
+    }
+  }
+  if (
+    record.outcome !== 'ready' ||
+    (request.operation === 'migrate_remap_provider' &&
+      record.providerKind !== 'local-encrypted-store')
+  ) {
+    return {
+      ...base,
+      capabilityResult: 'unsupported',
+      policyResult: 'denied',
+      expectedAction: 'choose_a_supported_operation_or_provider',
+      outcome: 'unsupported',
+      nextAction:
+        'use_provider_migration_campaign_or_implement_operation_executor',
+    }
+  }
+  return {
+    ...base,
+    capabilityResult: 'supported',
+    policyResult: 'allowed',
+    expectedAction:
+      request.operation === 'migrate_remap_provider'
+        ? 'copy_or_remap_value_inside_broker_to_target_provider'
+        : 'plan_only_apply_is_unsupported_for_this_family',
+    outcome: 'dry_run_ready',
+    nextAction:
+      request.operation === 'migrate_remap_provider'
+        ? 'revalidate_confirm_and_apply'
+        : 'apply_unsupported_use_migration_campaign',
+    retrySafe: true,
+  }
+}
+
+/**
+ * Builds the broker-shaped summary from per-item outcomes.
+ */
+function summarizeStubBulkCampaign(
+  items: BrokerBulkCampaignItem[]
+): BrokerBulkCampaignSummary {
+  const summary: BrokerBulkCampaignSummary = {
+    selectedCount: items.length,
+    applicableCount: 0,
+    deniedCount: 0,
+    unsupportedCount: 0,
+    authRequiredCount: 0,
+    skippedCount: 0,
+    appliedCount: 0,
+    failedCount: 0,
+    staleCount: 0,
+    highRiskCount: 0,
+  }
+  for (const item of items) {
+    if (item.risk === 'high') summary.highRiskCount += 1
+    switch (item.outcome) {
+      case 'dry_run_ready':
+        summary.applicableCount += 1
+        break
+      case 'policy_denied':
+      case 'invalid_ref':
+        summary.deniedCount += 1
+        break
+      case 'unsupported':
+        summary.unsupportedCount += 1
+        break
+      case 'source_auth_required':
+        summary.authRequiredCount += 1
+        break
+      case 'skipped':
+        summary.skippedCount += 1
+        break
+      case 'applied':
+      case 'migrated':
+        summary.appliedCount += 1
+        break
+      case 'stale_plan':
+        summary.staleCount += 1
+        break
+      default:
+        summary.failedCount += 1
+        break
+    }
+  }
+  return summary
+}
+
+function stubBulkPlanOutcome(summary: BrokerBulkCampaignSummary) {
+  if (summary.selectedCount === 0) return 'invalid_ref'
+  if (summary.applicableCount === summary.selectedCount) return 'dry_run_ready'
+  if (summary.applicableCount > 0) return 'partial_failure'
+  if (summary.deniedCount > 0) return 'policy_denied'
+  if (summary.unsupportedCount > 0) return 'unsupported'
+  if (summary.authRequiredCount > 0) return 'source_auth_required'
+  if (summary.staleCount > 0) return 'stale_plan'
+  if (summary.failedCount > 0) return 'audit_unavailable'
+  return 'degraded'
+}
+
+function stubBulkApplyOutcome(summary: BrokerBulkCampaignSummary) {
+  if (
+    summary.appliedCount > 0 &&
+    (summary.deniedCount > 0 ||
+      summary.unsupportedCount > 0 ||
+      summary.authRequiredCount > 0 ||
+      summary.failedCount > 0 ||
+      summary.staleCount > 0)
+  ) {
+    return 'partial_failure'
+  }
+  if (summary.appliedCount > 0) return 'applied'
+  if (summary.failedCount > 0 || summary.skippedCount > 0) {
+    return 'partial_failure'
+  }
+  return stubBulkPlanOutcome(summary)
+}
+
+function stubCampaignRequestConflicts(
+  request: BrokerBulkCampaignRequest,
+  stored: BrokerBulkCampaignResult
+) {
+  const requested = [...request.refs].sort().join('\n')
+  const storedRefs = [...stored.affectedRefs].sort().join('\n')
+  return (
+    (request.campaignId !== undefined &&
+      request.campaignId !== stored.campaignId) ||
+    request.operation !== stored.operation ||
+    request.operationId !== stored.operationId ||
+    requested !== storedRefs ||
+    (request.operation === 'migrate_remap_provider' &&
+      request.targetProviderId !== (stored.results[0]?.targetProviderId ?? ''))
+  )
+}
+
+function persistStubBulkCampaign(result: BrokerBulkCampaignResult) {
+  stubBulkCampaignStore.set(result.planToken, structuredClone(result))
+}
+
+function loadStubBulkCampaign(planToken: string) {
+  const stored = stubBulkCampaignStore.get(planToken)
+  return stored ? structuredClone(stored) : null
+}
+
+function buildStubBulkCampaignSkeleton(
+  request: BrokerBulkCampaignRequest,
+  mode: BrokerBulkCampaignResult['mode'],
+  stored?: BrokerBulkCampaignResult
+): BrokerBulkCampaignResult {
+  const now = new Date().toISOString()
+  const campaignId =
+    stored?.campaignId ??
+    request.campaignId ??
+    `stub-campaign-${request.operationId}`
+  const planToken = stored?.planToken ?? `stub-plan-${campaignId}`
+  const results =
+    stored?.results ??
+    [...request.refs]
+      .sort()
+      .map((ref, index) => classifyStubBulkCampaignItem(ref, request, index))
+  const summary = summarizeStubBulkCampaign(results)
+  const planOutcome = stubBulkPlanOutcome(summary)
+  return {
+    serviceId: secretsBrokerServiceId,
+    apiVersion: brokerProviderStatusFixture.apiVersion,
+    requestId: `stub-campaign-${mode}-${Date.now()}`,
+    campaignId,
+    planToken,
+    operationId: request.operationId,
+    operation: request.operation,
+    mode,
+    outcome: planOutcome,
+    applied: false,
+    requiresConfirmation: true,
+    requiresAuditReason: true,
+    requiresRevalidation: mode === 'create',
+    auditStatus: 'audit_recorded',
+    staleAfterSeconds: 300,
+    nextAction:
+      request.operation === 'migrate_remap_provider'
+        ? 'revalidate_confirm_and_apply'
+        : 'apply_unsupported_use_migration_campaign',
+    results,
+    summary,
+    affectedRefs: [...request.refs].sort(),
+    affectedServices: [
+      ...new Set(
+        results
+          .map((item) => item.ownerServiceId)
+          .filter((serviceId) => serviceId.length > 0)
+      ),
+    ].sort(),
+    unsupportedFamilies: ['bulk_raw_value_reveal'],
+    durable: true,
+    maxConcurrency: 1,
+    backpressurePolicy: 'stop_and_defer_remaining',
+    createdAt: stored?.createdAt ?? now,
+    revalidatedAt: stored?.revalidatedAt,
+    updatedAt: now,
+  }
+}
+
+function applyStubBulkCampaignItems(
+  stored: BrokerBulkCampaignResult
+): BrokerBulkCampaignItem[] {
+  const results = stored.results.map((item) => ({ ...item }))
+  for (let index = 0; index < results.length; index += 1) {
+    const item = results[index]
+    if (item === undefined) continue
+    if (item.applied && item.verified) continue
+    if (
+      item.outcome !== 'dry_run_ready' &&
+      item.outcome !== 'verification_failed'
+    ) {
+      continue
+    }
+    const attempts = (item.attempts ?? 0) + 1
+    // First apply of CONFIG_DIGEST fails closed so retry/recovery is visible.
+    if (item.ref.endsWith('/CONFIG_DIGEST') && attempts === 1) {
+      results[index] = {
+        ...item,
+        outcome: 'verification_failed',
+        applied: false,
+        verified: false,
+        retrySafe: true,
+        attempts,
+        nextAction: 'retry_same_operation_item_id',
+        recovery: 'retry_with_the_same_operation_item_id_after_verification',
+      }
+      continue
+    }
+    results[index] = {
+      ...item,
+      outcome: 'migrated',
+      applied: true,
+      verified: true,
+      retrySafe: true,
+      attempts,
+      nextAction: 'verify_target_metadata',
+    }
+  }
+  return results
+}
+
+async function runStubBrokerBulkCampaign(
+  request: BrokerBulkCampaignRequest,
+  mode: BrokerBulkCampaignResult['mode']
+): Promise<BrokerBulkCampaignResult> {
+  if (mode === 'create') {
+    const created = buildStubBulkCampaignSkeleton(request, 'create')
+    persistStubBulkCampaign(created)
+    return created
+  }
+
+  if (!request.planToken) {
+    const stale = buildStubBulkCampaignSkeleton(request, mode)
+    stale.outcome = 'stale_plan'
+    stale.applied = false
+    stale.requiresRevalidation = true
+    stale.nextAction = 'create_fresh_campaign_plan'
+    stale.results = stale.results.map((item) => ({
+      ...item,
+      outcome: 'stale_plan',
+      applied: false,
+      verified: false,
+    }))
+    stale.summary = summarizeStubBulkCampaign(stale.results)
+    return stale
+  }
+
+  const stored = loadStubBulkCampaign(request.planToken)
+  if (!stored || stubCampaignRequestConflicts(request, stored)) {
+    const stale = buildStubBulkCampaignSkeleton(request, mode)
+    stale.outcome = 'stale_plan'
+    stale.applied = false
+    stale.requiresRevalidation = true
+    stale.nextAction = 'create_fresh_campaign_plan'
+    stale.results = stale.results.map((item) => ({
+      ...item,
+      outcome: 'stale_plan',
+      applied: false,
+      verified: false,
+    }))
+    stale.summary = summarizeStubBulkCampaign(stale.results)
+    stale.summary.staleCount = stale.results.length
+    return stale
+  }
+
+  if (mode === 'revalidate' || mode === 'status') {
+    const revalidated = {
+      ...stored,
+      mode,
+      requestId: `stub-campaign-${mode}-${Date.now()}`,
+      requiresRevalidation: false,
+      revalidatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      outcome: stubBulkPlanOutcome(stored.summary),
+    }
+    persistStubBulkCampaign(revalidated)
+    return revalidated
+  }
+
+  if (stored.requiresRevalidation) {
+    const stale = {
+      ...stored,
+      mode: 'apply' as const,
+      outcome: 'stale_plan',
+      applied: false,
+      nextAction: 'revalidate_before_apply',
+      updatedAt: new Date().toISOString(),
+    }
+    stale.results = stale.results.map((item) => ({
+      ...item,
+      outcome: 'stale_plan',
+      applied: false,
+      verified: false,
+    }))
+    stale.summary = summarizeStubBulkCampaign(stale.results)
+    return stale
+  }
+
+  if (stored.operation !== 'migrate_remap_provider') {
+    const unsupported = {
+      ...stored,
+      mode: 'apply' as const,
+      outcome: 'unsupported',
+      applied: false,
+      nextAction:
+        'use_provider_migration_campaign_or_implement_operation_executor',
+      updatedAt: new Date().toISOString(),
+    }
+    unsupported.results = unsupported.results.map((item) =>
+      item.outcome === 'dry_run_ready'
+        ? {
+            ...item,
+            outcome: 'unsupported',
+            applied: false,
+            verified: false,
+            nextAction: unsupported.nextAction,
+          }
+        : item
+    )
+    unsupported.summary = summarizeStubBulkCampaign(unsupported.results)
+    persistStubBulkCampaign(unsupported)
+    return unsupported
+  }
+
+  if (
+    request.confirm !== true ||
+    request.highRiskConfirm !== stored.campaignId
+  ) {
+    return {
+      ...stored,
+      mode: 'apply',
+      outcome: 'policy_denied',
+      applied: false,
+      nextAction: 'confirm_exact_campaign_id_for_high_risk_migration',
+      updatedAt: new Date().toISOString(),
+    }
+  }
+
+  const appliedItems = applyStubBulkCampaignItems(stored)
+  const summary = summarizeStubBulkCampaign(appliedItems)
+  const applied: BrokerBulkCampaignResult = {
+    ...stored,
+    mode: 'apply',
+    outcome: stubBulkApplyOutcome(summary),
+    applied: summary.appliedCount > 0,
+    requiresConfirmation: false,
+    requiresAuditReason: false,
+    requiresRevalidation: false,
+    auditStatus: 'audit_recorded',
+    nextAction:
+      stubBulkApplyOutcome(summary) === 'applied'
+        ? 'verify_target_metadata'
+        : 'review_denied_unsupported_or_failed_items',
+    results: appliedItems,
+    summary,
+    updatedAt: new Date().toISOString(),
+  }
+  persistStubBulkCampaign(applied)
+  return applied
+}
+
 async function runBrokerBulkCampaign(
   request: BrokerBulkCampaignRequest,
   mode: BrokerBulkCampaignResult['mode']
@@ -6925,68 +7465,7 @@ async function runBrokerBulkCampaign(
   await wait(120)
   validateBrokerBulkCampaignRequest(request)
   if (serviceLassoStubDataEnabled) {
-    const now = new Date().toISOString()
-    const campaignId = request.campaignId ?? `stub-campaign-${Date.now()}`
-    const apply = mode === 'apply'
-    return structuredClone({
-      serviceId: secretsBrokerServiceId,
-      apiVersion: brokerProviderStatusFixture.apiVersion,
-      requestId: `stub-campaign-${mode}-${Date.now()}`,
-      campaignId,
-      planToken: request.planToken ?? `stub-plan-${Date.now()}`,
-      operationId: request.operationId,
-      operation: request.operation,
-      mode,
-      outcome: apply ? 'applied' : 'dry_run_ready',
-      applied: apply,
-      requiresConfirmation: !apply,
-      requiresAuditReason: !apply,
-      requiresRevalidation: false,
-      auditStatus: 'audit_recorded',
-      staleAfterSeconds: 300,
-      nextAction: apply ? 'verify_target_metadata' : 'confirm_exact_campaign',
-      results: request.refs.map((ref, index) => ({
-        ref,
-        sourceId: 'local',
-        providerKind: 'local-encrypted-store',
-        ownerServiceId: 'app',
-        operation: request.operation,
-        capabilityResult: 'validated',
-        policyResult: 'allowed',
-        auditRequirement: 'required',
-        risk: 'high',
-        expectedAction: 'copy_value_inside_broker',
-        outcome: apply ? 'migrated' : 'dry_run_ready',
-        idempotencyKey: `stub-key-${index}`,
-        operationItemId: `stub-item-${index}`,
-        recovery: 'retry_after_fix_or_restore_from_backup',
-        targetProviderId: request.targetProviderId,
-        providerAction: 'write_and_verify',
-        applied: apply,
-        retrySafe: true,
-        verified: apply,
-        attempts: apply ? 1 : 0,
-      })),
-      summary: {
-        selectedCount: request.refs.length,
-        applicableCount: request.refs.length,
-        deniedCount: 0,
-        unsupportedCount: 0,
-        authRequiredCount: 0,
-        skippedCount: 0,
-        appliedCount: apply ? request.refs.length : 0,
-        failedCount: 0,
-        staleCount: 0,
-        highRiskCount: request.refs.length,
-      },
-      affectedRefs: [...request.refs].sort(),
-      affectedServices: ['app'],
-      durable: true,
-      maxConcurrency: 1,
-      backpressurePolicy: 'stop_on_provider_backpressure',
-      createdAt: now,
-      updatedAt: now,
-    } satisfies BrokerBulkCampaignResult)
+    return runStubBrokerBulkCampaign(request, mode)
   }
   const payload = await fetchRuntimeJson<unknown>(
     buildSecretsManagementApiPath(`campaigns/${mode}`),
