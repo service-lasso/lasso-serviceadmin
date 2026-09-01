@@ -23,6 +23,11 @@ simulate policy.
 - Require current provider, policy, and audit readiness before applying a
   secret mutation.
 - Follow the linked audit record after every access or rotation change.
+- On Security > Rotations, keep the mixed dry-run fixture as non-mutating. Live
+  migrate_remap_provider apply requires a broker dry-run, immediate
+  revalidation, an audit reason, and the exact campaign id. Other campaign
+  families stay plan-only and fail closed instead of reporting metadata-only
+  success. Partial outcomes stay visible; retry only retry-safe operation IDs.
 
 If the page cannot read security state, or any required readiness signal is
 missing, stop the mutation and restore authoritative runtime connectivity.

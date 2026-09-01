@@ -436,6 +436,71 @@ describe('canonical Broker provider and migration client', () => {
     ).rejects.toThrow(/credential-bearing metadata/i)
   })
 
+  it('fails closed when unsupported apply families report metadata-only success', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...campaignResponse('apply', true),
+          operation: 'rotate_reset',
+          outcome: 'applied',
+          applied: true,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    await expect(
+      client.applyBrokerBulkCampaign({
+        operationId: 'serviceadmin-bulk-fixed',
+        operation: 'rotate_reset',
+        refs: ['services/app/runtime/API_KEY'],
+        targetProviderId: 'vault-target',
+        reason: 'approved bulk rotation',
+        confirm: true,
+        highRiskConfirm: 'campaign-fixed',
+      })
+    ).rejects.toThrow(/fail closed/i)
+  })
+
+  it('accepts unsupported apply families only when every item stays unapplied', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...campaignResponse('apply'),
+          operation: 'rotate_reset',
+          outcome: 'unsupported',
+          applied: false,
+          results: [
+            {
+              ...campaignResponse('apply').results[0],
+              operation: 'rotate_reset',
+              outcome: 'unsupported',
+              applied: false,
+              verified: false,
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = await runtimeClient()
+
+    const applied = await client.applyBrokerBulkCampaign({
+      operationId: 'serviceadmin-bulk-fixed',
+      operation: 'rotate_reset',
+      refs: ['services/app/runtime/API_KEY'],
+      targetProviderId: 'vault-target',
+      reason: 'approved bulk rotation',
+      confirm: true,
+      highRiskConfirm: 'campaign-fixed',
+    })
+    expect(applied.applied).toBe(false)
+    expect(applied.outcome).toBe('unsupported')
+  })
+
   it('loads live source status and provider capabilities through canonical routes', async () => {
     const sourceStatus = {
       serviceId: '@secretsbroker',
