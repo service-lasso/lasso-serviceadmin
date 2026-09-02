@@ -348,7 +348,7 @@ describe('logs page operator states', () => {
 
   it('uses runtime source tabs for all stdout stderr and additional log views', async () => {
     const user = userEvent.setup()
-    const requestedTypes: string[] = []
+    const requestedReads: string[] = []
 
     vi.stubGlobal(
       'fetch',
@@ -356,6 +356,7 @@ describe('logs page operator states', () => {
         const parsed = new URL(url, 'http://localhost')
         const serviceId = parsed.searchParams.get('service') ?? ''
         const type = parsed.searchParams.get('type') ?? 'default'
+        const advertisedSource = parsed.searchParams.get('source')
 
         if (parsed.pathname === '/api/services/log-info') {
           return new Response(
@@ -399,15 +400,20 @@ describe('logs page operator states', () => {
         }
 
         if (parsed.pathname === '/api/logs/read') {
-          requestedTypes.push(type)
+          requestedReads.push(
+            advertisedSource
+              ? `type=${type}&source=${advertisedSource}`
+              : `type=${type}`
+          )
+          const resolvedSource = advertisedSource ?? type
           return new Response(
             JSON.stringify({
               serviceId,
-              type,
-              path: `C:\\runtime\\@serviceadmin\\${type}.log`,
+              type: resolvedSource,
               source: {
-                stream: type,
-                label: type === 'access' ? 'Access log' : type,
+                stream: resolvedSource,
+                label:
+                  resolvedSource === 'access' ? 'Access log' : resolvedSource,
                 runId: 'run-320',
               },
               totalLines: 1,
@@ -417,9 +423,9 @@ describe('logs page operator states', () => {
               nextBefore: 0,
               limit: 100,
               lines: [
-                type === 'default'
+                resolvedSource === 'default'
                   ? '2026-07-09T13:00:00Z stdout ready\n2026-07-09T13:00:01Z stderr warning'
-                  : `2026-07-09T13:00:00Z ${type} source line`,
+                  : `2026-07-09T13:00:00Z ${resolvedSource} source line`,
               ],
             }),
             {
@@ -458,7 +464,7 @@ describe('logs page operator states', () => {
     )
 
     await waitFor(() => {
-      expect(requestedTypes).toContain('stderr')
+      expect(requestedReads).toContain('type=stderr')
     })
 
     expect(screen.getByRole('tab', { name: 'All' })).toBeVisible()
@@ -477,7 +483,7 @@ describe('logs page operator states', () => {
         service: '@serviceadmin',
         source: 'stdout',
       })
-      expect(requestedTypes).toContain('stdout')
+      expect(requestedReads).toContain('type=stdout')
     })
 
     expect(screen.getByText('Cursor: stdout-cursor')).toBeVisible()
@@ -490,7 +496,8 @@ describe('logs page operator states', () => {
         service: '@serviceadmin',
         source: 'access',
       })
-      expect(requestedTypes).toContain('access')
+      expect(requestedReads).toContain('type=default&source=access')
+      expect(requestedReads).not.toContain('type=access')
     })
   })
 
@@ -527,12 +534,14 @@ describe('logs page operator states', () => {
         }
 
         if (parsed.pathname === '/api/logs/read') {
+          const advertisedSource = parsed.searchParams.get('source')
+          const resolvedSource = advertisedSource ?? type
           return new Response(
             JSON.stringify({
               serviceId,
-              type,
+              type: resolvedSource,
               path: null,
-              available: type !== 'error',
+              available: resolvedSource !== 'error',
               totalLines: 0,
               start: 0,
               end: 0,
