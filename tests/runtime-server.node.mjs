@@ -1330,7 +1330,10 @@ test('packaged proxy binds loopback and normalizes only safe ingress identity', 
       observed.headers['x-service-lasso-zitadel-roles'],
       'operator,viewer'
     )
-    assert.equal(observed.headers['x-service-lasso-user'], 'usr_trusted_operator')
+    assert.equal(
+      observed.headers['x-service-lasso-user'],
+      'usr_trusted_operator'
+    )
     assert.equal(
       observed.headers['x-service-lasso-actor'],
       'usr_trusted_operator'
