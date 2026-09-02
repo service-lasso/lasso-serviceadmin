@@ -420,6 +420,123 @@ describe('Dashboard Secrets Broker chips', () => {
     expect(screen.queryByText(/supersecret/i)).not.toBeInTheDocument()
   })
 
+  it('shows empty-fleet zeros, inbox zero, missing Traefik, and unavailable metrics', async () => {
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: summary(),
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: undefined,
+      isError: true,
+      isLoading: false,
+    })
+    hookMocks.useInboxCounts.mockReturnValue({
+      data: { unread: 0 },
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useFleetMetrics.mockReturnValue({
+      data: null,
+      isError: true,
+      isLoading: false,
+    })
+    hookMocks.useRuntimeInstanceHome.mockReturnValue({
+      data: null,
+      isError: true,
+      isLoading: false,
+    })
+    hookMocks.useNetworkHome.mockReturnValue({
+      data: null,
+      isError: true,
+      isLoading: false,
+    })
+
+    await renderRoute('/')
+
+    expect(screen.getByText('0 available, 0 stopped, 0 degraded')).toBeVisible()
+    expect(screen.getByLabelText('Listen ports 0')).toHaveTextContent('0')
+    expect(screen.getByLabelText('Inbox unread 0')).toHaveTextContent('0')
+    expect(
+      within(screen.getByRole('main')).getByRole('link', { name: 'Open Inbox' })
+    ).toHaveAttribute('href', '/inbox')
+    expect(screen.getByLabelText('Traefik missing')).toBeVisible()
+    expect(
+      screen.getByLabelText('Log stderr lines unavailable')
+    ).toHaveTextContent('—')
+    expect(
+      screen.getByLabelText('Generation lane unavailable')
+    ).toHaveTextContent('—')
+    expect(screen.queryByText('Crashed')).not.toBeInTheDocument()
+    expect(screen.queryByText(/password=/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps inbox and listen-port counts after a second render of the same snapshot', async () => {
+    const running = echoService()
+    running.endpoints = [
+      {
+        label: 'Local',
+        url: 'http://127.0.0.1:4010',
+        bind: '127.0.0.1',
+        port: 4010,
+        protocol: 'http',
+        exposure: 'local',
+      },
+    ]
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: {
+        ...summary(),
+        others: [running],
+      },
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: { counters: { activeLockouts: 0 } },
+      isError: false,
+      isLoading: false,
+    })
+
+    const first = await renderRoute('/')
+    expect(screen.getByLabelText('Inbox unread 3')).toHaveTextContent('3')
+    expect(screen.getByLabelText('Listen ports 1')).toHaveTextContent('1')
+    first.unmount()
+
+    await renderRoute('/')
+    expect(screen.getByLabelText('Inbox unread 3')).toHaveTextContent('3')
+    expect(screen.getByLabelText('Listen ports 1')).toHaveTextContent('1')
+  })
+
+  it('withholds a secret-looking named-failure note on home', async () => {
+    const stopped = echoService()
+    stopped.status = 'stopped'
+    stopped.note = 'password=hunter2-home-sentinel'
+    stopped.installed = false
+    hookMocks.useDashboardSummary.mockReturnValue({
+      data: {
+        ...summary(),
+        problemServices: [stopped],
+        warnings: ['install failed at C:\\service-lasso\\app'],
+      },
+      isError: false,
+      isLoading: false,
+    })
+    hookMocks.useBrokerTelemetry.mockReturnValue({
+      data: { counters: { activeLockouts: 0 } },
+      isError: false,
+      isLoading: false,
+    })
+
+    await renderRoute('/')
+
+    expect(
+      screen.getAllByText('[unsafe metadata withheld]').length
+    ).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText(/hunter2-home-sentinel/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/C:\\service-lasso/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Not installed/)).toBeVisible()
+  })
+
   it('shows Unavailable when @secretsbroker is missing from the dashboard payload', async () => {
     hookMocks.useDashboardSummary.mockReturnValue({
       data: summary(),
