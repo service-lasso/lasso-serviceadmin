@@ -150,6 +150,8 @@ try {
   assert.equal(observedRequest.headers['x-service-lasso-trusted-ingress'], 'serviceadmin-loopback')
   assert.equal(observedRequest.headers['x-service-lasso-client-address'], '192.0.2.51')
   assert.equal(observedRequest.headers['x-service-lasso-zitadel-user-id'], 'usr_release_operator')
+  assert.equal(observedRequest.headers['x-service-lasso-user'], 'usr_release_operator')
+  assert.equal(observedRequest.headers['x-service-lasso-actor'], 'usr_release_operator')
   assert.equal(observedRequest.headers['x-service-lasso-workspace-id'], 'workspace-release')
   assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
   process.stdout.write(`${JSON.stringify({ assetName, runtime: 'verified', identityProxy: 'verified' })}\n`)
