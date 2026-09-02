@@ -130,6 +130,190 @@ describe('logs provider configured api mode', () => {
     )
   })
 
+  it('requests advertised file tabs with source instead of an invalid Core type', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: 'http://api.test',
+    }))
+
+    const advertisedSourceId = 'discovered:logs/access.log'
+    const nginxService = { id: '@nginx' }
+    const builtinTypes = new Set(['default', 'stdout', 'stderr'])
+
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      const type = parsed.searchParams.get('type') ?? ''
+      const source = parsed.searchParams.get('source')
+
+      if (!builtinTypes.has(type) && source === null) {
+        return new Response(JSON.stringify({ error: 'invalid_type' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      const lineCount = source === advertisedSourceId ? 1 : 0
+
+      return new Response(
+        JSON.stringify({
+          serviceId: nginxService.id,
+          type: 'default',
+          available: true,
+          availableTypes: ['default', 'stdout', 'stderr'],
+          totalLines: lineCount,
+          start: 0,
+          end: lineCount,
+          hasMore: false,
+          nextBefore: 0,
+          limit: 100,
+          lines: lineCount === 1 ? ['127.0.0.1 GET /health'] : [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const {
+      advertisedLogSourceId,
+      fetchServiceLogChunk,
+      resolveServiceLogReadType,
+    } = await import('./provider')
+
+    expect(advertisedLogSourceId(advertisedSourceId)).toBe(advertisedSourceId)
+    expect(resolveServiceLogReadType(advertisedSourceId)).toBe('default')
+    expect(advertisedLogSourceId('stderr')).toBeNull()
+    expect(advertisedLogSourceId('access')).toBe('access')
+    expect(resolveServiceLogReadType('access')).toBe('default')
+
+    const chunk = await fetchServiceLogChunk(
+      nginxService as never,
+      advertisedSourceId
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/api/logs/read?service=%40nginx&type=default&limit=100&source=discovered%3Alogs%2Faccess.log'
+    )
+    expect(chunk.lines).toHaveLength(1)
+    expect(chunk.totalLines).toBe(1)
+  })
+
+  it('keeps builtin All/stdout/stderr reads on type= without source=', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: 'http://api.test',
+    }))
+
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      const type = parsed.searchParams.get('type') ?? 'default'
+
+      return new Response(
+        JSON.stringify({
+          serviceId: '@nginx',
+          type,
+          available: true,
+          availableTypes: ['default', 'stdout', 'stderr'],
+          totalLines: 0,
+          start: 0,
+          end: 0,
+          hasMore: false,
+          nextBefore: 0,
+          limit: 100,
+          lines: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { advertisedLogSourceId, fetchServiceLogChunk } =
+      await import('./provider')
+
+    expect(advertisedLogSourceId('default')).toBeNull()
+    expect(advertisedLogSourceId('stdout')).toBeNull()
+    expect(advertisedLogSourceId('stderr')).toBeNull()
+
+    await fetchServiceLogChunk({ id: '@nginx' } as never, 'default')
+    await fetchServiceLogChunk({ id: '@nginx' } as never, 'stdout')
+    await fetchServiceLogChunk({ id: '@nginx' } as never, 'stderr')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://api.test/api/logs/read?service=%40nginx&type=default&limit=100'
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://api.test/api/logs/read?service=%40nginx&type=stdout&limit=100'
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://api.test/api/logs/read?service=%40nginx&type=stderr&limit=100'
+    )
+  })
+
+  it('keeps a missing advertised file as an empty 200 chunk instead of a hard error', async () => {
+    vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
+      serviceLassoApiBaseUrl: 'http://api.test',
+    }))
+
+    const advertisedSourceId = 'logs/error.log'
+
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      const type = parsed.searchParams.get('type')
+      const source = parsed.searchParams.get('source')
+
+      if (type !== 'default' || source !== advertisedSourceId) {
+        return new Response(JSON.stringify({ error: 'invalid_type' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      return new Response(
+        JSON.stringify({
+          serviceId: '@nginx',
+          type: 'default',
+          available: false,
+          availableTypes: ['default', 'stdout', 'stderr'],
+          totalLines: 0,
+          start: 0,
+          end: 0,
+          hasMore: false,
+          nextBefore: 0,
+          limit: 100,
+          lines: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchServiceLogChunk } = await import('./provider')
+
+    const chunk = await fetchServiceLogChunk(
+      { id: '@nginx' } as never,
+      advertisedSourceId
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/api/logs/read?service=%40nginx&type=default&limit=100&source=logs%2Ferror.log'
+    )
+    expect(chunk.lines).toEqual([])
+    expect(chunk.totalLines).toBe(0)
+    expect(chunk.available).toBe(false)
+  })
+
   it('fails cleanly when the runtime api returns non-json content', async () => {
     vi.doMock('@/lib/service-lasso-dashboard/stub', () => ({
       serviceLassoApiBaseUrl: 'http://api.test',

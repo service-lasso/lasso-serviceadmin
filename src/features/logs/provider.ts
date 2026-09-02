@@ -25,13 +25,38 @@ export function canonicalLogSourceId(
   return sourceId
 }
 
+const BUILTIN_SERVICE_LOG_READ_TYPES = new Set<ServiceLogType>([
+  ALL_LOG_SOURCE,
+  'stdout',
+  'stderr',
+])
+
 /**
  * Query `type` value Core accepts for a Logs source tab.
+ * Advertised file tabs stay on `default` and use `source=` instead.
  */
 export function resolveServiceLogReadType(
   type: ServiceLogType
 ): ServiceLogType {
-  return canonicalLogSourceId(type)
+  const canonical = canonicalLogSourceId(type)
+  if (BUILTIN_SERVICE_LOG_READ_TYPES.has(canonical)) {
+    return canonical
+  }
+
+  return ALL_LOG_SOURCE
+}
+
+/**
+ * Advertised declared/discovered source id for Core `source=`.
+ * Builtin All/stdout/stderr tabs do not send `source`.
+ */
+export function advertisedLogSourceId(type: ServiceLogType): string | null {
+  const canonical = canonicalLogSourceId(type)
+  if (BUILTIN_SERVICE_LOG_READ_TYPES.has(canonical)) {
+    return null
+  }
+
+  return canonical
 }
 
 export type ServiceLogInfo = {
@@ -272,11 +297,16 @@ export async function fetchServiceLogChunk(
   limit = 100
 ) {
   const readType = resolveServiceLogReadType(type)
+  const advertisedSource = advertisedLogSourceId(type)
   const params = new URLSearchParams({
     service: service.id,
     type: readType,
     limit: String(limit),
   })
+
+  if (advertisedSource) {
+    params.set('source', advertisedSource)
+  }
 
   if (typeof before === 'number') {
     params.set('before', String(before))
@@ -287,6 +317,7 @@ export async function fetchServiceLogChunk(
   debugLogs('requesting log chunk', {
     serviceId: service.id,
     type: readType,
+    source: advertisedSource,
     before: before ?? null,
     limit,
     chunkUrl,
