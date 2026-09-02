@@ -1,3 +1,4 @@
+import { containsUnsafeBrokerText } from '@/lib/service-lasso-dashboard/secrets-safe-text'
 import type {
   DashboardService,
   DashboardSummary,
@@ -6,6 +7,12 @@ import type {
   RuntimeInstanceHome,
   ServiceStatus,
 } from '@/lib/service-lasso-dashboard/types'
+
+export const withheldHomeText = '[unsafe metadata withheld]'
+
+const windowsPathPattern = /\b[A-Za-z]:[\\/]/
+const unixPathPattern =
+  /(?:^|[\s"'=])\/(?:home|Users|users|var|etc|opt|tmp|root|srv|data|services)\b/
 
 const TRAEFIK_SERVICE_ID = '@traefik'
 
@@ -41,6 +48,33 @@ export function listDashboardServices(
   }
 
   return [...byId.values()]
+}
+
+/**
+ * True when operator copy looks like a host filesystem path.
+ */
+function looksLikeFilesystemPath(value: string): boolean {
+  return windowsPathPattern.test(value) || unixPathPattern.test(value)
+}
+
+/**
+ * Home notes and warnings stay counts-and-status copy. Secrets, env dumps,
+ * and filesystem paths are withheld (`DH-008`).
+ */
+export function sanitizeHomeDisplayText(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, ' ')
+  if (!normalized) {
+    return ''
+  }
+
+  if (
+    containsUnsafeBrokerText(normalized) ||
+    looksLikeFilesystemPath(normalized)
+  ) {
+    return withheldHomeText
+  }
+
+  return normalized
 }
 
 /**
@@ -252,7 +286,7 @@ export function deriveProblemRows(
     id: service.id,
     name: service.name,
     status: service.status,
-    note: service.note.trim(),
+    note: sanitizeHomeDisplayText(service.note),
     lastStart: formatOperatorInstant(service.runtimeHealth.lastRestartAt),
     installed: service.installed,
     crashed: crashedIds.has(service.id),
