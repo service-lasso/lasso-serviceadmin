@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy, Loader2 } from 'lucide-react'
-import {
-  acknowledgeFirstRunCredentials,
-  fetchFirstRunCredentials,
-  type FirstRunCredentials,
-} from '@/lib/service-lasso-dashboard/first-run-credentials'
+import * as firstRunCredentials from '@/lib/service-lasso-dashboard/first-run-credentials'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -24,9 +20,8 @@ export function FirstRunCredentialsPanel({
 }: {
   onAcknowledged: () => void
 }) {
-  const [credentials, setCredentials] = useState<FirstRunCredentials | null>(
-    null
-  )
+  const [credentials, setCredentials] =
+    useState<firstRunCredentials.FirstRunCredentials | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [ackError, setAckError] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState(false)
@@ -36,24 +31,40 @@ export function FirstRunCredentialsPanel({
 
   useEffect(() => {
     let cancelled = false
-    void fetchFirstRunCredentials()
-      .then((result) => {
-        if (cancelled) {
+
+    /**
+     * Keep INIT visible while Core reports vault-not-ready. Only 404 skips
+     * to login (SPEC-005 `AC-5J`).
+     */
+    async function loadUntilReady(): Promise<void> {
+      while (!cancelled) {
+        try {
+          const result = await firstRunCredentials.fetchFirstRunCredentials()
+          if (cancelled) {
+            return
+          }
+          if (result.kind === 'not_pending') {
+            onAcknowledged()
+            return
+          }
+          if (result.kind === 'vault_not_ready') {
+            await firstRunCredentials.delayFirstRunVaultRetry()
+            continue
+          }
+          setCredentials(result.credentials)
+          return
+        } catch {
+          if (!cancelled) {
+            setLoadError(
+              'Could not load first-run credentials. Open Service Admin on 127.0.0.1 and retry.'
+            )
+          }
           return
         }
-        if (!result) {
-          onAcknowledged()
-          return
-        }
-        setCredentials(result)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoadError(
-            'Could not load first-run credentials. Open Service Admin on 127.0.0.1 and retry.'
-          )
-        }
-      })
+      }
+    }
+
+    void loadUntilReady()
     return () => {
       cancelled = true
     }
@@ -85,7 +96,7 @@ export function FirstRunCredentialsPanel({
     setAckError(null)
     setPending(true)
     try {
-      await acknowledgeFirstRunCredentials()
+      await firstRunCredentials.acknowledgeFirstRunCredentials()
       onAcknowledged()
     } catch {
       setAckError(
@@ -117,8 +128,7 @@ export function FirstRunCredentialsPanel({
       <div className='space-y-1'>
         <p className='text-sm font-medium'>Save your local-operator token</p>
         <p className='text-sm text-muted-foreground'>
-          Copy both values now. Later visits require this token or the
-          local-operator password. This screen will not dismiss itself.
+          {firstRunCredentials.FIRST_RUN_VAULT_BACKUP_COPY}
         </p>
       </div>
       <div className='space-y-2'>
