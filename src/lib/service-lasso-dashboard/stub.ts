@@ -9,6 +9,7 @@ import {
   mapBrokerOutcomeToUiState,
 } from './broker-provider-actions'
 import { countOperatorInboxItems, unreadBadgeCount } from './inbox'
+import { parseServiceIsolation } from './isolation'
 import { withLocalOperatorRequestInit } from './local-operator-session'
 import { parseManifestAccessPolicyGrants } from './secret-access-policy'
 import {
@@ -3824,6 +3825,7 @@ function normalizeRuntimeDashboardService(service: DashboardService) {
   const rawActions = Array.isArray(service.actions) ? service.actions : []
   return {
     ...service,
+    isolation: parseServiceIsolation(service.isolation),
     actions: rawActions
       .map(normalizeRuntimeServiceAction)
       .filter((action): action is ServiceAction => action !== null),

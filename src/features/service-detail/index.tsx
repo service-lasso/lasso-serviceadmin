@@ -141,6 +141,7 @@ import {
   getServiceDetailTabShortcutLabel,
   type ServiceDetailTabId,
 } from './service-detail-tabs'
+import { ServiceIsolationCard } from './service-isolation-card'
 import { ServiceRunStatusCards } from './service-run-status-cards'
 
 const editableShortcutTargetSelector = [
@@ -1751,6 +1752,7 @@ export function ServiceDetail({
                         </CardContent>
                       </Card>
                     </div>
+                    <ServiceIsolationCard isolation={service.isolation} />
                     <ServiceMetadataTable service={service} />
                   </TabsContent>
 
