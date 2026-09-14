@@ -25,6 +25,38 @@ export type ServiceRuntimeHealth = {
   runId?: string | null
 }
 
+export type ServiceIsolationMode = 'direct' | 'compose-scripts'
+export type ServiceIsolationRequire =
+  | 'none'
+  | 'limits'
+  | 'dedicated-user'
+  | 'hardened'
+export type ServiceIsolationDegradeReason =
+  | 'limits_not_applied'
+  | 'dedicated_user_unavailable'
+  | 'hardening_unavailable'
+
+export type ServiceIsolationLimits = {
+  cpuPercent?: number
+  memoryMb?: number
+  pids?: number
+}
+
+/**
+ * Secret-free isolation status from Core dashboard service payloads (`#609`).
+ */
+export type ServiceIsolationStatus = {
+  declaredMode: ServiceIsolationMode
+  effectiveMode: ServiceIsolationMode
+  require: ServiceIsolationRequire
+  workspace: string[]
+  limits?: ServiceIsolationLimits
+  limitsEnforced: boolean
+  degradeReasons: ServiceIsolationDegradeReason[]
+  startBlocked: boolean
+  startBlockedReason?: string
+}
+
 export type ServiceEndpoint = {
   id?: string
   kind?: string
@@ -140,6 +172,7 @@ export type DashboardService = {
   recovery?: ServiceRecoveryHistoryState
   setup?: ServiceSetupState
   access?: ServiceAccessState
+  isolation?: ServiceIsolationStatus
 }
 
 export type DashboardRuntime = {
