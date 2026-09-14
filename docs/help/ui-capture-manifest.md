@@ -1,38 +1,40 @@
 ---
-title: UI capture manifest and refresh guide
-description: Reproduce and assess Service Admin documentation captures.
-status: metadata-only
-tags: documentation, screenshots, maintenance
+title: Service Admin capture manifest and refresh guide
 ---
 
-# UI capture manifest and refresh guide
+# Service Admin capture manifest and refresh guide
 
-| Capture | Route/state | Reproduction and identity | Result |
+This is the canonical capture record. Admin bundles an exported copy for offline help.
+
+The later [newcomer verification](https://github.com/service-lasso/service-lasso/blob/develop/docs/development/newcomer-verification.md) includes a visible Echo detail capture and a verified detail-page stop/start sequence. The failures below remain historical evidence; they do not describe that later successful browser visit.
+
+| Intended capture | Route/state | Environment | Result |
 | --- | --- | --- | --- |
-| `assets/ui-captures/dashboard-live.png` | `/`, live task-owned proxy | Core `3307d61787918d6d6dd195facfb808e2c2c0c9a9`; Admin `5823f1b`; 1440×1024; 2026-09-14 | **Blocked:** headless page was blank after load; do not publish as evidence |
-| `assets/ui-captures/services-live.png` | `/services`, live task-owned proxy | same environment | **Blocked:** headless page was blank after load |
-| `assets/ui-captures/help-center-live.png` | `/help-center`, live task-owned proxy | same environment | **Blocked:** headless page was blank after load |
+| Dashboard overview | `/`, task-owned proxy | Core `3307d61787918d6d6dd195facfb808e2c2c0c9a9`; Admin `5823f1b`; 1440×1024; 2026-09-14 | Blocked: headless page was blank |
+| Services overview | `/services`, task-owned proxy | same | Blocked: headless page was blank |
+| Help Center overview | `/help-center`, task-owned proxy | same | Blocked: headless page was blank |
 
-The task-owned Core proof allocated runtime `http://127.0.0.1:18100` and Admin
-`http://127.0.0.1:18101/`. It reached a running runtime, but the canonical gate
-reported `canonical_service_state_mismatch` because `node-sample-service` was
-running although the accepted source-admin proof contract expects it to remain
-manifest-only. No credentials, secret values or raw logs were captured.
+The task-owned proof allocated Runtime `http://127.0.0.1:18100` and Service
+Admin `http://127.0.0.1:18101/`. It reached a live runtime, but canonical
+verification reported `canonical_service_state_mismatch`: `node-sample-service`
+ran although the source-Admin proof contract expects it to remain manifest-only.
+No credentials, secret values or raw logs were captured.
 
-## Refresh procedure
+## Refresh captures
 
-1. Create an issue worktree from `develop` in Core and Admin.
+1. Create issue worktrees from `develop` in Core and Service Admin.
 2. Run Core `npm ci`, then `npm run demo:worktree-proof -- --id=<issue>`.
-3. Start the Admin source UI on the allocated Admin port with
+3. Start Service Admin on the allocated port with
    `SERVICE_LASSO_RUNTIME_PROXY_TARGET` set to the allocated Core URL.
-4. Use the generated summary’s `gate` and `verify` commands. Stop on a non-zero
-   result and record its classification; do not alter the product to improve a
-   capture.
-5. Use a real browser with a consistent 1440×1024 viewport, default theme and
-   non-sensitive sample data. Capture overview plus relevant dialogs/states.
-6. Preserve originals, add a row above for every asset, then review legibility,
-   route/state, reproduction, date, viewport and exact Core/Admin identity.
+4. Run the generated `gate` and `verify` commands. Stop on a non-zero result
+   and record its classification; do not modify product behavior for a capture.
+5. Use a real browser at 1440×1024, default theme and non-sensitive example
+   data. Capture overview, important dialogs and workflow transitions.
+6. Preserve originals and record asset route, state, reproduction, viewport,
+   date, exact Core/Admin identity and verification result.
 
-The files presently named in this manifest are retained as failed-capture
-receipts only and must be replaced by verified visible browser captures before
-they are linked from a user guide.
+The current blank artifacts remain in the Service Admin PR as failed-capture
+receipts only. Replace them with verified visible browser captures before
+claiming screenshot-complete documentation.
+
+<!-- Generated from service-lasso/docs/operator-ui/capture-manifest.md. Edit the canonical page, then export. -->

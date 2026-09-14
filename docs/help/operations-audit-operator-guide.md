@@ -6,9 +6,9 @@ operators inspect safe audit metadata for Service Lasso and Secrets Broker
 activity. It does not by itself prove that every mutating UI action is durably
 persisted.
 
-Use this guide with [Service Actions](service-actions.md),
-[Operations Telemetry](operations-telemetry-operator-guide.md),
-[Variables and Secrets Broker Safety](variables-and-secrets-broker-safety-guide.md).
+Use this guide with [Service Actions](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/service-actions.md),
+[Operations Telemetry](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/operations-telemetry-operator-guide.md),
+[Variables and Secrets Broker Safety](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/variables-and-secrets-broker-safety-guide.md).
 
 ## What Audit Shows
 
@@ -115,10 +115,16 @@ outcome, not raw secrets, credentials, request bodies, or exported payloads.
 
 ## Related Checks
 
-- Use [Service Actions](service-actions.md) to decide which UI actions are
+- Use [Service Actions](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/service-actions.md) to decide which UI actions are
   mutating and which follow-up checks are required.
-- Use [Operations Telemetry](operations-telemetry-operator-guide.md) for signal
+- Use [Operations Telemetry](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/operations-telemetry-operator-guide.md) for signal
   posture, request summaries, trace context, and correlation ids.
-- Use [Variables and Secrets Broker Safety](variables-and-secrets-broker-safety-guide.md)
+- Use [Variables and Secrets Broker Safety](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/variables-and-secrets-broker-safety-guide.md)
   before interpreting secret refs, broker policy outcomes, reveal actions, or
   write-back events.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/operations-audit-operator-guide.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/operations-audit-operator-guide.md. Edit the canonical page, then export. -->

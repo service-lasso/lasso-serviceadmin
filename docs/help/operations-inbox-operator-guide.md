@@ -2,7 +2,7 @@
 title: Operations Inbox Operator Guide
 description: Open durable operator notices at Operations / Inbox, mark them read, hide or restore them, and follow safe in-app targets.
 status: runtime-backed
-tags: inbox, operations, notices, updates
+tags: ["inbox", "operations", "notices", "updates"]
 ---
 
 # Operations Inbox Operator Guide
@@ -13,9 +13,9 @@ operator notices from Service Lasso `GET /api/operator/inbox` and
 runtime mutation routes. Toasts and banners may still show immediate feedback;
 the Inbox is the record you can reopen later.
 
-Use this guide with [Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md),
-[Operations Audit Operator Guide](operations-audit-operator-guide.md), and
-[Product status and safety](product-status-and-safety.md).
+Use this guide with [Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md),
+[Operations Audit Operator Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/operations-audit-operator-guide.md), and
+[Product status and safety](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/product-status-and-safety.md).
 
 ## How To Open Inbox
 
@@ -144,3 +144,9 @@ When escalating an Inbox notice, include:
 
 Exclude secret values, operator tokens, bearer material, raw payloads, and
 unredacted log excerpts.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/operations-inbox-operator-guide.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/operations-inbox-operator-guide.md. Edit the canonical page, then export. -->

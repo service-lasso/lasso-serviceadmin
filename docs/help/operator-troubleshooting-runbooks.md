@@ -6,13 +6,13 @@ Confirm live state in Runtime, Services, service details, Network, Logs,
 Telemetry, Audit, Variables, or Secrets Broker before changing service
 configuration.
 
-Use this guide with [Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md),
-[Health Checks](health-checks.md),
-[Network and Service Routes Operator Guide](network-and-service-routes-operator-guide.md),
-[Service Install and Setup Config](service-install-and-setup-config.md),
-[Variables and Secrets Broker Safety Guide](variables-and-secrets-broker-safety-guide.md),
-[Operations Telemetry Operator Guide](operations-telemetry-operator-guide.md),
-and [Operations Audit Operator Guide](operations-audit-operator-guide.md).
+Use this guide with [Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md),
+[Health Checks](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/health-checks.md),
+[Network and Service Routes Operator Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/network-and-service-routes-operator-guide.md),
+[Service Install and Setup Config](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/service-install-and-setup-config.md),
+[Variables and Secrets Broker Safety Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/variables-and-secrets-broker-safety-guide.md),
+[Operations Telemetry Operator Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/operations-telemetry-operator-guide.md),
+and [Operations Audit Operator Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/operations-audit-operator-guide.md).
 
 Keep support evidence metadata-only. Do not paste raw secrets, provider
 credentials, tokens, cookies, private keys, request bodies, response bodies,
@@ -393,3 +393,9 @@ the next owner continue:
 Exclude raw credentials, tokens, cookies, private keys, request bodies,
 response bodies, recovery material, full environment dumps, and unredacted log
 output.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/operator-troubleshooting-runbooks.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/operator-troubleshooting-runbooks.md. Edit the canonical page, then export. -->

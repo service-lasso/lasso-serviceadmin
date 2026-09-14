@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.34.5",
   "type": "module",
   "scripts": {
+    "docs:check": "node scripts/check-help-source.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

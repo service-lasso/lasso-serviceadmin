@@ -5,8 +5,8 @@ Secrets Broker telemetry status through runtime API boundaries. It helps
 operators answer whether telemetry evidence is real, whether export is
 configured, and which data is intentionally hidden.
 
-Use this guide with [Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md)
-and [Product status and safety](product-status-and-safety.md) when telemetry is
+Use this guide with [Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md)
+and [Product status and safety](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/product-status-and-safety.md) when telemetry is
 missing, degraded, or unclear.
 
 ## What Telemetry Shows
@@ -154,3 +154,9 @@ When escalating a telemetry problem, include:
 Exclude raw headers, request or response bodies, tokens, credentials, query
 strings, secrets, private keys, recovery material, OTLP endpoint values, OTLP
 headers, environment values, and unredacted log output.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/operations-telemetry-operator-guide.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/operations-telemetry-operator-guide.md. Edit the canonical page, then export. -->
