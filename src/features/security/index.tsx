@@ -57,6 +57,8 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { SecretAccessAssignmentsTable } from '@/features/secret-access-assignments/access-assignments-table'
+import { isFixtureBulkCampaignApplyDisabled } from './bulk-campaign-contract'
+import { LiveBulkCampaignPlanner } from './bulk-campaign-planner'
 
 const securityRoute = getRouteApi('/_authenticated/security/')
 
@@ -914,7 +916,7 @@ function BulkCampaignCard({ plan }: { plan: SecretBulkCampaignPlan }) {
           <div className='max-w-2xl text-sm text-muted-foreground'>
             {plan.safeNextAction}
           </div>
-          <Button disabled>
+          <Button disabled={isFixtureBulkCampaignApplyDisabled(plan)}>
             <LockKeyhole className='size-4' />
             Apply campaign
           </Button>
@@ -933,7 +935,8 @@ function BulkCampaignPlans({ state }: { state: ServiceSecurityState }) {
         <div>
           <h3 className='text-lg font-semibold'>Bulk Campaign Planner</h3>
           <p className='text-sm text-muted-foreground'>
-            Broker-backed campaign dry runs for selected refs.
+            Mixed dry-run fixture stays non-mutating. Live apply requires
+            dry-run, revalidation, audit reason, and the exact campaign id.
           </p>
         </div>
         <Button variant='outline' size='sm' disabled>
@@ -941,6 +944,7 @@ function BulkCampaignPlans({ state }: { state: ServiceSecurityState }) {
           Audit reason required
         </Button>
       </div>
+      <LiveBulkCampaignPlanner />
       {campaigns.length ? (
         campaigns.map((plan) => <BulkCampaignCard key={plan.id} plan={plan} />)
       ) : (

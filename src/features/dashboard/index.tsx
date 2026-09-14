@@ -63,6 +63,7 @@ import {
   formatListenPortSummary,
   formatOperatorInstant,
   primaryListenPort,
+  sanitizeHomeDisplayText,
   uniqueListenPorts,
 } from './dashboard-home-metrics'
 
@@ -540,7 +541,7 @@ export function Dashboard() {
                     key={warning}
                     className='rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm'
                   >
-                    {warning}
+                    {sanitizeHomeDisplayText(warning)}
                   </div>
                 ))}
                 {problems.map((service) => (
