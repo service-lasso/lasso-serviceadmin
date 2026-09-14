@@ -12,6 +12,7 @@ _Status: working tracker_
 | `SPEC-SERVICE-TEMPLATE-REPO.md` | Template | `draft` | `docs/reference/SERVICE-TEMPLATE-REPO.md`, `docs/reference/SERVICE-STRUCTURE-REVIEW.md`, `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md` | `service-template` | Canonical template/service-author contract draft. |
 | `SPEC-CI-SECURITY-MAINTENANCE.md` | CI/Security | `draft` | `.github/workflows/*.yml`, `package.json`, `package-lock.json`, `pnpm-lock.yaml` | `lasso-serviceadmin` | Maintenance contract for action runtime and npm vulnerability hygiene. |
 | `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Repo identity | `draft` | `README.md`, `index.html`, `package.json`, `public/images/*` | `lasso-serviceadmin` | Service Admin identity contract and donor-branding cleanup. |
+| `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Operator UI documentation | `draft` | `docs/help/*`, UI routes, screenshot manifest | `lasso-serviceadmin` | ISS-44 defines the owner boundary and acceptance contract for complete UI documentation. |
 
 ## Current focus
 1. lock the canonical template repo contract
