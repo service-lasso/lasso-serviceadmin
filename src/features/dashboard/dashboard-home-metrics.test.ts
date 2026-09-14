@@ -6,6 +6,7 @@ import type {
 } from '@/lib/service-lasso-dashboard/types'
 import {
   deriveFleetMix,
+  deriveGenerationLane,
   deriveLogVolume,
   deriveProblemRows,
   deriveTraefikStrip,
@@ -13,7 +14,9 @@ import {
   formatInboxUnread,
   formatListenPortSummary,
   formatOperatorInstant,
+  sanitizeHomeDisplayText,
   uniqueListenPorts,
+  withheldHomeText,
 } from './dashboard-home-metrics'
 
 function service(overrides: Partial<DashboardService> = {}): DashboardService {
@@ -252,6 +255,187 @@ describe('dashboard home metrics', () => {
       servicesWithStderr: 1,
     })
     expect(formatInboxUnread(null)).toBe('—')
+    expect(formatInboxUnread(0)).toBe('0')
     expect(formatInboxUnread(23)).toBe('23')
+  })
+
+  it('returns zeros for an empty fleet', () => {
+    const mix = deriveFleetMix(summaryWith([]), [])
+
+    expect(mix).toEqual({
+      running: 0,
+      available: 0,
+      stopped: 0,
+      degraded: 0,
+      crashed: 0,
+      total: 0,
+    })
+    expect(uniqueListenPorts([])).toEqual([])
+    expect(deriveProblemRows(summaryWith([]), [])).toEqual([])
+  })
+
+  it('keeps an all-running fleet free of crashed and stopped counts', () => {
+    const mix = deriveFleetMix(
+      summaryWith([service(), service({ id: '@traefik', name: 'Traefik' })]),
+      [
+        {
+          serviceId: 'echo-service',
+          running: true,
+          crashCount: 0,
+          lastTermination: null,
+          stdoutLines: 2,
+          stderrLines: 0,
+        },
+        {
+          serviceId: '@traefik',
+          running: true,
+          crashCount: 0,
+          lastTermination: null,
+          stdoutLines: 1,
+          stderrLines: 0,
+        },
+      ]
+    )
+
+    expect(mix).toEqual({
+      running: 2,
+      available: 0,
+      stopped: 0,
+      degraded: 0,
+      crashed: 0,
+      total: 2,
+    })
+    expect(deriveProblemRows(summaryWith([service()]), null)).toEqual([])
+  })
+
+  it('splits mixed crashed and cleanly stopped services', () => {
+    const mix = deriveFleetMix(
+      summaryWith([
+        service(),
+        service({
+          id: '@serviceadmin',
+          name: 'Service Admin',
+          status: 'stopped',
+        }),
+        service({ id: 'node-sample', name: 'Node sample', status: 'stopped' }),
+      ]),
+      [
+        {
+          serviceId: '@serviceadmin',
+          running: false,
+          crashCount: 1,
+          lastTermination: 'crashed',
+          stdoutLines: 1,
+          stderrLines: 4,
+        },
+        {
+          serviceId: 'node-sample',
+          running: false,
+          crashCount: 0,
+          lastTermination: 'stopped',
+          stdoutLines: 0,
+          stderrLines: 0,
+        },
+      ]
+    )
+
+    expect(mix).toEqual({
+      running: 1,
+      available: 0,
+      stopped: 1,
+      degraded: 0,
+      crashed: 1,
+      total: 3,
+    })
+  })
+
+  it('marks Traefik missing when the service is absent', () => {
+    const strip = deriveTraefikStrip(summaryWith([service()]), [])
+
+    expect(strip).toEqual({
+      available: false,
+      status: 'missing',
+      entrypoints: [],
+      liveBackendCount: 0,
+      reservedEmptyCount: 0,
+    })
+  })
+
+  it('treats unavailable metrics as unknown crash and log volume, not zeros that look proven', () => {
+    const mix = deriveFleetMix(
+      summaryWith([
+        service({
+          id: '@serviceadmin',
+          name: 'Service Admin',
+          status: 'stopped',
+        }),
+      ]),
+      null
+    )
+
+    expect(mix.stopped).toBe(1)
+    expect(mix.crashed).toBe(0)
+    expect(deriveLogVolume(null)).toEqual({
+      available: false,
+      stdoutLines: 0,
+      stderrLines: 0,
+      servicesWithStderr: 0,
+    })
+  })
+
+  it('withholds secret-looking notes and filesystem paths', () => {
+    expect(sanitizeHomeDisplayText('process-ready failed')).toBe(
+      'process-ready failed'
+    )
+    expect(sanitizeHomeDisplayText('password=hunter2-home-sentinel')).toBe(
+      withheldHomeText
+    )
+    expect(
+      sanitizeHomeDisplayText('missing install at C:\\service-lasso\\app')
+    ).toBe(withheldHomeText)
+    expect(
+      deriveProblemRows(
+        summaryWith([
+          service({
+            id: 'leaky',
+            name: 'Leaky',
+            status: 'stopped',
+            note: 'token=abcd.efgh.ijkl-unsafe',
+            installed: false,
+          }),
+        ]),
+        null
+      )[0]?.note
+    ).toBe(withheldHomeText)
+  })
+
+  it('keeps fleet mix counts after a refresh of the same snapshot', () => {
+    const snapshot = summaryWith([
+      service(),
+      service({ id: '@node', name: 'Node', status: 'available' }),
+      service({
+        id: '@serviceadmin',
+        name: 'Service Admin',
+        status: 'stopped',
+      }),
+    ])
+    const metrics: FleetServiceMetrics[] = [
+      {
+        serviceId: '@serviceadmin',
+        running: false,
+        crashCount: 1,
+        lastTermination: 'crashed',
+        stdoutLines: 1,
+        stderrLines: 0,
+      },
+    ]
+    const first = deriveFleetMix(snapshot, metrics)
+    const refreshed = deriveFleetMix(
+      structuredClone(snapshot),
+      structuredClone(metrics)
+    )
+
+    expect(refreshed).toEqual(first)
+    expect(deriveGenerationLane(null).available).toBe(false)
   })
 })

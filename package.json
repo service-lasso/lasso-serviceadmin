@@ -76,7 +76,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@faker-js/faker": "^10.4.0",
+    "@faker-js/faker": "^10.5.0",
     "@playwright/test": "1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/eslint-plugin-query": "^5.95.2",
@@ -107,5 +107,13 @@
     "typescript-eslint": "^8.57.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "js-yaml": "4.3.2",
+      "smol-toml": "1.7.1",
+      "immutable": "5.1.8",
+      "dompurify": "3.4.14"
+    }
   }
 }

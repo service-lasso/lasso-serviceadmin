@@ -5,9 +5,11 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import {
+  resolvePackagedProxyHeaders,
   rotationProxyLifecycleEvidence,
   runtimeApiTimeoutMs,
   startServiceAdminServer,
+  TrustedIngressProxyError,
 } from '../runtime/server.js'
 import {
   brokerMetadataEndpointCount,
@@ -1328,6 +1330,16 @@ test('packaged proxy binds loopback and normalizes only safe ingress identity', 
       observed.headers['x-service-lasso-zitadel-roles'],
       'operator,viewer'
     )
+    assert.equal(
+      observed.headers['x-service-lasso-user'],
+      'usr_trusted_operator'
+    )
+    assert.equal(
+      observed.headers['x-service-lasso-actor'],
+      'usr_trusted_operator'
+    )
+    assert.equal(observed.headers['x-service-lasso-workspace'], 'workspace-a')
+    assert.equal(observed.headers['x-service-lasso-roles'], 'operator,viewer')
     assert.equal(observed.headers.authorization, undefined)
     assert.equal(observed.headers.cookie, undefined)
     assert.equal(
@@ -1353,12 +1365,89 @@ test('packaged proxy binds loopback and normalizes only safe ingress identity', 
   }
 })
 
-test('packaged proxy does not manufacture a trusted ingress marker from incomplete identity', async () => {
+test('packaged proxy fails closed on missing Traefik original-client context', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'serviceadmin-runtime-'))
   await writeFile(path.join(root, 'index.html'), '<h1>Service Admin</h1>')
-  const observed = []
+  let upstreamHits = 0
+  const upstream = http.createServer((_request, response) => {
+    upstreamHits += 1
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end(JSON.stringify({ auth: 'leaked' }))
+  })
+  const upstreamUrl = await listen(upstream)
+  const serviceAdmin = await startServiceAdminServer({
+    host: '127.0.0.1',
+    port: 0,
+    distDir: root,
+    runtimeApiBaseUrl: upstreamUrl,
+  })
+  const address = serviceAdmin.address()
+  assert.ok(address && typeof address === 'object')
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/runtime/security`,
+      { headers: { 'X-Service-Lasso-User': 'usr_missing_client' } }
+    )
+    assert.equal(response.status, 403)
+    const body = await response.json()
+    assert.equal(body.error, 'trusted_ingress_identity_invalid')
+    assert.equal(upstreamHits, 0)
+    assert.equal(JSON.stringify(body).includes('usr_missing_client'), false)
+    assert.doesNotMatch(JSON.stringify(body), /Bearer |cookie|password/i)
+  } finally {
+    await close(serviceAdmin)
+    await close(upstream)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('packaged proxy fails closed on mismatched Traefik actor', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'serviceadmin-runtime-'))
+  await writeFile(path.join(root, 'index.html'), '<h1>Service Admin</h1>')
+  let upstreamHits = 0
+  const upstream = http.createServer((_request, response) => {
+    upstreamHits += 1
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end(JSON.stringify({ auth: 'leaked' }))
+  })
+  const upstreamUrl = await listen(upstream)
+  const serviceAdmin = await startServiceAdminServer({
+    host: '127.0.0.1',
+    port: 0,
+    distDir: root,
+    runtimeApiBaseUrl: upstreamUrl,
+  })
+  const address = serviceAdmin.address()
+  assert.ok(address && typeof address === 'object')
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/runtime/security`,
+      {
+        headers: {
+          'X-Forwarded-For': '192.0.2.44',
+          'X-Service-Lasso-User': 'usr_trusted_operator',
+          'X-Service-Lasso-Actor': 'usr_other_actor',
+        },
+      }
+    )
+    assert.equal(response.status, 403)
+    assert.equal(upstreamHits, 0)
+    assert.doesNotMatch(await response.text(), /usr_other_actor|Bearer /)
+  } finally {
+    await close(serviceAdmin)
+    await close(upstream)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('direct-port spoofed identity stays local-root and never reaches Core', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'serviceadmin-runtime-'))
+  await writeFile(path.join(root, 'index.html'), '<h1>Service Admin</h1>')
+  let observed = null
   const upstream = http.createServer((request, response) => {
-    observed.push(request.headers)
+    observed = { headers: request.headers }
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(JSON.stringify({ auth: 'safe' }))
   })
@@ -1373,26 +1462,91 @@ test('packaged proxy does not manufacture a trusted ingress marker from incomple
   assert.ok(address && typeof address === 'object')
 
   try {
-    for (const headers of [
-      { 'X-Service-Lasso-User': 'usr_missing_client' },
-      { 'X-Forwarded-For': '192.0.2.41' },
-    ]) {
-      const response = await fetch(
-        `http://127.0.0.1:${address.port}/api/runtime/security`,
-        { headers }
-      )
-      assert.equal(response.status, 200)
-    }
-    assert.equal(observed.length, 2)
-    for (const headers of observed) {
-      assert.equal(headers['x-service-lasso-trusted-ingress'], undefined)
-      assert.equal(headers['x-service-lasso-proxy'], 'serviceadmin')
-    }
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/runtime/security`,
+      {
+        headers: {
+          Authorization: 'Bearer browser-token-must-not-forward',
+          Cookie: 'session=must-not-forward',
+          'X-Forwarded-For': '192.0.2.41',
+          'X-Service-Lasso-Zitadel-User-Id': 'spoofed-normalized-user',
+          'X-Service-Lasso-User-Id': 'spoofed-user-id',
+          'X-Service-Lasso-Client-Address': '203.0.113.9',
+          'X-Service-Lasso-Trusted-Ingress': 'serviceadmin-loopback',
+          'X-Service-Lasso-Internal-Proxy': 'spoofed-browser-proxy',
+          'X-Service-Lasso-Admin-Token': 'must-not-forward',
+        },
+      }
+    )
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { auth: 'safe' })
+    assert.equal(
+      observed.headers['x-service-lasso-internal-proxy'],
+      'serviceadmin'
+    )
+    assert.equal(observed.headers['x-service-lasso-proxy'], 'serviceadmin')
+    assert.equal(observed.headers['x-service-lasso-trusted-ingress'], undefined)
+    assert.equal(observed.headers['x-service-lasso-client-address'], undefined)
+    assert.equal(observed.headers['x-service-lasso-zitadel-user-id'], undefined)
+    assert.equal(observed.headers['x-service-lasso-user'], undefined)
+    assert.equal(observed.headers['x-service-lasso-actor'], undefined)
+    assert.equal(observed.headers.authorization, undefined)
+    assert.equal(observed.headers.cookie, undefined)
+    assert.equal(observed.headers['x-service-lasso-admin-token'], undefined)
+    const serialized = JSON.stringify(observed)
+    assert.equal(serialized.includes('browser-token-must-not-forward'), false)
+    assert.equal(serialized.includes('spoofed-normalized-user'), false)
+    assert.equal(serialized.includes('must-not-forward'), false)
   } finally {
     await close(serviceAdmin)
     await close(upstream)
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('loopback without Traefik identity stays local-root', () => {
+  const headers = resolvePackagedProxyHeaders({
+    headers: {
+      accept: 'application/json',
+      authorization: 'Bearer browser-token-must-not-forward',
+    },
+    socket: { remoteAddress: '127.0.0.1' },
+  })
+  assert.equal(headers.get('x-service-lasso-internal-proxy'), 'serviceadmin')
+  assert.equal(headers.get('x-service-lasso-proxy'), 'serviceadmin')
+  assert.equal(headers.get('x-service-lasso-trusted-ingress'), null)
+  assert.equal(headers.get('x-service-lasso-client-address'), null)
+  assert.equal(headers.get('x-service-lasso-zitadel-user-id'), null)
+  assert.equal(headers.get('authorization'), null)
+})
+
+test('malformed Traefik identity fails closed before Core', () => {
+  assert.throws(
+    () =>
+      resolvePackagedProxyHeaders({
+        headers: {
+          'x-service-lasso-user': 'usr_missing_client',
+        },
+        socket: { remoteAddress: '127.0.0.1' },
+      }),
+    (error) =>
+      error instanceof TrustedIngressProxyError &&
+      error.code === 'trusted_ingress_identity_missing'
+  )
+  assert.throws(
+    () =>
+      resolvePackagedProxyHeaders({
+        headers: {
+          'x-forwarded-for': '192.0.2.44',
+          'x-service-lasso-user': 'usr_trusted_operator',
+          'x-service-lasso-actor': 'usr_other_actor',
+        },
+        socket: { remoteAddress: '127.0.0.1' },
+      }),
+    (error) =>
+      error instanceof TrustedIngressProxyError &&
+      error.code === 'trusted_ingress_identity_mismatch'
+  )
 })
 
 test('packaged proxy gives consumer-converging rotation a bounded cross-platform window', () => {

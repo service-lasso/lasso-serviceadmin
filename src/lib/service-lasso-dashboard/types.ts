@@ -25,6 +25,38 @@ export type ServiceRuntimeHealth = {
   runId?: string | null
 }
 
+export type ServiceIsolationMode = 'direct' | 'compose-scripts'
+export type ServiceIsolationRequire =
+  | 'none'
+  | 'limits'
+  | 'dedicated-user'
+  | 'hardened'
+export type ServiceIsolationDegradeReason =
+  | 'limits_not_applied'
+  | 'dedicated_user_unavailable'
+  | 'hardening_unavailable'
+
+export type ServiceIsolationLimits = {
+  cpuPercent?: number
+  memoryMb?: number
+  pids?: number
+}
+
+/**
+ * Secret-free isolation status from Core dashboard service payloads (`#609`).
+ */
+export type ServiceIsolationStatus = {
+  declaredMode: ServiceIsolationMode
+  effectiveMode: ServiceIsolationMode
+  require: ServiceIsolationRequire
+  workspace: string[]
+  limits?: ServiceIsolationLimits
+  limitsEnforced: boolean
+  degradeReasons: ServiceIsolationDegradeReason[]
+  startBlocked: boolean
+  startBlockedReason?: string
+}
+
 export type ServiceEndpoint = {
   id?: string
   kind?: string
@@ -140,6 +172,7 @@ export type DashboardService = {
   recovery?: ServiceRecoveryHistoryState
   setup?: ServiceSetupState
   access?: ServiceAccessState
+  isolation?: ServiceIsolationStatus
 }
 
 export type DashboardRuntime = {
@@ -1023,11 +1056,18 @@ export type BrokerMigrationResult = {
   rollback: string
 }
 
+export type BrokerBulkCampaignFamily =
+  | 'rotate_reset'
+  | 'update_edit'
+  | 'apply_policy'
+  | 'migrate_remap_provider'
+  | 'mark_action_required'
+
 export type BrokerBulkCampaignRequest = {
   campaignId?: string
   planToken?: string
   operationId: string
-  operation: 'migrate_remap_provider'
+  operation: BrokerBulkCampaignFamily
   refs: string[]
   targetProviderId: string
   reason: string
@@ -1079,7 +1119,7 @@ export type BrokerBulkCampaignResult = {
   campaignId: string
   planToken: string
   operationId: string
-  operation: 'migrate_remap_provider'
+  operation: BrokerBulkCampaignFamily
   mode: 'create' | 'revalidate' | 'apply' | 'status'
   outcome: string
   applied: boolean

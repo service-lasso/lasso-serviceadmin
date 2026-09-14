@@ -15,7 +15,7 @@ Acceptance contract:
 - README is Service Admin-specific and documents service identity, runtime API configuration, validation, packaging, release shape, and agent notes.
 - HTML metadata uses Service Admin UI / Service Lasso title, description, URLs, and image path.
 - package metadata uses the Service Admin package identity and Apache-2.0 license metadata.
-- screenshot path is `public/images/service-admin-ui.png`.
+- Social previews reuse `public/images/brand/service-lasso/web-app-manifest-512x512.png`; an extra dashboard screenshot is not required (issue #614).
 - repo-visible donor starter branding strings are removed from README, package metadata, page metadata, source headings, and repo docs.
 - Generic Shadcn UI component-library references may remain only where they describe the UI technology stack, not donor project branding.
 - Validation includes a repo-wide donor-branding scan plus standard formatting/build/test gates.

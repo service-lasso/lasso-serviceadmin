@@ -34,13 +34,39 @@ const mimeTypes = new Map([
   ['.txt', 'text/plain; charset=utf-8'],
 ])
 
+const INTERNAL_PROXY_VALUE = 'serviceadmin'
+const TRUSTED_INGRESS_VALUE = 'serviceadmin-loopback'
+const TRAEFIK_IDENTITY_HEADERS = [
+  'x-service-lasso-user',
+  'x-service-lasso-actor',
+  'x-service-lasso-workspace',
+  'x-service-lasso-roles',
+]
+
+/**
+ * Fail-closed packaged-proxy rejection. Safe metadata only; never include
+ * header values, tokens, or cookies on the error.
+ */
+export class TrustedIngressProxyError extends Error {
+  /**
+   * @param {string} code Stable fail-closed reason for tests, not clients.
+   */
+  constructor(code) {
+    super('trusted_ingress_identity_invalid')
+    this.name = 'TrustedIngressProxyError'
+    this.code = code
+  }
+}
+
 function isLoopbackHost(host) {
+  if (!host) return false
   const normalized = String(host).trim().toLowerCase().replace(/^\[|\]$/g, '')
   return (
     normalized === 'localhost' ||
     normalized === '::1' ||
     normalized === '0:0:0:0:0:0:0:1' ||
-    normalized.startsWith('127.')
+    normalized.startsWith('127.') ||
+    normalized.startsWith('::ffff:127.')
   )
 }
 
@@ -88,7 +114,28 @@ function trustedRoleClaims(value) {
   return unique.length > 0 ? unique.join(',') : null
 }
 
-function proxyHeaders(request) {
+/**
+ * True when a Traefik identity header was sent, including unsafe values.
+ * @param {string | string[] | undefined} value
+ */
+function headerPresent(value) {
+  if (Array.isArray(value)) value = value[0]
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+/**
+ * Build Core-bound proxy headers for one Admin request.
+ *
+ * Direct-port (no Traefik identity): strip identity, forwarded-client,
+ * authorization, and cookies so Core sees loopback local-root.
+ * Protected ingress: require user plus original client address, then forward
+ * canonical Service Lasso headers. Incomplete or conflicting Traefik claims
+ * fail closed and never reach Core.
+ *
+ * @param {import('node:http').IncomingMessage} request
+ * @returns {Headers}
+ */
+export function resolvePackagedProxyHeaders(request) {
   const headers = new Headers()
   const allowed = ['accept', 'accept-language', 'content-type', 'if-none-match']
   for (const name of allowed) {
@@ -96,26 +143,59 @@ function proxyHeaders(request) {
     if (value) headers.set(name, value)
   }
 
-  headers.set('x-service-lasso-internal-proxy', 'serviceadmin')
-  headers.set('x-service-lasso-proxy', 'serviceadmin')
-  const clientAddress = forwardedClientAddress(request.headers['x-forwarded-for'])
-  if (clientAddress) {
-    headers.set('x-service-lasso-client-address', clientAddress)
+  headers.set('x-service-lasso-internal-proxy', INTERNAL_PROXY_VALUE)
+  headers.set('x-service-lasso-proxy', INTERNAL_PROXY_VALUE)
+
+  const peer = request.socket?.remoteAddress
+  if (peer && !isLoopbackHost(peer)) {
+    throw new TrustedIngressProxyError('untrusted_peer')
   }
+
+  const claimedIngress = TRAEFIK_IDENTITY_HEADERS.some((name) =>
+    headerPresent(request.headers[name])
+  )
+  if (!claimedIngress) {
+    return headers
+  }
+
   const userId = safeHeader(request.headers['x-service-lasso-user'])
-  if (userId) {
-    headers.set('x-service-lasso-zitadel-user-id', userId)
-    if (clientAddress) {
-      headers.set('x-service-lasso-trusted-ingress', 'serviceadmin-loopback')
-    }
-  }
-  const roles = trustedRoleClaims(request.headers['x-service-lasso-roles'])
-  if (roles) {
-    headers.set('x-service-lasso-zitadel-roles', roles)
-  }
+  const actor = safeHeader(request.headers['x-service-lasso-actor'])
   const workspaceId = safeHeader(request.headers['x-service-lasso-workspace'])
+  const roles = trustedRoleClaims(request.headers['x-service-lasso-roles'])
+  const clientAddress = forwardedClientAddress(request.headers['x-forwarded-for'])
+
+  if (headerPresent(request.headers['x-service-lasso-user']) && !userId) {
+    throw new TrustedIngressProxyError('trusted_ingress_identity_missing')
+  }
+  if (headerPresent(request.headers['x-service-lasso-actor']) && !actor) {
+    throw new TrustedIngressProxyError('trusted_ingress_identity_missing')
+  }
+  if (headerPresent(request.headers['x-service-lasso-workspace']) && !workspaceId) {
+    throw new TrustedIngressProxyError('trusted_ingress_identity_missing')
+  }
+  if (headerPresent(request.headers['x-service-lasso-roles']) && !roles) {
+    throw new TrustedIngressProxyError('trusted_ingress_identity_missing')
+  }
+  if (!userId || !clientAddress) {
+    throw new TrustedIngressProxyError('trusted_ingress_identity_missing')
+  }
+  if (actor && actor !== userId) {
+    throw new TrustedIngressProxyError('trusted_ingress_identity_mismatch')
+  }
+
+  const resolvedActor = actor ?? userId
+  headers.set('x-service-lasso-trusted-ingress', TRUSTED_INGRESS_VALUE)
+  headers.set('x-service-lasso-client-address', clientAddress)
+  headers.set('x-service-lasso-user', userId)
+  headers.set('x-service-lasso-actor', resolvedActor)
+  headers.set('x-service-lasso-zitadel-user-id', userId)
   if (workspaceId) {
+    headers.set('x-service-lasso-workspace', workspaceId)
     headers.set('x-service-lasso-workspace-id', workspaceId)
+  }
+  if (roles) {
+    headers.set('x-service-lasso-roles', roles)
+    headers.set('x-service-lasso-zitadel-roles', roles)
   }
   return headers
 }
@@ -280,7 +360,7 @@ export function createServiceAdminServer(options = {}) {
         }
         const upstream = await fetch(targetUrl, {
           method,
-          headers: proxyHeaders(request),
+          headers: resolvePackagedProxyHeaders(request),
           body,
           redirect: 'manual',
           signal: AbortSignal.timeout(runtimeApiTimeoutMs(method, requestUrl.pathname)),
@@ -299,6 +379,14 @@ export function createServiceAdminServer(options = {}) {
         })
         response.end(method === 'HEAD' ? undefined : bytes)
       } catch (error) {
+        if (error instanceof TrustedIngressProxyError) {
+          response.writeHead(403, securityHeaders('application/json; charset=utf-8'))
+          response.end(JSON.stringify({
+            error: 'trusted_ingress_identity_invalid',
+            message: 'Service Admin rejected untrusted or incomplete ingress identity.',
+          }))
+          return
+        }
         const statusCode = error instanceof Error && error.message === 'request_body_too_large'
           ? 413
           : 502
