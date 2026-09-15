@@ -77,8 +77,7 @@ export function ServiceLifecycleControls({
 
   const actionFor = (kind: 'start' | 'stop' | 'restart') =>
     service.actions.find((action) => action.kind === kind) as
-      | ServiceAction
-      | undefined
+      ServiceAction | undefined
   const startAction = actionFor('start')
   const stopAction = actionFor('stop')
   const restartAction = actionFor('restart')
