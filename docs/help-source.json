@@ -1,0 +1,111 @@
+{
+  "repository": "service-lasso/service-lasso",
+  "revision": "8ffcaddb222ce1b4bb3026a6cc23051df2b76f61",
+  "files": [
+    {
+      "source": "docs/components/service-admin/dashboard-home.md",
+      "destination": "docs/help/dashboard-home.md",
+      "sha256": "d443e8d5f540619fbcb63618ebbf6557cd1b23f0a7f819492c126ab5d9d5b803"
+    },
+    {
+      "source": "docs/components/service-admin/environment-variables-global-and-service-reuse.md",
+      "destination": "docs/help/environment-variables-global-and-service-reuse.md",
+      "sha256": "751f8a5efe77482cf72bbc6e76bca915bed04c605c255cd0d0b9dd8d2ae8b7bf"
+    },
+    {
+      "source": "docs/components/service-admin/health-checks.md",
+      "destination": "docs/help/health-checks.md",
+      "sha256": "cb4f1077f4e83d707166c0d15c22dbe1dd36646e99063266d5e317cdcb96273d"
+    },
+    {
+      "source": "docs/components/service-admin/how-to-create-a-basic-service.md",
+      "destination": "docs/help/how-to-create-a-basic-service.md",
+      "sha256": "fc25c33153b18758293b03a1a8f802beed6f25140d650fa3cb5df55ce3afdb62"
+    },
+    {
+      "source": "docs/components/service-admin/mcp-operator-guide.md",
+      "destination": "docs/help/mcp-operator-guide.md",
+      "sha256": "e7ee7987ce311c6eb5be533733b085dd1ea832c64ae30b44a02294c7b86d2031"
+    },
+    {
+      "source": "docs/components/service-admin/network-and-service-routes-operator-guide.md",
+      "destination": "docs/help/network-and-service-routes-operator-guide.md",
+      "sha256": "6bfaec2902009d53040be02edbea583bf406bd7e890ee7dcca8ca089e7be83dd"
+    },
+    {
+      "source": "docs/components/service-admin/operations-audit-operator-guide.md",
+      "destination": "docs/help/operations-audit-operator-guide.md",
+      "sha256": "953740ebc2c497e33aca13da8cbb4f7a74f45bd4fd2004d673d695dab7095213"
+    },
+    {
+      "source": "docs/components/service-admin/operations-inbox-operator-guide.md",
+      "destination": "docs/help/operations-inbox-operator-guide.md",
+      "sha256": "97edcbdd6cd942818d5dbac3471a799c9f6b635c96b5ffb47ea977a85cf30797"
+    },
+    {
+      "source": "docs/components/service-admin/operations-telemetry-operator-guide.md",
+      "destination": "docs/help/operations-telemetry-operator-guide.md",
+      "sha256": "ffe45b3272b2f94cbba046b1cec65b6758dd591eba254d1499485594bb68d78c"
+    },
+    {
+      "source": "docs/components/service-admin/operator-troubleshooting-runbooks.md",
+      "destination": "docs/help/operator-troubleshooting-runbooks.md",
+      "sha256": "e911206b163fb65d73babfa08a770fdaf1ee69c06ef467d31968de86aa349f2b"
+    },
+    {
+      "source": "docs/components/service-admin/product-status-and-safety.md",
+      "destination": "docs/help/product-status-and-safety.md",
+      "sha256": "c16ce5a88119cd5afabdb3b8faa8492f767cd3f6e2929d97f5e080d7140315fc"
+    },
+    {
+      "source": "docs/components/service-admin/runtime-and-logs-operator-runbook.md",
+      "destination": "docs/help/runtime-and-logs-operator-runbook.md",
+      "sha256": "f752c04cbe4f9d6536e0ae5ff3f59caaba16375ab010233f112e7be3702d5722"
+    },
+    {
+      "source": "docs/components/service-admin/security-and-access-operator-guide.md",
+      "destination": "docs/help/security-and-access-operator-guide.md",
+      "sha256": "cc8c566a08ce05ebc110944771a45c7a26694aff98d508388335443363e64b12"
+    },
+    {
+      "source": "docs/components/service-admin/security-secret-access-assignments.md",
+      "destination": "docs/help/security-secret-access-assignments.md",
+      "sha256": "b1be64d16319103048771e7c8a36147a1eb5d163b52d3962bcc84b624c3f6b37"
+    },
+    {
+      "source": "docs/components/service-admin/service-actions.md",
+      "destination": "docs/help/service-actions.md",
+      "sha256": "80f8fd8c21a8ebd0357365f71247d278c795ad4afab6e7558b3bf09966240498"
+    },
+    {
+      "source": "docs/components/service-admin/service-admin-overview-and-navigation.md",
+      "destination": "docs/help/service-admin-overview-and-navigation.md",
+      "sha256": "1268ccc28c09d90ba582bfee82fdc01ae055e96b03420a0e1872803245c18e94"
+    },
+    {
+      "source": "docs/components/service-admin/service-admin-packaging-and-release-artifacts.md",
+      "destination": "docs/help/service-admin-packaging-and-release-artifacts.md",
+      "sha256": "19449343442e04cfd85dcb150a8916903750614a1f994205538ed0d819888bda"
+    },
+    {
+      "source": "docs/components/service-admin/service-install-and-setup-config.md",
+      "destination": "docs/help/service-install-and-setup-config.md",
+      "sha256": "17d389ce39e18646047dfb3149c2465a3758f7ee5128f1e53adfe54863772beb"
+    },
+    {
+      "source": "docs/components/service-admin/variables-and-secrets-broker-safety-guide.md",
+      "destination": "docs/help/variables-and-secrets-broker-safety-guide.md",
+      "sha256": "f0838f1890df8c5b08fb39f4dfe01c13d73a8d8bdf018ab362f7cdab2e0318aa"
+    },
+    {
+      "source": "docs/operator-ui/service-admin-ui-guide.md",
+      "destination": "docs/help/ui-documentation.md",
+      "sha256": "94bea383d4dd434f0606e5786995ac932a3d53eb3c1578c58125b0cc8dab7d65"
+    },
+    {
+      "source": "docs/operator-ui/capture-manifest.md",
+      "destination": "docs/help/ui-capture-manifest.md",
+      "sha256": "e6b88a21ef412960b2a0679d13ccdfaeb6e0c16be7e274f32c7883cb4353bd29"
+    }
+  ]
+}

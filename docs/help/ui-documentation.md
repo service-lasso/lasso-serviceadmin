@@ -1,91 +1,79 @@
 ---
 title: Service Admin UI guide
-description: A route-by-route operator guide to the Service Admin interface.
-status: mixed runtime-backed and metadata-only surface
-tags: navigation, services, runtime, secrets, troubleshooting
 ---
 
 # Service Admin UI guide
 
 Service Admin is the browser console for a local Service Lasso runtime. Open its
-configured Service Admin URL, then use the sidebar to move between the operator
-surfaces. A page may be **runtime-backed** (reads Core through the same-origin
-`/api` proxy), **metadata-only** (safe local/UI metadata), **preview**, or
-**unavailable**; do not treat a visual status as durable unless the page states
-that it is runtime-backed.
+configured URL, then use the sidebar to move between operator surfaces. A page
+may be **runtime-backed**, **metadata-only**, **preview**, or **unavailable**;
+do not treat a visual status as durable unless the page states that it is
+runtime-backed.
 
 ## First launch and navigation
 
-1. Open Service Admin at the URL reported by the Core demo/proof summary.
-2. Start with **Dashboard**. If it cannot load, open **Runtime**; a banner that
-   says the runtime is unavailable means the UI has no usable runtime data.
-3. Use the left navigation: **Services**, **Dependencies**, **Routes**, **Logs**,
+1. Open the Service Admin URL reported by the Core demo/proof summary.
+2. Start with **Dashboard**. If it cannot load, open **Runtime**; an unavailable
+   banner means the UI has no usable runtime data.
+3. Use the sidebar: **Services**, **Dependencies**, **Routes**, **Logs**,
    **Runtime**, **Installed**, **Variables**, **Network**, **Operations**,
    **Secrets Broker**, **Settings**, and **Help Center**.
-4. Use the page toolbar and contextual Help links where present. A disabled
-   control states the prerequisite or permission that prevents the action.
+4. Use page-toolbar and contextual Help links where present. A disabled control
+   states its missing prerequisite or permission.
 
 ## Core operational workflow
 
 1. In **Dashboard**, read runtime health, warnings, service totals, and Broker
-   posture. A warning is a prompt to investigate, not proof of failure.
-2. Open **Services**, use its search/filter/sort controls, then select the exact
-   service row to open its detail page.
-3. On a detail page, review status, dependencies, endpoints, health, setup and
-   recent lifecycle evidence before selecting **Start**, **Stop**, **Restart**,
-   install/configuration or update actions that the runtime exposes.
-4. Confirm a risky action when the dialog asks. Cancellation leaves the current
-   state unchanged. Validation text identifies missing inputs or authority.
-5. Refresh the detail page and Dashboard, then check **Logs** or **Runtime** to
-   confirm the resulting runtime state. A toast alone is not confirmation.
+   posture.
+2. In **Services**, use search, filtering and sorting, then open the exact
+   service row.
+3. On the detail page, review status, dependencies, endpoints, health, setup
+   and recent lifecycle evidence before choosing **Start**, **Stop**,
+   **Restart**, install/configuration or update actions that are exposed.
+4. Confirm risky actions in their dialog. Cancellation leaves state unchanged;
+   validation identifies missing inputs or authority.
+5. Refresh the detail page and Dashboard, then inspect **Logs** or **Runtime**
+   to confirm resulting state. A toast alone is not confirmation.
 
-## Page reference
+## Page and control reference
 
 | Page / route | Purpose and key controls | State handling |
 | --- | --- | --- |
 | Dashboard `/` | health summary, alerts, recovery links | loading/unavailable banner; verify by Runtime refresh |
-| Services `/services` and `/services/:id` | search, filters, sorting, detail and lifecycle actions | empty results, disabled actions, confirmation/cancel, error/recovery |
-| Dependencies `/dependencies` | dependency/secret-ref relationships | metadata may be incomplete; open service detail for action evidence |
-| Service Routes `/service-routes` and Network `/network` | configured endpoint/host/port metadata and open links | configured route is not a reachability proof |
-| Logs `/logs` | source selection, bounded log reading, filtering | empty/loading/read errors; never paste sensitive logs |
-| Runtime `/runtime`, Installed `/installed` | runtime identity, readiness and installed metadata | use runtime health to distinguish UI and Core failures |
+| Services `/services`, `/services/:id` | search, filters, sorting, details and lifecycle actions | empty results, disabled actions, confirmation/cancel, error/recovery |
+| Dependencies `/dependencies` | dependency and SecretRef relationships | metadata may be incomplete; use service detail for action evidence |
+| Service Routes `/service-routes`, Network `/network` | configured endpoint/host/port metadata and open links | configuration is not reachability proof |
+| Logs `/logs` | source selection and bounded log reading | empty/loading/read errors; never paste sensitive logs |
+| Runtime `/runtime`, Installed `/installed` | runtime identity, readiness and installed metadata | separates UI from Core failures |
 | Variables `/variables` | global/service variable and SecretRef posture | raw secret values are not displayed |
-| Operations `/inbox`, `/operations/telemetry`, `/operations/audit-logging` | durable notices, safe telemetry/audit metadata | Inbox read/hide/restore changes should be refreshed |
-| Secrets Broker `/secrets-broker/*` | setup, inventory, providers, topology, policy, diagnostics and guarded workflows | permission, confirmation, lockout, unavailable-provider and recovery states are explicit |
-| MCP `/mcp`, Security `/security` | safe MCP/security posture | configuration and mutations remain runtime-authorized |
-| Settings `/settings/*` | appearance, display, account and notifications preferences | some preferences are local/metadata-only |
-| Apps, Chats, Tasks, Users | available product workspace surfaces | empty and unavailable states are honest; do not infer a backend action |
-| Help Center `/help-center` | local operator guides and document search | no-match state says **No docs matched the current search** |
-| Sign-in, sign-up, OTP, forgot password and `/401`–`/503` | authentication and error paths | availability depends on configured identity provider; do not enter secrets in screenshots |
+| Operations `/inbox`, `/operations/telemetry`, `/operations/audit-logging` | notices, telemetry and audit metadata | refresh after read/hide/restore mutations |
+| Secrets Broker `/secrets-broker/*` | setup, inventory, providers, topology, policy and diagnostics | permission, confirmation, lockout and recovery are explicit |
+| MCP `/mcp`, Security `/security` | safe MCP/security posture | configuration and mutations are runtime-authorized |
+| Settings `/settings/*` | appearance, display, account and notification preferences | some data is local/metadata-only |
+| Apps, Chats, Tasks, Users | available workspace surfaces | empty/unavailable states do not imply backend actions |
+| Help Center `/help-center` | local operator guides and search | no-match state says **No docs matched the current search** |
+| Sign-in, sign-up, OTP, forgot password and `/401`–`/503` | auth and error paths | availability depends on configured identity provider |
 
 ## Secrets Broker safety
 
-Open **Secrets Broker** only when you need its constrained workflow. Inventory,
-providers, topology, diagnostics, configuration, audit events, backup keys and
-operational controls are distinct routes. Reveal, mutation, decommission,
-rotation, policy and provider actions require the runtime’s trusted actor and
-may require a one-time confirmation. Copy only safe identifiers, outcomes and
-timestamps into support evidence; never copy a value, recovery material,
-credential, token, private key or raw request/log payload.
+Inventory, providers, topology, diagnostics, configuration, audit events,
+backup keys and operational controls are distinct routes. Reveal, mutation,
+decommission, rotation, policy and provider workflows require a trusted runtime
+actor and can require a one-time confirmation. Record only safe identifiers,
+outcomes and timestamps; never copy a value, recovery material, credential,
+token, private key or raw request/log payload.
 
-## Troubleshooting
+## Troubleshooting and glossary
 
 - **Blank, loading or unavailable page:** open **Runtime**, refresh, and verify
-  the Core `/api/health` endpoint through the configured same-origin proxy.
-- **Action disabled:** read its adjacent explanation; typical causes are missing
-  permission, unhealthy dependency, unsupported lifecycle capability or a
-  required confirmation.
-- **Service is healthy but unreachable:** compare **Network** and **Service
-  Routes**, then test the advertised interface separately.
-- **No results:** clear search/filter controls; this is not a service failure.
-- **Need durable evidence:** refresh after a lifecycle action, then record the
-  resulting service/runtime status and any operation/audit identifier.
+  Core `/api/health` through the same-origin proxy.
+- **Action disabled:** read the adjacent explanation; common causes are missing
+  permission, unhealthy dependency, unsupported capability or confirmation.
+- **Healthy but unreachable:** compare **Network** and **Service Routes**, then
+  test the advertised interface separately.
+- **No results:** clear search/filter controls before diagnosing a service.
+- **Runtime-backed** means returned by Core; **metadata-only** is descriptive,
+  not live proof; a **SecretRef** is a reference, not secret material; an
+  **operation id** identifies a durable action outcome.
 
-## Glossary
-
-- **Runtime-backed:** data returned by Service Lasso’s runtime boundary.
-- **Metadata-only:** safe descriptive data; it does not prove a live action.
-- **SecretRef:** a reference to secret material, never the material itself.
-- **Provider:** a service that prepares a runtime dependency rather than a
-  continuously managed daemon.
-- **Operation id:** safe identifier for a durable action outcome.
+<!-- Generated from service-lasso/docs/operator-ui/service-admin-ui-guide.md. Edit the canonical page, then export. -->

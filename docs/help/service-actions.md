@@ -141,10 +141,16 @@ From Service Details and related pages, operators should be able to:
 ## Related References
 
 - Runtime API behavior and same-origin proxy expectations:
-  [`README.md`](../../README.md#runtime-api-endpoint)
+  [`README.md`](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/README.md#runtime-api-endpoint)
 - Service manifest action definitions:
-  [`docs/service-json-reference.md`](../service-json-reference.md#actions)
+  [`docs/service-json-reference.md`](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/service-json-reference.md#actions)
 - Runtime telemetry and metadata-safe review:
-  [`docs/operations-telemetry.md`](../operations-telemetry.md)
+  [`docs/operations-telemetry.md`](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/operations-telemetry.md)
 - Audit metadata guardrails:
-  [`docs/service-admin-table-surface-audit.md`](../service-admin-table-surface-audit.md)
+  [`docs/service-admin-table-surface-audit.md`](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/service-admin-table-surface-audit.md)
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/service-actions.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/service-actions.md. Edit the canonical page, then export. -->

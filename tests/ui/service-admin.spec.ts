@@ -440,6 +440,32 @@ test('help center, logs, tables, and providers chrome', async ({ page }) => {
   await expect(page.getByTestId('data-table-scroll-region')).toBeVisible()
 })
 
+test('Help Center reads packaged articles with remote network denied', async ({
+  page,
+}) => {
+  await page.route('**/*', async (route) => {
+    const hostname = new URL(route.request().url()).hostname
+    if (hostname === '127.0.0.1' || hostname === 'localhost') {
+      await route.continue()
+      return
+    }
+    await route.abort('blockedbyclient')
+  })
+
+  await page.goto('/help-center?doc=help%2Fservice-actions.md')
+  await expectActivePageIdentity(page, 'Help Center')
+  await expect(
+    page.getByRole('heading', { name: 'Service Actions' })
+  ).toBeVisible()
+  await expect(
+    page
+      .getByText(
+        'Service actions are operator commands exposed by Service Admin'
+      )
+      .last()
+  ).toBeVisible()
+})
+
 test('dependencies graph and details fill remaining viewport height', async ({
   page,
 }) => {
