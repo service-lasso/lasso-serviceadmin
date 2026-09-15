@@ -81,23 +81,24 @@ describe('service lasso dashboard stub', () => {
     expect((await fetchDashboardService('@traefik'))?.status).toBe('running')
   })
 
-  it('runs per-service lifecycle actions from services table controls', async () => {
-    const { fetchDashboardService, runDashboardAction } = await loadStub()
+  it('applies confirmed per-service lifecycle actions to the resulting service state', async () => {
+    const { fetchDashboardService, runServiceLifecycleAction } =
+      await loadStub()
 
-    await runDashboardAction({
-      kind: 'service-lifecycle',
+    await runServiceLifecycleAction({
       serviceId: '@serviceadmin',
       action: 'stop',
+      confirm: true,
     })
 
     expect((await fetchDashboardService('@serviceadmin'))?.status).toBe(
       'stopped'
     )
 
-    await runDashboardAction({
-      kind: 'service-lifecycle',
+    await runServiceLifecycleAction({
       serviceId: '@serviceadmin',
       action: 'restart',
+      confirm: true,
     })
 
     expect((await fetchDashboardService('@serviceadmin'))?.status).toBe(
