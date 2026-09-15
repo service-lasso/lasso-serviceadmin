@@ -41,3 +41,23 @@ Acceptance contract:
   validation, cancellation, error, and recovery behavior.
 - Documentation changes are verified by the Admin build/lint conventions and
   the Core Docusaurus build that links to the integrated entry point.
+
+## ISS-45: consume canonical reader guides as packaged offline help
+
+Service Admin MUST lead newcomers to the canonical Service Lasso reader
+guides while retaining a verified offline Help Center copy for installed or
+disconnected use.
+
+Acceptance contract:
+
+- The README links to the Core demo quick start and the canonical reader-guide
+  entry points rather than maintaining a competing guide set.
+- Each packaged Help Center article has a source path, exact immutable Core
+  revision, and SHA-256 checksum in `docs/help-source.json`.
+- The Help Center remains usable from the packaged Admin application without
+  network access. Central links may open when the operator has connectivity.
+- `pnpm docs:check` rejects an independently edited, missing, or untracked
+  packaged article, and CI runs it before build completion.
+- A refresh is generated from a reviewed Core checkout with
+  `scripts/export-admin-help.mjs`; the generated articles and manifest are
+  committed together.

@@ -10,9 +10,9 @@ _Status: working tracker_
 | Draft Spec | Area | Status | Main Source Docs | Intended Repo Target | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `SPEC-SERVICE-TEMPLATE-REPO.md` | Template | `draft` | `docs/reference/SERVICE-TEMPLATE-REPO.md`, `docs/reference/SERVICE-STRUCTURE-REVIEW.md`, `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md` | `service-template` | Canonical template/service-author contract draft. |
-| `SPEC-CI-SECURITY-MAINTENANCE.md` | CI/Security | `draft` | `.github/workflows/*.yml`, `package.json`, `package-lock.json`, `pnpm-lock.yaml` | `lasso-serviceadmin` | Maintenance contract for action runtime and npm vulnerability hygiene. |
+| `SPEC-CI-SECURITY-MAINTENANCE.md` | CI/Security | `draft` | `.github/workflows/*.yml`, `package.json`, `package-lock.json`, `pnpm-lock.yaml` | `lasso-serviceadmin` | ISS-27 through ISS-29 cover action compatibility, vulnerability hygiene, and the supported dependency baseline. |
 | `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Repo identity | `draft` | `README.md`, `index.html`, `package.json`, `public/images/*` | `lasso-serviceadmin` | Service Admin identity contract and donor-branding cleanup. |
-| `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Operator UI documentation | `draft` | `docs/help/*`, UI routes, screenshot manifest | `lasso-serviceadmin` | ISS-44 defines the owner boundary and acceptance contract for complete UI documentation. |
+| `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Operator UI documentation | `draft` | `docs/help/*`, UI routes, screenshot manifest | `lasso-serviceadmin` | ISS-44 defines complete UI documentation; ISS-45 binds canonical reader guides to verified offline Help Center copies. |
 
 ## Current focus
 1. lock the canonical template repo contract

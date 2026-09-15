@@ -26,3 +26,21 @@ Acceptance contract:
 - `package-lock.json` and `pnpm-lock.yaml` remain committed and consistent with the updated dependency graph.
 - `npm audit` must not report the current `axios`, `follow-redirects`, or `postcss` vulnerabilities after the fix.
 - Standard build/test gates must continue to pass.
+
+## ISS-29: supported Admin dependency baseline
+
+Service Admin MUST keep a mutually compatible dependency set for its pinned
+TypeScript, ESLint, and TanStack Table usage so normal development and release
+qualification can complete without weakening checks.
+
+Acceptance contract:
+
+- `package.json` and `pnpm-lock.yaml` resolve TypeScript `5.9.3` with a
+  supported `typescript-eslint` release and TanStack Table v8 APIs used by the
+  application.
+- The calendar uses the supported react-day-picker v10 `month_grid` component
+  key.
+- Frozen installation, lint, production build, and production dependency audit
+  pass on the exact PR head.
+- The existing cross-platform package and real-Broker qualification checks
+  stay enabled; a successful build is not a substitute for those checks.
