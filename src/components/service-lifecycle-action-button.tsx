@@ -59,16 +59,22 @@ export function ServiceLifecycleActionButton({
     action.kind as ServiceLifecycleActionKind
   )
   const isDaemonLifecycleAction = isLifecycleAction(action)
-  const defaultPermissionAllowed =
-    action.permission?.allowed ??
-    (isDaemonLifecycleAction
-      ? isLifecycleActionEnabled(service, action.kind)
-      : !isServiceLifecycleAction)
-  const permission = action.permission ?? {
-    allowed: defaultPermissionAllowed,
-    reason: defaultPermissionAllowed
-      ? undefined
-      : `${action.label} is unavailable for the current service state.`,
+  const stateAllowsDaemonLifecycleAction =
+    !isDaemonLifecycleAction || isLifecycleActionEnabled(service, action.kind)
+  const fallbackPermissionAllowed = isDaemonLifecycleAction
+    ? stateAllowsDaemonLifecycleAction
+    : !isServiceLifecycleAction
+  const permissionAllowed =
+    (action.permission?.allowed ?? fallbackPermissionAllowed) &&
+    stateAllowsDaemonLifecycleAction
+  const permission = {
+    ...action.permission,
+    allowed: permissionAllowed,
+    reason:
+      action.permission?.reason ??
+      (permissionAllowed
+        ? undefined
+        : `${action.label} is unavailable for the current service state.`),
   }
 
   const runLifecycleAction = (confirm: boolean) => {

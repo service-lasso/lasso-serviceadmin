@@ -31,6 +31,12 @@ const service = {
   id: 'echo-service',
   name: 'Echo Service',
   status: 'running',
+  actions: [
+    { id: 'start', kind: 'start', label: 'Start service' },
+    { id: 'stop', kind: 'stop', label: 'Stop service' },
+    { id: 'restart', kind: 'restart', label: 'Restart service' },
+  ],
+  metadata: { serviceType: 'app' },
 } as DashboardService
 
 const tableService = {
@@ -142,6 +148,47 @@ describe('service lifecycle action button', () => {
 
     expect(lifecycleMutation).not.toHaveBeenCalled()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps an allowed restart disabled while the service is stopped', () => {
+    render(
+      <ServiceLifecycleControls
+        service={{
+          ...tableService,
+          status: 'stopped',
+          actions: tableService.actions.map((action) =>
+            action.kind === 'restart'
+              ? {
+                  ...action,
+                  permission: {
+                    allowed: true,
+                    key: 'service:restart',
+                    reason: 'Core permits restart for this actor.',
+                  },
+                }
+              : action
+          ),
+        }}
+      />
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Restart Echo Service' })
+    ).toBeDisabled()
+  })
+
+  it('uses the lifecycle state fallback when Core omits permission metadata', () => {
+    render(<ServiceLifecycleControls service={tableService} />)
+
+    expect(
+      screen.getByRole('button', { name: 'Start Echo Service' })
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Stop Echo Service' })
+    ).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: 'Restart Echo Service' })
+    ).toBeEnabled()
   })
 
   it('keeps a table lifecycle click from selecting its row', async () => {
