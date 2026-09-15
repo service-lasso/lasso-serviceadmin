@@ -11,16 +11,20 @@ import {
 } from 'lucide-react'
 import { renderServiceLinkUrl } from '@/lib/service-lasso-dashboard/access-host-urls'
 import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action-styles'
-import { useDashboardAction } from '@/lib/service-lasso-dashboard/hooks'
+import { useServiceLifecycleAction } from '@/lib/service-lasso-dashboard/hooks'
 import {
   hasLifecycleAction,
   isLifecycleActionEnabled,
 } from '@/lib/service-lasso-dashboard/lifecycle-actions'
-import { type DashboardService } from '@/lib/service-lasso-dashboard/types'
+import {
+  type DashboardService,
+  type ServiceAction,
+} from '@/lib/service-lasso-dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { LongText } from '@/components/long-text'
+import { ServiceLifecycleActionButton } from '@/components/service-lifecycle-action-button'
 import {
   getServiceRecoveryDescription,
   ServiceRecoveryBadge,
@@ -61,23 +65,23 @@ function FavoriteCell({ service }: { service: DashboardService }) {
 
 export { hasLifecycleAction, isLifecycleActionEnabled }
 
-function ServiceLifecycleControls({ service }: { service: DashboardService }) {
-  const actionMutation = useDashboardAction()
-  const pending = actionMutation.isPending
+export function ServiceLifecycleControls({
+  service,
+}: {
+  service: DashboardService
+}) {
+  const lifecycleAction = useServiceLifecycleAction()
   const canStart = hasLifecycleAction(service, 'start')
   const canStop = hasLifecycleAction(service, 'stop')
   const canRestart = hasLifecycleAction(service, 'restart')
-  const startEnabled = isLifecycleActionEnabled(service, 'start')
-  const stopEnabled = isLifecycleActionEnabled(service, 'stop')
-  const restartEnabled = isLifecycleActionEnabled(service, 'restart')
 
-  const runAction = (action: 'start' | 'stop' | 'restart') => {
-    actionMutation.mutate({
-      kind: 'service-lifecycle',
-      serviceId: service.id,
-      action,
-    })
-  }
+  const actionFor = (kind: 'start' | 'stop' | 'restart') =>
+    service.actions.find((action) => action.kind === kind) as
+      | ServiceAction
+      | undefined
+  const startAction = actionFor('start')
+  const stopAction = actionFor('stop')
+  const restartAction = actionFor('restart')
 
   if (!canStart && !canStop && !canRestart) {
     return (
@@ -92,56 +96,44 @@ function ServiceLifecycleControls({ service }: { service: DashboardService }) {
 
   return (
     <div className='flex items-center gap-1'>
-      {canStart ? (
-        <Button
-          type='button'
+      {canStart && startAction ? (
+        <ServiceLifecycleActionButton
+          action={startAction}
+          mutation={lifecycleAction}
+          service={service}
           size='icon'
-          variant='outline'
           className={lifecycleActionButtonClass('start', 'size-8')}
-          aria-label={`Start ${service.name}`}
-          title={`Start ${service.name}`}
-          disabled={pending || !startEnabled}
-          onClick={(event) => {
-            event.stopPropagation()
-            runAction('start')
-          }}
+          ariaLabel={`Start ${service.name}`}
+          stopPropagation
         >
           <Play className='size-3.5' />
-        </Button>
+        </ServiceLifecycleActionButton>
       ) : null}
-      {canStop ? (
-        <Button
-          type='button'
+      {canStop && stopAction ? (
+        <ServiceLifecycleActionButton
+          action={stopAction}
+          mutation={lifecycleAction}
+          service={service}
           size='icon'
-          variant='outline'
           className={lifecycleActionButtonClass('stop', 'size-8')}
-          aria-label={`Stop ${service.name}`}
-          title={`Stop ${service.name}`}
-          disabled={pending || !stopEnabled}
-          onClick={(event) => {
-            event.stopPropagation()
-            runAction('stop')
-          }}
+          ariaLabel={`Stop ${service.name}`}
+          stopPropagation
         >
           <Square className='size-3.5' />
-        </Button>
+        </ServiceLifecycleActionButton>
       ) : null}
-      {canRestart ? (
-        <Button
-          type='button'
+      {canRestart && restartAction ? (
+        <ServiceLifecycleActionButton
+          action={restartAction}
+          mutation={lifecycleAction}
+          service={service}
           size='icon'
-          variant='outline'
           className={lifecycleActionButtonClass('restart', 'size-8')}
-          aria-label={`Restart ${service.name}`}
-          title={`Restart ${service.name}`}
-          disabled={pending || !restartEnabled}
-          onClick={(event) => {
-            event.stopPropagation()
-            runAction('restart')
-          }}
+          ariaLabel={`Restart ${service.name}`}
+          stopPropagation
         >
           <RotateCcw className='size-3.5' />
-        </Button>
+        </ServiceLifecycleActionButton>
       ) : null}
     </div>
   )

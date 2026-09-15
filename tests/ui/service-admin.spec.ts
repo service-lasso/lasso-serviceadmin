@@ -172,7 +172,7 @@ test('services table filters and opens service detail', async ({ page }) => {
   ).toBeDisabled()
   await expect(
     page.getByRole('button', { name: 'Stop Service Admin UI', exact: true })
-  ).toBeEnabled()
+  ).toBeDisabled()
   await expect(
     page.getByRole('button', {
       name: 'Restart Service Admin UI',
