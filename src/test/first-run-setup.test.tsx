@@ -11,6 +11,23 @@ afterEach(() => {
 })
 
 describe('first-run setup gate', () => {
+  it('leaves the loading skeleton for a retryable setup-status failure', async () => {
+    vi.spyOn(dashboardStub, 'fetchFirstRunSetupState').mockRejectedValueOnce(
+      new Error('safe fixture failure')
+    )
+
+    await renderRoute('/', { firstRunSetupGate: true })
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /First-run setup status unavailable/i,
+      })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Retry setup status/i })
+    ).toBeVisible()
+  })
+
   it(
     'bootstraps the protected local broker without rendering key material',
     { timeout: 60_000 },

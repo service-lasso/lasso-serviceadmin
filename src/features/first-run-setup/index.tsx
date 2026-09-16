@@ -283,12 +283,12 @@ function FirstRunSetupUnavailable() {
 export function FirstRunSetupGate({ children }: { children: React.ReactNode }) {
   const setupQuery = useFirstRunSetupState()
 
-  if (setupQuery.isLoading || !setupQuery.data) {
-    return <FirstRunSetupLoading />
-  }
-
   if (setupQuery.isError) {
     return <FirstRunSetupUnavailable />
+  }
+
+  if (setupQuery.isLoading || !setupQuery.data) {
+    return <FirstRunSetupLoading />
   }
 
   const setup = setupQuery.data
