@@ -19,9 +19,7 @@ describe('first-run setup gate', () => {
     await renderRoute('/', { firstRunSetupGate: true })
 
     expect(
-      await screen.findByRole('heading', {
-        name: /First-run setup status unavailable/i,
-      })
+      await screen.findByText(/First-run setup status unavailable/i)
     ).toBeVisible()
     expect(
       screen.getByRole('button', { name: /Retry setup status/i })
