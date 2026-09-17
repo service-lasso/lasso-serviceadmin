@@ -65,6 +65,10 @@ Service Admin must consume only `service-lasso.setup-status.v1` from
 `POST /api/setup/bootstrap`. The shell remains locked until the runtime reports
 that setup mode is off and the broker vault is ready.
 
+If the setup-status request fails or is malformed, Service Admin must leave its
+loading skeleton and show a retryable unavailable state. It must not render a
+permanent loading surface over every route.
+
 The browser may render setup state, broker readiness, the safe OS operator
 name, trust-policy flags, blockers, and the number of provisioned declarations.
 It must never receive or render a vault path, master key, broker token, signing
