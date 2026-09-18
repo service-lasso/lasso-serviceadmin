@@ -1,5 +1,5 @@
 import { Link, Outlet } from '@tanstack/react-router'
-import { Palette } from 'lucide-react'
+import { Palette, Power } from 'lucide-react'
 import { usePageMetadata } from '@/lib/page-metadata'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -17,6 +17,11 @@ const sidebarNavItems = [
     title: 'Appearance',
     href: '/settings/appearance',
     icon: <Palette size={18} />,
+  },
+  {
+    title: 'Startup',
+    href: '/settings/startup',
+    icon: <Power size={18} />,
   },
 ]
 

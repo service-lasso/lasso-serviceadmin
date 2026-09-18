@@ -77,6 +77,7 @@ const appScreens: ScreenCase[] = [
   { path: '/settings', heading: /^Profile$/i },
   { path: '/settings/account', heading: /^Account$/i },
   { path: '/settings/appearance', heading: /^Appearance$/i },
+  { path: '/settings/startup', heading: /^Startup$/i },
   { path: '/settings/display', heading: /^Display$/i },
   { path: '/settings/notifications', heading: /^Notifications$/i },
 ]
