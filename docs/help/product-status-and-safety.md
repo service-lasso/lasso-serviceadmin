@@ -41,3 +41,9 @@ Do not describe a page as live, durable, runtime-backed, or production-ready unl
 - Include the safe evidence an operator can trust, such as service id, operation id, audit id, correlation id, health state, version, provider ref, or timestamp.
 - Include a negative claim when needed: no raw secrets, provider credentials, tokens, cookies, private keys, request bodies, response bodies, recovery material, or environment values.
 - If a backend contract is missing, say what is missing instead of presenting the workflow as live.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/product-status-and-safety.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/product-status-and-safety.md. Edit the canonical page, then export. -->

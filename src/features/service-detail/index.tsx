@@ -53,7 +53,6 @@ import { lifecycleActionButtonClass } from '@/lib/service-lasso-dashboard/action
 import {
   useDashboardAction,
   useDashboardService,
-  useServiceLifecycleAction,
   useServiceSetup,
   useServiceSetupAction,
 } from '@/lib/service-lasso-dashboard/hooks'
@@ -102,7 +101,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { ConfigDrawer } from '@/components/config-drawer'
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DependencyGraphCanvas } from '@/components/dependency-graph-canvas'
 import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
@@ -110,6 +108,7 @@ import { Main } from '@/components/layout/main'
 import { HeaderActions } from '@/components/page-toolbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
+import { ServiceLifecycleActionButton } from '@/components/service-lifecycle-action-button'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
   fetchServiceLogChunk,
@@ -141,6 +140,7 @@ import {
   getServiceDetailTabShortcutLabel,
   type ServiceDetailTabId,
 } from './service-detail-tabs'
+import { ServiceIsolationCard } from './service-isolation-card'
 import { ServiceRunStatusCards } from './service-run-status-cards'
 
 const editableShortcutTargetSelector = [
@@ -1243,9 +1243,6 @@ export function ServiceActionButton({
   service: DashboardService
 }) {
   const key = action.id
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const lifecycleAction = useServiceLifecycleAction()
-
   const lifecycleKinds: ServiceLifecycleActionKind[] = [
     'install',
     'config',
@@ -1270,28 +1267,6 @@ export function ServiceActionButton({
       : `${action.label} is unavailable for the current service state.`,
   }
 
-  const runLifecycleAction = (confirm: boolean) => {
-    if (!isServiceLifecycleAction || lifecycleAction.isPending) return
-    lifecycleAction.mutate(
-      {
-        serviceId: service.id,
-        action: action.kind as ServiceLifecycleActionKind,
-        confirm,
-      },
-      {
-        onSuccess: () => {
-          setConfirmOpen(false)
-          toast.success(`${action.label} completed.`)
-        },
-        onError: () => {
-          toast.error(
-            `${action.label} failed. The runtime made no UI-side assumptions.`
-          )
-        },
-      }
-    )
-  }
-
   if (!permission.allowed) {
     return (
       <Button
@@ -1312,7 +1287,6 @@ export function ServiceActionButton({
       </Button>
     )
   }
-
   if (action.kind === 'open_logs') {
     return (
       <Button key={key} variant='outline' size='sm' asChild>
@@ -1356,64 +1330,7 @@ export function ServiceActionButton({
     )
   }
 
-  if (permission.requiresConfirmation) {
-    return (
-      <>
-        <Button
-          key={key}
-          variant='outline'
-          size='sm'
-          title={permission.reason}
-          onClick={() => setConfirmOpen(true)}
-          disabled={lifecycleAction.isPending}
-        >
-          {action.label}
-        </Button>
-        <ConfirmDialog
-          open={confirmOpen}
-          onOpenChange={setConfirmOpen}
-          title='Confirm elevated action'
-          desc={
-            <div className='space-y-2'>
-              <p>
-                {permission.reason ?? 'Core marked this action as elevated.'}
-              </p>
-              <p>
-                Actor: {permission.actor ?? 'unknown'}; mode:{' '}
-                {permission.mode ?? 'unknown'}.
-              </p>
-            </div>
-          }
-          confirmText={permission.confirmationLabel ?? action.label}
-          isLoading={lifecycleAction.isPending}
-          destructive={
-            action.kind === 'stop' ||
-            action.kind === 'restart' ||
-            action.kind === 'uninstall'
-          }
-          handleConfirm={() => {
-            runLifecycleAction(true)
-          }}
-        />
-      </>
-    )
-  }
-
-  return (
-    <Button
-      key={key}
-      variant='outline'
-      size='sm'
-      title={permission.reason}
-      disabled={lifecycleAction.isPending}
-      onClick={() => runLifecycleAction(false)}
-    >
-      {lifecycleAction.isPending ? (
-        <RefreshCw className='mr-2 size-4 animate-spin' />
-      ) : null}
-      {action.label}
-    </Button>
-  )
+  return <ServiceLifecycleActionButton action={action} service={service} />
 }
 
 function ServiceDetailLoading() {
@@ -1751,6 +1668,7 @@ export function ServiceDetail({
                         </CardContent>
                       </Card>
                     </div>
+                    <ServiceIsolationCard isolation={service.isolation} />
                     <ServiceMetadataTable service={service} />
                   </TabsContent>
 

@@ -2,7 +2,7 @@
 title: Service Admin Packaging and Release Artifacts
 description: How Service Admin is packaged, installed, started, and checked as the @serviceadmin managed service.
 status: metadata-only
-tags: packaging, release, service-admin, managed-service
+tags: ["packaging", "release", "service-admin", "managed-service"]
 ---
 
 # Service Admin Packaging and Release Artifacts
@@ -31,8 +31,8 @@ The archive is the runnable payload. The manifest is the service contract that
 Service Lasso discovers and presents in Service Admin. Keep those roles separate
 when you compare releases, support bundles, and installed-service metadata.
 
-For repository-level packaging details, start with [`docs/packaging.md`](../packaging.md)
-and the Packaging and release section in [`README.md`](../../README.md). Use the
+For repository-level packaging details, start with [`docs/packaging.md`](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/packaging.md)
+and the Packaging and release section in [`README.md`](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/README.md). Use the
 main Service Lasso runtime repo when you need runtime installer behavior,
 services-root layout, release-backed service package discovery, or lifecycle API
 details.
@@ -101,6 +101,12 @@ release-backed packages.
 | The UI loads but same-origin API calls fail | Check the Service Admin runtime proxy and the Service Lasso runtime health endpoint before changing UI code. |
 | Update evidence is unclear | Record release version, manifest path, install path, checksum result, operation id, log path, and health result. Do not paste raw secrets or local credential values. |
 
-For broader operator triage, use [Service Install and Setup Config](service-install-and-setup-config.md),
-[Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md), and
-[Health Checks](health-checks.md).
+For broader operator triage, use [Service Install and Setup Config](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/service-install-and-setup-config.md),
+[Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md), and
+[Health Checks](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/health-checks.md).
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/service-admin-packaging-and-release-artifacts.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/service-admin-packaging-and-release-artifacts.md. Edit the canonical page, then export. -->

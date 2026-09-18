@@ -176,3 +176,9 @@ When escalating a Runtime or Logs problem, include:
 Exclude raw secrets, provider credentials, tokens, cookies, private keys, full
 environment dumps, request bodies, response bodies, recovery material, and
 unredacted log excerpts.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/runtime-and-logs-operator-runbook.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/runtime-and-logs-operator-runbook.md. Edit the canonical page, then export. -->
