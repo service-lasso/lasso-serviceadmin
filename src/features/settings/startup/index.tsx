@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import {
   fetchRuntimeJson,
   serviceLassoStubDataEnabled,
 } from '@/lib/service-lasso-dashboard/stub'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { ContentSection } from '../components/content-section'
 
 type StartupResponse = { startup: { autostart: boolean } }
@@ -18,7 +18,9 @@ async function loadStartupSettings(): Promise<StartupResponse> {
   return fetchRuntimeJson<StartupResponse>('/api/runtime/settings/startup')
 }
 
-async function saveStartupSettings(autostart: boolean): Promise<StartupResponse> {
+async function saveStartupSettings(
+  autostart: boolean
+): Promise<StartupResponse> {
   if (serviceLassoStubDataEnabled) {
     stubAutostart = autostart
     return { startup: { autostart } }
