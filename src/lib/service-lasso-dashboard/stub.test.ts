@@ -12,6 +12,37 @@ describe('service lasso dashboard stub', () => {
     window.localStorage.clear()
   })
 
+  it('rejects the Core authentication envelope as an incomplete Security state', async () => {
+    const { isServiceSecurityState } = await loadStub()
+
+    expect(
+      isServiceSecurityState({
+        contractVersion: 'runtime_auth_v1',
+        authenticated: true,
+        auth: {
+          required: true,
+          source: 'local',
+        },
+      })
+    ).toBe(false)
+
+    expect(
+      isServiceSecurityState({
+        updatedAt: '2026-09-20T00:00:00.000Z',
+        currentActor: 'local-root',
+        groups: [],
+        permissions: [],
+        actorAssignments: [],
+        providerMappings: [],
+        auditLinks: [],
+        safety: {
+          lastOwnerProtected: true,
+          selfSecurityAccessProtected: true,
+        },
+      })
+    ).toBe(true)
+  })
+
   it('builds a summary from the current service inventory', async () => {
     const { fetchDashboardSummary } = await loadStub()
 
