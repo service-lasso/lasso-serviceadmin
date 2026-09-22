@@ -15,6 +15,10 @@ import {
   providerReadinessRequestOptions,
   providerReadinessRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
+import {
+  observeBrokerDetailReadiness,
+  brokerLifecycleControls,
+} from '../../support/broker-detail-readiness.js'
 import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
@@ -115,9 +119,10 @@ function visibleTableRow(content, timeout = 20_000) {
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
   waitForManagedServiceReadiness('@secretsbroker')
+  const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
   unlockTrustedIdentity()
-  cy.get('[data-testid="service-detail-lifecycle-controls"]').within(() => {
+  brokerLifecycleControls(detailReadiness).within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
       .should('be.visible')
       .and('be.enabled')

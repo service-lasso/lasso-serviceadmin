@@ -17,6 +17,7 @@
     "test:unit": "vitest run",
     "test:logs:unit": "vitest run src/features/logs/provider.stub.test.ts src/features/logs/provider.runtime.test.ts",
     "test:logs:e2e": "start-server-and-test \"vite --host 127.0.0.1 --port 4175 --strictPort\" http://127.0.0.1:4175 \"cypress run --config baseUrl=http://127.0.0.1:4175 --spec cypress/e2e/logs/logs-page.cy.js\"",
+    "test:secrets:readiness-diagnostic": "start-server-and-test \"vite --host 127.0.0.1 --port 4176 --strictPort\" http://127.0.0.1:4176 \"cypress run --config baseUrl=http://127.0.0.1:4176 --spec cypress/e2e/secrets-broker/detail-readiness-diagnostic.cy.js\"",
     "test:ui": "playwright test",
     "test:runtime": "node --test tests/runtime-server.node.mjs",
     "test:secrets:real-browser": "node scripts/verify-real-broker-browser.mjs",
