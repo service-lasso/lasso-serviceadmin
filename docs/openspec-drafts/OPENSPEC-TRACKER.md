@@ -7,6 +7,12 @@ _Status: working tracker_
 
 ## Draft Spec Register
 
+Admin #636 is governed by the active diagnostic contract
+`SPEC-SERVICEADMIN-RESTART-DIAGNOSTICS.md` (`RD-001` through `RD-005`), covering
+closed service-detail readiness evidence before Broker restart. Implementation
+and full packaged qualification remain pending; Core #1382 retains the original
+macOS failure and its attribution limits.
+
 | Draft Spec | Area | Status | Main Source Docs | Intended Repo Target | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `SPEC-SERVICE-TEMPLATE-REPO.md` | Template | `draft` | `docs/reference/SERVICE-TEMPLATE-REPO.md`, `docs/reference/SERVICE-STRUCTURE-REVIEW.md`, `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md` | `service-template` | Canonical template/service-author contract draft. |
