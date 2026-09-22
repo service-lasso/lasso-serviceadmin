@@ -207,7 +207,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   for (const uiRestartProof of [
     'cy.reload()',
     'unlockTrustedIdentity()',
-    'cy.get(\'[data-testid="service-detail-lifecycle-controls"]\').within(() => {',
+    'brokerLifecycleControls(detailReadiness).within(() => {',
     "cy.contains('button', /^Restart service$/, { timeout: 20_000 })",
     "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
     "cy.wait('@restartBrokerFromUi', { timeout: 120_000 })",
