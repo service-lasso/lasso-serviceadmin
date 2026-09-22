@@ -7,12 +7,6 @@ _Status: working tracker_
 
 ## Draft Spec Register
 
-Admin #636 is governed by the active diagnostic contract
-`SPEC-SERVICEADMIN-RESTART-DIAGNOSTICS.md` (`RD-001` through `RD-005`), covering
-closed service-detail readiness evidence before Broker restart. Implementation
-and full packaged qualification remain pending; Core #1382 retains the original
-macOS failure and its attribution limits.
-
 | Draft Spec | Area | Status | Main Source Docs | Intended Repo Target | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `SPEC-SERVICE-TEMPLATE-REPO.md` | Template | `draft` | `docs/reference/SERVICE-TEMPLATE-REPO.md`, `docs/reference/SERVICE-STRUCTURE-REVIEW.md`, `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md` | `service-template` | Canonical template/service-author contract draft. |
@@ -20,6 +14,7 @@ macOS failure and its attribution limits.
 | `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Repo identity | `draft` | `README.md`, `index.html`, `package.json`, `public/images/*` | `lasso-serviceadmin` | Service Admin identity contract and donor-branding cleanup. |
 | `SPEC-SERVICEADMIN-REPO-IDENTITY.md` | Operator UI documentation | `draft` | `docs/help/*`, UI routes, screenshot manifest | `lasso-serviceadmin` | ISS-44 defines complete UI documentation; ISS-45 binds canonical reader guides to verified offline Help Center copies. |
 | `SPEC-SERVICEADMIN-SERVICE-ACTIONS.md` | Lifecycle actions | `active draft` | `src/components/service-lifecycle-action-button.tsx`, `src/features/service-detail/index.tsx`, `src/features/services/components/services-columns.tsx` | `lasso-serviceadmin` | Core-owned permission, confirmation, and state-refresh contract for service action surfaces. |
+| `SPEC-SERVICEADMIN-RESTART-DIAGNOSTICS.md` | Restart diagnostics | `active draft` | `cypress/e2e/secrets-broker/real-lifecycle.cy.js`, `scripts/service-detail-readiness-diagnostic.mjs` | `lasso-serviceadmin` | Admin #636; closed service-detail readiness metadata before Broker restart; Core #1382 retains the original macOS failure and attribution limits; full packaged qualification remains pending. |
 
 ## Current focus
 1. lock the canonical template repo contract
@@ -32,6 +27,7 @@ macOS failure and its attribution limits.
 - `docs/openspec-drafts/SPEC-SERVICE-TEMPLATE-REPO.md`
 - `docs/openspec-drafts/SPEC-CI-SECURITY-MAINTENANCE.md`
 - `docs/openspec-drafts/SPEC-SERVICEADMIN-REPO-IDENTITY.md`
+- `docs/openspec-drafts/SPEC-SERVICEADMIN-RESTART-DIAGNOSTICS.md`
 - `docs/reference/SERVICE-TEMPLATE-REPO.md`
 - `docs/reference/SERVICE-STRUCTURE-REVIEW.md`
 - `docs/reference/PROPOSED-CODEBASE-STRUCTURE.md`

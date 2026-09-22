@@ -62,6 +62,10 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Run browser qualification
         run: pnpm test:ui
+      - name: Install Cypress
+        run: pnpm exec cypress install
+      - name: Run readiness diagnostic browser fixture
+        run: pnpm test:secrets:readiness-diagnostic
       - name: Build UI
         run: pnpm build
 
