@@ -16,6 +16,7 @@ export function createServiceDetailReadinessObservation() {
     },
     responded(request, status, present) {
       if (request === null || request !== latest) return
+      latest = null
       state = 'responded'
       httpStatus =
         Number.isInteger(status) && status >= 100 && status <= 599

@@ -27,10 +27,11 @@ export function brokerLifecycleControls(observation) {
   return cy
     .get('body')
     .should(($body) => {
-      const present = $body.find(lifecycleControlsSelector).length > 0
-      expect(present, JSON.stringify(observation.snapshot(present))).to.equal(
-        true
-      )
+      const matches = $body.find(lifecycleControlsSelector)
+      expect(
+        matches.length,
+        JSON.stringify(observation.snapshot(matches.length > 0))
+      ).to.equal(1)
     })
     .find(lifecycleControlsSelector)
 }

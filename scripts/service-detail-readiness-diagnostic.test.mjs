@@ -47,6 +47,19 @@ describe('RD-001/RD-002 closed readiness observation', () => {
     })
   })
 
+  it('closes a request after its first response', () => {
+    const observer = createServiceDetailReadinessObservation()
+    const request = observer.started()
+    observer.responded(request, 200, true)
+    observer.responded(request, 503, false)
+    expect(observer.snapshot(true)).toMatchObject({
+      requestCount: 1,
+      state: 'responded',
+      httpStatus: 200,
+      servicePresent: true,
+    })
+  })
+
   it('rejects arbitrary sensitive metadata and invalid statuses', () => {
     const observer = createServiceDetailReadinessObservation()
     const secret = {
