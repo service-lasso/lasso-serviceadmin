@@ -15,16 +15,10 @@ export type SecretsBrokerAuditEventType =
   | 'secret_rotated'
 
 export type SecretsBrokerAuditOutcome =
-  | 'granted'
-  | 'denied'
-  | 'failure'
-  | 'revoked'
-  | 'success'
+  'granted' | 'denied' | 'failure' | 'revoked' | 'success'
 
 export type SecretsBrokerAuditTamperEvidenceStatus =
-  | 'verified'
-  | 'broken'
-  | 'unavailable'
+  'verified' | 'broken' | 'unavailable'
 
 export type SecretsBrokerAuditEvent = {
   id: string

@@ -460,19 +460,17 @@ function runtimeAuditChainStatus(event: AuditEvent) {
 }
 
 export function buildAuditRowsFromRuntimeEvents(events: AuditEvent[]) {
-  return events.map(
-    (event): AuditLogRow => ({
-      id: event.id,
-      event: runtimeAuditActionLabel(event.action),
-      source: runtimeAuditSourceLabel(event.source),
-      actor: event.actor,
-      outcome: event.outcome,
-      policy: runtimeAuditPolicyLabel(event),
-      tamperEvidence: runtimeAuditChainStatus(event),
-      recordedAt: event.timestamp,
-      safeSummary: event.summary,
-    })
-  )
+  return events.map((event): AuditLogRow => ({
+    id: event.id,
+    event: runtimeAuditActionLabel(event.action),
+    source: runtimeAuditSourceLabel(event.source),
+    actor: event.actor,
+    outcome: event.outcome,
+    policy: runtimeAuditPolicyLabel(event),
+    tamperEvidence: runtimeAuditChainStatus(event),
+    recordedAt: event.timestamp,
+    safeSummary: event.summary,
+  }))
 }
 
 function auditSourceLabel(status: AuditSourceStatus) {

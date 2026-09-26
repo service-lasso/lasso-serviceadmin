@@ -1,12 +1,7 @@
 export type ServiceStatus = 'running' | 'available' | 'stopped' | 'degraded'
 
 export type ServiceLogType =
-  | 'default'
-  | 'stdout'
-  | 'stderr'
-  | 'access'
-  | 'error'
-  | (string & {})
+  'default' | 'stdout' | 'stderr' | 'access' | 'error' | (string & {})
 
 export type ServiceLink = {
   label: string
@@ -27,14 +22,9 @@ export type ServiceRuntimeHealth = {
 
 export type ServiceIsolationMode = 'direct' | 'compose-scripts'
 export type ServiceIsolationRequire =
-  | 'none'
-  | 'limits'
-  | 'dedicated-user'
-  | 'hardened'
+  'none' | 'limits' | 'dedicated-user' | 'hardened'
 export type ServiceIsolationDegradeReason =
-  | 'limits_not_applied'
-  | 'dedicated_user_unavailable'
-  | 'hardening_unavailable'
+  'limits_not_applied' | 'dedicated_user_unavailable' | 'hardening_unavailable'
 
 export type ServiceIsolationLimits = {
   cpuPercent?: number
@@ -231,12 +221,7 @@ export type RuntimeLaneClassification =
   | 'unknown_owner'
 
 export type RuntimeGenerationPhase =
-  | 'starting'
-  | 'running'
-  | 'stopping'
-  | 'stopped'
-  | 'failed'
-  | 'superseded'
+  'starting' | 'running' | 'stopping' | 'stopped' | 'failed' | 'superseded'
 
 export type RuntimeInstanceHome = {
   phase: RuntimeGenerationPhase | null
@@ -324,20 +309,10 @@ export type AuditEventsResult = AuditEventsResponse & {
 }
 
 export type OperatorInboxType =
-  | 'system'
-  | 'workflow'
-  | 'service'
-  | 'update'
-  | 'security'
-  | 'help'
-  | 'error'
+  'system' | 'workflow' | 'service' | 'update' | 'security' | 'help' | 'error'
 
 export type OperatorInboxSeverity =
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'error'
-  | 'critical'
+  'info' | 'success' | 'warning' | 'error' | 'critical'
 
 export type OperatorInboxSource =
   | 'runtime'
@@ -355,9 +330,7 @@ export type OperatorInboxVisibility = 'visible' | 'hidden'
 export type OperatorInboxActionKind = 'link' | 'api' | 'command'
 
 export type OperatorInboxActionAvailability =
-  | 'available'
-  | 'disabled'
-  | 'expired'
+  'available' | 'disabled' | 'expired'
 
 export type OperatorInboxFilter =
   | 'all'
@@ -625,8 +598,7 @@ export type SecretRevealResult = {
 export type SecretMutationOperation = 'edit' | 'reset'
 
 export type SecretCreateGenerationMode =
-  | 'broker_generated'
-  | 'operator_supplied'
+  'broker_generated' | 'operator_supplied'
 
 export type SecretCreatePlan = {
   ref: string
@@ -862,10 +834,7 @@ export type BrokerProviderActionUiState =
  * Clicked-row chrome for a provider action attempt.
  */
 export type BrokerProviderActionPhase =
-  | 'pending'
-  | 'success'
-  | 'failure'
-  | 'blocked'
+  'pending' | 'success' | 'failure' | 'blocked'
 
 export type BrokerProviderRowActionName =
   | 'status'
@@ -1309,11 +1278,7 @@ export type SecretRotationVersionMetadata = {
 }
 
 export type SecretRotationVersionAction =
-  | 'status'
-  | 'stage'
-  | 'activate'
-  | 'rollback'
-  | 'retire'
+  'status' | 'stage' | 'activate' | 'rollback' | 'retire'
 
 export type SecretRotationVersionRequest = {
   action: SecretRotationVersionAction
@@ -1395,11 +1360,7 @@ export type SecretRotationPreviewResult = {
 }
 
 export type SecretRotationImpactServiceAction =
-  | 'restart'
-  | 'reload'
-  | 'action'
-  | 'manual'
-  | 'none'
+  'restart' | 'reload' | 'action' | 'manual' | 'none'
 
 export type CoreSecretRotationImpactPlan = {
   ref: string
@@ -1493,11 +1454,7 @@ export type CoreSecretRotationExecutionState = {
 }
 
 export type ServiceSetupStepStatus =
-  | 'pending'
-  | 'succeeded'
-  | 'failed'
-  | 'timeout'
-  | 'skipped'
+  'pending' | 'succeeded' | 'failed' | 'timeout' | 'skipped'
 
 export type ServiceSetupStepRun = {
   runId: string
@@ -1598,12 +1555,7 @@ export type FirstRunSetupActionResult = {
 }
 
 export type ServiceLifecycleActionKind =
-  | 'install'
-  | 'config'
-  | 'start'
-  | 'stop'
-  | 'restart'
-  | 'reload'
+  'install' | 'config' | 'start' | 'stop' | 'restart' | 'reload'
 
 export type SecurityPermissionRisk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -1838,18 +1790,10 @@ export type SecretAccessAssignmentFinding = {
  * `docs/reference/service-secret-access-policy.md`.
  */
 export type SecretAccessPolicyOperation =
-  | 'resolve'
-  | 'create'
-  | 'update'
-  | 'rotate'
-  | 'delete'
+  'resolve' | 'create' | 'update' | 'rotate' | 'delete'
 
 export type SecretAccessPolicyScope =
-  | 'workspace'
-  | 'service'
-  | 'app'
-  | 'shared'
-  | 'global'
+  'workspace' | 'service' | 'app' | 'shared' | 'global'
 
 export type SecretAccessPolicyGrant = {
   id: string
@@ -1885,11 +1829,7 @@ export type SecretAccessAssignmentAudit = {
 }
 
 export type McpRole =
-  | 'Observer'
-  | 'Operator'
-  | 'Maintainer'
-  | 'Administrator'
-  | string
+  'Observer' | 'Operator' | 'Maintainer' | 'Administrator' | string
 
 export type McpTransport = 'stdio' | 'streamable-http' | 'sse' | string
 
@@ -2033,11 +1973,7 @@ export type ServiceUpdateState = {
   lastCheck: {
     checkedAt: string
     status:
-      | 'latest'
-      | 'update_available'
-      | 'pinned'
-      | 'unavailable'
-      | 'check_failed'
+      'latest' | 'update_available' | 'pinned' | 'unavailable' | 'check_failed'
     reason: string
     sourceRepo: string | null
     track: string | null

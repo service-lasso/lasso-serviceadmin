@@ -112,12 +112,7 @@ function EnabledBadge({ enabled }: { enabled: boolean }) {
 }
 
 type ProviderAction =
-  | 'add'
-  | 'edit'
-  | 'test'
-  | 'reconnect'
-  | 'disable'
-  | 'remove'
+  'add' | 'edit' | 'test' | 'reconnect' | 'disable' | 'remove'
 
 type SelectedProviderAction = {
   provider: SecretsBrokerSourceBackend

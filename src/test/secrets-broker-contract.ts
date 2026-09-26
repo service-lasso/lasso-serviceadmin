@@ -43,8 +43,7 @@ function sourceOperations(source?: SourceOverride) {
   const sourcePayload = fixtureResponse('source-local-ready')
   const operations = structuredClone(
     ((sourcePayload.sources as Record<string, unknown>[])[0]?.operations as
-      | Record<string, unknown>[]
-      | undefined) ?? []
+      Record<string, unknown>[] | undefined) ?? []
   )
 
   if (!source) return operations

@@ -1,11 +1,7 @@
 export type SecretsBrokerDiagnosticStatus = 'pass' | 'warning' | 'fail'
 
 export type SecretsBrokerDiagnosticCategory =
-  | 'configuration'
-  | 'permission'
-  | 'provider'
-  | 'auth'
-  | 'runtime'
+  'configuration' | 'permission' | 'provider' | 'auth' | 'runtime'
 
 export type SecretsBrokerDiagnostic = {
   id: string
