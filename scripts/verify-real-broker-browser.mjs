@@ -546,6 +546,8 @@ try {
   cypress = spawn(
     process.execPath,
     [
+      '--require',
+      path.join(root, 'scripts', 'cypress-child-exit-preload.cjs'),
       cypressBin,
       'run',
       '--browser',

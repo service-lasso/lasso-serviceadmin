@@ -17,6 +17,9 @@ export function observeBrokerDetailReadiness() {
           Boolean(response.body?.service)
         )
       })
+      request.on('after:response', () => {
+        observation.delivered(token)
+      })
     }
   )
   return observation
@@ -43,8 +46,8 @@ export function brokerLifecycleControls(observation) {
         pageNotFoundPresent: $body
           .find('span')
           .toArray()
-          .some((element) =>
-            element.textContent?.trim() === 'Oops! Page Not Found!'
+          .some(
+            (element) => element.textContent?.trim() === 'Oops! Page Not Found!'
           ),
       }
       expect(

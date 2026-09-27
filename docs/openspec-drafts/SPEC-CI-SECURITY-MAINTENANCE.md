@@ -72,3 +72,23 @@ Acceptance contract:
 - This repairs an independently reproducible observation defect. Cypress's
   passed-spec/exit-1 cause remains unresolved until complete evidence proves it;
   do not reclassify a passing summary as a successful qualification.
+
+## ISS-651: distinguish Cypress CLI and executable exit
+
+A first-run spec at Core 4537fc8 passed before CLI exit 1 despite complete pipe
+capture. Before attributing the cause, a Node preload may observe exit and close
+outcomes of Cypress executable children spawned by the existing CLI. The CLI can
+finish on exit before close; record the event kind without keeping it alive. Forward the
+original spawn call unchanged; add no child, timer, mutation, retry or debug flag.
+Preserve unhandled error behavior, caller listeners and outer CLI exit status.
+
+The observation is capped at eight events per invocation and contains only a
+fixed schema, smoke-test/run phase, exit/close event kind, closed exit code or unavailable state, and
+null/allowlisted signal. Never retain executable paths, PID, arguments, options,
+environment, errors, arbitrary output or test/runtime state. Unknown outcomes
+remain explicit and never become success. Tests must prove delegated arguments
+and child identity, unrelated-child exclusion, original nonzero/signal/error
+behavior, privacy/cap boundaries and real-child CLI/executable status separation,
+including a CLI that terminates on the executable's exit event.
+Full current-head Admin and owning three-platform Core qualification are required.
+This is causal observation only; no passing-summary or exit-status waiver.

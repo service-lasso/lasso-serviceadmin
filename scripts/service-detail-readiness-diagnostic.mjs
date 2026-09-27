@@ -5,6 +5,8 @@ export function createServiceDetailReadinessObservation() {
   let state = 'unobserved'
   let httpStatus = null
   let servicePresent = null
+  let responseToken = null
+  let responseDelivery = 'unobserved'
   return {
     started() {
       latest = Symbol('request')
@@ -12,17 +14,24 @@ export function createServiceDetailReadinessObservation() {
       state = 'pending'
       httpStatus = null
       servicePresent = null
+      responseToken = null
+      responseDelivery = 'pending'
       return latest
     },
     responded(request, status, present) {
       if (request === null || request !== latest) return
       latest = null
+      responseToken = request
       state = 'responded'
       httpStatus =
         Number.isInteger(status) && status >= 100 && status <= 599
           ? status
           : null
       servicePresent = typeof present === 'boolean' ? present : null
+    },
+    delivered(request) {
+      if (request === null || request !== responseToken) return
+      responseDelivery = 'complete'
     },
     snapshot(controlsPresent, renderState) {
       return {
@@ -31,6 +40,7 @@ export function createServiceDetailReadinessObservation() {
         state,
         httpStatus,
         servicePresent,
+        responseDelivery,
         controlsPresent: controlsPresent === true,
         ...(renderState
           ? {

@@ -56,7 +56,11 @@ describe('RD-003/RD-004 lifecycle readiness diagnostic browser contract', () => 
     })
     const observation = observeBrokerDetailReadiness()
     cy.window().then((window) =>
-      window.fetch('/api/dashboard/services/%40secretsbroker')
+      window
+        .fetch('/api/dashboard/services/%40secretsbroker')
+        .then(async (response) => {
+          await response.arrayBuffer()
+        })
     )
     cy.then(() => {
       expect(observation.snapshot(false)).to.include({
@@ -64,6 +68,7 @@ describe('RD-003/RD-004 lifecycle readiness diagnostic browser contract', () => 
         state: 'responded',
         httpStatus: 200,
         servicePresent: true,
+        responseDelivery: 'complete',
       })
       expect(JSON.stringify(observation.snapshot(false))).not.to.contain(
         'PRIVATE-RESPONSE-SENTINEL'
