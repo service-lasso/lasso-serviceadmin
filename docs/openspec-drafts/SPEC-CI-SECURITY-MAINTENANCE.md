@@ -50,3 +50,25 @@ Acceptance contract:
 The #629 dependency update selected Table v9 while current UI source still uses v8 APIs, producing 591 compiler errors on unchanged develop 500485f7fbf10c813f4a9d7bf3013d83aed548db. Restore package/lock selection to the available supported v8 line and keep a package-specific Dependabot major-update guard until a separately governed source/spec migration is delivered. Keep production and tooling audit gates enabled; the guard is not a security exemption. Verify frozen install, lint/format, build, unit tests and complete hosted gates on the exact head, then integrate through develop into blocked diagnostic #640.
 
 The #641 macOS real-Broker gate currently reports HTTP 200/service present but no lifecycle controls after trusted unlock. Existing test-only readiness diagnostics may project fixed booleans for visible skeleton, service-not-found, general error and page-not-found render states. Never retain DOM text or response values; preserve the original assertion and default timeout. This observation supports baseline qualification and does not prove the original #1382 pre-unlock cause or relax any browser gate.
+
+## ISS-651: complete captured Cypress output before interpreting exit
+
+The qualification harness must await closure of the Cypress child's captured
+stdout/stderr before publishing those bounded buffers and interpreting its exit
+code. An `exit` event alone is insufficient evidence that the pipes have drained.
+Use the existing qualification timeout for the whole wait; no extra drain budget.
+
+Acceptance contract:
+
+- Preserve the exact exit code, including nonzero and signal/null outcomes.
+- Late pipe output is retained, bounded and checked by the existing private
+  material guard before publication. Add no arbitrary debug or environment logs.
+- Live/unfinished streams at the deadline remain a failed qualification; remove
+  observation listeners/timers without waiving cleanup or extending timeouts.
+- Real-child regression fixtures must demonstrate late output after process
+  exit, retained nonzero status, signal/null status, and deadline failure.
+- Keep runner lifecycle waits unchanged; this requirement concerns Cypress
+  captured output only. Include focused tests in every real-Broker CI lane.
+- This repairs an independently reproducible observation defect. Cypress's
+  passed-spec/exit-1 cause remains unresolved until complete evidence proves it;
+  do not reclassify a passing summary as a successful qualification.
