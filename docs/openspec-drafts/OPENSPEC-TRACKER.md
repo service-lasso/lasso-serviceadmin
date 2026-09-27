@@ -50,3 +50,7 @@ Still needs explicit implementation-ready work for:
 - deciding which starter-file fields are canonical first-pass contract versus illustrative placeholders
 - normalizing the exact health schema around `process` default plus explicit `http|tcp|file|variable` overrides
 - replacing the starter CI package/test flow with a real released-harness invocation once `service-lasso-harness` exists as a binary
+
+## Current trusted-identity pre-unlock observation
+
+Admin #640 / Core #1382 extends SPEC-SERVICEADMIN-RESTART-DIAGNOSTICS.md RD-006 through RD-010 with helper-scoped failure attribution, closed marker/request metadata, original failure preservation and listener cleanup. Admin #636 post-unlock detail readiness is delivered through #637 and owning Core #1416; its completion does not resolve the historical pre-unlock failure. Full current-head Admin gates and checksum-bound Core Windows/Linux/macOS packaged acceptance remain required for #640 diagnostic delivery.
