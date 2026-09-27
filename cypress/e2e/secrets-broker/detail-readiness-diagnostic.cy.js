@@ -18,6 +18,28 @@ describe('RD-003/RD-004 lifecycle readiness diagnostic browser contract', () => 
     expect(observedFailure).to.equal(expectedFailure)
   })
 
+  for (const [state, html] of [
+    ['skeletonPresent', '<div data-slot="skeleton"></div>'],
+    ['serviceNotFoundPresent', '<div data-slot="card-title">Service not found</div>'],
+    ['generalErrorPresent', '<span>Oops! Something went wrong :\')</span>'],
+    ['pageNotFoundPresent', '<span>Oops! Page Not Found!</span>'],
+  ]) {
+    it(`records ${state} without relaxing missing-control failure`, () => {
+      expectedFailure = true
+      const observation = createServiceDetailReadinessObservation()
+      cy.document().then((document) => {
+        document.body.innerHTML = `${html}<p>PRIVATE-DOM-SENTINEL</p>`
+      })
+      cy.on('fail', (error) => {
+        expect(error.message).to.contain(`"${state}":true`)
+        expect(error.message).not.to.contain('PRIVATE-DOM-SENTINEL')
+        observedFailure = true
+        return false
+      })
+      brokerLifecycleControls(observation)
+    })
+  }
+
   it('returns present controls without mutation', () => {
     const observation = createServiceDetailReadinessObservation()
     cy.document().then((document) => {
