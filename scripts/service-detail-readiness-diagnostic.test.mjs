@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { createServiceDetailReadinessObservation } from './service-detail-readiness-diagnostic.mjs'
 
+it('projects only fixed render booleans without retaining diagnostic input', () => {
+  const observer = createServiceDetailReadinessObservation()
+  const snapshot = observer.snapshot(false, {
+    skeletonPresent: true,
+    serviceNotFoundPresent: false,
+    generalErrorPresent: true,
+    pageNotFoundPresent: 'PRIVATE-DOM-SENTINEL',
+    text: 'PRIVATE-DOM-SENTINEL',
+  })
+  expect(snapshot.renderState).toEqual({
+    skeletonPresent: true,
+    serviceNotFoundPresent: false,
+    generalErrorPresent: true,
+    pageNotFoundPresent: false,
+  })
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE-DOM-SENTINEL')
+})
+
 describe('RD-001/RD-002 closed readiness observation', () => {
   it('distinguishes unobserved, pending, failed, missing and ready responses', () => {
     const observer = createServiceDetailReadinessObservation()

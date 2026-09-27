@@ -24,7 +24,7 @@ export function createServiceDetailReadinessObservation() {
           : null
       servicePresent = typeof present === 'boolean' ? present : null
     },
-    snapshot(controlsPresent) {
+    snapshot(controlsPresent, renderState) {
       return {
         kind: 'broker-detail-readiness',
         requestCount,
@@ -32,6 +32,17 @@ export function createServiceDetailReadinessObservation() {
         httpStatus,
         servicePresent,
         controlsPresent: controlsPresent === true,
+        ...(renderState
+          ? {
+              renderState: {
+                skeletonPresent: renderState.skeletonPresent === true,
+                serviceNotFoundPresent:
+                  renderState.serviceNotFoundPresent === true,
+                generalErrorPresent: renderState.generalErrorPresent === true,
+                pageNotFoundPresent: renderState.pageNotFoundPresent === true,
+              },
+            }
+          : {}),
       }
     },
   }
