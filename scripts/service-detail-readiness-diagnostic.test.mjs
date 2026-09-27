@@ -1,7 +1,64 @@
 import { describe, expect, it } from 'vitest'
 import { createServiceDetailReadinessObservation } from './service-detail-readiness-diagnostic.mjs'
 
+it('projects only fixed render booleans without retaining diagnostic input', () => {
+  const observer = createServiceDetailReadinessObservation()
+  const snapshot = observer.snapshot(false, {
+    skeletonPresent: true,
+    serviceNotFoundPresent: false,
+    generalErrorPresent: true,
+    pageNotFoundPresent: 'PRIVATE-DOM-SENTINEL',
+    text: 'PRIVATE-DOM-SENTINEL',
+  })
+  expect(snapshot.renderState).toEqual({
+    skeletonPresent: true,
+    serviceNotFoundPresent: false,
+    generalErrorPresent: true,
+    pageNotFoundPresent: false,
+  })
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE-DOM-SENTINEL')
+})
+
 describe('RD-001/RD-002 closed readiness observation', () => {
+  it('distinguishes response from delivery without inferring rendered controls', () => {
+    const observer = createServiceDetailReadinessObservation()
+    expect(observer.snapshot(false).responseDelivery).toBe('unobserved')
+    const request = observer.started()
+    observer.delivered(request)
+    expect(observer.snapshot(false).responseDelivery).toBe('pending')
+    observer.responded(request, 200, true)
+    expect(observer.snapshot(false).responseDelivery).toBe('pending')
+    expect(observer.delivered(request)).toBeUndefined()
+    observer.delivered(request)
+    expect(observer.snapshot(false)).toMatchObject({
+      responseDelivery: 'complete',
+      controlsPresent: false,
+      httpStatus: 200,
+    })
+  })
+
+  it('ignores stale and unmatched delivery and resets for a new request', () => {
+    const observer = createServiceDetailReadinessObservation()
+    const old = observer.started()
+    observer.responded(old, 200, true)
+    observer.delivered(old)
+    const current = observer.started()
+    for (const token of [null, old, Symbol('PRIVATE-SENTINEL')])
+      observer.delivered(token)
+    expect(observer.snapshot(false).responseDelivery).toBe('pending')
+    observer.responded(current, 503, false)
+    observer.delivered(old)
+    expect(observer.snapshot(false).responseDelivery).toBe('pending')
+    observer.delivered(current)
+    expect(observer.snapshot(false)).toMatchObject({
+      responseDelivery: 'complete',
+      httpStatus: 503,
+      servicePresent: false,
+    })
+    expect(JSON.stringify(observer.snapshot(false))).not.toContain(
+      'PRIVATE-SENTINEL'
+    )
+  })
   it('distinguishes unobserved, pending, failed, missing and ready responses', () => {
     const observer = createServiceDetailReadinessObservation()
     expect(observer.snapshot(false).state).toBe('unobserved')
@@ -31,6 +88,7 @@ describe('RD-001/RD-002 closed readiness observation', () => {
       httpStatus: 200,
       servicePresent: true,
       controlsPresent: true,
+      responseDelivery: 'pending',
     })
   })
 

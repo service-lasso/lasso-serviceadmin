@@ -1,3 +1,4 @@
+import { waitForCapturedChildClose } from './captured-child-close.mjs'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -545,6 +546,8 @@ try {
   cypress = spawn(
     process.execPath,
     [
+      '--require',
+      path.join(root, 'scripts', 'cypress-child-exit-preload.cjs'),
       cypressBin,
       'run',
       '--browser',
@@ -570,7 +573,10 @@ try {
   )
   let cypressExit
   try {
-    cypressExit = await waitForExit(cypress, cypressQualificationTimeoutMs)
+    cypressExit = await waitForCapturedChildClose(
+      cypress,
+      cypressQualificationTimeoutMs
+    )
   } catch (error) {
     qualificationFailureKind = classifyQualificationFailure({ timedOut: true })
     throw error
