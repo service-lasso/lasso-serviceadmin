@@ -237,9 +237,7 @@ async function installCatalogPackages(
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as
-    | T
-    | { message?: string }
-    | null
+    T | { message?: string } | null
 
   if (!response.ok) {
     const message =

@@ -1,10 +1,7 @@
 export type SecretsBrokerBackupState = 'ready' | 'missing' | 'stale' | 'blocked'
 
 export type SecretsBrokerRotationState =
-  | 'current'
-  | 'rotation-due'
-  | 'recovery-risk'
-  | 'blocked'
+  'current' | 'rotation-due' | 'recovery-risk' | 'blocked'
 
 export type SecretsBrokerBackupKeyAction = {
   id:

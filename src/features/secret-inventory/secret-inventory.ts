@@ -1,8 +1,5 @@
 export type SecretInventoryState =
-  | 'present'
-  | 'missing'
-  | 'stale'
-  | 'rotation-due'
+  'present' | 'missing' | 'stale' | 'rotation-due'
 
 export type SecretInventorySource =
   | 'local encrypted store'

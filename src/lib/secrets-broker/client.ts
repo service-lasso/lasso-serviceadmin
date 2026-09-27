@@ -55,19 +55,12 @@ export type SecretsBrokerRouteName =
   | 'events'
 
 export type SecretsBrokerRouteState =
-  | 'ready'
-  | 'unsupported'
-  | 'denied'
-  | 'unavailable'
+  'ready' | 'unsupported' | 'denied' | 'unavailable'
 
 export const secretsBrokerSupportedContractRange = '>=1.0.0 <2.0.0'
 
 export type SecretsBrokerContractCompatibilityState =
-  | 'compatible'
-  | 'missing'
-  | 'malformed'
-  | 'unsupported'
-  | 'not-applicable'
+  'compatible' | 'missing' | 'malformed' | 'unsupported' | 'not-applicable'
 
 export type SecretsBrokerContractCompatibility = {
   state: SecretsBrokerContractCompatibilityState
@@ -87,9 +80,7 @@ export type SecretsBrokerOperationMaturity =
   | 'unknown'
 
 export type SecretsBrokerOperationClassification =
-  | 'read'
-  | 'mutation'
-  | 'unknown'
+  'read' | 'mutation' | 'unknown'
 
 export type SecretsBrokerOperationCapability = {
   operationId: string
@@ -203,10 +194,7 @@ export type SecretsBrokerManagedSecretsResult = {
 }
 
 export type SecretsBrokerSecretDryRunAction =
-  | 'edit'
-  | 'reset'
-  | 'delete'
-  | 'policy'
+  'edit' | 'reset' | 'delete' | 'policy'
 
 export type SecretsBrokerSecretDryRunRequest = {
   action: SecretsBrokerSecretDryRunAction
