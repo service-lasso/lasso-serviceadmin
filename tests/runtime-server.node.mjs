@@ -60,8 +60,10 @@ import {
 import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
+  createLockedWrapperUiRecorder,
   createQualificationProgressRecorder,
   parseCypressChildProvenance,
+  parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
   qualificationProgressPhases,
   stoppedLifecycleQualificationProgressPhases,
@@ -1161,6 +1163,78 @@ test('qualification progress emits nothing when disabled or outside the lifecycl
   assert.deepEqual(writes, [])
 })
 
+test('locked-wrapper UI provenance is closed-schema, bounded, and secret-free', () => {
+  const writes = []
+  const recorder = createLockedWrapperUiRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+    }),
+    {
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+    }
+  )
+  assert.equal(recorder.record({ unavailablePanelPresent: false }), null)
+  assert.deepEqual(parseLockedWrapperUiDiagnostic(writes[0].trim()), {
+    unavailablePanelPresent: true,
+    unavailablePanelVisible: true,
+    retryControlPresent: true,
+  })
+  for (const unsafeEvidence of [
+    {
+      schema: 'service-admin.locked-wrapper-ui.v1',
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+      domText: 'private rendered content',
+    },
+    {
+      schema: 'service-admin.locked-wrapper-ui.v1',
+      unavailablePanelPresent: false,
+      unavailablePanelVisible: true,
+      retryControlPresent: false,
+    },
+    {
+      schema: 'service-admin.locked-wrapper-ui.v1',
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: false,
+      retryControlPresent: true,
+      url: 'http://private.example/',
+    },
+  ]) {
+    assert.equal(
+      parseLockedWrapperUiDiagnostic(JSON.stringify(unsafeEvidence)),
+      null
+    )
+  }
+
+  const outsideSpec = createLockedWrapperUiRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  outsideSpec.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-first-run.cy.js'
+  )
+  assert.equal(
+    outsideSpec.record({
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+    }),
+    null
+  )
+})
+
 test('qualification progress call sites are exact, ordered, and bounded', async () => {
   const lifecycleSource = await readFile(
     new URL(
@@ -1197,6 +1271,15 @@ test('qualification progress call sites are exact, ordered, and bounded', async 
   }
   assert.equal(writes.length, qualificationProgressPhases.length)
   assert.equal(recorder.record('acceptance_complete'), null)
+
+  const lockedWrapperObserver = "cy.task('lockedWrapperUiCheckpoint'"
+  const lockedWrapperAssertion =
+    "cy.contains('Secrets Broker management is unavailable.'"
+  assert.equal(lifecycleSource.split(lockedWrapperObserver).length - 1, 1)
+  assert.ok(
+    lifecycleSource.indexOf(lockedWrapperObserver) <
+      lifecycleSource.lastIndexOf(lockedWrapperAssertion)
+  )
 })
 
 test('stopped lifecycle qualification progress is exact, ordered, and isolated', async () => {
@@ -1283,6 +1366,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
         serviceRunning: true,
         serviceHealthy: false,
       },
+      lockedWrapperUi: null,
     }
   )
   assert.equal(
@@ -1318,7 +1402,38 @@ test('qualification failures retain only bounded phase and transport metadata', 
       statuses: [],
       adminReachability: 'unreachable',
       providerUi: null,
+      lockedWrapperUi: null,
     }
+  )
+})
+
+test('qualification failure retains only closed locked-wrapper UI state', () => {
+  assert.deepEqual(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      lockedWrapperUiDiagnostic: {
+        unavailablePanelPresent: true,
+        unavailablePanelVisible: false,
+        retryControlPresent: false,
+      },
+    }).lockedWrapperUi,
+    {
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: false,
+      retryControlPresent: false,
+    }
+  )
+  assert.equal(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      lockedWrapperUiDiagnostic: {
+        unavailablePanelPresent: true,
+        unavailablePanelVisible: true,
+        retryControlPresent: true,
+        secret: 'never retain',
+      },
+    }).lockedWrapperUi,
+    null
   )
 })
 
