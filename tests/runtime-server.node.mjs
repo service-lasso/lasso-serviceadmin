@@ -12,6 +12,10 @@ import {
   TrustedIngressProxyError,
 } from '../runtime/server.js'
 import {
+  isLockedWrapperContainmentFailure,
+  lockedWrapperContainmentMessages,
+} from '../scripts/locked-wrapper-containment-contract.mjs'
+import {
   brokerMetadataEndpointCount,
   brokerMetadataReadinessAttempts,
   brokerMetadataRequestOptions,
@@ -67,6 +71,36 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from '../scripts/real-browser-transport-diagnostics.mjs'
+
+test('locked wrapper accepts only named contained launch failures', () => {
+  assert.equal(
+    isLockedWrapperContainmentFailure(lockedWrapperContainmentMessages[0]),
+    true
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(lockedWrapperContainmentMessages[1]),
+    true
+  )
+  for (const unsafeMessage of [
+    `unexpected detail: ${lockedWrapperContainmentMessages[0]}`,
+    `${lockedWrapperContainmentMessages[1]} unexpected detail`,
+    `${lockedWrapperContainmentMessages[0]} caused by ${lockedWrapperContainmentMessages[1]}`,
+  ]) {
+    assert.equal(isLockedWrapperContainmentFailure(unsafeMessage), false)
+  }
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      'Cannot start service "@secretsbroker" because process spawn failed: Windows managed launcher exited before the service launch was acknowledged (exit 2).'
+    ),
+    false
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      'Cannot start service "@secretsbroker" because process spawn timed out.'
+    ),
+    false
+  )
+})
 
 test('bounded provider, metadata, and execute network waits retain exact source counts', async () => {
   assert.equal(cypressQualificationTimeoutMs, 720_000)
@@ -672,7 +706,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'failOnStatusCode: false',
     'expect(status).to.equal(409)',
     "error: 'invalid_lifecycle_state'",
-    '/root exited during ownership enrollment/i',
+    'expect(isLockedWrapperContainmentFailure(body?.message)).to.equal(true)',
     "cy.contains('Secrets Broker management is unavailable.'",
     "expect(body).to.deep.equal({ outcome: 'wrapper_restored' })",
   ]) {
