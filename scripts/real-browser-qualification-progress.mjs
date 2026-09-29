@@ -2,6 +2,17 @@ import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualifica
 
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
+const cypressChildSchema = 'service-admin.cypress-child-exit.v1'
+const cypressChildErrorCodes = new Set([
+  'EACCES',
+  'EAGAIN',
+  'EMFILE',
+  'ENFILE',
+  'ENOENT',
+  'ENOMEM',
+  'EPERM',
+  'UNKNOWN',
+])
 
 export const qualificationProgressPhases = Object.freeze([
   'lifecycle_started',
@@ -62,6 +73,60 @@ export function parseQualificationProgressDiagnostic(line) {
     return null
   }
   return { phase: value.phase, elapsedMs: value.elapsedMs }
+}
+
+export function parseCypressChildProvenance(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  let value
+  try {
+    value = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (
+    value?.schema !== cypressChildSchema ||
+    !['smoke_test', 'run'].includes(value.phase) ||
+    !['spawn', 'spawn_throw', 'error', 'exit', 'close'].includes(value.event)
+  ) {
+    return null
+  }
+  if (value.event === 'spawn') {
+    if (Object.keys(value).sort().join(',') !== 'event,phase,schema') return null
+    return { phase: value.phase, event: value.event }
+  }
+  if (['spawn_throw', 'error'].includes(value.event)) {
+    if (
+      Object.keys(value).sort().join(',') !== 'errorCode,event,phase,schema' ||
+      (value.errorCode !== 'unavailable' &&
+        !cypressChildErrorCodes.has(value.errorCode))
+    ) {
+      return null
+    }
+    return {
+      phase: value.phase,
+      event: value.event,
+      errorCode: value.errorCode,
+    }
+  }
+  if (
+    Object.keys(value).sort().join(',') !== 'event,exitCode,phase,schema,signal' ||
+    !(
+      value.exitCode === null ||
+      value.exitCode === 'unavailable' ||
+      (Number.isInteger(value.exitCode) &&
+        value.exitCode >= 0 &&
+        value.exitCode <= 255)
+    ) ||
+    ![null, 'SIGINT', 'SIGTERM', 'SIGKILL', 'other'].includes(value.signal)
+  ) {
+    return null
+  }
+  return {
+    phase: value.phase,
+    event: value.event,
+    exitCode: value.exitCode,
+    signal: value.signal,
+  }
 }
 
 export function createQualificationProgressRecorder({
@@ -132,6 +197,7 @@ export function createQualificationProgressRecorder({
 export function buildQualificationFailureDiagnostic({
   failure,
   progressEvents = [],
+  cypressChildEvents = [],
   providerUiDiagnostic,
   transportDiagnostic,
 }) {
@@ -147,6 +213,12 @@ export function buildQualificationFailureDiagnostic({
         event.elapsedMs >= 0
     )
   const lastProgress = boundedProgress.at(-1)
+  const boundedCypressChildEvents = cypressChildEvents
+    .slice(0, 16)
+    .filter((event) => {
+      const serialized = JSON.stringify({ schema: cypressChildSchema, ...event })
+      return parseCypressChildProvenance(serialized) !== null
+    })
   const safeProviderUiDiagnostic =
     providerCheckpoints.has(providerUiDiagnostic?.checkpoint) &&
     providerComponents.has(providerUiDiagnostic?.component) &&
@@ -182,6 +254,7 @@ export function buildQualificationFailureDiagnostic({
     failure,
     lastPhase: lastProgress?.phase ?? 'not_started',
     elapsedMs: lastProgress?.elapsedMs ?? 0,
+    cypressChildEvents: boundedCypressChildEvents,
     transportPhases: Array.isArray(transportDiagnostic?.phases)
       ? transportDiagnostic.phases.slice(0, 16)
       : [],

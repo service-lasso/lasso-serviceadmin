@@ -11,7 +11,7 @@ import observer from './cypress-child-exit-observer.cjs'
 
 const { installCypressChildExitObserver } = observer
 
-test('delegates the original call and preserves child identity and error behavior', () => {
+test('delegates the original call and preserves child identity and terminal error behavior', () => {
   const child = new EventEmitter()
   const args = ['--run-project', 'PRIVATE_SENTINEL']
   const options = { env: { PRIVATE_SENTINEL: 'credential' } }
@@ -26,7 +26,7 @@ test('delegates the original call and preserves child identity and error behavio
   assert.equal(api.spawn('Cypress.exe', args, options), child)
   assert.equal(received[1], args)
   assert.equal(received[2], options)
-  assert.equal(child.listenerCount('error'), 0)
+  assert.equal(child.listenerCount('error'), 1)
   const failure = new Error('original spawn failure')
   assert.throws(
     () => child.emit('error', failure),
@@ -34,7 +34,7 @@ test('delegates the original call and preserves child identity and error behavio
   )
 })
 
-test('retains nonzero and signal outcomes with capped private-input-free records', () => {
+test('retains bounded spawn, exit, and signal provenance without private input', () => {
   const children = []
   const records = []
   const api = {
@@ -53,21 +53,60 @@ test('retains nonzero and signal outcomes with capped private-input-free records
       index === 1 ? 'SIGTERM' : index === 2 ? 'PRIVATE_SENTINEL' : null
     )
   }
-  assert.equal(records.length, 8)
-  assert.equal(records[0].exitCode, 7)
-  assert.equal(records[0].phase, 'smoke_test')
-  assert.equal(records[1].exitCode, null)
-  assert.equal(records[1].signal, 'SIGTERM')
-  assert.equal(records[2].exitCode, 'unavailable')
-  assert.equal(records[2].signal, 'other')
+  assert.equal(records.length, 16)
+  assert.deepEqual(records[0], {
+    schema: 'service-admin.cypress-child-exit.v1',
+    phase: 'smoke_test',
+    event: 'spawn',
+  })
+  assert.equal(records[1].exitCode, 7)
+  assert.equal(records[1].phase, 'smoke_test')
+  assert.equal(records[3].exitCode, null)
+  assert.equal(records[3].signal, 'SIGTERM')
+  assert.equal(records[5].exitCode, 'unavailable')
+  assert.equal(records[5].signal, 'other')
   assert.equal(JSON.stringify(records).includes('PRIVATE_SENTINEL'), false)
-  assert.deepEqual(Object.keys(records[0]), [
+  assert.deepEqual(Object.keys(records[1]), [
     'schema',
     'phase',
     'event',
     'exitCode',
     'signal',
   ])
+})
+
+test('retains a safe child error code and rethrows the original error', () => {
+  const records = []
+  const child = new EventEmitter()
+  const api = { spawn: () => child }
+  installCypressChildExitObserver(api, (line) => records.push(JSON.parse(line)))
+  api.spawn('Cypress.exe')
+  const error = Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'EACCES' })
+  assert.throws(() => child.emit('error', error), (caught) => caught === error)
+  assert.deepEqual(records.at(-1), {
+    schema: 'service-admin.cypress-child-exit.v1',
+    phase: 'run',
+    event: 'error',
+    errorCode: 'EACCES',
+  })
+  assert.equal(JSON.stringify(records).includes('PRIVATE_SENTINEL'), false)
+})
+
+test('retains a safe synchronous spawn failure code and rethrows the original error', () => {
+  const records = []
+  const error = Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ENOENT' })
+  const api = { spawn: () => { throw error } }
+  installCypressChildExitObserver(api, (line) => records.push(JSON.parse(line)))
+  assert.throws(() => api.spawn('Cypress.exe'), (caught) => caught === error)
+  assert.deepEqual(records, [
+    {
+      schema: 'service-admin.cypress-child-exit.v1',
+      phase: 'run',
+      event: 'spawn_throw',
+      errorCode: 'ENOENT',
+    },
+  ])
+  assert.equal(JSON.stringify(records).includes('PRIVATE_SENTINEL'), false)
 })
 
 test('ignores unrelated children and never replaces a result with a sink failure', () => {
@@ -115,11 +154,16 @@ for (const terminationEvent of ['exit', 'close']) {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line))
-      assert.deepEqual(
-        records.map((record) => record.event),
-        terminationEvent === 'exit' ? ['exit'] : ['exit', 'close']
-      )
-      for (const record of records)
+      assert.deepEqual(records.map((record) => record.event), [
+        'spawn',
+        ...(terminationEvent === 'exit' ? ['exit'] : ['exit', 'close']),
+      ])
+      assert.deepEqual(records[0], {
+        schema: 'service-admin.cypress-child-exit.v1',
+        phase: 'run',
+        event: 'spawn',
+      })
+      for (const record of records.slice(1))
         assert.deepEqual(record, {
           schema: 'service-admin.cypress-child-exit.v1',
           phase: 'run',
