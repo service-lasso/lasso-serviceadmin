@@ -1088,37 +1088,38 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.reload()
     cy.wait('@rehydrateRollbackRotation', { timeout: 60_000 }).then(
       ({ request, response }) => {
-        cy.task(
+        return cy.task(
           'rotationRehydrationDiagnostic',
           rotationRehydrationDiagnostic(response),
           { log: false }
-        )
-        expect(request.url).to.include(
-          `/api/secrets/rotation/operations/${rollbackOperationId}`
-        )
-        expect(response?.statusCode).to.equal(200)
-        const operation = response?.body?.operation
-        const safeRollbackRehydration = {
-          operationId: operation?.operationId,
-          outcome: operation?.outcome,
-          phase: operation?.phase,
-          failureCode: operation?.failureCode,
-          activeVersionId: operation?.activeVersionId,
-          previousVersionId: operation?.previousVersionId,
-          rollbackCompletedOperations:
-            operation?.rollbackCompletedOperations,
-        }
-        expect(
-          safeRollbackRehydration,
-          JSON.stringify(safeRollbackRehydration)
-        ).to.deep.equal({
-          operationId: rollbackOperationId,
-          outcome: 'rolled_back',
-          phase: 'rolled_back',
-          failureCode: 'rotation_consumer_not_ready',
-          activeVersionId: committedRotationVersionId,
-          previousVersionId: committedRotationVersionId,
-          rollbackCompletedOperations: ['sample-service:restart:'],
+        ).then(() => {
+          expect(request.url).to.include(
+            `/api/secrets/rotation/operations/${rollbackOperationId}`
+          )
+          expect(response?.statusCode).to.equal(200)
+          const operation = response?.body?.operation
+          const safeRollbackRehydration = {
+            operationId: operation?.operationId,
+            outcome: operation?.outcome,
+            phase: operation?.phase,
+            failureCode: operation?.failureCode,
+            activeVersionId: operation?.activeVersionId,
+            previousVersionId: operation?.previousVersionId,
+            rollbackCompletedOperations:
+              operation?.rollbackCompletedOperations,
+          }
+          expect(
+            safeRollbackRehydration,
+            JSON.stringify(safeRollbackRehydration)
+          ).to.deep.equal({
+            operationId: rollbackOperationId,
+            outcome: 'rolled_back',
+            phase: 'rolled_back',
+            failureCode: 'rotation_consumer_not_ready',
+            activeVersionId: committedRotationVersionId,
+            previousVersionId: committedRotationVersionId,
+            rollbackCompletedOperations: ['sample-service:restart:'],
+          })
         })
       }
     )
