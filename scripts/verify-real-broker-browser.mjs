@@ -21,6 +21,7 @@ import {
   classifyQualificationFailure,
   parseCypressChildProvenance,
   parseQualificationProgressDiagnostic,
+  parseRotationRehydrationDiagnostic,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
 
@@ -521,6 +522,7 @@ let qualificationFailureKind
 const qualificationProgressEvents = []
 const cypressChildEvents = []
 const providerUiConvergenceEvents = []
+const rotationRehydrationEvents = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -571,7 +573,8 @@ try {
   captureQualificationProgress(
     cypress,
     qualificationProgressEvents,
-    providerUiConvergenceEvents
+    providerUiConvergenceEvents,
+    rotationRehydrationEvents
   )
   captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
@@ -640,6 +643,7 @@ try {
           progressEvents: qualificationProgressEvents,
           cypressChildEvents,
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+          rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
             adminReachability
@@ -670,7 +674,12 @@ function cypressEnvironment() {
   return environment
 }
 
-function captureQualificationProgress(child, target, providerUiTarget) {
+function captureQualificationProgress(
+  child,
+  target,
+  providerUiTarget,
+  rotationRehydrationTarget
+) {
   let buffer = ''
   child.stderr.on('data', (chunk) => {
     buffer += chunk.toString('utf8')
@@ -688,6 +697,10 @@ function captureQualificationProgress(child, target, providerUiTarget) {
         providerUiTarget.length < providerReadinessDiagnosticEventCap
       ) {
         providerUiTarget.push(providerUiEvent)
+      }
+      const rotationRehydration = parseRotationRehydrationDiagnostic(line)
+      if (rotationRehydration && rotationRehydrationTarget.length < 1) {
+        rotationRehydrationTarget.push(rotationRehydration)
       }
     }
   })

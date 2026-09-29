@@ -3,6 +3,8 @@ import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualifica
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
 const cypressChildSchema = 'service-admin.cypress-child-exit.v1'
+const rotationRehydrationSchema =
+  'service-admin.rotation-rehydration-response.v1'
 const cypressChildErrorCodes = new Set([
   'EACCES',
   'EAGAIN',
@@ -50,6 +52,84 @@ const providerCheckpoints = new Set([
   'post_rotation',
 ])
 const providerComponents = new Set(['response_metadata', 'row_render'])
+const rotationRehydrationTransports = new Set([
+  'response_received',
+  'response_absent',
+])
+
+function safeRotationRehydrationDiagnostic(value) {
+  if (
+    !rotationRehydrationTransports.has(value?.transport) ||
+    typeof value?.responsePresent !== 'boolean' ||
+    (value.responsePresent && value.transport !== 'response_received') ||
+    (!value.responsePresent && value.transport !== 'response_absent') ||
+    (value.responsePresent &&
+      !(
+        Number.isInteger(value?.statusCode) &&
+        value.statusCode >= 100 &&
+        value.statusCode <= 599
+      )) ||
+    (!value.responsePresent && value?.statusCode !== 'unavailable')
+  ) {
+    return null
+  }
+  return {
+    responsePresent: value.responsePresent,
+    statusCode: value.statusCode,
+    transport: value.transport,
+  }
+}
+
+export function parseRotationRehydrationDiagnostic(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  let value
+  try {
+    value = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (
+    value?.schema !== rotationRehydrationSchema ||
+    Object.keys(value).sort().join(',') !==
+      'responsePresent,schema,statusCode,transport'
+  ) {
+    return null
+  }
+  return safeRotationRehydrationDiagnostic(value)
+}
+
+export function createRotationRehydrationRecorder({
+  enabled = false,
+  write = () => undefined,
+} = {}) {
+  let active = false
+  let recorded = false
+  return {
+    setSpecPath(specPath) {
+      active =
+        enabled === true &&
+        /cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
+          typeof specPath === 'string' ? specPath : ''
+        )
+      recorded = false
+    },
+    record(diagnostic) {
+      if (!active || recorded) return null
+      const safeDiagnostic = safeRotationRehydrationDiagnostic(diagnostic)
+      if (!safeDiagnostic) {
+        throw new Error('Rotation rehydration diagnostic is invalid.')
+      }
+      write(
+        JSON.stringify({
+          schema: rotationRehydrationSchema,
+          ...safeDiagnostic,
+        }) + '\n'
+      )
+      recorded = true
+      return safeDiagnostic
+    },
+  }
+}
 
 export function parseQualificationProgressDiagnostic(line) {
   if (typeof line !== 'string' || line.length > 256) return null
@@ -199,6 +279,7 @@ export function buildQualificationFailureDiagnostic({
   progressEvents = [],
   cypressChildEvents = [],
   providerUiDiagnostic,
+  rotationRehydrationDiagnostic,
   transportDiagnostic,
 }) {
   if (!['timeout', 'nonzero_exit'].includes(failure)) {
@@ -249,6 +330,8 @@ export function buildQualificationFailureDiagnostic({
           serviceHealthy: providerUiDiagnostic.serviceHealthy,
         }
       : null
+  const safeRotationRehydration =
+    safeRotationRehydrationDiagnostic(rotationRehydrationDiagnostic)
   return {
     schema: failureSchema,
     failure,
@@ -265,6 +348,7 @@ export function buildQualificationFailureDiagnostic({
       transportDiagnostic?.adminReachability === 'reachable'
         ? 'reachable'
         : 'unreachable',
+    rotationRehydration: safeRotationRehydration,
     providerUi: safeProviderUiDiagnostic,
   }
 }

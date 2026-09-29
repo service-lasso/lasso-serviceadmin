@@ -63,6 +63,8 @@ import {
   createQualificationProgressRecorder,
   parseCypressChildProvenance,
   parseQualificationProgressDiagnostic,
+  createRotationRehydrationRecorder,
+  parseRotationRehydrationDiagnostic,
   qualificationProgressPhases,
   stoppedLifecycleQualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
@@ -1234,6 +1236,80 @@ test('stopped lifecycle qualification progress is exact, ordered, and isolated',
   )
 })
 
+test('rotation rehydration diagnostic is closed-schema and response-safe', () => {
+  const writes = []
+  const recorder = createRotationRehydrationRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      responsePresent: true,
+      statusCode: 200,
+      transport: 'response_received',
+    }),
+    {
+      responsePresent: true,
+      statusCode: 200,
+      transport: 'response_received',
+    }
+  )
+  assert.equal(
+    recorder.record({
+      responsePresent: false,
+      statusCode: 'unavailable',
+      transport: 'response_absent',
+    }),
+    null
+  )
+  assert.deepEqual(parseRotationRehydrationDiagnostic(writes[0].trim()), {
+    responsePresent: true,
+    statusCode: 200,
+    transport: 'response_received',
+  })
+  assert.equal(
+    parseRotationRehydrationDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.rotation-rehydration-response.v1',
+        responsePresent: false,
+        statusCode: 'unavailable',
+        transport: 'response_absent',
+        url: 'PRIVATE-URL-SENTINEL',
+      })
+    ),
+    null
+  )
+  assert.equal(
+    parseRotationRehydrationDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.rotation-rehydration-response.v1',
+        responsePresent: true,
+        statusCode: 'unavailable',
+        transport: 'response_received',
+      })
+    ),
+    null
+  )
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      responsePresent: false,
+      statusCode: 'unavailable',
+      transport: 'response_absent',
+    }),
+    {
+      responsePresent: false,
+      statusCode: 'unavailable',
+      transport: 'response_absent',
+    }
+  )
+})
+
 test('qualification failures retain only bounded phase and transport metadata', () => {
   assert.equal(classifyQualificationFailure({ timedOut: true }), 'timeout')
   assert.equal(classifyQualificationFailure({ exitCode: 1 }), 'nonzero_exit')
@@ -1255,6 +1331,11 @@ test('qualification failures retain only bounded phase and transport metadata', 
         serviceRunning: true,
         serviceHealthy: false,
       },
+      rotationRehydrationDiagnostic: {
+        responsePresent: false,
+        statusCode: 'unavailable',
+        transport: 'response_absent',
+      },
       transportDiagnostic: {
         phases: ['upstream_started', 'headers_received', 'body_received'],
         statuses: [200, 200],
@@ -1274,6 +1355,11 @@ test('qualification failures retain only bounded phase and transport metadata', 
       ],
       statuses: [200, 200],
       adminReachability: 'reachable',
+      rotationRehydration: {
+        responsePresent: false,
+        statusCode: 'unavailable',
+        transport: 'response_absent',
+      },
       providerUi: {
         checkpoint: 'single_migration_apply',
         component: 'response_metadata',
@@ -1317,6 +1403,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
       transportPhases: [],
       statuses: [],
       adminReachability: 'unreachable',
+      rotationRehydration: null,
       providerUi: null,
     }
   )

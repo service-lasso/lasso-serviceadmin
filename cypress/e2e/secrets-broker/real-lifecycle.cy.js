@@ -49,6 +49,20 @@ function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
 }
 
+function rotationRehydrationDiagnostic(response) {
+  const statusCode =
+    Number.isInteger(response?.statusCode) &&
+    response.statusCode >= 100 &&
+    response.statusCode <= 599
+      ? response.statusCode
+      : 'unavailable'
+  return {
+    responsePresent: response != null,
+    statusCode,
+    transport: response == null ? 'response_absent' : 'response_received',
+  }
+}
+
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
 }
@@ -1074,6 +1088,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.reload()
     cy.wait('@rehydrateRollbackRotation', { timeout: 60_000 }).then(
       ({ request, response }) => {
+        cy.task(
+          'rotationRehydrationDiagnostic',
+          rotationRehydrationDiagnostic(response),
+          { log: false }
+        )
         expect(request.url).to.include(
           `/api/secrets/rotation/operations/${rollbackOperationId}`
         )
