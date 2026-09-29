@@ -340,7 +340,6 @@ export function buildQualificationFailureDiagnostic({
   providerUiDiagnostic,
   rotationRehydrationDiagnostic,
   lockedWrapperUiDiagnostic,
-  rotationRehydrationDiagnostic,
   transportDiagnostic,
 }) {
   if (!['timeout', 'nonzero_exit'].includes(failure)) {
@@ -399,8 +398,6 @@ export function buildQualificationFailureDiagnostic({
       ...lockedWrapperUiDiagnostic,
     })
   )
-  const safeRotationRehydration =
-    safeRotationRehydrationDiagnostic(rotationRehydrationDiagnostic)
   return {
     schema: failureSchema,
     failure,
