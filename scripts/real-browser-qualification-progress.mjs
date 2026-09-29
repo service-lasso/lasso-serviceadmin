@@ -17,9 +17,18 @@ export const qualificationProgressPhases = Object.freeze([
   'acceptance_complete',
 ])
 
-const phaseIndex = new Map(
-  qualificationProgressPhases.map((phase, index) => [phase, index])
-)
+export const stoppedLifecycleQualificationProgressPhases = Object.freeze([
+  'stopped_lifecycle_started',
+  'stopped_broker_stopped',
+  'stopped_inventory_unavailable',
+  'stopped_broker_recovered',
+  'stopped_lifecycle_complete',
+])
+
+const allQualificationProgressPhases = new Set([
+  ...qualificationProgressPhases,
+  ...stoppedLifecycleQualificationProgressPhases,
+])
 const providerCheckpoints = new Set([
   'single_migration',
   'single_migration_apply',
@@ -41,7 +50,7 @@ export function parseQualificationProgressDiagnostic(line) {
   }
   if (
     value?.schema !== progressSchema ||
-    !phaseIndex.has(value.phase) ||
+    !allQualificationProgressPhases.has(value.phase) ||
     !Number.isInteger(value.elapsedMs) ||
     value.elapsedMs < 0 ||
     value.elapsedMs > 24 * 60 * 60_000
@@ -69,26 +78,40 @@ export function createQualificationProgressRecorder({
     throw new Error('Qualification progress event cap is invalid.')
   }
   let active = false
+  let activePhases = qualificationProgressPhases
   let startedAt = 0
   let lastIndex = -1
   let emitted = 0
 
   return {
     setSpecPath(specPath) {
-      active =
-        enabled === true &&
-        typeof specPath === 'string' &&
-        /(?:^|[\\/])cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
-          specPath
+      const normalizedSpecPath = typeof specPath === 'string' ? specPath : ''
+      if (
+        /cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
+          normalizedSpecPath
         )
+      ) {
+        activePhases = qualificationProgressPhases
+      } else if (
+        /cypress[\\/]e2e[\\/]secrets-broker[\\/]real-stopped-lifecycle\.cy\.js$/.test(
+          normalizedSpecPath
+        )
+      ) {
+        activePhases = stoppedLifecycleQualificationProgressPhases
+      } else {
+        activePhases = []
+      }
+      active = enabled === true && activePhases.length > 0
       startedAt = active ? now() : 0
       lastIndex = -1
       emitted = 0
     },
     record(phase) {
-      if (!active || emitted >= maxEvents) return null
-      const nextIndex = phaseIndex.get(phase)
-      if (nextIndex === undefined || nextIndex <= lastIndex) {
+      if (!active || emitted >= Math.min(maxEvents, activePhases.length)) {
+        return null
+      }
+      const nextIndex = activePhases.indexOf(phase)
+      if (nextIndex < 0 || nextIndex <= lastIndex) {
         throw new Error(
           'Qualification progress phase was invalid or out of order.'
         )
@@ -119,7 +142,7 @@ export function buildQualificationFailureDiagnostic({
     .slice(0, qualificationProgressPhases.length)
     .filter(
       (event) =>
-        phaseIndex.has(event?.phase) &&
+        allQualificationProgressPhases.has(event?.phase) &&
         Number.isInteger(event?.elapsedMs) &&
         event.elapsedMs >= 0
     )

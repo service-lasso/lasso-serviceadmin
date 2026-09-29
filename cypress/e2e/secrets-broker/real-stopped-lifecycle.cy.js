@@ -10,6 +10,10 @@ import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 
+function qualificationCheckpoint(phase) {
+  return cy.task('qualificationCheckpoint', phase, { log: false })
+}
+
 function waitForManagedServiceStopped(
   serviceId,
   remainingAttempts = managedServiceStopReadinessAttempts
@@ -39,6 +43,7 @@ describe('packaged Service Admin stopped Broker recovery', () => {
   })
 
   it('renders unavailable management and recovers inventory after one restart', () => {
+    qualificationCheckpoint('stopped_lifecycle_started')
     cy.visit('/services/%40secretsbroker')
     unlockTrustedIdentity()
     cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
@@ -55,6 +60,7 @@ describe('packaged Service Admin stopped Broker recovery', () => {
       .its('status')
       .should('equal', 200)
     waitForManagedServiceStopped('@secretsbroker')
+    qualificationCheckpoint('stopped_broker_stopped')
 
     cy.intercept('GET', '**/secrets/management*').as(
       'stoppedBrokerManagement'
@@ -71,6 +77,7 @@ describe('packaged Service Admin stopped Broker recovery', () => {
       timeout: 30_000,
     }).should('be.visible')
     cy.contains('button', 'Retry inventory').should('be.visible')
+    qualificationCheckpoint('stopped_inventory_unavailable')
 
     cy.request(
       managedServiceStartMutationRequestOptions(
@@ -84,11 +91,13 @@ describe('packaged Service Admin stopped Broker recovery', () => {
       $cell[0].scrollIntoView({ block: 'center', inline: 'nearest' })
     })
     cy.contains(expectedRef, { timeout: 30_000 }).should('be.visible')
+    qualificationCheckpoint('stopped_broker_recovered')
 
     cy.get('[data-testid="secret-reveal-value"]').should('not.exist')
     cy.get('input[type="password"]').should('not.exist')
     cy.contains(/error boundary|uncaught error|failed to load/i).should(
       'not.exist'
     )
+    qualificationCheckpoint('stopped_lifecycle_complete')
   })
 })

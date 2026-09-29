@@ -59,6 +59,7 @@ import {
   createQualificationProgressRecorder,
   parseQualificationProgressDiagnostic,
   qualificationProgressPhases,
+  stoppedLifecycleQualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
 import {
   buildTransportDiagnostic,
@@ -1161,6 +1162,41 @@ test('qualification progress call sites are exact, ordered, and bounded', async 
   }
   assert.equal(writes.length, qualificationProgressPhases.length)
   assert.equal(recorder.record('acceptance_complete'), null)
+})
+
+test('stopped lifecycle qualification progress is exact, ordered, and isolated', async () => {
+  const stoppedLifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  let previousIndex = -1
+  for (const phase of stoppedLifecycleQualificationProgressPhases) {
+    const call = `qualificationCheckpoint('${phase}')`
+    assert.equal(stoppedLifecycleSource.split(call).length - 1, 1)
+    const nextIndex = stoppedLifecycleSource.indexOf(call)
+    assert.ok(nextIndex > previousIndex)
+    previousIndex = nextIndex
+  }
+
+  const writes = []
+  const recorder = createQualificationProgressRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js'
+  )
+  for (const phase of stoppedLifecycleQualificationProgressPhases) {
+    assert.equal(recorder.record(phase)?.phase, phase)
+  }
+  assert.equal(recorder.record('acceptance_complete'), null)
+  assert.equal(
+    writes.length,
+    stoppedLifecycleQualificationProgressPhases.length
+  )
 })
 
 test('qualification failures retain only bounded phase and transport metadata', () => {
