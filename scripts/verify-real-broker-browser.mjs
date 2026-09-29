@@ -20,6 +20,7 @@ import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
   parseCypressChildProvenance,
+  parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
@@ -521,6 +522,7 @@ let qualificationFailureKind
 const qualificationProgressEvents = []
 const cypressChildEvents = []
 const providerUiConvergenceEvents = []
+const lockedWrapperUiEvents = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -571,7 +573,8 @@ try {
   captureQualificationProgress(
     cypress,
     qualificationProgressEvents,
-    providerUiConvergenceEvents
+    providerUiConvergenceEvents,
+    lockedWrapperUiEvents
   )
   captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
@@ -640,6 +643,7 @@ try {
           progressEvents: qualificationProgressEvents,
           cypressChildEvents,
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+          lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
             adminReachability
@@ -670,7 +674,12 @@ function cypressEnvironment() {
   return environment
 }
 
-function captureQualificationProgress(child, target, providerUiTarget) {
+function captureQualificationProgress(
+  child,
+  target,
+  providerUiTarget,
+  lockedWrapperUiTarget
+) {
   let buffer = ''
   child.stderr.on('data', (chunk) => {
     buffer += chunk.toString('utf8')
@@ -688,6 +697,10 @@ function captureQualificationProgress(child, target, providerUiTarget) {
         providerUiTarget.length < providerReadinessDiagnosticEventCap
       ) {
         providerUiTarget.push(providerUiEvent)
+      }
+      const lockedWrapperUiEvent = parseLockedWrapperUiDiagnostic(line)
+      if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
+        lockedWrapperUiTarget.push(lockedWrapperUiEvent)
       }
     }
   })
