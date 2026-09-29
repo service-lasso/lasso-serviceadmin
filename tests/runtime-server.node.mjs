@@ -1193,7 +1193,10 @@ test('stopped lifecycle qualification progress is exact, ordered, and isolated',
     assert.equal(recorder.record(phase)?.phase, phase)
   }
   assert.equal(recorder.record('acceptance_complete'), null)
-  assert.equal(writes.length, stoppedLifecycleQualificationProgressPhases.length)
+  assert.equal(
+    writes.length,
+    stoppedLifecycleQualificationProgressPhases.length
+  )
 })
 
 test('qualification failures retain only bounded phase and transport metadata', () => {
