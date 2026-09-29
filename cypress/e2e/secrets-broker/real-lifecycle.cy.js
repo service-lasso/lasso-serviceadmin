@@ -113,6 +113,17 @@ function openSecrets() {
   cy.contains(expectedRef, { timeout: 20_000 }).should('be.visible')
 }
 
+function lockedWrapperUiDiagnostic($body) {
+  const unavailablePanel = $body.find(
+    'div.flex.flex-wrap.items-center.justify-between.gap-3.rounded-md.border.border-dashed.p-4.text-sm.text-muted-foreground'
+  )
+  return {
+    unavailablePanelPresent: unavailablePanel.length > 0,
+    unavailablePanelVisible: unavailablePanel.filter(':visible').length > 0,
+    retryControlPresent: unavailablePanel.find('button').length > 0,
+  }
+}
+
 function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
 }
@@ -1899,6 +1910,11 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.reload()
       unlockTrustedIdentity()
       cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
+      cy.get('body').then(($body) =>
+        cy.task('lockedWrapperUiCheckpoint', lockedWrapperUiDiagnostic($body), {
+          log: false,
+        })
+      )
       cy.contains('Secrets Broker management is unavailable.', {
         timeout: 30_000,
       }).should('be.visible')

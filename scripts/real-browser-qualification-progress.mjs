@@ -5,6 +5,7 @@ const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
 const cypressChildSchema = 'service-admin.cypress-child-exit.v1'
 const rotationRehydrationSchema =
   'service-admin.rotation-rehydration-response.v1'
+const lockedWrapperUiSchema = 'service-admin.locked-wrapper-ui.v1'
 const cypressChildErrorCodes = new Set([
   'EACCES',
   'EAGAIN',
@@ -209,6 +210,64 @@ export function parseCypressChildProvenance(line) {
   }
 }
 
+export function parseLockedWrapperUiDiagnostic(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  let value
+  try {
+    value = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (
+    value?.schema !== lockedWrapperUiSchema ||
+    Object.keys(value).sort().join(',') !==
+      'retryControlPresent,schema,unavailablePanelPresent,unavailablePanelVisible' ||
+    typeof value.unavailablePanelPresent !== 'boolean' ||
+    typeof value.unavailablePanelVisible !== 'boolean' ||
+    typeof value.retryControlPresent !== 'boolean' ||
+    (value.unavailablePanelVisible && !value.unavailablePanelPresent) ||
+    (value.retryControlPresent && !value.unavailablePanelPresent)
+  ) {
+    return null
+  }
+  return {
+    unavailablePanelPresent: value.unavailablePanelPresent,
+    unavailablePanelVisible: value.unavailablePanelVisible,
+    retryControlPresent: value.retryControlPresent,
+  }
+}
+
+export function createLockedWrapperUiRecorder({
+  enabled = false,
+  write = () => undefined,
+} = {}) {
+  let active = false
+  let emitted = false
+
+  return {
+    setSpecPath(specPath) {
+      active =
+        enabled === true &&
+        /cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
+          typeof specPath === 'string' ? specPath : ''
+        )
+      emitted = false
+    },
+    record(diagnostic) {
+      if (!active || emitted) return null
+      const parsed = parseLockedWrapperUiDiagnostic(
+        JSON.stringify({ schema: lockedWrapperUiSchema, ...diagnostic })
+      )
+      if (!parsed) {
+        throw new Error('Locked-wrapper UI diagnostic was invalid.')
+      }
+      write(`${JSON.stringify({ schema: lockedWrapperUiSchema, ...parsed })}\n`)
+      emitted = true
+      return parsed
+    },
+  }
+}
+
 export function createQualificationProgressRecorder({
   enabled = false,
   write = () => undefined,
@@ -280,6 +339,8 @@ export function buildQualificationFailureDiagnostic({
   cypressChildEvents = [],
   providerUiDiagnostic,
   rotationRehydrationDiagnostic,
+  lockedWrapperUiDiagnostic,
+  rotationRehydrationDiagnostic,
   transportDiagnostic,
 }) {
   if (!['timeout', 'nonzero_exit'].includes(failure)) {
@@ -332,6 +393,14 @@ export function buildQualificationFailureDiagnostic({
       : null
   const safeRotationRehydration =
     safeRotationRehydrationDiagnostic(rotationRehydrationDiagnostic)
+  const safeLockedWrapperUiDiagnostic = parseLockedWrapperUiDiagnostic(
+    JSON.stringify({
+      schema: lockedWrapperUiSchema,
+      ...lockedWrapperUiDiagnostic,
+    })
+  )
+  const safeRotationRehydration =
+    safeRotationRehydrationDiagnostic(rotationRehydrationDiagnostic)
   return {
     schema: failureSchema,
     failure,
@@ -350,6 +419,7 @@ export function buildQualificationFailureDiagnostic({
         : 'unreachable',
     rotationRehydration: safeRotationRehydration,
     providerUi: safeProviderUiDiagnostic,
+    lockedWrapperUi: safeLockedWrapperUiDiagnostic,
   }
 }
 

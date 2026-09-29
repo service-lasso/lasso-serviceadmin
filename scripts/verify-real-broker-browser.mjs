@@ -20,6 +20,7 @@ import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
   parseCypressChildProvenance,
+  parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
   parseRotationRehydrationDiagnostic,
   qualificationProgressPhases,
@@ -523,6 +524,7 @@ const qualificationProgressEvents = []
 const cypressChildEvents = []
 const providerUiConvergenceEvents = []
 const rotationRehydrationEvents = []
+const lockedWrapperUiEvents = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -574,7 +576,8 @@ try {
     cypress,
     qualificationProgressEvents,
     providerUiConvergenceEvents,
-    rotationRehydrationEvents
+    rotationRehydrationEvents,
+    lockedWrapperUiEvents
   )
   captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
@@ -643,6 +646,7 @@ try {
           progressEvents: qualificationProgressEvents,
           cypressChildEvents,
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+          lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
           rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
@@ -678,7 +682,8 @@ function captureQualificationProgress(
   child,
   target,
   providerUiTarget,
-  rotationRehydrationTarget
+  rotationRehydrationTarget,
+  lockedWrapperUiTarget
 ) {
   let buffer = ''
   child.stderr.on('data', (chunk) => {
@@ -701,6 +706,10 @@ function captureQualificationProgress(
       const rotationRehydration = parseRotationRehydrationDiagnostic(line)
       if (rotationRehydration && rotationRehydrationTarget.length < 1) {
         rotationRehydrationTarget.push(rotationRehydration)
+      }
+      const lockedWrapperUiEvent = parseLockedWrapperUiDiagnostic(line)
+      if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
+        lockedWrapperUiTarget.push(lockedWrapperUiEvent)
       }
     }
   })
