@@ -12,6 +12,10 @@ import {
   TrustedIngressProxyError,
 } from '../runtime/server.js'
 import {
+  isLockedWrapperContainmentFailure,
+  lockedWrapperContainmentMessages,
+} from '../scripts/locked-wrapper-containment-contract.mjs'
+import {
   brokerMetadataEndpointCount,
   brokerMetadataReadinessAttempts,
   brokerMetadataRequestOptions,
@@ -67,24 +71,23 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from '../scripts/real-browser-transport-diagnostics.mjs'
-import {
-  isLockedWrapperContainmentFailure,
-  lockedWrapperContainmentBoundaries,
-} from '../scripts/locked-wrapper-containment-contract.mjs'
 
 test('locked wrapper accepts only named contained launch failures', () => {
   assert.equal(
-    isLockedWrapperContainmentFailure(
-      `Cannot start service "@secretsbroker" because process spawn failed: ${lockedWrapperContainmentBoundaries.ownershipEnrollment}.`
-    ),
+    isLockedWrapperContainmentFailure(lockedWrapperContainmentMessages[0]),
     true
   )
   assert.equal(
-    isLockedWrapperContainmentFailure(
-      `Cannot start service "@secretsbroker" because process spawn failed: ${lockedWrapperContainmentBoundaries.targetAcknowledgement}`
-    ),
+    isLockedWrapperContainmentFailure(lockedWrapperContainmentMessages[1]),
     true
   )
+  for (const unsafeMessage of [
+    `unexpected detail: ${lockedWrapperContainmentMessages[0]}`,
+    `${lockedWrapperContainmentMessages[1]} unexpected detail`,
+    `${lockedWrapperContainmentMessages[0]} caused by ${lockedWrapperContainmentMessages[1]}`,
+  ]) {
+    assert.equal(isLockedWrapperContainmentFailure(unsafeMessage), false)
+  }
   assert.equal(
     isLockedWrapperContainmentFailure(
       'Cannot start service "@secretsbroker" because process spawn failed: Windows managed launcher exited before the service launch was acknowledged (exit 2).'
