@@ -57,6 +57,7 @@ import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
   createQualificationProgressRecorder,
+  parseCypressChildProvenance,
   parseQualificationProgressDiagnostic,
   qualificationProgressPhases,
   stoppedLifecycleQualificationProgressPhases,
@@ -1231,6 +1232,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'timeout',
       lastPhase: 'wrapper_recovery_complete',
       elapsedMs: 80_000,
+      cypressChildEvents: [],
       transportPhases: [
         'upstream_started',
         'headers_received',
@@ -1277,11 +1279,37 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'nonzero_exit',
       lastPhase: 'wrapper_recovery_complete',
       elapsedMs: 1_234,
+      cypressChildEvents: [],
       transportPhases: [],
       statuses: [],
       adminReachability: 'unreachable',
       providerUi: null,
     }
+  )
+})
+
+test('Cypress child provenance retains only bounded event metadata', () => {
+  assert.deepEqual(
+    parseCypressChildProvenance(
+      JSON.stringify({
+        schema: 'service-admin.cypress-child-exit.v1',
+        phase: 'run',
+        event: 'error',
+        errorCode: 'EACCES',
+      })
+    ),
+    { phase: 'run', event: 'error', errorCode: 'EACCES' }
+  )
+  assert.equal(
+    parseCypressChildProvenance(
+      JSON.stringify({
+        schema: 'service-admin.cypress-child-exit.v1',
+        phase: 'run',
+        event: 'error',
+        errorCode: 'PRIVATE_SENTINEL',
+      })
+    ),
+    null
   )
 })
 

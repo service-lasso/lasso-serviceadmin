@@ -19,6 +19,7 @@ import {
 import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
+  parseCypressChildProvenance,
   parseQualificationProgressDiagnostic,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
@@ -518,6 +519,7 @@ let cypressOutputChecked = false
 let cypressSucceeded = false
 let qualificationFailureKind
 const qualificationProgressEvents = []
+const cypressChildEvents = []
 const providerUiConvergenceEvents = []
 let runFailure
 let auditEventCount = 0
@@ -571,6 +573,7 @@ try {
     qualificationProgressEvents,
     providerUiConvergenceEvents
   )
+  captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
   try {
     cypressExit = await waitForCapturedChildClose(
@@ -635,6 +638,7 @@ try {
         buildQualificationFailureDiagnostic({
           failure: qualificationFailureKind,
           progressEvents: qualificationProgressEvents,
+          cypressChildEvents,
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
@@ -685,6 +689,20 @@ function captureQualificationProgress(child, target, providerUiTarget) {
       ) {
         providerUiTarget.push(providerUiEvent)
       }
+    }
+  })
+}
+
+function captureCypressChildProvenance(child, target) {
+  let buffer = ''
+  child.stderr.on('data', (chunk) => {
+    buffer += chunk.toString('utf8')
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() ?? ''
+    if (buffer.length > 256) buffer = ''
+    for (const line of lines) {
+      const event = parseCypressChildProvenance(line)
+      if (event && target.length < 16) target.push(event)
     }
   })
 }
