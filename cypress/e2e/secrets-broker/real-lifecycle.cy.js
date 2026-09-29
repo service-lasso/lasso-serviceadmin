@@ -15,6 +15,7 @@ import {
   providerReadinessRequestOptions,
   providerReadinessRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
+import { isLockedWrapperContainmentFailure } from '../../../scripts/locked-wrapper-containment-contract.mjs'
 import {
   observeBrokerDetailReadiness,
   brokerLifecycleControls,
@@ -1873,9 +1874,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             error: 'invalid_lifecycle_state',
             statusCode: 409,
           })
-          expect(body?.message).to.match(
-            /(?:root exited during ownership enrollment|Windows managed launcher exited before the service launch was acknowledged \(exit 1\)\.)/i
-          )
+          expect(isLockedWrapperContainmentFailure(body?.message)).to.equal(true)
         })
       cy.reload()
       unlockTrustedIdentity()

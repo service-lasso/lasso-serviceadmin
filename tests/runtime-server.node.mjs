@@ -67,6 +67,37 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from '../scripts/real-browser-transport-diagnostics.mjs'
+import {
+  isLockedWrapperContainmentFailure,
+  lockedWrapperContainmentBoundaries,
+} from '../scripts/locked-wrapper-containment-contract.mjs'
+
+test('locked wrapper accepts only named contained launch failures', () => {
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      `Cannot start service "@secretsbroker" because process spawn failed: ${lockedWrapperContainmentBoundaries.ownershipEnrollment}.`
+    ),
+    true
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      `Cannot start service "@secretsbroker" because process spawn failed: ${lockedWrapperContainmentBoundaries.targetAcknowledgement}`
+    ),
+    true
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      'Cannot start service "@secretsbroker" because process spawn failed: Windows managed launcher exited before the service launch was acknowledged (exit 2).'
+    ),
+    false
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      'Cannot start service "@secretsbroker" because process spawn timed out.'
+    ),
+    false
+  )
+})
 
 test('bounded provider, metadata, and execute network waits retain exact source counts', async () => {
   assert.equal(cypressQualificationTimeoutMs, 720_000)
@@ -672,7 +703,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'failOnStatusCode: false',
     'expect(status).to.equal(409)',
     "error: 'invalid_lifecycle_state'",
-    '/(?:root exited during ownership enrollment|Windows managed launcher exited before the service launch was acknowledged \\(exit 1\\)\\.)/i',
+    'expect(isLockedWrapperContainmentFailure(body?.message)).to.equal(true)',
     "cy.contains('Secrets Broker management is unavailable.'",
     "expect(body).to.deep.equal({ outcome: 'wrapper_restored' })",
   ]) {
