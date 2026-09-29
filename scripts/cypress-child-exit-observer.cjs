@@ -60,8 +60,10 @@ function installCypressChildExitObserver(api, write) {
     }
     child.once('error', (error) => {
       publish(phase, 'error', { errorCode: safeErrorCode(error) })
-      // Keep the original unhandled-error terminal behavior after observation.
-      throw error
+      // The once listener is removed before this callback runs. Preserve a
+      // caller-installed handler; otherwise retain the original unhandled
+      // terminal behavior after observation.
+      if (child.listenerCount('error') === 0) throw error
     })
     child.once('exit', observe('exit'))
     child.once('close', observe('close'))

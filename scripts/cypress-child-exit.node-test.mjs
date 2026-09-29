@@ -92,6 +92,28 @@ test('retains a safe child error code and rethrows the original error', () => {
   assert.equal(JSON.stringify(records).includes('PRIVATE_SENTINEL'), false)
 })
 
+test('retains a safe child error code without preempting a later caller handler', () => {
+  const records = []
+  const child = new EventEmitter()
+  const api = { spawn: () => child }
+  installCypressChildExitObserver(api, (line) => records.push(JSON.parse(line)))
+  api.spawn('Cypress.exe')
+  const error = Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ENOENT' })
+  let received
+  child.once('error', (value) => {
+    received = value
+  })
+  assert.doesNotThrow(() => child.emit('error', error))
+  assert.equal(received, error)
+  assert.deepEqual(records.at(-1), {
+    schema: 'service-admin.cypress-child-exit.v1',
+    phase: 'run',
+    event: 'error',
+    errorCode: 'ENOENT',
+  })
+  assert.equal(JSON.stringify(records).includes('PRIVATE_SENTINEL'), false)
+})
+
 test('retains a safe synchronous spawn failure code and rethrows the original error', () => {
   const records = []
   const error = Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ENOENT' })
