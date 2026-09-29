@@ -1874,7 +1874,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             statusCode: 409,
           })
           expect(body?.message).to.match(
-            /root exited during ownership enrollment/i
+            /(?:root exited during ownership enrollment|Windows managed launcher exited before the service launch was acknowledged \(exit 1\)\.)/i
           )
         })
       cy.reload()

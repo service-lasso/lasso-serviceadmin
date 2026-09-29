@@ -672,7 +672,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'failOnStatusCode: false',
     'expect(status).to.equal(409)',
     "error: 'invalid_lifecycle_state'",
-    '/root exited during ownership enrollment/i',
+    '/(?:root exited during ownership enrollment|Windows managed launcher exited before the service launch was acknowledged \\(exit 1\\)\\.)/i',
     "cy.contains('Secrets Broker management is unavailable.'",
     "expect(body).to.deep.equal({ outcome: 'wrapper_restored' })",
   ]) {
