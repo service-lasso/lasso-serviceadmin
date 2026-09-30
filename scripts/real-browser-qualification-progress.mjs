@@ -3,6 +3,7 @@ import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualifica
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
 const cypressChildSchema = 'service-admin.cypress-child-exit.v1'
+const cypressRunSummarySchema = 'service-admin.cypress-run-summary.v1'
 const rotationRehydrationSchema =
   'service-admin.rotation-rehydration-response.v1'
 const lockedWrapperUiSchema = 'service-admin.locked-wrapper-ui.v1'
@@ -15,6 +16,13 @@ const cypressChildErrorCodes = new Set([
   'ENOMEM',
   'EPERM',
   'UNKNOWN',
+])
+const cypressRunSummaryCountFields = Object.freeze([
+  'totalTests',
+  'totalPassed',
+  'totalFailed',
+  'totalPending',
+  'totalSkipped',
 ])
 
 export const qualificationProgressPhases = Object.freeze([
@@ -210,6 +218,77 @@ export function parseCypressChildProvenance(line) {
   }
 }
 
+function safeCypressRunSummary(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { state: 'unavailable' }
+  }
+  const summary = {}
+  for (const field of cypressRunSummaryCountFields) {
+    const count = value[field]
+    if (!Number.isInteger(count) || count < 0 || count > 1_000_000) {
+      return { state: 'unavailable' }
+    }
+    summary[field] = count
+  }
+  return { state: 'complete', ...summary }
+}
+
+export function parseCypressRunSummaryDiagnostic(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  let value
+  try {
+    value = JSON.parse(line)
+  } catch {
+    return null
+  }
+  if (value?.schema !== cypressRunSummarySchema) return null
+  if (value.state === 'unavailable') {
+    return Object.keys(value).sort().join(',') === 'schema,state'
+      ? { state: 'unavailable' }
+      : null
+  }
+  if (
+    value.state !== 'complete' ||
+    Object.keys(value).sort().join(',') !==
+      ['schema', 'state', ...cypressRunSummaryCountFields].sort().join(',')
+  ) {
+    return null
+  }
+  const summary = safeCypressRunSummary(value)
+  return summary.state === 'complete' ? summary : null
+}
+
+export function createCypressRunSummaryRecorder({
+  enabled = false,
+  write = () => undefined,
+} = {}) {
+  let active = false
+  let recorded = false
+  return {
+    setSpecPath(specPath) {
+      if (
+        enabled === true &&
+        /cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
+          typeof specPath === 'string' ? specPath : ''
+        )
+      ) {
+        active = true
+      }
+    },
+    record(results) {
+      if (!active || recorded) return null
+      recorded = true
+      const summary = safeCypressRunSummary(results)
+      try {
+        write(`${JSON.stringify({ schema: cypressRunSummarySchema, ...summary })}\n`)
+      } catch {
+        // Observation must not replace Cypress's original outcome if its sink fails.
+      }
+      return summary
+    },
+  }
+}
+
 export function parseLockedWrapperUiDiagnostic(line) {
   if (typeof line !== 'string' || line.length > 256) return null
   let value
@@ -337,6 +416,7 @@ export function buildQualificationFailureDiagnostic({
   failure,
   progressEvents = [],
   cypressChildEvents = [],
+  cypressRunSummary,
   providerUiDiagnostic,
   rotationRehydrationDiagnostic,
   lockedWrapperUiDiagnostic,
@@ -360,6 +440,9 @@ export function buildQualificationFailureDiagnostic({
       const serialized = JSON.stringify({ schema: cypressChildSchema, ...event })
       return parseCypressChildProvenance(serialized) !== null
     })
+  const safeRunSummary = parseCypressRunSummaryDiagnostic(
+    JSON.stringify({ schema: cypressRunSummarySchema, ...cypressRunSummary })
+  ) ?? { state: 'unavailable' }
   const safeProviderUiDiagnostic =
     providerCheckpoints.has(providerUiDiagnostic?.checkpoint) &&
     providerComponents.has(providerUiDiagnostic?.component) &&
@@ -404,6 +487,7 @@ export function buildQualificationFailureDiagnostic({
     lastPhase: lastProgress?.phase ?? 'not_started',
     elapsedMs: lastProgress?.elapsedMs ?? 0,
     cypressChildEvents: boundedCypressChildEvents,
+    cypressRunSummary: safeRunSummary,
     transportPhases: Array.isArray(transportDiagnostic?.phases)
       ? transportDiagnostic.phases.slice(0, 16)
       : [],
