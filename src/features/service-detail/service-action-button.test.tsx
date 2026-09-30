@@ -29,7 +29,14 @@ vi.mock('sonner', () => ({
   toast: { error: errorToast, success: successToast },
 }))
 
-const service = { id: '@secretsbroker' } as DashboardService
+const service = {
+  id: '@secretsbroker',
+  name: 'Secrets Broker',
+  status: 'stopped',
+  role: 'Broker',
+  metadata: { serviceType: 'app' },
+  actions: [{ id: 'start', kind: 'start', label: 'Start service' }],
+} as DashboardService
 
 function lifecycleAction(
   kind: ServiceAction['kind'],

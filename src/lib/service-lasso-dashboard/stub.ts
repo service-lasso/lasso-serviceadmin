@@ -9,6 +9,7 @@ import {
   mapBrokerOutcomeToUiState,
 } from './broker-provider-actions'
 import { countOperatorInboxItems, unreadBadgeCount } from './inbox'
+import { parseServiceIsolation } from './isolation'
 import { withLocalOperatorRequestInit } from './local-operator-session'
 import { parseManifestAccessPolicyGrants } from './secret-access-policy'
 import {
@@ -3696,6 +3697,23 @@ function isRecord(input: unknown): input is Record<string, unknown> {
   return typeof input === 'object' && input !== null
 }
 
+export function isServiceSecurityState(
+  input: unknown
+): input is ServiceSecurityState {
+  if (!isRecord(input) || !isRecord(input.safety)) return false
+  return (
+    typeof input.updatedAt === 'string' &&
+    typeof input.currentActor === 'string' &&
+    Array.isArray(input.groups) &&
+    Array.isArray(input.permissions) &&
+    Array.isArray(input.actorAssignments) &&
+    Array.isArray(input.providerMappings) &&
+    Array.isArray(input.auditLinks) &&
+    typeof input.safety.lastOwnerProtected === 'boolean' &&
+    typeof input.safety.selfSecurityAccessProtected === 'boolean'
+  )
+}
+
 const serviceActionKinds = new Set<ServiceAction['kind']>([
   'start',
   'stop',
@@ -3824,6 +3842,7 @@ function normalizeRuntimeDashboardService(service: DashboardService) {
   const rawActions = Array.isArray(service.actions) ? service.actions : []
   return {
     ...service,
+    isolation: parseServiceIsolation(service.isolation),
     actions: rawActions
       .map(normalizeRuntimeServiceAction)
       .filter((action): action is ServiceAction => action !== null),
@@ -4368,7 +4387,7 @@ export async function fetchSecurityState() {
     const payload = await fetchRuntimeJson<{
       security?: ServiceSecurityState
     }>('/api/security')
-    if (!payload.security) {
+    if (!isServiceSecurityState(payload.security)) {
       throw new RuntimeApiUnavailableError({
         mode: resolveRuntimeApiMode(),
         path: '/api/security',

@@ -10,11 +10,7 @@ export type SecretsBrokerSourceType =
   | 'mounted-secrets'
 
 export type SecretsBrokerSourceState =
-  | 'configured'
-  | 'not-configured'
-  | 'reachable'
-  | 'failing'
-  | 'untested'
+  'configured' | 'not-configured' | 'reachable' | 'failing' | 'untested'
 
 export type SecretsBrokerSourceWarning = {
   code:
@@ -30,12 +26,7 @@ export type SecretsBrokerSourceWarning = {
 }
 
 export type SecretsBrokerProviderLifecycle =
-  | 'setup-needed'
-  | 'locked'
-  | 'unlocked'
-  | 'auth-required'
-  | 'invalid'
-  | 'ready'
+  'setup-needed' | 'locked' | 'unlocked' | 'auth-required' | 'invalid' | 'ready'
 
 export type SecretsBrokerSourceTestResult = {
   outcome: 'success' | 'failure' | 'not-run'

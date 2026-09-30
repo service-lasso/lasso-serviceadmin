@@ -5,10 +5,10 @@ traffic, or blocked by something it depends on. Service Admin should make those
 signals visible in Runtime, Services, and service details without requiring an
 operator to inspect the host first.
 
-Use this guide with [Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md),
-[How to Create a Basic Service](how-to-create-a-basic-service.md),
-[Network and Service Routes Operator Guide](network-and-service-routes-operator-guide.md),
-and [Environment Variables: Global and Service Reuse](environment-variables-global-and-service-reuse.md).
+Use this guide with [Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md),
+[How to Create a Basic Service](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/how-to-create-a-basic-service.md),
+[Network and Service Routes Operator Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/network-and-service-routes-operator-guide.md),
+and [Environment Variables: Global and Service Reuse](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/environment-variables-global-and-service-reuse.md).
 
 ## Health States
 
@@ -173,7 +173,13 @@ known-invalid checks.
 
 ## Related Guides
 
-- [Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md)
-- [How to Create a Basic Service](how-to-create-a-basic-service.md)
-- [Network and Service Routes Operator Guide](network-and-service-routes-operator-guide.md)
-- [Environment Variables: Global and Service Reuse](environment-variables-global-and-service-reuse.md)
+- [Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md)
+- [How to Create a Basic Service](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/how-to-create-a-basic-service.md)
+- [Network and Service Routes Operator Guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/network-and-service-routes-operator-guide.md)
+- [Environment Variables: Global and Service Reuse](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/environment-variables-global-and-service-reuse.md)
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/health-checks.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/health-checks.md. Edit the canonical page, then export. -->

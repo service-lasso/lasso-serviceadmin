@@ -23,7 +23,7 @@ simulate policy.
 - Require current provider, policy, and audit readiness before applying a
   secret mutation.
 - Follow the linked audit record after every access or rotation change.
-- On Security > Rotations, keep the mixed dry-run fixture as non-mutating. Live
+- On Security &gt; Rotations, keep the mixed dry-run fixture as non-mutating. Live
   migrate_remap_provider apply requires a broker dry-run, immediate
   revalidation, an audit reason, and the exact campaign id. Other campaign
   families stay plan-only and fail closed instead of reporting metadata-only
@@ -31,3 +31,9 @@ simulate policy.
 
 If the page cannot read security state, or any required readiness signal is
 missing, stop the mutation and restore authoritative runtime connectivity.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/security-and-access-operator-guide.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/security-and-access-operator-guide.md. Edit the canonical page, then export. -->

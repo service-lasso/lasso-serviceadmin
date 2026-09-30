@@ -1,9 +1,5 @@
 export type SecretsBrokerProviderConnectionState =
-  | 'healthy'
-  | 'degraded'
-  | 'failed'
-  | 'disabled'
-  | 'missing'
+  'healthy' | 'degraded' | 'failed' | 'disabled' | 'missing'
 
 export type SecretsBrokerProviderLifecycleStatus =
   | 'connected'
@@ -16,11 +12,7 @@ export type SecretsBrokerProviderLifecycleStatus =
   | 'degraded'
 
 export type SecretsBrokerSecretMaterialState =
-  | 'present'
-  | 'missing'
-  | 'expired'
-  | 'rotation-due'
-  | 'revoked'
+  'present' | 'missing' | 'expired' | 'rotation-due' | 'revoked'
 
 export type SecretsBrokerProviderReconnectWorkflowState =
   | 'healthy'

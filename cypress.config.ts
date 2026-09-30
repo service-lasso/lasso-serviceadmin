@@ -1,7 +1,10 @@
 import { defineConfig } from 'cypress'
 import { createProviderUiConvergenceRecorder } from './scripts/real-browser-qualification-budget.mjs'
 import {
+  createCypressRunSummaryRecorder,
+  createLockedWrapperUiRecorder,
   createQualificationProgressRecorder,
+  createRotationRehydrationRecorder,
   createTrustedUnlockReceiptRecorder,
 } from './scripts/real-browser-qualification-progress.mjs'
 
@@ -22,6 +25,18 @@ export default defineConfig({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
       })
+      const rotationRehydration = createRotationRehydrationRecorder({
+        enabled: String(config.env.qualificationProgress) === '1',
+        write: (line) => process.stderr.write(line),
+      })
+      const lockedWrapperUi = createLockedWrapperUiRecorder({
+        enabled: String(config.env.qualificationProgress) === '1',
+        write: (line) => process.stderr.write(line),
+      })
+      const cypressRunSummary = createCypressRunSummaryRecorder({
+        enabled: String(config.env.qualificationProgress) === '1',
+        write: (line) => process.stderr.write(line),
+      })
       const trustedUnlock = createTrustedUnlockReceiptRecorder({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
@@ -29,12 +44,21 @@ export default defineConfig({
       on('before:spec', (spec) => {
         progress.setSpecPath(spec.absolute)
         providerUi.setSpecPath(spec.absolute)
+        rotationRehydration.setSpecPath(spec.absolute)
+        lockedWrapperUi.setSpecPath(spec.absolute)
+        cypressRunSummary.setSpecPath(spec.absolute)
         trustedUnlock.setSpecPath(spec.absolute)
       })
-      on('after:spec', () => {
+      on('after:spec', (_spec, results) => {
         progress.setSpecPath(undefined)
         providerUi.setSpecPath(undefined)
+        rotationRehydration.setSpecPath(undefined)
+        lockedWrapperUi.setSpecPath(undefined)
+        trustedUnlock.record(results)
         trustedUnlock.setSpecPath(undefined)
+      })
+      on('after:run', (results) => {
+        cypressRunSummary.record(results)
       })
       on('task', {
         qualificationCheckpoint(phase) {
@@ -45,8 +69,12 @@ export default defineConfig({
           providerUi.record(diagnostic)
           return null
         },
-        trustedUnlockFailureReceipt(receipt) {
-          trustedUnlock.record(receipt)
+        rotationRehydrationDiagnostic(diagnostic) {
+          rotationRehydration.record(diagnostic)
+          return null
+        },
+        lockedWrapperUiCheckpoint(diagnostic) {
+          lockedWrapperUi.record(diagnostic)
           return null
         },
       })

@@ -5,22 +5,13 @@ import type {
 } from '@/lib/service-lasso-dashboard/types'
 
 export type SecretVariableMappingStatus =
-  | 'mapped'
-  | 'unmapped'
-  | 'missing-source'
-  | 'unknown'
+  'mapped' | 'unmapped' | 'missing-source' | 'unknown'
 
 export type SecretsBrokerTopologyNodeKind =
-  | 'broker'
-  | 'provider'
-  | 'ref'
-  | 'service'
-  | 'variable'
+  'broker' | 'provider' | 'ref' | 'service' | 'variable'
 
 export type SecretsBrokerTopologyEdgeKind =
-  | 'maps-to'
-  | 'provided-by'
-  | 'uses-variable'
+  'maps-to' | 'provided-by' | 'uses-variable'
 
 export type SecretsBrokerTopologyNode = {
   id: string

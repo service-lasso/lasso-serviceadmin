@@ -28,3 +28,9 @@ Unavailable means the runtime audit or service list could not be read.
 - Not a Vault playground.
 - Not lockout, telemetry, or operational-controls (#118).
 - Not a place that reveals, copies, or logs secret values.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/security-secret-access-assignments.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/security-secret-access-assignments.md. Edit the canonical page, then export. -->

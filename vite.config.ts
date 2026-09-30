@@ -189,9 +189,7 @@ function attachLogMiddlewares(middlewares: {
       const requestUrl = new URL(req.url ?? '', 'http://localhost')
       const serviceId = requestUrl.searchParams.get('service')
       const type = (requestUrl.searchParams.get('type') ?? 'default') as
-        | 'default'
-        | 'access'
-        | 'error'
+        'default' | 'access' | 'error'
 
       if (!serviceId) {
         res.statusCode = 400
@@ -230,9 +228,7 @@ function attachLogMiddlewares(middlewares: {
       const requestUrl = new URL(req.url ?? '', 'http://localhost')
       const serviceId = requestUrl.searchParams.get('service')
       const type = (requestUrl.searchParams.get('type') ?? 'default') as
-        | 'default'
-        | 'access'
-        | 'error'
+        'default' | 'access' | 'error'
 
       if (!serviceId) {
         res.statusCode = 400
@@ -267,9 +263,7 @@ function attachLogMiddlewares(middlewares: {
       const requestUrl = new URL(req.url ?? '', 'http://localhost')
       const serviceId = requestUrl.searchParams.get('service')
       const type = (requestUrl.searchParams.get('type') ?? 'default') as
-        | 'default'
-        | 'access'
-        | 'error'
+        'default' | 'access' | 'error'
       const limit = normalizeLogReadLimit(requestUrl.searchParams.get('limit'))
       const beforeParam = requestUrl.searchParams.get('before')
 

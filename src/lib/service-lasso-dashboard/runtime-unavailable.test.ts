@@ -116,6 +116,31 @@ describe('runtime API unavailable handling', () => {
     })
   })
 
+  it('treats the Core authentication envelope as unavailable Security data', async () => {
+    vi.stubEnv('VITE_SERVICE_LASSO_API_BASE_URL', 'http://runtime.test')
+    vi.resetModules()
+    const { fetchSecurityState } = await import('./stub')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          security: {
+            contractVersion: 'runtime_auth_v1',
+            authenticated: true,
+            auth: { required: true, source: 'local' },
+          },
+        })
+      )
+    )
+
+    await expect(fetchSecurityState()).rejects.toMatchObject({
+      details: {
+        path: '/api/security',
+        reason: 'non_json',
+      },
+    })
+  })
+
   it('allows stub data only when explicitly enabled in local development', () => {
     expect(
       isServiceLassoStubDataEnabled({

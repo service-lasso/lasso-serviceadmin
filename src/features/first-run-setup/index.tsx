@@ -265,7 +265,7 @@ function FirstRunSetupLoading() {
   )
 }
 
-function FirstRunSetupUnavailable() {
+function FirstRunSetupUnavailable({ retry }: { retry: () => void }) {
   return (
     <div className='mx-auto flex min-h-svh w-full max-w-5xl flex-col justify-center px-4 py-6 sm:px-6 lg:px-8'>
       <Alert variant='destructive'>
@@ -275,6 +275,9 @@ function FirstRunSetupUnavailable() {
           Service Admin could not verify the setup contract. The application
           remains locked until the Service Lasso runtime is reachable.
         </AlertDescription>
+        <Button type='button' variant='outline' onClick={retry}>
+          Retry setup status
+        </Button>
       </Alert>
     </div>
   )
@@ -283,12 +286,12 @@ function FirstRunSetupUnavailable() {
 export function FirstRunSetupGate({ children }: { children: React.ReactNode }) {
   const setupQuery = useFirstRunSetupState()
 
-  if (setupQuery.isLoading || !setupQuery.data) {
-    return <FirstRunSetupLoading />
+  if (setupQuery.isError) {
+    return <FirstRunSetupUnavailable retry={() => void setupQuery.refetch()} />
   }
 
-  if (setupQuery.isError) {
-    return <FirstRunSetupUnavailable />
+  if (setupQuery.isLoading || !setupQuery.data) {
+    return <FirstRunSetupLoading />
   }
 
   const setup = setupQuery.data

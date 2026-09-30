@@ -1,60 +1,20 @@
 # Service Lasso Admin
 
-Service Lasso Admin is the browser interface for operating a Service Lasso runtime. It provides the Release 1 dashboard, service lifecycle, dependencies, logs, runtime, MCP, installed services, variables, network, security, settings, and help surfaces.
+Operate your local services in a browser: see what is running, start and stop a service, inspect its endpoints, and read the logs that explain a failure.
 
-## Release 1 product boundary
+**[Try Admin with the Service Lasso demo](https://github.com/service-lasso/service-lasso/blob/develop/docs/quick-start.md)**
 
-- Fleet is retired.
-- Sessions is retired; identity sessions belong to ZITADEL.
-- Policy Simulation is not a product surface. Security shows the service manifest secret-access assignments that Core actually enforces.
-- Support Bundle is not a GA control and remains hidden until it has released-artifact evidence.
-- Capabilities without GA evidence remain hidden or are explicitly labelled preview.
+[UI guide](https://github.com/service-lasso/service-lasso/blob/develop/docs/operator-ui/service-admin-ui-guide.md) · [Configure and recover](https://github.com/service-lasso/service-lasso/blob/develop/docs/operate-your-service.md) · [MCP and agent prompts](https://github.com/service-lasso/service-lasso/blob/develop/docs/agent-prompts.md)
 
-The full decision record and validation contract are in [`docs/release/release-1-product-decisions.md`](docs/release/release-1-product-decisions.md).
+## Develop Admin
 
-## Runtime endpoint contract
-
-Admin discovers the Service Lasso runtime API through configuration rather than a fixed host assumption:
-
-- `VITE_SERVICE_LASSO_API_BASE_URL`
-- `VITE_SERVICE_LASSO_FAVORITES_ENABLED`
-- `VITE_SERVICE_LASSO_LOGS_DEBUG`
-
-Example:
-
-```text
-VITE_SERVICE_LASSO_API_BASE_URL=http://127.0.0.1:3001
-VITE_SERVICE_LASSO_FAVORITES_ENABLED=true
-```
-
-The runtime is responsible for authentication, authorization, bind identity, and client-visible endpoint policy. Admin must not invent or weaken those controls.
-
-## Local development
-
-```powershell
+```sh
 pnpm install --frozen-lockfile
-pnpm run dev
+pnpm dev
 ```
 
-Validate the application:
+Set `VITE_SERVICE_LASSO_API_BASE_URL` to your runtime URL. The runtime owns authentication and authorization. See [developer notes](docs/development.md) for configuration, validation, packaging, and design provenance.
 
-```powershell
-pnpm run lint
-pnpm run format:check
-pnpm run test
-pnpm run build
-pnpm run package:artifact
-pnpm run package:verify
-```
+Reader guides are maintained in [Service Lasso](https://github.com/service-lasso/service-lasso/tree/develop/docs). The offline Help Center bundles generated copies; see [help synchronization](docs/help-sync.md).
 
-## Packaging
-
-The release workflow produces one archive per supported operating system, a CycloneDX SBOM for every archive, a checksum manifest, provenance attestations, and a service manifest. Publication is manual, environment-protected, and bound to the exact reviewed candidate commit.
-
-## Design provenance
-
-The interface is derived from the MIT-licensed `shadcn-admin` project by satnaing. Service Lasso keeps its shared responsive, accessible Shadcn/Tailwind page structure; Service Lasso product behavior, runtime contracts, tests, and release controls are maintained here.
-
-## License
-
-MIT. See [`LICENSE`](LICENSE).
+MIT · [License](LICENSE)

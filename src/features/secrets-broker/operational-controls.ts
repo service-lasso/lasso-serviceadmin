@@ -1,9 +1,5 @@
 export type OperationalControlOutcome =
-  | 'allowed'
-  | 'denied'
-  | 'blocked'
-  | 'warning'
-  | 'recorded'
+  'allowed' | 'denied' | 'blocked' | 'warning' | 'recorded'
 
 export type OperationalControlSeverity = 'info' | 'warning' | 'critical'
 

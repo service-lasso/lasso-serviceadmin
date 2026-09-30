@@ -1,16 +1,8 @@
 export type ManagedSecretState =
-  | 'present'
-  | 'rotation-due'
-  | 'stale'
-  | 'missing'
+  'present' | 'rotation-due' | 'stale' | 'missing'
 
 export type ManagedSecretAction =
-  | 'metadata'
-  | 'reveal'
-  | 'edit'
-  | 'reset'
-  | 'delete'
-  | 'policy'
+  'metadata' | 'reveal' | 'edit' | 'reset' | 'delete' | 'policy'
 
 export type ManagedSecretRow = {
   id: string

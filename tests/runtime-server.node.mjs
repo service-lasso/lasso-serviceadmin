@@ -12,6 +12,10 @@ import {
   TrustedIngressProxyError,
 } from '../runtime/server.js'
 import {
+  isLockedWrapperContainmentFailure,
+  lockedWrapperContainmentMessages,
+} from '../scripts/locked-wrapper-containment-contract.mjs'
+import {
   brokerMetadataEndpointCount,
   brokerMetadataReadinessAttempts,
   brokerMetadataRequestOptions,
@@ -56,17 +60,51 @@ import {
 import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
+  createLockedWrapperUiRecorder,
   createQualificationProgressRecorder,
-  createTrustedUnlockReceiptRecorder,
+  parseCypressChildProvenance,
+  parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
-  parseTrustedUnlockReceiptDiagnostic,
+  createRotationRehydrationRecorder,
+  parseRotationRehydrationDiagnostic,
   qualificationProgressPhases,
+  stoppedLifecycleQualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
 import {
   buildTransportDiagnostic,
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from '../scripts/real-browser-transport-diagnostics.mjs'
+
+test('locked wrapper accepts only named contained launch failures', () => {
+  assert.equal(
+    isLockedWrapperContainmentFailure(lockedWrapperContainmentMessages[0]),
+    true
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(lockedWrapperContainmentMessages[1]),
+    true
+  )
+  for (const unsafeMessage of [
+    `unexpected detail: ${lockedWrapperContainmentMessages[0]}`,
+    `${lockedWrapperContainmentMessages[1]} unexpected detail`,
+    `${lockedWrapperContainmentMessages[0]} caused by ${lockedWrapperContainmentMessages[1]}`,
+  ]) {
+    assert.equal(isLockedWrapperContainmentFailure(unsafeMessage), false)
+  }
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      'Cannot start service "@secretsbroker" because process spawn failed: Windows managed launcher exited before the service launch was acknowledged (exit 2).'
+    ),
+    false
+  )
+  assert.equal(
+    isLockedWrapperContainmentFailure(
+      'Cannot start service "@secretsbroker" because process spawn timed out.'
+    ),
+    false
+  )
+})
 
 test('bounded provider, metadata, and execute network waits retain exact source counts', async () => {
   assert.equal(cypressQualificationTimeoutMs, 720_000)
@@ -209,7 +247,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   for (const uiRestartProof of [
     'cy.reload()',
     'unlockTrustedIdentity()',
-    'cy.get(\'[data-testid="service-detail-lifecycle-controls"]\').within(() => {',
+    'brokerLifecycleControls(detailReadiness).within(() => {',
     "cy.contains('button', /^Restart service$/, { timeout: 20_000 })",
     "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
     "cy.wait('@restartBrokerFromUi', { timeout: 120_000 })",
@@ -643,11 +681,6 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const trustedIdentityWaitCount = [
     ...lateLifecycleSource.matchAll(/unlockTrustedIdentity\(\)/g),
   ].length
-  const trustedUnlockReceiptGateCount = [
-    ...lateLifecycleSource.matchAll(
-      /^\s+unlockPostRestartTrustedIdentity\(\)$/gm
-    ),
-  ].length
   const directThirtySecondWaitCount = [
     ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
   ].length
@@ -669,8 +702,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
   assert.equal(directTwentySecondWaitCount, 2)
-  assert.equal(trustedIdentityWaitCount, 2)
-  assert.equal(trustedUnlockReceiptGateCount, 1)
+  assert.equal(trustedIdentityWaitCount, 3)
   assert.equal(directThirtySecondWaitCount, 3)
   assert.equal(openSecretsCount, 2)
   assert.equal(visibleTableRowCount, 4)
@@ -678,7 +710,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'failOnStatusCode: false',
     'expect(status).to.equal(409)',
     "error: 'invalid_lifecycle_state'",
-    '/root exited during ownership enrollment/i',
+    'expect(isLockedWrapperContainmentFailure(body?.message)).to.equal(true)',
     "cy.contains('Secrets Broker management is unavailable.'",
     "expect(body).to.deep.equal({ outcome: 'wrapper_restored' })",
   ]) {
@@ -707,7 +739,6 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const longUiWaitMs =
     (directTwentySecondWaitCount +
       trustedIdentityWaitCount +
-      trustedUnlockReceiptGateCount +
       openSecretsCount * 2 +
       visibleTableRowCount * 2 +
       validationDialogCount) *
@@ -1134,6 +1165,78 @@ test('qualification progress emits nothing when disabled or outside the lifecycl
   assert.deepEqual(writes, [])
 })
 
+test('locked-wrapper UI provenance is closed-schema, bounded, and secret-free', () => {
+  const writes = []
+  const recorder = createLockedWrapperUiRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+    }),
+    {
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+    }
+  )
+  assert.equal(recorder.record({ unavailablePanelPresent: false }), null)
+  assert.deepEqual(parseLockedWrapperUiDiagnostic(writes[0].trim()), {
+    unavailablePanelPresent: true,
+    unavailablePanelVisible: true,
+    retryControlPresent: true,
+  })
+  for (const unsafeEvidence of [
+    {
+      schema: 'service-admin.locked-wrapper-ui.v1',
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+      domText: 'private rendered content',
+    },
+    {
+      schema: 'service-admin.locked-wrapper-ui.v1',
+      unavailablePanelPresent: false,
+      unavailablePanelVisible: true,
+      retryControlPresent: false,
+    },
+    {
+      schema: 'service-admin.locked-wrapper-ui.v1',
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: false,
+      retryControlPresent: true,
+      url: 'http://private.example/',
+    },
+  ]) {
+    assert.equal(
+      parseLockedWrapperUiDiagnostic(JSON.stringify(unsafeEvidence)),
+      null
+    )
+  }
+
+  const outsideSpec = createLockedWrapperUiRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  outsideSpec.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-first-run.cy.js'
+  )
+  assert.equal(
+    outsideSpec.record({
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: true,
+      retryControlPresent: true,
+    }),
+    null
+  )
+})
+
 test('qualification progress call sites are exact, ordered, and bounded', async () => {
   const lifecycleSource = await readFile(
     new URL(
@@ -1170,6 +1273,124 @@ test('qualification progress call sites are exact, ordered, and bounded', async 
   }
   assert.equal(writes.length, qualificationProgressPhases.length)
   assert.equal(recorder.record('acceptance_complete'), null)
+
+  const lockedWrapperObserver = "cy.task('lockedWrapperUiCheckpoint'"
+  const lockedWrapperAssertion =
+    "cy.contains('Secrets Broker management is unavailable.'"
+  assert.equal(lifecycleSource.split(lockedWrapperObserver).length - 1, 1)
+  assert.ok(
+    lifecycleSource.indexOf(lockedWrapperObserver) <
+      lifecycleSource.lastIndexOf(lockedWrapperAssertion)
+  )
+})
+
+test('stopped lifecycle qualification progress is exact, ordered, and isolated', async () => {
+  const stoppedLifecycleSource = await readFile(
+    new URL(
+      '../cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  let previousIndex = -1
+  for (const phase of stoppedLifecycleQualificationProgressPhases) {
+    const call = `qualificationCheckpoint('${phase}')`
+    assert.equal(stoppedLifecycleSource.split(call).length - 1, 1)
+    const nextIndex = stoppedLifecycleSource.indexOf(call)
+    assert.ok(nextIndex > previousIndex)
+    previousIndex = nextIndex
+  }
+
+  const writes = []
+  const recorder = createQualificationProgressRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-stopped-lifecycle.cy.js'
+  )
+  for (const phase of stoppedLifecycleQualificationProgressPhases) {
+    assert.equal(recorder.record(phase)?.phase, phase)
+  }
+  assert.equal(recorder.record('acceptance_complete'), null)
+  assert.equal(
+    writes.length,
+    stoppedLifecycleQualificationProgressPhases.length
+  )
+})
+
+test('rotation rehydration diagnostic is closed-schema and response-safe', () => {
+  const writes = []
+  const recorder = createRotationRehydrationRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      responsePresent: true,
+      statusCode: 200,
+      transport: 'response_received',
+    }),
+    {
+      responsePresent: true,
+      statusCode: 200,
+      transport: 'response_received',
+    }
+  )
+  assert.equal(
+    recorder.record({
+      responsePresent: false,
+      statusCode: 'unavailable',
+      transport: 'response_absent',
+    }),
+    null
+  )
+  assert.deepEqual(parseRotationRehydrationDiagnostic(writes[0].trim()), {
+    responsePresent: true,
+    statusCode: 200,
+    transport: 'response_received',
+  })
+  assert.equal(
+    parseRotationRehydrationDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.rotation-rehydration-response.v1',
+        responsePresent: false,
+        statusCode: 'unavailable',
+        transport: 'response_absent',
+        url: 'PRIVATE-URL-SENTINEL',
+      })
+    ),
+    null
+  )
+  assert.equal(
+    parseRotationRehydrationDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.rotation-rehydration-response.v1',
+        responsePresent: true,
+        statusCode: 'unavailable',
+        transport: 'response_received',
+      })
+    ),
+    null
+  )
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  assert.deepEqual(
+    recorder.record({
+      responsePresent: false,
+      statusCode: 'unavailable',
+      transport: 'response_absent',
+    }),
+    {
+      responsePresent: false,
+      statusCode: 'unavailable',
+      transport: 'response_absent',
+    }
+  )
 })
 
 test('qualification failures retain only bounded phase and transport metadata', () => {
@@ -1193,6 +1414,11 @@ test('qualification failures retain only bounded phase and transport metadata', 
         serviceRunning: true,
         serviceHealthy: false,
       },
+      rotationRehydrationDiagnostic: {
+        responsePresent: false,
+        statusCode: 'unavailable',
+        transport: 'response_absent',
+      },
       transportDiagnostic: {
         phases: ['upstream_started', 'headers_received', 'body_received'],
         statuses: [200, 200],
@@ -1204,6 +1430,8 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'timeout',
       lastPhase: 'wrapper_recovery_complete',
       elapsedMs: 80_000,
+      cypressChildEvents: [],
+      cypressRunSummary: { state: 'unavailable' },
       transportPhases: [
         'upstream_started',
         'headers_received',
@@ -1211,6 +1439,11 @@ test('qualification failures retain only bounded phase and transport metadata', 
       ],
       statuses: [200, 200],
       adminReachability: 'reachable',
+      rotationRehydration: {
+        responsePresent: false,
+        statusCode: 'unavailable',
+        transport: 'response_absent',
+      },
       providerUi: {
         checkpoint: 'single_migration_apply',
         component: 'response_metadata',
@@ -1220,6 +1453,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
         serviceRunning: true,
         serviceHealthy: false,
       },
+      lockedWrapperUi: null,
       trustedUnlock: null,
     }
   )
@@ -1251,98 +1485,70 @@ test('qualification failures retain only bounded phase and transport metadata', 
       failure: 'nonzero_exit',
       lastPhase: 'wrapper_recovery_complete',
       elapsedMs: 1_234,
+      cypressChildEvents: [],
+      cypressRunSummary: { state: 'unavailable' },
       transportPhases: [],
       statuses: [],
       adminReachability: 'unreachable',
+      rotationRehydration: null,
       providerUi: null,
+      lockedWrapperUi: null,
       trustedUnlock: null,
     }
   )
 })
 
-test('post-restart trusted-unlock receipt is closed, bounded, and reaches the failure sink', () => {
-  const writes = []
-  const recorder = createTrustedUnlockReceiptRecorder({
-    enabled: true,
-    write: (line) => writes.push(line),
-  })
-  recorder.setSpecPath(
-    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
-  )
-  const receipt = {
-    schema: 'service-admin.trusted-unlock-receipt.v1',
-    status: 'observed',
-    present: true,
-    verified: false,
-    localRoot: false,
-    loading: true,
-    unavailable: false,
-  }
-  assert.deepEqual(recorder.record(receipt), receipt)
-  assert.equal(recorder.record(receipt), null)
-  assert.equal(writes.length, 1)
-  assert.deepEqual(
-    parseTrustedUnlockReceiptDiagnostic(writes[0].trim()),
-    receipt
-  )
+test('qualification failure retains only closed locked-wrapper UI state', () => {
   assert.deepEqual(
     buildQualificationFailureDiagnostic({
-      failure: 'timeout',
-      trustedUnlockReceipt: parseTrustedUnlockReceiptDiagnostic(
-        writes[0].trim()
-      ),
-    }).trustedUnlock,
-    receipt
-  )
-})
-
-test('trusted-unlock receipt rejects private, malformed, inherited, and getter-backed input', () => {
-  const writes = []
-  const recorder = createTrustedUnlockReceiptRecorder({
-    enabled: true,
-    write: (line) => writes.push(line),
-  })
-  recorder.setSpecPath(
-    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
-  )
-  const zero = {
-    schema: 'service-admin.trusted-unlock-receipt.v1',
-    status: 'observed',
-    present: false,
-    verified: false,
-    localRoot: false,
-    loading: false,
-    unavailable: false,
-  }
-  assert.deepEqual(recorder.record(zero), zero)
-  assert.equal(writes.length, 1)
-
-  const rejectingRecorder = createTrustedUnlockReceiptRecorder({
-    enabled: true,
-  })
-  rejectingRecorder.setSpecPath(
-    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
-  )
-  const untrusted = Object.create({ verified: true })
-  Object.assign(untrusted, zero)
-  assert.equal(rejectingRecorder.record(untrusted), null)
-  const getterBacked = { ...zero }
-  Object.defineProperty(getterBacked, 'loading', {
-    enumerable: true,
-    get: () => true,
-  })
-  assert.equal(rejectingRecorder.record(getterBacked), null)
-  assert.equal(
-    parseTrustedUnlockReceiptDiagnostic(
-      JSON.stringify({ ...zero, privateUrl: 'http://private.invalid/token' })
-    ),
-    null
+      failure: 'nonzero_exit',
+      lockedWrapperUiDiagnostic: {
+        unavailablePanelPresent: true,
+        unavailablePanelVisible: false,
+        retryControlPresent: false,
+      },
+    }).lockedWrapperUi,
+    {
+      unavailablePanelPresent: true,
+      unavailablePanelVisible: false,
+      retryControlPresent: false,
+    }
   )
   assert.equal(
     buildQualificationFailureDiagnostic({
       failure: 'nonzero_exit',
-      trustedUnlockReceipt: { ...zero, present: true },
-    }).trustedUnlock,
+      lockedWrapperUiDiagnostic: {
+        unavailablePanelPresent: true,
+        unavailablePanelVisible: true,
+        retryControlPresent: true,
+        secret: 'never retain',
+      },
+    }).lockedWrapperUi,
+    null
+  )
+})
+
+test('Cypress child provenance retains only bounded event metadata', () => {
+  assert.deepEqual(
+    parseCypressChildProvenance(
+      JSON.stringify({
+        schema: 'service-admin.cypress-child-exit.v1',
+        phase: 'run',
+        event: 'error',
+        errorCode: 'EACCES',
+      })
+    ),
+    { phase: 'run', event: 'error', errorCode: 'EACCES' }
+  )
+  assert.equal(
+    parseCypressChildProvenance(
+      JSON.stringify({
+        schema: 'service-admin.cypress-child-exit.v1',
+        phase: 'run',
+        event: 'error',
+        errorCode: 'PRIVATE_SENTINEL',
+      })
+    ),
     null
   )
 })

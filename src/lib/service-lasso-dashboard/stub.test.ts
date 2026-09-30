@@ -12,6 +12,37 @@ describe('service lasso dashboard stub', () => {
     window.localStorage.clear()
   })
 
+  it('rejects the Core authentication envelope as an incomplete Security state', async () => {
+    const { isServiceSecurityState } = await loadStub()
+
+    expect(
+      isServiceSecurityState({
+        contractVersion: 'runtime_auth_v1',
+        authenticated: true,
+        auth: {
+          required: true,
+          source: 'local',
+        },
+      })
+    ).toBe(false)
+
+    expect(
+      isServiceSecurityState({
+        updatedAt: '2026-09-20T00:00:00.000Z',
+        currentActor: 'local-root',
+        groups: [],
+        permissions: [],
+        actorAssignments: [],
+        providerMappings: [],
+        auditLinks: [],
+        safety: {
+          lastOwnerProtected: true,
+          selfSecurityAccessProtected: true,
+        },
+      })
+    ).toBe(true)
+  })
+
   it('builds a summary from the current service inventory', async () => {
     const { fetchDashboardSummary } = await loadStub()
 
@@ -81,23 +112,24 @@ describe('service lasso dashboard stub', () => {
     expect((await fetchDashboardService('@traefik'))?.status).toBe('running')
   })
 
-  it('runs per-service lifecycle actions from services table controls', async () => {
-    const { fetchDashboardService, runDashboardAction } = await loadStub()
+  it('applies confirmed per-service lifecycle actions to the resulting service state', async () => {
+    const { fetchDashboardService, runServiceLifecycleAction } =
+      await loadStub()
 
-    await runDashboardAction({
-      kind: 'service-lifecycle',
+    await runServiceLifecycleAction({
       serviceId: '@serviceadmin',
       action: 'stop',
+      confirm: true,
     })
 
     expect((await fetchDashboardService('@serviceadmin'))?.status).toBe(
       'stopped'
     )
 
-    await runDashboardAction({
-      kind: 'service-lifecycle',
+    await runServiceLifecycleAction({
       serviceId: '@serviceadmin',
       action: 'restart',
+      confirm: true,
     })
 
     expect((await fetchDashboardService('@serviceadmin'))?.status).toBe(

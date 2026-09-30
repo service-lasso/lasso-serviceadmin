@@ -5,9 +5,9 @@ and exposure metadata from the Service Lasso runtime service list. Treat the
 rows as configured reachability evidence unless a runtime health check or
 direct endpoint probe proves the endpoint is currently reachable.
 
-Use this guide with [How to Create a Basic Service](how-to-create-a-basic-service.md),
-[Runtime and Logs Operator Runbook](runtime-and-logs-operator-runbook.md), and
-[Health Checks](health-checks.md) when a service is healthy but a URL, port, or
+Use this guide with [How to Create a Basic Service](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/how-to-create-a-basic-service.md),
+[Runtime and Logs Operator Runbook](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/runtime-and-logs-operator-runbook.md), and
+[Health Checks](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/service-admin/health-checks.md) when a service is healthy but a URL, port, or
 route does not behave as expected.
 
 ## When to Use Network or Service Routes
@@ -183,3 +183,9 @@ Before treating LAN or public exposure as intentional, confirm:
 When exposure is uncertain, classify the route using the narrowest safe scope
 and escalate with service id, endpoint label, URL host, bind, port, protocol,
 exposure, route provider, health state, timestamp, and the check already run.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/network-and-service-routes-operator-guide.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/network-and-service-routes-operator-guide.md. Edit the canonical page, then export. -->

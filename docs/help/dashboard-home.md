@@ -2,7 +2,7 @@
 title: Dashboard home operator chips
 description: How operator home splits fleet mix, named failures, listen ports, Inbox, generation, Traefik, and log volume without secret values.
 status: runtime-backed
-tags: dashboard, home, telemetry, inbox
+tags: ["dashboard", "home", "telemetry", "inbox"]
 ---
 
 # Dashboard home operator chips
@@ -39,3 +39,9 @@ is not a count of documentation or UI links. Open Network for the full table.
 
 Broker ready and lockouts stay on home as already shipped. They are not part
 of this chip set.
+
+---
+
+[Component guides](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/README.md) · Imported from [lasso-serviceadmin](https://github.com/service-lasso/lasso-serviceadmin/blob/d018767c715c92719b8df69f64ebf5484ee0ba11/docs/help/dashboard-home.md). The [migration inventory](https://github.com/service-lasso/service-lasso/blob/develop/docs/components/documentation-migration.md) records ownership and remaining work.
+
+<!-- Generated from service-lasso/docs/components/service-admin/dashboard-home.md. Edit the canonical page, then export. -->

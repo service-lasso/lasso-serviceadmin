@@ -15,6 +15,11 @@ import {
   providerReadinessRequestOptions,
   providerReadinessRetryDelayMs,
 } from '../../../scripts/real-browser-qualification-budget.mjs'
+import { isLockedWrapperContainmentFailure } from '../../../scripts/locked-wrapper-containment-contract.mjs'
+import {
+  observeBrokerDetailReadiness,
+  brokerLifecycleControls,
+} from '../../support/broker-detail-readiness.js'
 import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
@@ -44,63 +49,18 @@ function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
 }
 
-function trustedUnlockReceipt() {
-  try {
-    const body = Cypress.$('body')
-    const hasExactButton = (text) =>
-      body
-        .find('button')
-        .toArray()
-        .some((element) => element.textContent?.trim() === text)
-    const verified = body.find('[data-runtime-identity]').length > 0
-    const localRoot = hasExactButton('Continue as local-root')
-    const loading = body
-      .find('main')
-      .toArray()
-      .some(
-        (element) =>
-          element.textContent?.trim() ===
-          'Verifying trusted Service Lasso identity'
-      )
-    const unavailable = body
-      .find('[role="alert"]')
-      .toArray()
-      .some((element) => element.textContent?.includes('Trusted identity unavailable'))
-    return {
-      schema: 'service-admin.trusted-unlock-receipt.v1',
-      status: 'observed',
-      present: verified || localRoot || loading || unavailable,
-      verified,
-      localRoot,
-      loading,
-      unavailable,
-    }
-  } catch {
-    return {
-      schema: 'service-admin.trusted-unlock-receipt.v1',
-      status: 'observed',
-      present: false,
-      verified: false,
-      localRoot: false,
-      loading: false,
-      unavailable: false,
-    }
+function rotationRehydrationDiagnostic(response) {
+  const statusCode =
+    Number.isInteger(response?.statusCode) &&
+    response.statusCode >= 100 &&
+    response.statusCode <= 599
+      ? response.statusCode
+      : 'unavailable'
+  return {
+    responsePresent: response != null,
+    statusCode,
+    transport: response == null ? 'response_absent' : 'response_received',
   }
-}
-
-function unlockPostRestartTrustedIdentity() {
-  return cy
-    .then(() => unlockTrustedIdentity())
-    .then(undefined, (originalError) =>
-      cy.task('trustedUnlockFailureReceipt', trustedUnlockReceipt(), { log: false }).then(
-        () => {
-          throw originalError
-        },
-        () => {
-          throw originalError
-        }
-      )
-    )
 }
 
 function dialog(title) {
@@ -153,6 +113,17 @@ function openSecrets() {
   cy.contains(expectedRef, { timeout: 20_000 }).should('be.visible')
 }
 
+function lockedWrapperUiDiagnostic($body) {
+  const unavailablePanel = $body.find(
+    'div.flex.flex-wrap.items-center.justify-between.gap-3.rounded-md.border.border-dashed.p-4.text-sm.text-muted-foreground'
+  )
+  return {
+    unavailablePanelPresent: unavailablePanel.length > 0,
+    unavailablePanelVisible: unavailablePanel.filter(':visible').length > 0,
+    retryControlPresent: unavailablePanel.find('button').length > 0,
+  }
+}
+
 function managedSecretsInventory() {
   return cy.get('[data-testid="managed-secrets-inventory"]')
 }
@@ -174,9 +145,10 @@ function visibleTableRow(content, timeout = 20_000) {
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
   waitForManagedServiceReadiness('@secretsbroker')
+  const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
   unlockTrustedIdentity()
-  cy.get('[data-testid="service-detail-lifecycle-controls"]').within(() => {
+  brokerLifecycleControls(detailReadiness).within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
       .should('be.visible')
       .and('be.enabled')
@@ -807,7 +779,18 @@ function waitForSuccessfulBrokerEventsUiResponse(
     })
 }
 
-describe('packaged Service Admin with real Core and Secrets Broker', () => {
+if (Cypress.env('trustedUnlockReceiptControlFailure') === '1') {
+  describe('trusted-unlock receipt control', () => {
+    it('retains the original Cypress failure for the Node receipt sink', () => {
+      cy.visit('/')
+      cy.document().then((document) => {
+        document.body.innerHTML =
+          '<main>Verifying trusted Service Lasso identity</main>'
+      })
+      unlockTrustedIdentity(100, { retainFailureReceipt: true })
+    })
+  })
+} else describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
   })
@@ -1127,32 +1110,38 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     cy.reload()
     cy.wait('@rehydrateRollbackRotation', { timeout: 60_000 }).then(
       ({ request, response }) => {
-        expect(request.url).to.include(
-          `/api/secrets/rotation/operations/${rollbackOperationId}`
-        )
-        expect(response?.statusCode).to.equal(200)
-        const operation = response?.body?.operation
-        const safeRollbackRehydration = {
-          operationId: operation?.operationId,
-          outcome: operation?.outcome,
-          phase: operation?.phase,
-          failureCode: operation?.failureCode,
-          activeVersionId: operation?.activeVersionId,
-          previousVersionId: operation?.previousVersionId,
-          rollbackCompletedOperations:
-            operation?.rollbackCompletedOperations,
-        }
-        expect(
-          safeRollbackRehydration,
-          JSON.stringify(safeRollbackRehydration)
-        ).to.deep.equal({
-          operationId: rollbackOperationId,
-          outcome: 'rolled_back',
-          phase: 'rolled_back',
-          failureCode: 'rotation_consumer_not_ready',
-          activeVersionId: committedRotationVersionId,
-          previousVersionId: committedRotationVersionId,
-          rollbackCompletedOperations: ['sample-service:restart:'],
+        return cy.task(
+          'rotationRehydrationDiagnostic',
+          rotationRehydrationDiagnostic(response),
+          { log: false }
+        ).then(() => {
+          expect(request.url).to.include(
+            `/api/secrets/rotation/operations/${rollbackOperationId}`
+          )
+          expect(response?.statusCode).to.equal(200)
+          const operation = response?.body?.operation
+          const safeRollbackRehydration = {
+            operationId: operation?.operationId,
+            outcome: operation?.outcome,
+            phase: operation?.phase,
+            failureCode: operation?.failureCode,
+            activeVersionId: operation?.activeVersionId,
+            previousVersionId: operation?.previousVersionId,
+            rollbackCompletedOperations:
+              operation?.rollbackCompletedOperations,
+          }
+          expect(
+            safeRollbackRehydration,
+            JSON.stringify(safeRollbackRehydration)
+          ).to.deep.equal({
+            operationId: rollbackOperationId,
+            outcome: 'rolled_back',
+            phase: 'rolled_back',
+            failureCode: 'rotation_consumer_not_ready',
+            activeVersionId: committedRotationVersionId,
+            previousVersionId: committedRotationVersionId,
+            rollbackCompletedOperations: ['sample-service:restart:'],
+          })
         })
       }
     )
@@ -1877,7 +1866,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()
-    unlockPostRestartTrustedIdentity()
+    unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
     openSecrets()
     visibleTableRow(expectedRef)
     visibleTableRow(createdRef)
@@ -1927,13 +1916,16 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
             error: 'invalid_lifecycle_state',
             statusCode: 409,
           })
-          expect(body?.message).to.match(
-            /root exited during ownership enrollment/i
-          )
+          expect(isLockedWrapperContainmentFailure(body?.message)).to.equal(true)
         })
       cy.reload()
       unlockTrustedIdentity()
       cy.contains('[role="tab"]', /^Secrets\b/, { timeout: 20_000 }).click()
+      cy.get('body').then(($body) =>
+        cy.task('lockedWrapperUiCheckpoint', lockedWrapperUiDiagnostic($body), {
+          log: false,
+        })
+      )
       cy.contains('Secrets Broker management is unavailable.', {
         timeout: 30_000,
       }).should('be.visible')

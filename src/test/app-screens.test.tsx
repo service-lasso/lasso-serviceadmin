@@ -38,7 +38,6 @@ const appScreens: ScreenCase[] = [
     title: 'Service Admin - Inbox',
   },
   { path: '/tasks', heading: /^Tasks$/i },
-  { path: '/users', heading: /^User List$/i },
   {
     path: '/runtime',
     heading: /^Runtime$/i,
@@ -77,6 +76,7 @@ const appScreens: ScreenCase[] = [
   { path: '/settings', heading: /^Profile$/i },
   { path: '/settings/account', heading: /^Account$/i },
   { path: '/settings/appearance', heading: /^Appearance$/i },
+  { path: '/settings/startup', heading: /^Startup$/i },
   { path: '/settings/display', heading: /^Display$/i },
   { path: '/settings/notifications', heading: /^Notifications$/i },
 ]
@@ -158,6 +158,19 @@ describe('app screens', () => {
         expect(document.title).toBe(title)
       })
     }
+  })
+
+  it('redirects the retired users surface to Security', async () => {
+    const { router } = await renderRoute('/users')
+
+    expect(
+      await screen.findByRole('heading', { name: /^Security$/i })
+    ).toBeVisible()
+    expect(screen.queryByRole('heading', { name: /^User List$/i })).toBeNull()
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/security')
+    })
   })
 
   it('shows compact empty setup state on service details', async () => {

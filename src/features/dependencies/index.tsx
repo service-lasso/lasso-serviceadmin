@@ -521,8 +521,7 @@ export function Dependencies() {
                       onChange={(event) =>
                         setStatusFilter(
                           event.target.value as
-                            | 'all'
-                            | DashboardService['status']
+                            'all' | DashboardService['status']
                         )
                       }
                     >

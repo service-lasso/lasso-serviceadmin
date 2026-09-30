@@ -4,9 +4,7 @@ export type ReleaseArtifactSource =
   | 'frontend-fixture-mode'
 
 export type QualificationPlatform =
-  | 'windows-named-pipe'
-  | 'linux-unix-socket'
-  | 'loopback-development'
+  'windows-named-pipe' | 'linux-unix-socket' | 'loopback-development'
 
 export type QualificationJourneyId =
   | 'fresh-setup'

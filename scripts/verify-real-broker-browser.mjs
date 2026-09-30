@@ -1,3 +1,4 @@
+import { waitForCapturedChildClose } from './captured-child-close.mjs'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -18,7 +19,11 @@ import {
 import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
+  parseCypressRunSummaryDiagnostic,
+  parseCypressChildProvenance,
+  parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
+  parseRotationRehydrationDiagnostic,
   parseTrustedUnlockReceiptDiagnostic,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
@@ -518,7 +523,11 @@ let cypressOutputChecked = false
 let cypressSucceeded = false
 let qualificationFailureKind
 const qualificationProgressEvents = []
+const cypressChildEvents = []
+const cypressRunSummaryEvents = []
 const providerUiConvergenceEvents = []
+const rotationRehydrationEvents = []
+const lockedWrapperUiEvents = []
 const trustedUnlockReceipts = []
 let runFailure
 let auditEventCount = 0
@@ -547,6 +556,8 @@ try {
   cypress = spawn(
     process.execPath,
     [
+      '--require',
+      path.join(root, 'scripts', 'cypress-child-exit-preload.cjs'),
       cypressBin,
       'run',
       '--browser',
@@ -569,11 +580,18 @@ try {
     cypress,
     qualificationProgressEvents,
     providerUiConvergenceEvents,
+    rotationRehydrationEvents,
+    lockedWrapperUiEvents,
     trustedUnlockReceipts
   )
+  captureCypressRunSummary(cypress, cypressRunSummaryEvents)
+  captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
   try {
-    cypressExit = await waitForExit(cypress, cypressQualificationTimeoutMs)
+    cypressExit = await waitForCapturedChildClose(
+      cypress,
+      cypressQualificationTimeoutMs
+    )
   } catch (error) {
     qualificationFailureKind = classifyQualificationFailure({ timedOut: true })
     throw error
@@ -632,8 +650,12 @@ try {
         buildQualificationFailureDiagnostic({
           failure: qualificationFailureKind,
           progressEvents: qualificationProgressEvents,
+          cypressChildEvents,
+          cypressRunSummary: cypressRunSummaryEvents.at(-1),
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+          lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
           trustedUnlockReceipt: trustedUnlockReceipts.at(-1),
+          rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
             adminReachability
@@ -668,6 +690,8 @@ function captureQualificationProgress(
   child,
   target,
   providerUiTarget,
+  rotationRehydrationTarget,
+  lockedWrapperUiTarget,
   trustedUnlockTarget
 ) {
   let buffer = ''
@@ -688,10 +712,46 @@ function captureQualificationProgress(
       ) {
         providerUiTarget.push(providerUiEvent)
       }
+      const rotationRehydration = parseRotationRehydrationDiagnostic(line)
+      if (rotationRehydration && rotationRehydrationTarget.length < 1) {
+        rotationRehydrationTarget.push(rotationRehydration)
+      }
+      const lockedWrapperUiEvent = parseLockedWrapperUiDiagnostic(line)
+      if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
+        lockedWrapperUiTarget.push(lockedWrapperUiEvent)
+      }
       const trustedUnlockReceipt = parseTrustedUnlockReceiptDiagnostic(line)
       if (trustedUnlockReceipt && trustedUnlockTarget.length < 1) {
         trustedUnlockTarget.push(trustedUnlockReceipt)
       }
+    }
+  })
+}
+
+function captureCypressChildProvenance(child, target) {
+  let buffer = ''
+  child.stderr.on('data', (chunk) => {
+    buffer += chunk.toString('utf8')
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() ?? ''
+    if (buffer.length > 256) buffer = ''
+    for (const line of lines) {
+      const event = parseCypressChildProvenance(line)
+      if (event && target.length < 16) target.push(event)
+    }
+  })
+}
+
+function captureCypressRunSummary(child, target) {
+  let buffer = ''
+  child.stderr.on('data', (chunk) => {
+    buffer += chunk.toString('utf8')
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() ?? ''
+    if (buffer.length > 256) buffer = ''
+    for (const line of lines) {
+      const summary = parseCypressRunSummaryDiagnostic(line)
+      if (summary && target.length < 1) target.push(summary)
     }
   })
 }

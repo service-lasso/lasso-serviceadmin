@@ -9,6 +9,10 @@ updates:
       time: "03:00"
       timezone: Australia/Sydney
     open-pull-requests-limit: 10
+    # ISS-29 / #641: the application contract uses Table v8 APIs.
+    ignore:
+      - dependency-name: "@tanstack/react-table"
+        update-types: ["version-update:semver-major"]
     groups:
       production-dependencies:
         dependency-type: production
