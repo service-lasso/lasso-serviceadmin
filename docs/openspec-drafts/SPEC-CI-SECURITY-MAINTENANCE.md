@@ -92,3 +92,29 @@ behavior, privacy/cap boundaries and real-child CLI/executable status separation
 including a CLI that terminates on the executable's exit event.
 Full current-head Admin and owning three-platform Core qualification are required.
 This is causal observation only; no passing-summary or exit-status waiver.
+
+## ISS-1504: classify post-acceptance Cypress runner results
+
+Core #1504 retains a macOS packaged lifecycle attempt where the lifecycle spec
+printed one passing test and zero failures, then the nested Cypress executable
+closed with exit code 1. The existing child provenance establishes the nested
+process boundary but does not retain Cypress's structured run result before
+that exit.
+
+The lifecycle-only Cypress configuration may emit one metadata-only `after:run`
+summary before the executable outcome is interpreted. It must contain only a
+fixed availability state and bounded aggregate test counts (total, passed,
+failed, pending, and skipped). It must never retain spec names, paths, browser
+metadata, error text, screenshots, video, test titles, configuration, requests,
+responses, environment, or private material.
+
+The summary is causal observation only: it must not alter Cypress event
+registration, exit status, test assertions, timeouts, retries, artifacts,
+mutations, or cleanup. It must tolerate missing or malformed Cypress results by
+recording `unavailable`, and it must be included in the existing bounded failure
+diagnostic only for a terminal qualification failure. Focused tests must prove
+lifecycle scoping, one-record capping, private-input exclusion, complete count
+projection, unavailable projection, and that observer sink failure cannot
+replace the original Cypress outcome. A natural exact-head three-platform
+packaged lifecycle result remains required; this diagnostic alone does not
+attribute ownership or qualify release, promotion, or GA.

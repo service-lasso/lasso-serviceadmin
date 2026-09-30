@@ -19,6 +19,7 @@ import {
 import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
+  parseCypressRunSummaryDiagnostic,
   parseCypressChildProvenance,
   parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
@@ -522,6 +523,7 @@ let cypressSucceeded = false
 let qualificationFailureKind
 const qualificationProgressEvents = []
 const cypressChildEvents = []
+const cypressRunSummaryEvents = []
 const providerUiConvergenceEvents = []
 const rotationRehydrationEvents = []
 const lockedWrapperUiEvents = []
@@ -579,6 +581,7 @@ try {
     rotationRehydrationEvents,
     lockedWrapperUiEvents
   )
+  captureCypressRunSummary(cypress, cypressRunSummaryEvents)
   captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
   try {
@@ -645,6 +648,7 @@ try {
           failure: qualificationFailureKind,
           progressEvents: qualificationProgressEvents,
           cypressChildEvents,
+          cypressRunSummary: cypressRunSummaryEvents.at(-1),
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
           lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
           rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
@@ -725,6 +729,20 @@ function captureCypressChildProvenance(child, target) {
     for (const line of lines) {
       const event = parseCypressChildProvenance(line)
       if (event && target.length < 16) target.push(event)
+    }
+  })
+}
+
+function captureCypressRunSummary(child, target) {
+  let buffer = ''
+  child.stderr.on('data', (chunk) => {
+    buffer += chunk.toString('utf8')
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() ?? ''
+    if (buffer.length > 256) buffer = ''
+    for (const line of lines) {
+      const summary = parseCypressRunSummaryDiagnostic(line)
+      if (summary && target.length < 1) target.push(summary)
     }
   })
 }
