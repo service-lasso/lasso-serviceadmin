@@ -64,15 +64,18 @@ test('actual Cypress failure reaches the closed Node qualification receipt sink'
         '--spec',
         'cypress/e2e/secrets-broker/real-lifecycle.cy.js',
       ],
-      { cwd: root, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true }
+      { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
     )
-    let stderr = ''
+    let output = ''
+    cypress.stdout.on('data', (chunk) => {
+      output += chunk.toString('utf8')
+    })
     cypress.stderr.on('data', (chunk) => {
-      stderr += chunk.toString('utf8')
+      output += chunk.toString('utf8')
     })
     const [exitCode] = await once(cypress, 'close')
     assert.notEqual(exitCode, 0)
-    const receipts = stderr
+    const receipts = output
       .split(/\r?\n/)
       .map(parseTrustedUnlockReceiptDiagnostic)
       .filter(Boolean)

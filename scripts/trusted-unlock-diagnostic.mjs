@@ -11,6 +11,15 @@ const receiptKeys = Object.freeze([
   'unavailable',
 ])
 
+function appendReceipt(error, receipt) {
+  const encoded = receiptPrefix + JSON.stringify(receipt)
+  error.message += encoded
+  // Cypress's after:spec result projects the display stack on some runners.
+  // Keep the original assertion and stack intact while appending only the
+  // closed receipt so the Node qualification sink can observe it.
+  if (typeof error.stack === 'string') error.stack += encoded
+}
+
 function ownBoolean(value, key) {
   try {
     const descriptor = Object.getOwnPropertyDescriptor(value, key)
@@ -70,7 +79,7 @@ export function observeTrustedUnlockReceiptFailure(emitter, readMarkers) {
       const receipt = createTrustedUnlockReceipt(readMarkers())
       // Cypress delivers this original failure to its Node after:spec result.
       // No command is queued from this handler.
-      if (error instanceof Error) error.message += receiptPrefix + JSON.stringify(receipt)
+      if (error && typeof error.message === 'string') appendReceipt(error, receipt)
     } catch {
       // Receipt production must never replace the original assertion failure.
     }
@@ -84,9 +93,14 @@ export function receiptFromCypressSpecResults(results) {
   if (!results || typeof results !== 'object' || !Array.isArray(results.tests)) {
     return null
   }
-  for (const result of results.tests.slice(0, 64)) {
-    const displayError = result?.displayError
-    if (typeof displayError !== 'string' || displayError.length > 65_536) continue
+  const errorSurfaces = [
+    results.error,
+    ...results.tests.slice(0, 64).map((result) => result?.displayError),
+  ]
+  for (const displayError of errorSurfaces) {
+    if (typeof displayError !== 'string' || displayError.length > 65_536) {
+      continue
+    }
     const start = displayError.lastIndexOf(receiptPrefix)
     if (start < 0) continue
     const encoded = displayError.slice(start + receiptPrefix.length)
@@ -149,7 +163,8 @@ export function observeTrustedUnlockFailure(
   emitter,
   observation,
   readMarkers,
-  readReceiptMarkers
+  readReceiptMarkers,
+  retainReceipt
 ) {
   const detach = () => emitter.removeListener('fail', failed)
   function failed(error) {
@@ -159,8 +174,14 @@ export function observeTrustedUnlockFailure(
         const diagnostic = observation.snapshot(readMarkers())
         // Supplement the original assertion; never serialize the error as metadata.
         if (error instanceof Error) error.message += `\n${JSON.stringify(diagnostic)}`
-        if (typeof readReceiptMarkers === 'function' && error instanceof Error) {
-          error.message += receiptPrefix + JSON.stringify(createTrustedUnlockReceipt(readReceiptMarkers()))
+        if (
+          typeof readReceiptMarkers === 'function' &&
+          error &&
+          typeof error.message === 'string'
+        ) {
+          const receipt = createTrustedUnlockReceipt(readReceiptMarkers())
+          appendReceipt(error, receipt)
+          if (typeof retainReceipt === 'function') retainReceipt(receipt)
         }
       }
     } catch {

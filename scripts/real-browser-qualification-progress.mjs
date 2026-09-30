@@ -312,6 +312,7 @@ export function createTrustedUnlockReceiptRecorder({
 } = {}) {
   let active = false
   let emitted = false
+  let retainedReceipt = null
   return {
     setSpecPath(specPath) {
       active =
@@ -320,10 +321,16 @@ export function createTrustedUnlockReceiptRecorder({
           typeof specPath === 'string' ? specPath : ''
         )
       emitted = false
+      retainedReceipt = null
+    },
+    retain(receipt) {
+      if (!active || retainedReceipt) return null
+      retainedReceipt = parseTrustedUnlockReceipt(receipt)
+      return retainedReceipt
     },
     record(results) {
       if (!active || emitted) return null
-      const receipt = receiptFromCypressSpecResults(results)
+      const receipt = receiptFromCypressSpecResults(results) ?? retainedReceipt
       if (!receipt) return null
       emitted = true
       try {

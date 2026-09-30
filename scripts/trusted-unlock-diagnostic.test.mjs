@@ -72,6 +72,17 @@ test('receipt extraction rejects malformed, duplicate, private, and zero-state i
   }
 })
 
+test('receipt extraction accepts the bounded Cypress spec error projection', () => {
+  const receipt = createTrustedUnlockReceipt({ loading: true })
+  assert.deepEqual(
+    receiptFromCypressSpecResults({
+      error: `original failure\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${JSON.stringify(receipt)}`,
+      tests: [],
+    }),
+    receipt
+  )
+})
+
 test('failure retains the original error, closes its observer and excludes private fields', () => {
   const emitter = new EventEmitter()
   const observation = createTrustedUnlockObservation()

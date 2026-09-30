@@ -3,6 +3,14 @@ import {
   observeTrustedUnlockFailure,
 } from '../../scripts/trusted-unlock-diagnostic.mjs'
 
+let retainedTrustedUnlockReceipt = null
+
+export function flushTrustedUnlockReceipt() {
+  const receipt = retainedTrustedUnlockReceipt
+  retainedTrustedUnlockReceipt = null
+  return receipt ? cy.task('trustedUnlockReceipt', receipt, { log: false }) : undefined
+}
+
 export function unlockTrustedIdentity(
   timeout = 20_000,
   { retainFailureReceipt = false } = {}
@@ -53,7 +61,9 @@ export function unlockTrustedIdentity(
         loadingMarkerPresent: text.includes('Verifying trusted Service Lasso identity'),
         unavailableMarkerPresent: text.includes('Trusted identity unavailable'),
       }
-    }, retainFailureReceipt ? readReceiptMarkers : undefined)
+    }, retainFailureReceipt ? readReceiptMarkers : undefined, (receipt) => {
+      retainedTrustedUnlockReceipt = receipt
+    })
   })
   cy.contains(/Trusted identity verified|Continue as local-root/, {
     timeout,

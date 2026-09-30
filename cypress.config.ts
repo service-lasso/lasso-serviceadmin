@@ -61,6 +61,9 @@ export default defineConfig({
         cypressRunSummary.record(results)
       })
       on('task', {
+        trustedUnlockReceiptControlEnabled() {
+          return String(config.env.trustedUnlockReceiptControlFailure) === '1'
+        },
         qualificationCheckpoint(phase) {
           progress.record(phase)
           return null
@@ -75,6 +78,10 @@ export default defineConfig({
         },
         lockedWrapperUiCheckpoint(diagnostic) {
           lockedWrapperUi.record(diagnostic)
+          return null
+        },
+        trustedUnlockReceipt(receipt) {
+          trustedUnlock.retain(receipt)
           return null
         },
       })
