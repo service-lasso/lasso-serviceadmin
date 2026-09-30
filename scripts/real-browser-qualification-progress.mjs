@@ -1,8 +1,5 @@
 import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualification-budget.mjs'
-import {
-  parseTrustedUnlockReceipt,
-  receiptFromCypressSpecResults,
-} from './trusted-unlock-diagnostic.mjs'
+import { parseTrustedUnlockReceipt } from './trusted-unlock-diagnostic.mjs'
 
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
@@ -330,7 +327,9 @@ export function createTrustedUnlockReceiptRecorder({
     },
     record(results) {
       if (!active || emitted) return null
-      const receipt = receiptFromCypressSpecResults(results) ?? retainedReceipt
+      const failed = Array.isArray(results?.tests) &&
+        results.tests.some((test) => test?.state === 'failed')
+      const receipt = failed ? retainedReceipt : null
       if (!receipt) return null
       emitted = true
       try {

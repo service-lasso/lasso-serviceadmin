@@ -51,7 +51,7 @@ export function unlockTrustedIdentity(
   }
   cy.then(() => {
     observation.begin()
-    complete = observeTrustedUnlockFailure(cy, observation, () => {
+    complete = observeTrustedUnlockFailure(Cypress, observation, () => {
       const text = Cypress.$('body').text()
       return {
         verifiedMarkerPresent: text.includes('Trusted identity verified'),

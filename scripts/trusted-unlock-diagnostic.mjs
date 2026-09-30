@@ -1,6 +1,5 @@
 // Test-only closed observation; never retain network or DOM objects.
 const receiptSchema = 'service-admin.trusted-unlock-receipt.v1'
-const receiptPrefix = '\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:'
 const receiptKeys = Object.freeze([
   'schema',
   'status',
@@ -10,15 +9,6 @@ const receiptKeys = Object.freeze([
   'loading',
   'unavailable',
 ])
-
-function appendReceipt(error, receipt) {
-  const encoded = receiptPrefix + JSON.stringify(receipt)
-  error.message += encoded
-  // Cypress's after:spec result projects the display stack on some runners.
-  // Keep the original assertion and stack intact while appending only the
-  // closed receipt so the Node qualification sink can observe it.
-  if (typeof error.stack === 'string') error.stack += encoded
-}
 
 function ownBoolean(value, key) {
   try {
@@ -69,50 +59,6 @@ export function parseTrustedUnlockReceipt(value) {
     loading: value.loading,
     unavailable: value.unavailable,
   }
-}
-
-export function observeTrustedUnlockReceiptFailure(emitter, readMarkers) {
-  const detach = () => emitter.removeListener('fail', failed)
-  function failed(error) {
-    detach()
-    try {
-      const receipt = createTrustedUnlockReceipt(readMarkers())
-      // Cypress delivers this original failure to its Node after:spec result.
-      // No command is queued from this handler.
-      if (error && typeof error.message === 'string') appendReceipt(error, receipt)
-    } catch {
-      // Receipt production must never replace the original assertion failure.
-    }
-    throw error
-  }
-  emitter.on('fail', failed)
-  return detach
-}
-
-export function receiptFromCypressSpecResults(results) {
-  if (!results || typeof results !== 'object' || !Array.isArray(results.tests)) {
-    return null
-  }
-  const errorSurfaces = [
-    results.error,
-    ...results.tests.slice(0, 64).map((result) => result?.displayError),
-  ]
-  for (const displayError of errorSurfaces) {
-    if (typeof displayError !== 'string' || displayError.length > 65_536) {
-      continue
-    }
-    const start = displayError.lastIndexOf(receiptPrefix)
-    if (start < 0) continue
-    const encoded = displayError.slice(start + receiptPrefix.length)
-    if (encoded.length > 256 || encoded.includes('\n')) continue
-    try {
-      const receipt = parseTrustedUnlockReceipt(JSON.parse(encoded))
-      if (receipt) return receipt
-    } catch {
-      // The result error remains Cypress-owned and is never retained here.
-    }
-  }
-  return null
 }
 
 export function createTrustedUnlockObservation() {
@@ -174,13 +120,8 @@ export function observeTrustedUnlockFailure(
         const diagnostic = observation.snapshot(readMarkers())
         // Supplement the original assertion; never serialize the error as metadata.
         if (error instanceof Error) error.message += `\n${JSON.stringify(diagnostic)}`
-        if (
-          typeof readReceiptMarkers === 'function' &&
-          error &&
-          typeof error.message === 'string'
-        ) {
+        if (typeof readReceiptMarkers === 'function') {
           const receipt = createTrustedUnlockReceipt(readReceiptMarkers())
-          appendReceipt(error, receipt)
           if (typeof retainReceipt === 'function') retainReceipt(receipt)
         }
       }
