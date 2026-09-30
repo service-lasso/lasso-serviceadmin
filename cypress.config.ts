@@ -3,6 +3,7 @@ import { createProviderUiConvergenceRecorder } from './scripts/real-browser-qual
 import {
   createLockedWrapperUiRecorder,
   createQualificationProgressRecorder,
+  createRotationRehydrationRecorder,
 } from './scripts/real-browser-qualification-progress.mjs'
 
 export default defineConfig({
@@ -22,6 +23,10 @@ export default defineConfig({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
       })
+      const rotationRehydration = createRotationRehydrationRecorder({
+        enabled: String(config.env.qualificationProgress) === '1',
+        write: (line) => process.stderr.write(line),
+      })
       const lockedWrapperUi = createLockedWrapperUiRecorder({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
@@ -29,11 +34,13 @@ export default defineConfig({
       on('before:spec', (spec) => {
         progress.setSpecPath(spec.absolute)
         providerUi.setSpecPath(spec.absolute)
+        rotationRehydration.setSpecPath(spec.absolute)
         lockedWrapperUi.setSpecPath(spec.absolute)
       })
       on('after:spec', () => {
         progress.setSpecPath(undefined)
         providerUi.setSpecPath(undefined)
+        rotationRehydration.setSpecPath(undefined)
         lockedWrapperUi.setSpecPath(undefined)
       })
       on('task', {
@@ -43,6 +50,10 @@ export default defineConfig({
         },
         providerUiConvergenceCheckpoint(diagnostic) {
           providerUi.record(diagnostic)
+          return null
+        },
+        rotationRehydrationDiagnostic(diagnostic) {
+          rotationRehydration.record(diagnostic)
           return null
         },
         lockedWrapperUiCheckpoint(diagnostic) {
