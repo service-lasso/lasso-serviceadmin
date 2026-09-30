@@ -42,7 +42,7 @@ test('records one lifecycle-only Cypress run summary without private input', () 
   assert.equal(JSON.stringify(records).includes('PRIVATE_SENTINEL'), false)
 })
 
-test('does not observe another spec and tolerates unavailable results or a sink failure', () => {
+test('does not observe another spec and records one unavailable lifecycle summary for null or malformed results', () => {
   const records = []
   const inactive = createCypressRunSummaryRecorder({
     enabled: true,
@@ -52,6 +52,29 @@ test('does not observe another spec and tolerates unavailable results or a sink 
   assert.equal(inactive.record(null), null)
   assert.deepEqual(records, [])
 
+  for (const result of [null, { totalTests: 'PRIVATE_SENTINEL' }]) {
+    const lifecycleRecords = []
+    const active = createCypressRunSummaryRecorder({
+      enabled: true,
+      write: (line) => lifecycleRecords.push(JSON.parse(line)),
+    })
+    active.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
+    assert.deepEqual(active.record(result), { state: 'unavailable' })
+    active.record({
+      totalTests: 1,
+      totalPassed: 1,
+      totalFailed: 0,
+      totalPending: 0,
+      totalSkipped: 0,
+    })
+    assert.deepEqual(lifecycleRecords, [
+      { schema: 'service-admin.cypress-run-summary.v1', state: 'unavailable' },
+    ])
+    assert.equal(JSON.stringify(lifecycleRecords).includes('PRIVATE_SENTINEL'), false)
+  }
+})
+
+test('tolerates Cypress run-summary sink failure', () => {
   const active = createCypressRunSummaryRecorder({
     enabled: true,
     write: () => {
