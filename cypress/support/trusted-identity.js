@@ -3,7 +3,18 @@ import {
   observeTrustedUnlockFailure,
 } from '../../scripts/trusted-unlock-diagnostic.mjs'
 
-export function unlockTrustedIdentity(timeout = 20_000) {
+let retainedTrustedUnlockReceipt = null
+
+export function flushTrustedUnlockReceipt() {
+  const receipt = retainedTrustedUnlockReceipt
+  retainedTrustedUnlockReceipt = null
+  return receipt ? cy.task('trustedUnlockReceipt', receipt, { log: false }) : undefined
+}
+
+export function unlockTrustedIdentity(
+  timeout = 20_000,
+  { retainFailureReceipt = false } = {}
+) {
   const observation = createTrustedUnlockObservation()
   let complete
   cy.intercept('GET', /\/api\/runtime\/security(?:\?|$)/, (request) => {
@@ -14,6 +25,30 @@ export function unlockTrustedIdentity(timeout = 20_000) {
       })
     }
   })
+  const readReceiptMarkers = () => {
+    const body = Cypress.$('body')
+    return {
+      verified: body.find('[data-runtime-identity]').length > 0,
+      localRoot: body
+        .find('button')
+        .toArray()
+        .some((button) => button.textContent?.trim() === 'Continue as local-root'),
+      loading: body
+        .find('main')
+        .toArray()
+        .some(
+          (element) =>
+            element.textContent?.trim() ===
+            'Verifying trusted Service Lasso identity'
+        ),
+      unavailable: body
+        .find('[role="alert"]')
+        .toArray()
+        .some((element) =>
+          element.textContent?.includes('Trusted identity unavailable')
+        ),
+    }
+  }
   cy.then(() => {
     observation.begin()
     complete = observeTrustedUnlockFailure(cy, observation, () => {
@@ -26,6 +61,8 @@ export function unlockTrustedIdentity(timeout = 20_000) {
         loadingMarkerPresent: text.includes('Verifying trusted Service Lasso identity'),
         unavailableMarkerPresent: text.includes('Trusted identity unavailable'),
       }
+    }, retainFailureReceipt ? readReceiptMarkers : undefined, (receipt) => {
+      retainedTrustedUnlockReceipt = receipt
     })
   })
   cy.contains(/Trusted identity verified|Continue as local-root/, {
@@ -37,5 +74,7 @@ export function unlockTrustedIdentity(timeout = 20_000) {
   })
   cy.then(() => observation.verifying())
   cy.contains('Trusted identity verified', { timeout }).should('exist')
-  cy.then(() => complete())
+  cy.then(() => {
+    complete()
+  })
 }

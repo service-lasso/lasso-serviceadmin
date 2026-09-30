@@ -20,7 +20,10 @@ import {
   observeBrokerDetailReadiness,
   brokerLifecycleControls,
 } from '../../support/broker-detail-readiness.js'
-import { unlockTrustedIdentity } from '../../support/trusted-identity.js'
+import {
+  flushTrustedUnlockReceipt,
+  unlockTrustedIdentity,
+} from '../../support/trusted-identity.js'
 
 const expectedRef = 'services/sample-service/sample.GENERATED_TOKEN'
 const createdRef = 'services/sample-service/browser.CREATED_TOKEN'
@@ -170,7 +173,7 @@ function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount) {
   restartBrokerFromUi(expectedRequestCount, requestCount)
   waitForManagedServiceReadiness('@secretsbroker')
   cy.reload()
-  unlockTrustedIdentity()
+  unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
   openSecrets()
 }
 
@@ -779,7 +782,34 @@ function waitForSuccessfulBrokerEventsUiResponse(
     })
 }
 
+describe('trusted-unlock receipt control', () => {
+  before(function () {
+    cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
+      if (!enabled) this.skip()
+    })
+  })
+
+    afterEach(() => flushTrustedUnlockReceipt())
+
+    it('retains the original Cypress failure for the Node receipt sink', () => {
+      cy.visit('/')
+      cy.document().then((document) => {
+        document.body.innerHTML =
+          '<main>Verifying trusted Service Lasso identity</main>'
+      })
+      unlockTrustedIdentity(100, { retainFailureReceipt: true })
+    })
+})
+
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
+  before(function () {
+    cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
+      if (enabled) this.skip()
+    })
+  })
+
+  afterEach(() => flushTrustedUnlockReceipt())
+
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
   })
@@ -1855,7 +1885,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()
-    unlockTrustedIdentity()
+    unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
     openSecrets()
     visibleTableRow(expectedRef)
     visibleTableRow(createdRef)

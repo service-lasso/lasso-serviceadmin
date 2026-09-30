@@ -3,8 +3,52 @@ import test from 'node:test'
 import {
   buildQualificationFailureDiagnostic,
   createCypressRunSummaryRecorder,
+  createTrustedUnlockReceiptRecorder,
   parseCypressRunSummaryDiagnostic,
+  parseTrustedUnlockReceiptDiagnostic,
 } from './real-browser-qualification-progress.mjs'
+
+test('records one actual-result trusted-unlock receipt and rejects malformed input', () => {
+  const records = []
+  const recorder = createTrustedUnlockReceiptRecorder({
+    enabled: true,
+    write: (line) => records.push(line.trim()),
+  })
+  recorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
+  const receipt = {
+    schema: 'service-admin.trusted-unlock-receipt.v1',
+    status: 'observed',
+    present: true,
+    verified: false,
+    localRoot: false,
+    loading: true,
+    unavailable: false,
+  }
+  const result = {
+    tests: [
+      {
+        displayError: `original failure\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${JSON.stringify(receipt)}`,
+      },
+    ],
+  }
+  assert.deepEqual(recorder.record(result), receipt)
+  assert.equal(recorder.record(result), null)
+  assert.deepEqual(records.map(parseTrustedUnlockReceiptDiagnostic), [receipt])
+  assert.deepEqual(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      trustedUnlockReceipt: receipt,
+    }).trustedUnlock,
+    receipt
+  )
+  assert.equal(JSON.stringify(records).includes('original failure'), false)
+  assert.equal(
+    parseTrustedUnlockReceiptDiagnostic(
+      JSON.stringify({ ...receipt, private: 'PRIVATE' })
+    ),
+    null
+  )
+})
 
 test('records one lifecycle-only Cypress run summary without private input', () => {
   const records = []

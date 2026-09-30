@@ -45,6 +45,24 @@ Acceptance contract:
 - The existing cross-platform package and real-Broker qualification checks
   stay enabled; a successful build is not a substitute for those checks.
 
+## ISS-30: production DOMPurify advisory repair
+
+Service Admin MUST resolve the reported production dependency advisory in the
+Monaco editor path without changing the supported Monaco baseline or weakening
+qualification behavior.
+
+Acceptance contract:
+
+- Keep `monaco-editor@0.56.0` and `@monaco-editor/react@4.7.0`; use only a
+  compatible DOMPurify lock/override selection at or above the advisory's
+  patched version.
+- Keep `pnpm audit --prod` and its existing report policy unchanged; the exact
+  PR head must report no production vulnerabilities.
+- Preserve the controlled trusted-unlock Cypress failure's original nonzero
+  close and one closed receipt as separate qualification evidence.
+- Do not treat the dependency repair as attribution for the historical #1382
+  macOS failure, or as release, promotion, or GA approval.
+
 ## ISS-641: preserve the Table v8 application contract
 
 The #629 dependency update selected Table v9 while current UI source still uses v8 APIs, producing 591 compiler errors on unchanged develop 500485f7fbf10c813f4a9d7bf3013d83aed548db. Restore package/lock selection to the available supported v8 line and keep a package-specific Dependabot major-update guard until a separately governed source/spec migration is delivered. Keep production and tooling audit gates enabled; the guard is not a security exemption. Verify frozen install, lint/format, build, unit tests and complete hosted gates on the exact head, then integrate through develop into blocked diagnostic #640.

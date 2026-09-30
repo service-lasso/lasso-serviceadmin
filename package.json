@@ -20,6 +20,7 @@
     "test:secrets:readiness-diagnostic": "start-server-and-test \"vite --host 127.0.0.1 --port 4176 --strictPort\" http://127.0.0.1:4176 \"cypress run --config baseUrl=http://127.0.0.1:4176,screenshotOnRunFailure=false,video=false --spec cypress/e2e/secrets-broker/detail-readiness-diagnostic.cy.js,cypress/e2e/secrets-broker/trusted-unlock-diagnostic.cy.js\"",
     "test:ui": "playwright test",
     "test:runtime": "node --test tests/runtime-server.node.mjs",
+    "test:secrets:trusted-unlock-receipt": "node --test scripts/trusted-unlock-cypress-receipt.node-test.mjs",
     "test:secrets:real-browser": "node scripts/verify-real-broker-browser.mjs",
     "test:secrets:real-first-run-browser": "node scripts/verify-real-broker-first-run-browser.mjs",
     "test:secrets:real-lockout-browser": "node scripts/verify-real-broker-lockout-browser.mjs",
@@ -115,7 +116,7 @@
       "js-yaml": "4.3.2",
       "smol-toml": "1.7.1",
       "immutable": "5.1.8",
-      "dompurify": "3.4.14",
+      "dompurify": "3.4.16",
       "brace-expansion@2": "2.1.7"
     }
   }

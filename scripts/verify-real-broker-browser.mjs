@@ -24,6 +24,7 @@ import {
   parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
   parseRotationRehydrationDiagnostic,
+  parseTrustedUnlockReceiptDiagnostic,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
 
@@ -527,6 +528,7 @@ const cypressRunSummaryEvents = []
 const providerUiConvergenceEvents = []
 const rotationRehydrationEvents = []
 const lockedWrapperUiEvents = []
+const trustedUnlockReceipts = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -579,7 +581,8 @@ try {
     qualificationProgressEvents,
     providerUiConvergenceEvents,
     rotationRehydrationEvents,
-    lockedWrapperUiEvents
+    lockedWrapperUiEvents,
+    trustedUnlockReceipts
   )
   captureCypressRunSummary(cypress, cypressRunSummaryEvents)
   captureCypressChildProvenance(cypress, cypressChildEvents)
@@ -651,6 +654,7 @@ try {
           cypressRunSummary: cypressRunSummaryEvents.at(-1),
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
           lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
+          trustedUnlockReceipt: trustedUnlockReceipts.at(-1),
           rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
@@ -687,7 +691,8 @@ function captureQualificationProgress(
   target,
   providerUiTarget,
   rotationRehydrationTarget,
-  lockedWrapperUiTarget
+  lockedWrapperUiTarget,
+  trustedUnlockTarget
 ) {
   let buffer = ''
   child.stderr.on('data', (chunk) => {
@@ -714,6 +719,10 @@ function captureQualificationProgress(
       const lockedWrapperUiEvent = parseLockedWrapperUiDiagnostic(line)
       if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
         lockedWrapperUiTarget.push(lockedWrapperUiEvent)
+      }
+      const trustedUnlockReceipt = parseTrustedUnlockReceiptDiagnostic(line)
+      if (trustedUnlockReceipt && trustedUnlockTarget.length < 1) {
+        trustedUnlockTarget.push(trustedUnlockReceipt)
       }
     }
   })

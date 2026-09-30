@@ -264,6 +264,21 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     ).length - 1,
     1
   )
+  let restartThenUnlockCursor = 0
+  for (const postRestartStep of [
+    'restartBrokerFromUi(expectedRequestCount, requestCount)',
+    "waitForManagedServiceReadiness('@secretsbroker')",
+    'cy.reload()',
+    'unlockTrustedIdentity(20_000, { retainFailureReceipt: true })',
+    'openSecrets()',
+  ]) {
+    const nextStep = restartHelperSource.indexOf(
+      postRestartStep,
+      restartThenUnlockCursor
+    )
+    assert.ok(nextStep >= restartThenUnlockCursor)
+    restartThenUnlockCursor = nextStep + postRestartStep.length
+  }
   const restartInterceptPattern =
     /cy\.intercept\(\r?\n[ \t]*'POST',\r?\n[ \t]*'\*\*\/api\/services\/%40secretsbroker\/restart'/g
   for (const source of [
@@ -678,12 +693,6 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const directTwentySecondWaitCount = [
     ...lateLifecycleSource.matchAll(/timeout:\s*20_000/g),
   ].length
-  const trustedIdentityWaitCount = [
-    ...lateLifecycleSource.matchAll(/unlockTrustedIdentity\(\)/g),
-  ].length
-  const directThirtySecondWaitCount = [
-    ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
-  ].length
   const openSecretsCount = [...lateLifecycleSource.matchAll(/openSecrets\(\)/g)]
     .length
   const visibleTableRowCount = [
@@ -702,8 +711,29 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
   assert.equal(directTwentySecondWaitCount, 2)
-  assert.equal(trustedIdentityWaitCount, 3)
-  assert.equal(directThirtySecondWaitCount, 3)
+  const trustedUnlockWaitPolicy = Object.freeze({
+    postRestartReceipt: 20_000,
+    wrapperLocked: 20_000,
+    wrapperRecovery: 20_000,
+  })
+  const wrapperLifecycleWaitPolicy = Object.freeze({
+    unavailableState: 30_000,
+    recoveredSecretName: 30_000,
+    recoveredSecretStatus: 30_000,
+  })
+  let wrapperLifecycleCursor = 0
+  for (const wrapperLifecycleStep of [
+    "cy.contains('Secrets Broker management is unavailable.', {\n        timeout: 30_000,\n      })",
+    "cy.contains('Master key', { timeout: 30_000 })",
+    ".contains('Available', { timeout: 30_000 })",
+  ]) {
+    const nextStep = lateLifecycleSource.indexOf(
+      wrapperLifecycleStep,
+      wrapperLifecycleCursor
+    )
+    assert.ok(nextStep >= wrapperLifecycleCursor)
+    wrapperLifecycleCursor = nextStep + wrapperLifecycleStep.length
+  }
   assert.equal(openSecretsCount, 2)
   assert.equal(visibleTableRowCount, 4)
   for (const lockedWrapperProof of [
@@ -736,14 +766,21 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     (rawLifecycleRequestCount + sharedStopMutationCount) * 120_000
   const controlRequestWaitMs = controlRequestCount * 30_000
   const reloadWaitMs = reloadCount * 60_000
-  const longUiWaitMs =
+  const ordinaryUiWaitMs =
     (directTwentySecondWaitCount +
-      trustedIdentityWaitCount +
       openSecretsCount * 2 +
       visibleTableRowCount * 2 +
       validationDialogCount) *
-      20_000 +
-    directThirtySecondWaitCount * 30_000
+    20_000
+  const trustedUnlockWaitMs = Object.values(trustedUnlockWaitPolicy).reduce(
+    (total, timeoutMs) => total + timeoutMs,
+    0
+  )
+  const wrapperLifecycleWaitMs = Object.values(
+    wrapperLifecycleWaitPolicy
+  ).reduce((total, timeoutMs) => total + timeoutMs, 0)
+  const longUiWaitMs =
+    ordinaryUiWaitMs + trustedUnlockWaitMs + wrapperLifecycleWaitMs
   const progressTaskWaitMs = (lateCheckpointCount + 1) * 60_000
   const uiRestartActionWaitMs =
     (lateLifecycleSource.split(
@@ -1454,6 +1491,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
         serviceHealthy: false,
       },
       lockedWrapperUi: null,
+      trustedUnlock: null,
     }
   )
   assert.equal(
@@ -1492,6 +1530,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
       rotationRehydration: null,
       providerUi: null,
       lockedWrapperUi: null,
+      trustedUnlock: null,
     }
   )
 })
