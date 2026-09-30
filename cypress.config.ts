@@ -1,6 +1,9 @@
 import { defineConfig } from 'cypress'
 import { createProviderUiConvergenceRecorder } from './scripts/real-browser-qualification-budget.mjs'
-import { createQualificationProgressRecorder } from './scripts/real-browser-qualification-progress.mjs'
+import {
+  createQualificationProgressRecorder,
+  createTrustedUnlockReceiptRecorder,
+} from './scripts/real-browser-qualification-progress.mjs'
 
 export default defineConfig({
   allowCypressEnv: false,
@@ -19,13 +22,19 @@ export default defineConfig({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
       })
+      const trustedUnlock = createTrustedUnlockReceiptRecorder({
+        enabled: String(config.env.qualificationProgress) === '1',
+        write: (line) => process.stderr.write(line),
+      })
       on('before:spec', (spec) => {
         progress.setSpecPath(spec.absolute)
         providerUi.setSpecPath(spec.absolute)
+        trustedUnlock.setSpecPath(spec.absolute)
       })
       on('after:spec', () => {
         progress.setSpecPath(undefined)
         providerUi.setSpecPath(undefined)
+        trustedUnlock.setSpecPath(undefined)
       })
       on('task', {
         qualificationCheckpoint(phase) {
@@ -34,6 +43,10 @@ export default defineConfig({
         },
         providerUiConvergenceCheckpoint(diagnostic) {
           providerUi.record(diagnostic)
+          return null
+        },
+        trustedUnlockFailureReceipt(receipt) {
+          trustedUnlock.record(receipt)
           return null
         },
       })

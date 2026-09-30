@@ -2,6 +2,8 @@ import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualifica
 
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
+const trustedUnlockSchema = 'service-admin.trusted-unlock-receipt.v1'
+export const trustedUnlockReceiptEventCap = 1
 
 export const qualificationProgressPhases = Object.freeze([
   'lifecycle_started',
@@ -106,11 +108,110 @@ export function createQualificationProgressRecorder({
   }
 }
 
+function ownDataValue(record, key) {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key)
+  return descriptor &&
+    Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
+    !Object.prototype.hasOwnProperty.call(descriptor, 'get') &&
+    !Object.prototype.hasOwnProperty.call(descriptor, 'set')
+    ? descriptor.value
+    : undefined
+}
+
+export function parseTrustedUnlockReceipt(value) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    Object.getOwnPropertySymbols(value).length !== 0
+  ) {
+    return null
+  }
+  const keys = Object.keys(value)
+  const expectedKeys = [
+    'schema',
+    'status',
+    'present',
+    'verified',
+    'localRoot',
+    'loading',
+    'unavailable',
+  ]
+  if (
+    keys.length !== expectedKeys.length ||
+    !expectedKeys.every((key) => keys.includes(key))
+  ) {
+    return null
+  }
+  const receipt = Object.fromEntries(
+    expectedKeys.map((key) => [key, ownDataValue(value, key)])
+  )
+  if (
+    receipt.schema !== trustedUnlockSchema ||
+    receipt.status !== 'observed' ||
+    ![receipt.present, receipt.verified, receipt.localRoot, receipt.loading, receipt.unavailable].every(
+      (entry) => typeof entry === 'boolean'
+    ) ||
+    receipt.present !==
+      (receipt.verified ||
+        receipt.localRoot ||
+        receipt.loading ||
+        receipt.unavailable)
+  ) {
+    return null
+  }
+  return receipt
+}
+
+export function parseTrustedUnlockReceiptDiagnostic(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  try {
+    return parseTrustedUnlockReceipt(JSON.parse(line))
+  } catch {
+    return null
+  }
+}
+
+export function createTrustedUnlockReceiptRecorder({
+  enabled = false,
+  write = () => undefined,
+  maxEvents = trustedUnlockReceiptEventCap,
+} = {}) {
+  if (!Number.isInteger(maxEvents) || maxEvents < 1 || maxEvents > trustedUnlockReceiptEventCap) {
+    throw new Error('Trusted unlock receipt event cap is invalid.')
+  }
+  let active = false
+  let emitted = 0
+  return {
+    setSpecPath(specPath) {
+      active =
+        enabled === true &&
+        typeof specPath === 'string' &&
+        /(?:^|[\\/])cypress[\\/]e2e[\\/]secrets-broker[\\/]real-lifecycle\.cy\.js$/.test(
+          specPath
+        )
+      emitted = 0
+    },
+    record(receipt) {
+      const safeReceipt = parseTrustedUnlockReceipt(receipt)
+      if (!active || emitted >= maxEvents || !safeReceipt) return null
+      try {
+        write(`${JSON.stringify(safeReceipt)}\n`)
+        emitted += 1
+        return safeReceipt
+      } catch {
+        return null
+      }
+    },
+  }
+}
+
 export function buildQualificationFailureDiagnostic({
   failure,
   progressEvents = [],
   providerUiDiagnostic,
   transportDiagnostic,
+  trustedUnlockReceipt,
 }) {
   if (!['timeout', 'nonzero_exit'].includes(failure)) {
     throw new Error('Qualification failure kind is invalid.')
@@ -170,6 +271,7 @@ export function buildQualificationFailureDiagnostic({
         ? 'reachable'
         : 'unreachable',
     providerUi: safeProviderUiDiagnostic,
+    trustedUnlock: parseTrustedUnlockReceipt(trustedUnlockReceipt),
   }
 }
 

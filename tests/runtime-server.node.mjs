@@ -57,7 +57,9 @@ import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
   createQualificationProgressRecorder,
+  createTrustedUnlockReceiptRecorder,
   parseQualificationProgressDiagnostic,
+  parseTrustedUnlockReceiptDiagnostic,
   qualificationProgressPhases,
 } from '../scripts/real-browser-qualification-progress.mjs'
 import {
@@ -641,6 +643,11 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const trustedIdentityWaitCount = [
     ...lateLifecycleSource.matchAll(/unlockTrustedIdentity\(\)/g),
   ].length
+  const trustedUnlockReceiptGateCount = [
+    ...lateLifecycleSource.matchAll(
+      /^\s+unlockPostRestartTrustedIdentity\(\)$/gm
+    ),
+  ].length
   const directThirtySecondWaitCount = [
     ...lateLifecycleSource.matchAll(/timeout:\s*30_000/g),
   ].length
@@ -662,7 +669,8 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(controlRequestCount, 2)
   assert.equal(reloadCount, 3)
   assert.equal(directTwentySecondWaitCount, 2)
-  assert.equal(trustedIdentityWaitCount, 3)
+  assert.equal(trustedIdentityWaitCount, 2)
+  assert.equal(trustedUnlockReceiptGateCount, 1)
   assert.equal(directThirtySecondWaitCount, 3)
   assert.equal(openSecretsCount, 2)
   assert.equal(visibleTableRowCount, 4)
@@ -699,6 +707,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   const longUiWaitMs =
     (directTwentySecondWaitCount +
       trustedIdentityWaitCount +
+      trustedUnlockReceiptGateCount +
       openSecretsCount * 2 +
       visibleTableRowCount * 2 +
       validationDialogCount) *
@@ -1211,6 +1220,7 @@ test('qualification failures retain only bounded phase and transport metadata', 
         serviceRunning: true,
         serviceHealthy: false,
       },
+      trustedUnlock: null,
     }
   )
   assert.equal(
@@ -1245,7 +1255,95 @@ test('qualification failures retain only bounded phase and transport metadata', 
       statuses: [],
       adminReachability: 'unreachable',
       providerUi: null,
+      trustedUnlock: null,
     }
+  )
+})
+
+test('post-restart trusted-unlock receipt is closed, bounded, and reaches the failure sink', () => {
+  const writes = []
+  const recorder = createTrustedUnlockReceiptRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  const receipt = {
+    schema: 'service-admin.trusted-unlock-receipt.v1',
+    status: 'observed',
+    present: true,
+    verified: false,
+    localRoot: false,
+    loading: true,
+    unavailable: false,
+  }
+  assert.deepEqual(recorder.record(receipt), receipt)
+  assert.equal(recorder.record(receipt), null)
+  assert.equal(writes.length, 1)
+  assert.deepEqual(
+    parseTrustedUnlockReceiptDiagnostic(writes[0].trim()),
+    receipt
+  )
+  assert.deepEqual(
+    buildQualificationFailureDiagnostic({
+      failure: 'timeout',
+      trustedUnlockReceipt: parseTrustedUnlockReceiptDiagnostic(
+        writes[0].trim()
+      ),
+    }).trustedUnlock,
+    receipt
+  )
+})
+
+test('trusted-unlock receipt rejects private, malformed, inherited, and getter-backed input', () => {
+  const writes = []
+  const recorder = createTrustedUnlockReceiptRecorder({
+    enabled: true,
+    write: (line) => writes.push(line),
+  })
+  recorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  const zero = {
+    schema: 'service-admin.trusted-unlock-receipt.v1',
+    status: 'observed',
+    present: false,
+    verified: false,
+    localRoot: false,
+    loading: false,
+    unavailable: false,
+  }
+  assert.deepEqual(recorder.record(zero), zero)
+  assert.equal(writes.length, 1)
+
+  const rejectingRecorder = createTrustedUnlockReceiptRecorder({
+    enabled: true,
+  })
+  rejectingRecorder.setSpecPath(
+    'C:/candidate/cypress/e2e/secrets-broker/real-lifecycle.cy.js'
+  )
+  const untrusted = Object.create({ verified: true })
+  Object.assign(untrusted, zero)
+  assert.equal(rejectingRecorder.record(untrusted), null)
+  const getterBacked = { ...zero }
+  Object.defineProperty(getterBacked, 'loading', {
+    enumerable: true,
+    get: () => true,
+  })
+  assert.equal(rejectingRecorder.record(getterBacked), null)
+  assert.equal(
+    parseTrustedUnlockReceiptDiagnostic(
+      JSON.stringify({ ...zero, privateUrl: 'http://private.invalid/token' })
+    ),
+    null
+  )
+  assert.equal(
+    buildQualificationFailureDiagnostic({
+      failure: 'nonzero_exit',
+      trustedUnlockReceipt: { ...zero, present: true },
+    }).trustedUnlock,
+    null
   )
 })
 

@@ -44,6 +44,65 @@ function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
 }
 
+function trustedUnlockReceipt() {
+  try {
+    const body = Cypress.$('body')
+    const hasExactButton = (text) =>
+      body
+        .find('button')
+        .toArray()
+        .some((element) => element.textContent?.trim() === text)
+    const verified = body.find('[data-runtime-identity]').length > 0
+    const localRoot = hasExactButton('Continue as local-root')
+    const loading = body
+      .find('main')
+      .toArray()
+      .some(
+        (element) =>
+          element.textContent?.trim() ===
+          'Verifying trusted Service Lasso identity'
+      )
+    const unavailable = body
+      .find('[role="alert"]')
+      .toArray()
+      .some((element) => element.textContent?.includes('Trusted identity unavailable'))
+    return {
+      schema: 'service-admin.trusted-unlock-receipt.v1',
+      status: 'observed',
+      present: verified || localRoot || loading || unavailable,
+      verified,
+      localRoot,
+      loading,
+      unavailable,
+    }
+  } catch {
+    return {
+      schema: 'service-admin.trusted-unlock-receipt.v1',
+      status: 'observed',
+      present: false,
+      verified: false,
+      localRoot: false,
+      loading: false,
+      unavailable: false,
+    }
+  }
+}
+
+function unlockPostRestartTrustedIdentity() {
+  return cy
+    .then(() => unlockTrustedIdentity())
+    .then(undefined, (originalError) =>
+      cy.task('trustedUnlockFailureReceipt', trustedUnlockReceipt(), { log: false }).then(
+        () => {
+          throw originalError
+        },
+        () => {
+          throw originalError
+        }
+      )
+    )
+}
+
 function dialog(title) {
   return cy.contains('[role="dialog"]', title, { timeout: 20_000 })
 }
@@ -1818,7 +1877,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
 
     restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()
-    unlockTrustedIdentity()
+    unlockPostRestartTrustedIdentity()
     openSecrets()
     visibleTableRow(expectedRef)
     visibleTableRow(createdRef)

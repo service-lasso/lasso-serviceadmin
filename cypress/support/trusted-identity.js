@@ -6,5 +6,5 @@ export function unlockTrustedIdentity(timeout = 20_000) {
       cy.wrap($marker).click()
     }
   })
-  cy.contains('Trusted identity verified', { timeout }).should('exist')
+  return cy.contains('Trusted identity verified', { timeout }).should('exist')
 }

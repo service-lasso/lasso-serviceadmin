@@ -19,6 +19,7 @@ import {
   buildQualificationFailureDiagnostic,
   classifyQualificationFailure,
   parseQualificationProgressDiagnostic,
+  parseTrustedUnlockReceiptDiagnostic,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
 
@@ -518,6 +519,7 @@ let cypressSucceeded = false
 let qualificationFailureKind
 const qualificationProgressEvents = []
 const providerUiConvergenceEvents = []
+const trustedUnlockReceipts = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -566,7 +568,8 @@ try {
   captureQualificationProgress(
     cypress,
     qualificationProgressEvents,
-    providerUiConvergenceEvents
+    providerUiConvergenceEvents,
+    trustedUnlockReceipts
   )
   let cypressExit
   try {
@@ -630,6 +633,7 @@ try {
           failure: qualificationFailureKind,
           progressEvents: qualificationProgressEvents,
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+          trustedUnlockReceipt: trustedUnlockReceipts.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
             adminReachability
@@ -660,7 +664,12 @@ function cypressEnvironment() {
   return environment
 }
 
-function captureQualificationProgress(child, target, providerUiTarget) {
+function captureQualificationProgress(
+  child,
+  target,
+  providerUiTarget,
+  trustedUnlockTarget
+) {
   let buffer = ''
   child.stderr.on('data', (chunk) => {
     buffer += chunk.toString('utf8')
@@ -678,6 +687,10 @@ function captureQualificationProgress(child, target, providerUiTarget) {
         providerUiTarget.length < providerReadinessDiagnosticEventCap
       ) {
         providerUiTarget.push(providerUiEvent)
+      }
+      const trustedUnlockReceipt = parseTrustedUnlockReceiptDiagnostic(line)
+      if (trustedUnlockReceipt && trustedUnlockTarget.length < 1) {
+        trustedUnlockTarget.push(trustedUnlockReceipt)
       }
     }
   })
