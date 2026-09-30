@@ -246,7 +246,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.ok(restartHelperSource.length > 0)
   for (const uiRestartProof of [
     'cy.reload()',
-    'unlockTrustedIdentity()',
+    'unlockTrustedIdentity(20_000, { retainFailureReceipt: true })',
     'brokerLifecycleControls(detailReadiness).within(() => {',
     "cy.contains('button', /^Restart service$/, { timeout: 20_000 })",
     "cy.contains('[role=\"alertdialog\"]', 'Confirm elevated action')",
@@ -257,6 +257,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   ]) {
     assert.equal(restartUiSource.split(uiRestartProof).length - 1, 1)
   }
+  assert.equal(restartUiSource.includes('unlockTrustedIdentity()'), false)
   assert.equal(restartHelperSource.includes('cy.request('), false)
   assert.equal(
     restartHelperSource.split(

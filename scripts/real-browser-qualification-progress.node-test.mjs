@@ -8,7 +8,7 @@ import {
   parseTrustedUnlockReceiptDiagnostic,
 } from './real-browser-qualification-progress.mjs'
 
-test('records one actual-result trusted-unlock receipt and rejects malformed input', () => {
+test('records one afterEach-delivered trusted-unlock receipt only for an actual Cypress failure', () => {
   const records = []
   const recorder = createTrustedUnlockReceiptRecorder({
     enabled: true,
@@ -24,13 +24,9 @@ test('records one actual-result trusted-unlock receipt and rejects malformed inp
     loading: true,
     unavailable: false,
   }
-  const result = {
-    tests: [
-      {
-        displayError: `original failure\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${JSON.stringify(receipt)}`,
-      },
-    ],
-  }
+  assert.deepEqual(recorder.retain(receipt), receipt)
+  assert.equal(recorder.retain(receipt), null)
+  const result = { tests: [{ state: 'failed' }] }
   assert.deepEqual(recorder.record(result), receipt)
   assert.equal(recorder.record(result), null)
   assert.deepEqual(records.map(parseTrustedUnlockReceiptDiagnostic), [receipt])
@@ -48,6 +44,10 @@ test('records one actual-result trusted-unlock receipt and rejects malformed inp
     ),
     null
   )
+  const successRecorder = createTrustedUnlockReceiptRecorder({ enabled: true })
+  successRecorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
+  successRecorder.retain(receipt)
+  assert.equal(successRecorder.record({ tests: [{ state: 'passed' }] }), null)
 })
 
 test('records one lifecycle-only Cypress run summary without private input', () => {

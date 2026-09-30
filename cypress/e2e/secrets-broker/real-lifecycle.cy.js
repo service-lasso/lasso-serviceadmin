@@ -150,7 +150,7 @@ function restartBrokerFromUi(expectedRequestCount, requestCount) {
   waitForManagedServiceReadiness('@secretsbroker')
   const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
-  unlockTrustedIdentity()
+  unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
   brokerLifecycleControls(detailReadiness).within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
       .should('be.visible')

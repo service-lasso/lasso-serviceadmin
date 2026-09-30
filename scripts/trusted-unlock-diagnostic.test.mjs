@@ -5,8 +5,6 @@ import {
   createTrustedUnlockObservation,
   createTrustedUnlockReceipt,
   observeTrustedUnlockFailure,
-  observeTrustedUnlockReceiptFailure,
-  receiptFromCypressSpecResults,
 } from './trusted-unlock-diagnostic.mjs'
 
 test('closed receipt uses own primitive fields and preserves the original failure', () => {
@@ -31,18 +29,24 @@ test('closed receipt uses own primitive fields and preserves the original failur
   })
 
   const emitter = new EventEmitter()
-  observeTrustedUnlockReceiptFailure(emitter, () => inherited)
+  const observation = createTrustedUnlockObservation()
+  observation.begin()
+  let retained = null
+  observeTrustedUnlockFailure(
+    emitter,
+    observation,
+    () => ({}),
+    () => inherited,
+    (receipt) => { retained = receipt }
+  )
   const original = new Error('original assertion')
   assert.throws(() => emitter.emit('fail', original), (error) => error === original)
-  const receipt = receiptFromCypressSpecResults({
-    tests: [{ displayError: original.message }],
-  })
-  assert.deepEqual(receipt, createTrustedUnlockReceipt(inherited))
-  assert.equal(JSON.stringify(receipt).includes('PRIVATE'), false)
+  assert.deepEqual(retained, createTrustedUnlockReceipt(inherited))
+  assert.equal(JSON.stringify(retained).includes('PRIVATE'), false)
   assert.equal(emitter.listenerCount('fail'), 0)
 })
 
-test('receipt extraction rejects malformed, duplicate, private, and zero-state input', () => {
+test('closed receipt rejects hostile and zero-state input', () => {
   const zero = createTrustedUnlockReceipt({})
   assert.deepEqual(zero, {
     schema: 'service-admin.trusted-unlock-receipt.v1',
@@ -53,34 +57,8 @@ test('receipt extraction rejects malformed, duplicate, private, and zero-state i
     loading: false,
     unavailable: false,
   })
-  const encoded = JSON.stringify(zero)
-  assert.deepEqual(
-    receiptFromCypressSpecResults({
-      tests: [
-        { displayError: `first\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${encoded}` },
-        { displayError: `second\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${encoded}` },
-      ],
-    }),
-    zero
-  )
-  for (const displayError of [
-    'SERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:{',
-    `SERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${JSON.stringify({ ...zero, private: 'PRIVATE' })}`,
-    `SERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${JSON.stringify({ ...zero, present: true })}`,
-  ]) {
-    assert.equal(receiptFromCypressSpecResults({ tests: [{ displayError }] }), null)
-  }
-})
-
-test('receipt extraction accepts the bounded Cypress spec error projection', () => {
-  const receipt = createTrustedUnlockReceipt({ loading: true })
-  assert.deepEqual(
-    receiptFromCypressSpecResults({
-      error: `original failure\nSERVICE_ADMIN_TRUSTED_UNLOCK_RECEIPT:${JSON.stringify(receipt)}`,
-      tests: [],
-    }),
-    receipt
-  )
+  assert.equal(zero.present, false)
+  assert.equal(createTrustedUnlockReceipt({ private: 'PRIVATE' }).present, false)
 })
 
 test('failure retains the original error, closes its observer and excludes private fields', () => {
