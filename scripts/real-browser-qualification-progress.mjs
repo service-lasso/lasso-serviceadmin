@@ -26,19 +26,106 @@ const cypressRunSummaryCountFields = Object.freeze([
   'totalPending',
   'totalSkipped',
 ])
-const causalJsonKeys = Object.freeze([
-  'sequence',
-  'request',
-  'contract',
-  'query',
-  'render',
-])
+function hasDuplicateJsonObjectKey(line) {
+  let index = 0
+  let duplicate = false
 
-function hasDuplicateCausalJsonKey(line) {
-  return causalJsonKeys.some((key) => {
-    const matches = line.match(new RegExp(`"${key}"\\s*:`, 'g'))
-    return (matches?.length ?? 0) !== 1
-  })
+  const whitespace = () => {
+    while (/\s/.test(line[index] ?? '')) index += 1
+  }
+
+  const string = () => {
+    if (line[index] !== '"') return null
+    index += 1
+    let value = ''
+    while (index < line.length) {
+      const character = line[index++]
+      if (character === '"') return value
+      if (character !== '\\') {
+        if (character.charCodeAt(0) < 0x20) return null
+        value += character
+        continue
+      }
+      const escape = line[index++]
+      if (escape === '"' || escape === '\\' || escape === '/') value += escape
+      else if (escape === 'b') value += '\b'
+      else if (escape === 'f') value += '\f'
+      else if (escape === 'n') value += '\n'
+      else if (escape === 'r') value += '\r'
+      else if (escape === 't') value += '\t'
+      else if (escape === 'u') {
+        const digits = line.slice(index, index + 4)
+        if (!/^[0-9a-fA-F]{4}$/.test(digits)) return null
+        value += String.fromCharCode(Number.parseInt(digits, 16))
+        index += 4
+      } else return null
+    }
+    return null
+  }
+
+  const scalar = () => {
+    const start = index
+    while (index < line.length && !/[\s,\]}]/.test(line[index])) index += 1
+    return index > start
+  }
+
+  const value = () => {
+    whitespace()
+    if (line[index] === '"') return string() !== null
+    if (line[index] === '{') return object()
+    if (line[index] === '[') return array()
+    return scalar()
+  }
+
+  const object = () => {
+    if (line[index++] !== '{') return false
+    const keys = new Set()
+    whitespace()
+    if (line[index] === '}') {
+      index += 1
+      return true
+    }
+    while (index < line.length) {
+      whitespace()
+      const key = string()
+      if (key === null) return false
+      if (keys.has(key)) duplicate = true
+      keys.add(key)
+      whitespace()
+      if (line[index++] !== ':') return false
+      if (!value()) return false
+      whitespace()
+      if (line[index] === '}') {
+        index += 1
+        return true
+      }
+      if (line[index++] !== ',') return false
+    }
+    return false
+  }
+
+  const array = () => {
+    if (line[index++] !== '[') return false
+    whitespace()
+    if (line[index] === ']') {
+      index += 1
+      return true
+    }
+    while (index < line.length) {
+      if (!value()) return false
+      whitespace()
+      if (line[index] === ']') {
+        index += 1
+        return true
+      }
+      if (line[index++] !== ',') return false
+    }
+    return false
+  }
+
+  if (!value()) return false
+  whitespace()
+  return index === line.length && duplicate
 }
 
 export const qualificationProgressPhases = Object.freeze([
@@ -307,7 +394,7 @@ export function createCypressRunSummaryRecorder({
 
 export function parseTrustedUnlockDiagnosticLine(line) {
   if (typeof line !== 'string' || line.length > 512) return null
-  if (hasDuplicateCausalJsonKey(line)) return null
+  if (hasDuplicateJsonObjectKey(line)) return null
   let value
   try {
     value = JSON.parse(line)
@@ -342,8 +429,15 @@ export function createTrustedUnlockDiagnosticRecorder({
     },
     record(results) {
       if (!active || emitted) return null
-      const failed = Array.isArray(results?.tests) &&
-        results.tests.some((test) => test?.state === 'failed')
+      const failed =
+        results?.stats?.failures > 0 ||
+        results?.totalFailed > 0 ||
+        (Array.isArray(results?.tests) &&
+          results.tests.some(
+            (test) =>
+              test?.state === 'failed' ||
+              test?.attempts?.some((attempt) => attempt?.state === 'failed')
+          ))
       const diagnostic = failed ? retainedDiagnostic : null
       if (!diagnostic) return null
       emitted = true

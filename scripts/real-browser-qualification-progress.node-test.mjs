@@ -41,6 +41,15 @@ test('records one closed causal diagnostic only for an actual Cypress failure', 
   assert.deepEqual(recorder.record(result), diagnostic)
   assert.equal(recorder.record(result), null)
   assert.deepEqual(records.map(parseTrustedUnlockDiagnosticLine), [diagnostic])
+  const statsRecords = []
+  const statsRecorder = createTrustedUnlockDiagnosticRecorder({
+    enabled: true,
+    write: (line) => statsRecords.push(line.trim()),
+  })
+  statsRecorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
+  statsRecorder.retain(diagnostic)
+  assert.deepEqual(statsRecorder.record({ stats: { failures: 1 } }), diagnostic)
+  assert.deepEqual(statsRecords.map(parseTrustedUnlockDiagnosticLine), [diagnostic])
   assert.deepEqual(
     buildQualificationFailureDiagnostic({
       failure: 'nonzero_exit',
@@ -63,6 +72,29 @@ test('records one closed causal diagnostic only for an actual Cypress failure', 
       )
     ),
     null
+  )
+  for (const duplicate of [
+    ['"schema":"service-admin.trusted-unlock-diagnostic.v2"', '"schema":"service-admin.trusted-unlock-diagnostic.v2","schema":"private"'],
+    ['"schema":"service-admin.trusted-unlock-receipt.v1"', '"schema":"service-admin.trusted-unlock-receipt.v1","schema":"private"'],
+    ['"schema":"service-admin.trusted-identity-causal.v2"', '"schema":"service-admin.trusted-identity-causal.v2","schema":"private"'],
+    ['"receipt":{', '"receipt":{"safe":"string with \\\"schema\\\": text"},"receipt":{'],
+  ]) {
+    const line = JSON.stringify(diagnostic).replace(...duplicate)
+    assert.equal(parseTrustedUnlockDiagnosticLine(line), null)
+  }
+  const escapedDuplicate = JSON.stringify(diagnostic).replace(
+    '"schema":"service-admin.trusted-identity-causal.v2"',
+    '"schema":"service-admin.trusted-identity-causal.v2","\\u0073chema":"private"'
+  )
+  assert.equal(parseTrustedUnlockDiagnosticLine(escapedDuplicate), null)
+  assert.deepEqual(
+    parseTrustedUnlockDiagnosticLine(
+      JSON.stringify(diagnostic).replace(
+        '"schema":"service-admin.trusted-identity-causal.v2"',
+        '"\\u0073chema":"service-admin.trusted-identity-causal.v2"'
+      )
+    ),
+    diagnostic
   )
   const successRecorder = createTrustedUnlockDiagnosticRecorder({ enabled: true })
   successRecorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')

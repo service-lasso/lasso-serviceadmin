@@ -93,11 +93,11 @@ test('actual Cypress failure reaches the closed Node qualification receipt sink'
         },
         causal: {
           schema: 'service-admin.trusted-identity-causal.v2',
-          sequence: 1,
-          request: 'response_delivered',
-          contract: 'parsed',
-          query: 'settled',
-          render: 'unlocked',
+          sequence: 0,
+          request: 'unobserved',
+          contract: 'unobserved',
+          query: 'unobserved',
+          render: 'unobserved',
         },
       },
     ])

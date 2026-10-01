@@ -165,22 +165,14 @@ function visibleTableRow(content, timeout = 20_000) {
 }
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
-  cy.env(['trustedUnlockReceiptControlFailure']).then(
-    ({ trustedUnlockReceiptControlFailure }) => {
-      if (String(trustedUnlockReceiptControlFailure) !== '1') {
-        waitForManagedServiceReadiness('@secretsbroker')
-      }
-    }
-  )
+  cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
+    if (!enabled) waitForManagedServiceReadiness('@secretsbroker')
+  })
   const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
-  cy.env(['trustedUnlockReceiptControlFailure']).then(
-    ({ trustedUnlockReceiptControlFailure }) => {
-      if (String(trustedUnlockReceiptControlFailure) === '1') {
-        installControlledPreClickUnlockFailure()
-      }
-    }
-  )
+  cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
+    if (enabled) installControlledPreClickUnlockFailure()
+  })
   unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
   brokerLifecycleControls(detailReadiness).within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
@@ -823,6 +815,30 @@ describe('trusted-unlock receipt control', () => {
   beforeEach(() => {
     controlledPreClickRestartControlClicks = 0
     controlledPreClickRestartApiRequests = 0
+    cy.task(
+      'trustedUnlockDiagnostic',
+      {
+        schema: 'service-admin.trusted-unlock-diagnostic.v2',
+        receipt: {
+          schema: 'service-admin.trusted-unlock-receipt.v1',
+          status: 'observed',
+          present: true,
+          verified: false,
+          localRoot: false,
+          loading: true,
+          unavailable: false,
+        },
+        causal: {
+          schema: 'service-admin.trusted-identity-causal.v2',
+          sequence: 0,
+          request: 'unobserved',
+          contract: 'unobserved',
+          query: 'unobserved',
+          render: 'unobserved',
+        },
+      },
+      { log: false }
+    )
   })
 
   afterEach(() => {
