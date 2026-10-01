@@ -1,5 +1,6 @@
 // Test-only closed observation; never retain network or DOM objects.
 const receiptSchema = 'service-admin.trusted-unlock-receipt.v1'
+const causalSchema = 'service-admin.trusted-identity-causal.v1'
 const receiptKeys = Object.freeze([
   'schema',
   'status',
@@ -35,6 +36,25 @@ export function createTrustedUnlockReceipt(markers) {
   }
 }
 
+export function createTrustedIdentityCausalReceipt(value) {
+  const own = (key) => {
+    try { return Object.getOwnPropertyDescriptor(value, key)?.value } catch { return undefined }
+  }
+  const sequence = own('sequence')
+  const request = own('request')
+  const contract = own('contract')
+  const query = own('query')
+  const render = own('render')
+  if (
+    !Number.isInteger(sequence) || sequence < 0 || sequence > 999 ||
+    !['unobserved', 'started', 'response_delivered'].includes(request) ||
+    !['unobserved', 'parsed', 'rejected'].includes(contract) ||
+    !['unobserved', 'pending', 'settled', 'failed'].includes(query) ||
+    !['unobserved', 'loading', 'unavailable', 'unlocked', 'login'].includes(render)
+  ) return null
+  return { schema: causalSchema, sequence, request, contract, query, render }
+}
+
 export function parseTrustedUnlockReceipt(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   if (Object.keys(value).sort().join(',') !== receiptKeys.slice().sort().join(',')) {
@@ -68,6 +88,7 @@ export function createTrustedUnlockObservation() {
   let requestCount = 0
   let requestState = 'unobserved'
   let httpStatus = null
+  let causal = null
   return {
     begin() { active = true },
     verifying() { phase = 'verified_marker' },
@@ -86,6 +107,7 @@ export function createTrustedUnlockObservation() {
       requestState = 'responded'
       httpStatus = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null
     },
+    causalSnapshot(value) { causal = createTrustedIdentityCausalReceipt(value) },
     snapshot(markers) {
       const boolean = (key) => {
         try {
@@ -99,6 +121,7 @@ export function createTrustedUnlockObservation() {
         localRootButtonPresent: boolean('localRootButtonPresent'),
         loadingMarkerPresent: boolean('loadingMarkerPresent'),
         unavailableMarkerPresent: boolean('unavailableMarkerPresent'),
+        causal,
       }
     },
     isActive() { return active },

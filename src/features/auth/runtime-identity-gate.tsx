@@ -6,6 +6,7 @@ import {
   resolveIdentityGateSurface,
   useRuntimeIdentity,
 } from '@/lib/service-lasso-dashboard/runtime-auth'
+import { observeRuntimeIdentityCausalPhase } from '@/lib/service-lasso-dashboard/runtime-identity-observation'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { FirstRunCredentialsPanel } from '@/features/auth/first-run-credentials-panel'
@@ -78,6 +79,7 @@ export function RuntimeIdentityGate({
   }, [identity, unlocked, setUser])
 
   if (identityQuery.isLoading) {
+    observeRuntimeIdentityCausalPhase('render_loading')
     return (
       <main className='flex min-h-svh items-center justify-center gap-3 text-sm text-muted-foreground'>
         <Loader2 className='size-4 animate-spin' />
@@ -87,6 +89,7 @@ export function RuntimeIdentityGate({
   }
 
   if (identityQuery.isError) {
+    observeRuntimeIdentityCausalPhase('render_unavailable')
     return (
       <IdentityBoundary
         title='Trusted identity unavailable'
@@ -97,6 +100,7 @@ export function RuntimeIdentityGate({
   }
 
   if (surface === 'first-run' && identity) {
+    observeRuntimeIdentityCausalPhase('render_login')
     return (
       <main className='mx-auto flex min-h-svh w-full max-w-lg items-center px-4 py-8'>
         <FirstRunCredentialsPanel onAcknowledged={onAuthenticated} />
@@ -105,6 +109,7 @@ export function RuntimeIdentityGate({
   }
 
   if (surface === 'login' && identity) {
+    observeRuntimeIdentityCausalPhase('render_login')
     return (
       <main className='mx-auto flex min-h-svh w-full max-w-lg items-center px-4 py-8'>
         <LocalOperatorLoginForm
@@ -117,6 +122,7 @@ export function RuntimeIdentityGate({
   }
 
   if (!unlocked) {
+    observeRuntimeIdentityCausalPhase('render_login')
     return (
       <IdentityBoundary
         title='Authentication required'
@@ -126,6 +132,7 @@ export function RuntimeIdentityGate({
     )
   }
 
+  observeRuntimeIdentityCausalPhase('render_unlocked')
   return (
     <div data-runtime-identity={identity?.actorKind}>
       <span className='sr-only'>

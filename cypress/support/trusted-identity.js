@@ -52,6 +52,9 @@ export function unlockTrustedIdentity(
   cy.then(() => {
     observation.begin()
     complete = observeTrustedUnlockFailure(Cypress, observation, () => {
+      observation.causalSnapshot(
+        Cypress.state('window')?.__serviceAdminRuntimeIdentityCausal
+      )
       const text = Cypress.$('body').text()
       return {
         verifiedMarkerPresent: text.includes('Trusted identity verified'),
@@ -64,6 +67,9 @@ export function unlockTrustedIdentity(
     }, retainFailureReceipt ? readReceiptMarkers : undefined, (receipt) => {
       retainedTrustedUnlockReceipt = receipt
     })
+  })
+  cy.window({ log: false }).then((browserWindow) => {
+    observation.causalSnapshot(browserWindow.__serviceAdminRuntimeIdentityCausal)
   })
   cy.contains(/Trusted identity verified|Continue as local-root/, {
     timeout,
