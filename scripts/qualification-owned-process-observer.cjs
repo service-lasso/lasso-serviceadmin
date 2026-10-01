@@ -1,4 +1,4 @@
-const { createHash } = require('node:crypto')
+const { createHash, randomBytes } = require('node:crypto')
 const { appendFileSync, lstatSync, readFileSync } = require('node:fs')
 const { syncBuiltinESMExports } = require('node:module')
 const childProcess = require('node:child_process')
@@ -20,11 +20,13 @@ function hashRegularFile(candidate) {
 }
 
 function classify(command, args) {
+  const executableSha256 = hashRegularFile(command)
+  if (!executableSha256) return null
   for (const candidate of [command, ...(Array.isArray(args) ? args : [])]) {
     if (typeof candidate !== 'string') continue
     const sourceSha256 = hashRegularFile(candidate)
     const role = expectedSources.get(sourceSha256)
-    if (role) return { role, sourceSha256 }
+    if (role) return { role, sourceSha256, executableSha256 }
   }
   return null
 }
@@ -41,20 +43,29 @@ childProcess.spawn = function observedSpawn(command, args, options) {
   const child = Reflect.apply(originalSpawn, this, arguments)
   const source = classify(command, args)
   if (!source) return child
-  let birth = 'unverified'
-  if (Number.isInteger(child.pid) && child.pid > 0) {
+  const ownerNonce = randomBytes(16).toString('hex')
+  const pid = Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null
+  let born = false
+  if (pid !== null) {
     try {
-      process.kill(child.pid, 0)
-      birth = 'observed'
+      process.kill(pid, 0)
+      born = true
     } catch {}
   }
-  publish({ ...source, event: 'birth', birth })
+  if (!born) return child
+  const identity = {
+    ...source,
+    ownerNonce,
+    pid,
+    parentPid: process.pid,
+  }
+  publish({ ...identity, event: 'birth' })
   child.once('close', (exitCode, signal) => {
     publish({
-      ...source,
+      ...identity,
       event: 'close',
-      exitCode: Number.isInteger(exitCode) && exitCode >= 0 ? exitCode : 'unavailable',
-      signal: signal === null ? null : 'signalled',
+      exitCode: Number.isInteger(exitCode) && exitCode >= 0 ? exitCode : null,
+      signal: signal === null || typeof signal === 'string' ? signal : 'UNKNOWN',
     })
   })
   return child

@@ -7,6 +7,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  hasClosedOwnedProcessCustody,
+  parseOwnedProcessCustody,
+} from './qualification-owned-process-custody.mjs'
+import {
   buildTransportDiagnostic,
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
@@ -509,7 +513,7 @@ function retainOwnedProcess(role, child, sourceSha256) {
   return owner
 }
 
-async function readOwnedProcessCustody(eventPath) {
+async function readOwnedProcessCustody(eventPath, expected) {
   let bytes
   try {
     bytes = await readFile(eventPath)
@@ -517,39 +521,7 @@ async function readOwnedProcessCustody(eventPath) {
     if (error?.code === 'ENOENT') return []
     throw error
   }
-  if (bytes.length === 0 || bytes.length > 64 * 1024) return []
-  const records = []
-  for (const line of bytes.toString('utf8').split(/\r?\n/).filter(Boolean)) {
-    let record
-    try {
-      record = JSON.parse(line)
-    } catch {
-      return []
-    }
-    if (
-      !record ||
-      typeof record !== 'object' ||
-      Array.isArray(record) ||
-      !['broker_binary', 'admin_runtime'].includes(record.role) ||
-      !/^[a-f0-9]{64}$/.test(record.sourceSha256) ||
-      !['birth', 'close'].includes(record.event) ||
-      Object.keys(record).sort().join(',') !==
-        (record.event === 'birth'
-          ? 'birth,event,role,sourceSha256'
-          : 'event,exitCode,role,signal,sourceSha256')
-    ) {
-      return []
-    }
-    if (
-      (record.event === 'birth' && !['observed', 'unverified'].includes(record.birth)) ||
-      (record.event === 'close' &&
-        (!Number.isInteger(record.exitCode) || record.exitCode < 0 || record.signal !== null))
-    ) {
-      return []
-    }
-    records.push(record)
-  }
-  return records
+  return parseOwnedProcessCustody(bytes, expected)
 }
 
 const ownedSourceHashes = {
@@ -557,6 +529,16 @@ const ownedSourceHashes = {
   coreRunner: await sha256File(runnerPath),
   adminRuntime: await sha256File(path.join(adminRoot, 'runtime', 'server.js')),
   cypressLauncher: await sha256File(cypressBin),
+}
+const nestedExpectedSources = {
+  broker_binary: {
+    sourceSha256: ownedSourceHashes.brokerBinary,
+    executableSha256: ownedSourceHashes.brokerBinary,
+  },
+  admin_runtime: {
+    sourceSha256: ownedSourceHashes.adminRuntime,
+    executableSha256: await sha256File(process.execPath),
+  },
 }
 const ownedProcessObserver = path.join(
   root,
@@ -790,23 +772,14 @@ try {
 const sourceHashes = ownedSourceHashes
 let nestedOwners = []
 try {
-  nestedOwners = await readOwnedProcessCustody(ownedProcessEventsPath)
+  nestedOwners = await readOwnedProcessCustody(
+    ownedProcessEventsPath,
+    nestedExpectedSources
+  )
 } catch (error) {
   runFailure = error
 }
-const nestedClosureVerified =
-  ['broker_binary', 'admin_runtime'].every((role) =>
-    nestedOwners.some(
-      (record) => record.role === role && record.event === 'birth' && record.birth === 'observed'
-    )
-  ) &&
-  nestedOwners.filter((record) => record.event === 'close').length >= 2 &&
-  nestedOwners.every(
-    (record) =>
-      record.event === 'birth'
-        ? record.birth === 'observed'
-        : Number.isInteger(record.exitCode) && record.exitCode >= 0 && record.signal === null
-  )
+const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
 const closureVerified =
   runFailure === undefined &&
   cypressOutput?.exceeded !== true &&
@@ -821,6 +794,24 @@ const closureVerified =
       owner.signal === null &&
       /^[a-f0-9]{64}$/.test(owner.sourceSha256)
   )
+const publicOwnerSummary = [
+  ...custodyOwners.map(({ role, birth, close, exitCode, signal }) => ({
+    role,
+    birth,
+    close,
+    exitCode,
+    signal,
+  })),
+  ...nestedOwners
+    .filter((record) => record.event === 'close')
+    .map(({ role, exitCode, signal }) => ({
+      role,
+      birth: 'observed',
+      close: 'observed',
+      exitCode,
+      signal,
+    })),
+]
 const controlledReceipt = finalQualificationFailureDiagnostic?.trustedUnlock
 const controlledCausal = controlledReceipt?.causal
 const controlledObserved =
@@ -868,7 +859,9 @@ await writeQualificationCustody(custodyReceiptPath, {
     { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
     { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
   ],
-  owners: [...custodyOwners, ...nestedOwners],
+  // PID, parent PID, nonce, executable identity, and the raw sidecar stay in
+  // the private runner.  The retained receipt exposes only typed completion.
+  owners: publicOwnerSummary,
 })
 
 if (trustedUnlockRealProviderControl) {

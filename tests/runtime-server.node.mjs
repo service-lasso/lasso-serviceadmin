@@ -388,6 +388,13 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     ),
     true
   )
+  assert.equal(
+    browserWorkflowSource.includes(
+      'scripts/qualification-custody.node-test.mjs scripts/qualification-owned-process-custody.node-test.mjs'
+    ),
+    true
+  )
+  assert.equal(verifierSource.includes('hasClosedOwnedProcessCustody'), true)
   const stoppedLifecycleVerifierSource = await readFile(
     new URL(
       '../scripts/verify-real-broker-stopped-lifecycle-browser.mjs',
