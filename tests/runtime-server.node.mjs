@@ -242,8 +242,15 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     ),
     lifecycleSource.indexOf('function assertSecretValuesAbsentFromBrowser')
   )
+  const controlledProviderFaultSource = lifecycleSource.slice(
+    lifecycleSource.indexOf('function consumeControlledProviderFault()'),
+    lifecycleSource.indexOf(
+      'function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount)'
+    )
+  )
   assert.ok(restartUiSource.length > 0)
   assert.ok(restartHelperSource.length > 0)
+  assert.ok(controlledProviderFaultSource.length > 0)
   for (const uiRestartProof of [
     'cy.reload()',
     'unlockTrustedIdentity(20_000, { retainFailureReceipt: true })',
@@ -327,6 +334,28 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   )
   assert.equal(lifecycleSource.includes('document.body.innerHTML ='), false)
   assert.equal(lifecycleSource.includes('controlledPreClick'), false)
+  assert.equal(
+    controlledProviderFaultSource.split(
+      'url: `${controlUrl}/fail-next-provider-request`'
+    ).length - 1,
+    2
+  )
+  assert.equal(
+    controlledProviderFaultSource.split(
+      "'x-service-lasso-provider-control-nonce': providerControlNonce"
+    ).length - 1,
+    3
+  )
+  assert.equal(
+    controlledProviderFaultSource.split('expect(status).to.equal(409)').length -
+      1,
+    1
+  )
+  assert.equal(
+    controlledProviderFaultSource.split('recoveryProviderValidationClicks += 1')
+      .length - 1,
+    1
+  )
   for (const requestCount of [1, 2]) {
     assert.equal(
       lifecycleSource.split(
@@ -387,6 +416,13 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'receipt.controlNonce === providerControlNonce',
     'receipt.adminSource?.head === adminSource.head',
     'receipt.adminSource?.tree === adminSource.tree',
+    'live-provider-control-recovery-receipt.json',
+    'receipt.platform === platform',
+    "'originalRequest',",
+    "recovered.originalRequest?.path !== '/v1/secret/data/browser/provider-control'",
+    'recovered.recoveryStatus !== recovered.baselineStatus',
+    "recovered.rearm !== 'rejected'",
+    'recovered.secondConsume !== false',
   ]) {
     assert.equal(verifierSource.includes(requiredProviderBinding), true)
   }

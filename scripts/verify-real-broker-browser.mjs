@@ -184,14 +184,33 @@ async function verifyControlledProviderFault(runtimeInputs, source) {
     label,
     maxBytes: 1024 * 1024,
   }).then(({ value }) => value)
-  const [armed, consumed] = await Promise.all([
+  const [armed, consumed, recovered] = await Promise.all([
     read('live-provider-control-receipt.json', 'Real browser provider control receipt'),
     read('live-provider-control-consumed-receipt.json', 'Real browser provider consumed receipt'),
+    read('live-provider-control-recovery-receipt.json', 'Real browser provider recovery receipt'),
   ])
+  const baseKeys = [
+    'schema',
+    'private',
+    'nonce',
+    'platform',
+    'source',
+    'adminSource',
+    'controlNonce',
+    'phase',
+    'causalSink',
+    'state',
+  ]
+  const hasExactKeys = (value, keys) =>
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join(',') === [...keys].sort().join(',')
   const matches = (receipt, state, causalSink) =>
     receipt?.schema === 'service-lasso.real-admin-browser-provider-control.v1' &&
     receipt.private === true &&
     receipt.nonce === runtimeInputs.liveReceipt.nonce &&
+    receipt.platform === platform &&
     receipt.controlNonce === providerControlNonce &&
     receipt.source?.head === source.head &&
     receipt.source?.tree === source.tree &&
@@ -201,10 +220,29 @@ async function verifyControlledProviderFault(runtimeInputs, source) {
     receipt.state === state &&
     receipt.causalSink === causalSink
   if (
+    !hasExactKeys(armed, baseKeys) ||
     !matches(armed, 'observed_before_controlled_fault', 'authenticated_vault_provider_request') ||
-    !matches(consumed, 'controlled_fault_consumed', 'next_authenticated_vault_provider_request')
+    !hasExactKeys(consumed, baseKeys) ||
+    !matches(consumed, 'controlled_fault_consumed', 'next_authenticated_vault_provider_request') ||
+    !matches(recovered, 'controlled_fault_recovered', 'next_authenticated_vault_provider_request') ||
+    !hasExactKeys(recovered, [
+      ...baseKeys,
+      'originalRequest',
+      'baselineStatus',
+      'recoveryStatus',
+      'rearm',
+      'secondConsume',
+    ]) ||
+    !hasExactKeys(recovered.originalRequest, ['method', 'path', 'authClass']) ||
+    recovered.originalRequest?.method !== 'GET' ||
+    recovered.originalRequest?.path !== '/v1/secret/data/browser/provider-control' ||
+    recovered.originalRequest?.authClass !== 'vault_token' ||
+    recovered.baselineStatus !== 404 ||
+    recovered.recoveryStatus !== recovered.baselineStatus ||
+    recovered.rearm !== 'rejected' ||
+    recovered.secondConsume !== false
   ) {
-    throw new Error('Controlled provider 503 did not retain the required private receipt pair.')
+    throw new Error('Controlled provider 503 did not retain the required consumed-and-recovered private receipt chain.')
   }
 }
 

@@ -49,6 +49,7 @@ const safeTransportErrorCodes = new Set([
 ])
 
 let controlledProviderValidationClicks = 0
+let recoveryProviderValidationClicks = 0
 
 function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
@@ -209,6 +210,26 @@ function consumeControlledProviderFault() {
           state: 'controlled_fault_consumed',
         })
         expect(body.receipt).not.to.have.property('controlNonce')
+      })
+    })
+    dialog('Validate provider configuration').within(() => {
+      // This is the same rendered consumer control after the real 503.  It
+      // must issue the next authenticated provider request instead of using a
+      // direct control-plane probe or a synthetic response.
+      cy.contains('button', 'Validate through Broker').click()
+      recoveryProviderValidationClicks += 1
+      cy.contains('Provider validation failed closed.', { timeout: 20_000 }).should('be.visible')
+    })
+    cy.env(['testControlUrl', 'providerControlNonce']).then(({ testControlUrl: controlUrl, providerControlNonce }) => {
+      cy.request({
+        method: 'POST',
+        url: `${controlUrl}/fail-next-provider-request`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        body: '',
+        failOnStatusCode: false,
+        log: false,
+      }).then(({ status }) => {
+        expect(status).to.equal(409)
       })
     })
     cy.then(() => {
@@ -833,6 +854,7 @@ function waitForSuccessfulBrokerEventsUiResponse(
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   beforeEach(() => {
     controlledProviderValidationClicks = 0
+    recoveryProviderValidationClicks = 0
   })
 
   afterEach(() => {
@@ -841,6 +863,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
         if (!enabled) return
         expect(controlledProviderValidationClicks).to.equal(1)
+        expect(recoveryProviderValidationClicks).to.equal(1)
       })
     )
   })
