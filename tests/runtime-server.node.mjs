@@ -371,9 +371,12 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(verifierSource.includes("child.kill('SIGKILL')"), false)
   assert.equal(verifierSource.includes('SIGKILL'), false)
   assert.equal(verifierSource.includes('initialReceiptSha256'), true)
-  assert.equal(verifierSource.includes('parseRuntimeInputs(ready)'), true)
+  assert.equal(verifierSource.includes('parseRuntimeInputs(ready,'), true)
   assert.equal(verifierSource.includes('brokerAuditPath(runtimeInputs)'), true)
-  assert.equal(verifierSource.includes('ready.tempRoot,\n    \'workspace\''), false)
+  assert.equal(
+    verifierSource.includes("ready.tempRoot,\n    'workspace'"),
+    false
+  )
   assert.equal(verifierSource.includes('closureVerified'), true)
   assert.equal(verifierSource.includes('nestedClosureVerified'), true)
   assert.equal(

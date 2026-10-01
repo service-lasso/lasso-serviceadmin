@@ -1,5 +1,5 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { lstat, readFile, readdir } from 'node:fs/promises'
@@ -43,6 +43,8 @@ import {
   noLeakEvidenceRoots,
   parseRuntimeInputs,
   rollbackProcessEvidencePath,
+  validateExpectedRuntimeFilesystem,
+  verifyClosureReceipt,
 } from './real-browser-runtime-inputs.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -93,6 +95,14 @@ const runnerPath = path.join(
   'fixtures',
   'real-admin-browser-runner.mjs'
 )
+const coreSource = {
+  head: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim(),
+  tree: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD^{tree}'], {
+    encoding: 'utf8',
+  }).trim(),
+}
 const specPath = path.join(
   root,
   'cypress',
@@ -197,20 +207,6 @@ function waitForReady(runner, timeoutMs = 240_000) {
     runner.stdout.on('data', onData)
     runner.once('exit', onExit)
   })
-}
-
-async function waitForRemoved(target, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      await lstat(target)
-    } catch (error) {
-      if (error?.code === 'ENOENT') return
-      throw error
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error('Real browser runtime did not remove its isolated workspace.')
 }
 
 async function verifyBrokerAudit(runtimeInputs) {
@@ -451,6 +447,7 @@ await requireFile(runnerPath, 'Core browser runner')
 await requireFile(path.join(adminRoot, 'runtime', 'server.js'), 'Admin runtime')
 await requireFile(path.join(adminRoot, 'dist', 'index.html'), 'Admin UI entrypoint')
 await requireFile(specPath, 'Cypress lifecycle spec')
+await validateExpectedRuntimeFilesystem()
 const initialCustody = await readQualificationCustody(initialCustodyReceiptPath)
 const initialCustodyHash = await sha256Receipt(initialCustodyReceiptPath)
 const custodyOwners = []
@@ -502,6 +499,22 @@ const ownedSourceHashes = {
   adminRuntime: await sha256File(path.join(adminRoot, 'runtime', 'server.js')),
   cypressLauncher: await sha256File(cypressBin),
 }
+const coreReceiptAssets = Object.fromEntries(
+  await Promise.all(
+    [
+      'tests/fixtures/real-admin-browser-runner.mjs',
+      'tests/fixtures/real-admin-browser-shutdown.mjs',
+      'tests/fixtures/real-admin-browser-rollback.mjs',
+    ].map(async (literalPath) => {
+      const filePath = path.join(coreRoot, ...literalPath.split('/'))
+      const info = await lstat(filePath)
+      if (!info.isFile() || info.isSymbolicLink() || info.size < 1) {
+        throw new Error('Expected Core native runner asset was unavailable.')
+      }
+      return [literalPath, { sha256: `sha256:${await sha256File(filePath)}`, size: info.size }]
+    })
+  )
+)
 const nestedExpectedSources = {
   broker_binary: {
     sourceSha256: ownedSourceHashes.brokerBinary,
@@ -589,7 +602,10 @@ try {
   if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
     throw new Error('Real browser runtime returned an invalid platform.')
   }
-  runtimeInputs = parseRuntimeInputs(ready)
+  runtimeInputs = await parseRuntimeInputs(ready, {
+    source: coreSource,
+    assets: coreReceiptAssets,
+  })
   const adminUrl = new URL(ready.adminUrl)
   const controlUrl = new URL(ready.controlUrl)
   if (
@@ -734,9 +750,9 @@ try {
       runFailure = new Error('Owned Core browser runner did not close after shutdown.')
     }
   }
-  if (ready?.tempRoot) {
+  if (runtimeInputs) {
     try {
-      await waitForRemoved(path.resolve(ready.tempRoot))
+      await verifyClosureReceipt(runtimeInputs, coreSource)
     } catch (error) {
       runFailure = error
     }
