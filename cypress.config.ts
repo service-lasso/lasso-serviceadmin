@@ -81,8 +81,7 @@ export default defineConfig({
           return null
         },
         trustedUnlockDiagnostic(diagnostic) {
-          trustedUnlock.retain(diagnostic)
-          return null
+          return trustedUnlock.retain(diagnostic)
         },
       })
       return config
