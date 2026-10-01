@@ -55,6 +55,15 @@ test('records one closed causal diagnostic only for an actual Cypress failure', 
     ),
     null
   )
+  assert.equal(
+    parseTrustedUnlockDiagnosticLine(
+      JSON.stringify(diagnostic).replace(
+        '"query":"settled"',
+        '"query":"settled","query":"failed"'
+      )
+    ),
+    null
+  )
   const successRecorder = createTrustedUnlockDiagnosticRecorder({ enabled: true })
   successRecorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
   successRecorder.retain(diagnostic)

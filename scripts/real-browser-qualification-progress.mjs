@@ -26,6 +26,20 @@ const cypressRunSummaryCountFields = Object.freeze([
   'totalPending',
   'totalSkipped',
 ])
+const causalJsonKeys = Object.freeze([
+  'sequence',
+  'request',
+  'contract',
+  'query',
+  'render',
+])
+
+function hasDuplicateCausalJsonKey(line) {
+  return causalJsonKeys.some((key) => {
+    const matches = line.match(new RegExp(`"${key}"\\s*:`, 'g'))
+    return (matches?.length ?? 0) !== 1
+  })
+}
 
 export const qualificationProgressPhases = Object.freeze([
   'lifecycle_started',
@@ -293,6 +307,7 @@ export function createCypressRunSummaryRecorder({
 
 export function parseTrustedUnlockDiagnosticLine(line) {
   if (typeof line !== 'string' || line.length > 512) return null
+  if (hasDuplicateCausalJsonKey(line)) return null
   let value
   try {
     value = JSON.parse(line)
