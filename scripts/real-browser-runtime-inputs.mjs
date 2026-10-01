@@ -1,12 +1,17 @@
-import { createHash } from 'node:crypto'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import path from 'node:path'
+import {
+  absoluteOwnedPath,
+  readHeldJsonFile,
+  requireRealDirectoryChain,
+} from './held-receipt-reader.mjs'
 
 const runtimeInputNames = Object.freeze([
   'workspaceRoot',
   'servicesRoot',
   'evidenceRoot',
   'supportRoot',
+  'registriesRoot',
 ])
 const registryNames = Object.freeze(['instanceRegistryPath', 'hostPortRegistryPath'])
 
@@ -27,14 +32,12 @@ function overlaps(left, right) {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..')
 }
 
-function sha256(bytes) {
-  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`
-}
-
 export function parseExpectedRuntimeInputs(environment = process.env) {
   const inputs = Object.fromEntries(
     runtimeInputNames.map((name) => {
-      const environmentName = `SERVICE_LASSO_TEST_${name
+      const environmentName = name === 'workspaceRoot'
+        ? 'SERVICE_LASSO_WORKSPACE_ROOT'
+        : `SERVICE_LASSO_TEST_${name
         .replace(/[A-Z]/g, (letter) => `_${letter}`)
         .toUpperCase()}`
       return [name, absolutePath(environment[environmentName], environmentName)]
@@ -62,20 +65,21 @@ export function parseExpectedRuntimeInputs(environment = process.env) {
 export async function validateExpectedRuntimeFilesystem(environment = process.env) {
   const inputs = parseExpectedRuntimeInputs(environment)
   for (const name of runtimeInputNames) {
-    const info = await lstat(inputs[name]).catch(() => null)
-    if (!info?.isDirectory() || info.isSymbolicLink()) {
-      throw new Error(`Caller-owned ${name} must be an existing real directory.`)
-    }
+    await requireRealDirectoryChain(inputs[name], `Caller-owned ${name}`)
   }
   for (const name of registryNames) {
-    if (!inputs[name].startsWith(`${inputs.workspaceRoot}${path.sep}`)) {
-      throw new Error(`Caller-owned ${name} must be beneath workspaceRoot.`)
+    if (!inputs[name].startsWith(`${inputs.registriesRoot}${path.sep}`)) {
+      throw new Error(`Caller-owned ${name} must be beneath registriesRoot.`)
     }
-    const parent = await lstat(path.dirname(inputs[name])).catch(() => null)
-    const existing = await lstat(inputs[name]).catch(() => null)
-    if (!parent?.isDirectory() || parent.isSymbolicLink() || existing) {
-      throw new Error(`Caller-owned ${name} must be absent beneath a real workspace directory.`)
+    if (path.dirname(inputs[name]) !== inputs.registriesRoot) {
+      throw new Error(`Caller-owned ${name} must be a direct absent file in registriesRoot.`)
     }
+    const expected = absoluteOwnedPath(inputs.registriesRoot, path.relative(inputs.registriesRoot, inputs[name]), `Caller-owned ${name}`)
+    if (expected !== inputs[name]) throw new Error(`Caller-owned ${name} must be beneath registriesRoot.`)
+    const existing = await lstat(inputs[name]).catch((error) =>
+      error?.code === 'ENOENT' ? null : Promise.reject(error)
+    )
+    if (existing) throw new Error(`Caller-owned ${name} must be absent beneath a real registries directory.`)
   }
   if (inputs.instanceRegistryPath === inputs.hostPortRegistryPath) {
     throw new Error('Caller-owned registry paths must be distinct.')
@@ -83,19 +87,9 @@ export async function validateExpectedRuntimeFilesystem(environment = process.en
   return inputs
 }
 
-async function readPrivateReceipt(filePath, expectedPath, expectedHash, label) {
-  if (filePath !== expectedPath) {
-    throw new Error(`${label} path was outside the caller-owned evidence root.`)
-  }
-  const info = await lstat(expectedPath)
-  if (!info.isFile() || info.isSymbolicLink() || info.size < 1 || info.size > 1024 * 1024) {
-    throw new Error(`${label} must be a bounded regular file.`)
-  }
-  const bytes = await readFile(expectedPath)
-  if (bytes.length !== info.size || (expectedHash && sha256(bytes) !== expectedHash)) {
-    throw new Error(`${label} changed or failed its public hash binding.`)
-  }
-  return JSON.parse(bytes.toString('utf8'))
+async function readPrivateReceipt(evidenceRoot, literalPath, label) {
+  const { value } = await readHeldJsonFile({ root: evidenceRoot, literalPath, label, maxBytes: 1024 * 1024 })
+  return value
 }
 
 export async function parseRuntimeInputs(ready, { environment = process.env, source, assets } = {}) {
@@ -104,7 +98,7 @@ export async function parseRuntimeInputs(ready, { environment = process.env, sou
   if (!liveReceipt || typeof liveReceipt !== 'object' || Array.isArray(liveReceipt)) {
     throw new Error('Real browser runtime omitted its public live receipt.')
   }
-  const fields = ['schema', 'nonce', 'prelaunchPath', 'prelaunchSHA256', 'initialPath', 'initialSHA256', 'readyPath', 'readySHA256', 'closurePath']
+  const fields = ['schema', 'nonce']
   if (Object.keys(liveReceipt).length !== fields.length || fields.some((field) => !(field in liveReceipt))) {
     throw new Error('Real browser runtime returned an incomplete public live receipt.')
   }
@@ -114,9 +108,8 @@ export async function parseRuntimeInputs(ready, { environment = process.env, sou
   const receipts = {}
   for (const name of ['prelaunch', 'initial', 'ready']) {
     receipts[name] = await readPrivateReceipt(
-      liveReceipt[`${name}Path`],
-      path.join(runtimeInputs.evidenceRoot, `live-${name}-receipt.json`),
-      liveReceipt[`${name}SHA256`],
+      runtimeInputs.evidenceRoot,
+      `live-${name}-receipt.json`,
       `Real browser ${name} receipt`
     )
   }
@@ -139,9 +132,15 @@ export async function parseRuntimeInputs(ready, { environment = process.env, sou
   const prelaunch = receipts.prelaunch
   if (
     prelaunch.schema !== 'service-lasso.real-admin-browser-live-prelaunch.v1' ||
-    prelaunch.runner?.birthObserved !== true ||
-    prelaunch.runner?.parentEdgeObserved !== true ||
-    prelaunch.runner?.nativeIdentityObserved !== true ||
+    !Number.isInteger(prelaunch.runner?.pid) ||
+    prelaunch.runner.pid < 1 ||
+    !Number.isInteger(prelaunch.runner?.parentPid) ||
+    prelaunch.runner.parentPid < 1 ||
+    typeof prelaunch.runner?.birth !== 'string' ||
+    prelaunch.runner.birth.length < 1 ||
+    !Number.isInteger(prelaunch.runner?.nativeIdentity?.size) ||
+    prelaunch.runner.nativeIdentity.size < 1 ||
+    !/^sha256:[a-f0-9]{64}$/.test(prelaunch.runner.nativeIdentity.sha256) ||
     !Array.isArray(prelaunch.assets)
   ) {
     throw new Error('Real browser prelaunch receipt did not prove its native runner identity.')
@@ -176,17 +175,14 @@ export async function parseRuntimeInputs(ready, { environment = process.env, sou
     ...runtimeInputs,
     liveReceipt: Object.freeze({
       nonce: liveReceipt.nonce,
-      closurePath: absolutePath(liveReceipt.closurePath, 'closurePath'),
     }),
   })
 }
 
 export async function verifyClosureReceipt(runtimeInputs, source) {
-  const expectedPath = path.join(runtimeInputs.evidenceRoot, 'live-closure-receipt.json')
   const receipt = await readPrivateReceipt(
-    runtimeInputs.liveReceipt.closurePath,
-    expectedPath,
-    null,
+    runtimeInputs.evidenceRoot,
+    'live-closure-receipt.json',
     'Real browser closure receipt'
   )
   if (

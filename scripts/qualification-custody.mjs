@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { readHeldJsonFile, readHeldRegularFile } from './held-receipt-reader.mjs'
 
 const schema = 'service-lasso.real-browser-native-custody.v1'
 const pathNames = Object.freeze([
   'SERVICE_LASSO_WORKSPACE_ROOT',
+  'SERVICE_LASSO_TEST_REGISTRIES_ROOT',
   'SERVICE_LASSO_INSTANCE_REGISTRY_PATH',
   'SERVICE_LASSO_HOST_PORT_REGISTRY_PATH',
 ])
@@ -28,13 +30,19 @@ export function requiredRuntimePaths(environment = process.env) {
   }
   if (
     !values.SERVICE_LASSO_INSTANCE_REGISTRY_PATH.startsWith(
-      `${values.SERVICE_LASSO_WORKSPACE_ROOT}${path.sep}`
+      `${values.SERVICE_LASSO_TEST_REGISTRIES_ROOT}${path.sep}`
     ) ||
     !values.SERVICE_LASSO_HOST_PORT_REGISTRY_PATH.startsWith(
-      `${values.SERVICE_LASSO_WORKSPACE_ROOT}${path.sep}`
+      `${values.SERVICE_LASSO_TEST_REGISTRIES_ROOT}${path.sep}`
     )
   ) {
-    throw new Error('Qualification registries must be owned by its workspace.')
+    throw new Error('Qualification registries must be owned by their separate registries root.')
+  }
+  if (
+    values.SERVICE_LASSO_TEST_REGISTRIES_ROOT.startsWith(`${values.SERVICE_LASSO_WORKSPACE_ROOT}${path.sep}`) ||
+    values.SERVICE_LASSO_WORKSPACE_ROOT.startsWith(`${values.SERVICE_LASSO_TEST_REGISTRIES_ROOT}${path.sep}`)
+  ) {
+    throw new Error('Qualification registries root must not overlap its workspace.')
   }
   return values
 }
@@ -55,7 +63,10 @@ export async function initializeQualificationCustody({
   ) {
     throw new Error('SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH is required.')
   }
-  await mkdir(runtimePaths.SERVICE_LASSO_WORKSPACE_ROOT, { recursive: true })
+  await Promise.all([
+    mkdir(runtimePaths.SERVICE_LASSO_WORKSPACE_ROOT, { recursive: true }),
+    mkdir(runtimePaths.SERVICE_LASSO_TEST_REGISTRIES_ROOT, { recursive: true }),
+  ])
   await Promise.all(
     [
       runtimePaths.SERVICE_LASSO_INSTANCE_REGISTRY_PATH,
@@ -80,7 +91,13 @@ export async function initializeQualificationCustody({
 }
 
 export async function readQualificationCustody(receiptPath) {
-  const value = JSON.parse(await readFile(receiptPath, 'utf8'))
+  const resolved = path.resolve(receiptPath)
+  const { value } = await readHeldJsonFile({
+    root: path.dirname(resolved),
+    literalPath: path.basename(resolved),
+    label: 'Qualification custody receipt',
+    maxBytes: 1024 * 1024,
+  })
   if (
     !value ||
     typeof value !== 'object' ||
@@ -98,7 +115,9 @@ export async function readQualificationCustody(receiptPath) {
 }
 
 export async function sha256Receipt(receiptPath) {
-  return createHash('sha256').update(await readFile(receiptPath)).digest('hex')
+  const resolved = path.resolve(receiptPath)
+  const bytes = await readHeldRegularFile({ root: path.dirname(resolved), literalPath: path.basename(resolved), label: 'Qualification custody receipt', maxBytes: 1024 * 1024 })
+  return createHash('sha256').update(bytes).digest('hex')
 }
 
 export async function writeQualificationCustody(receiptPath, receipt) {
@@ -108,13 +127,42 @@ export async function writeQualificationCustody(receiptPath, receipt) {
   })
 }
 
+export async function finalizeAbsentQualificationCustody({
+  initialReceiptPath = process.env.SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH,
+  receiptPath = process.env.SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH,
+} = {}) {
+  const closed = path.resolve(receiptPath)
+  try {
+    await readHeldRegularFile({ root: path.dirname(closed), literalPath: path.basename(closed), label: 'Qualification custody closed receipt', maxBytes: 1024 * 1024 })
+    return false
+  } catch (error) {
+    if (error?.message !== 'Qualification custody closed receipt could not be read from its held descriptor.') throw error
+  }
+  const initial = await readQualificationCustody(initialReceiptPath)
+  const initialReceiptSha256 = await sha256Receipt(initialReceiptPath)
+  await writeFile(closed, `${JSON.stringify({
+    schema: initial.schema,
+    state: 'closed',
+    mode: 'unverified',
+    outcome: 'unverified',
+    causal: 'unverified',
+    runtimePathHashes: initial.runtimePathHashes,
+    initialReceiptSha256,
+    sourceHashes: {},
+    sourceBindings: [],
+    owners: [],
+  })}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+  return true
+}
+
 export async function sha256File(filePath) {
-  return createHash('sha256').update(await readFile(filePath)).digest('hex')
+  const resolved = path.resolve(filePath)
+  const bytes = await readHeldRegularFile({ root: path.dirname(resolved), literalPath: path.basename(resolved), label: 'Qualification source file', maxBytes: 256 * 1024 * 1024 })
+  return createHash('sha256').update(bytes).digest('hex')
 }
 
 if (process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href) {
-  if (process.argv[2] !== 'initialize') {
-    throw new Error('Expected qualification custody initialize command.')
-  }
-  await initializeQualificationCustody()
+  if (process.argv[2] === 'initialize') await initializeQualificationCustody()
+  else if (process.argv[2] === 'finalize') await finalizeAbsentQualificationCustody()
+  else throw new Error('Expected qualification custody initialize or finalize command.')
 }

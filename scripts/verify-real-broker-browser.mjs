@@ -2,7 +2,7 @@ import { waitForCapturedChildClose } from './captured-child-close.mjs'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { lstat, readFile, readdir } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -46,6 +46,7 @@ import {
   validateExpectedRuntimeFilesystem,
   verifyClosureReceipt,
 } from './real-browser-runtime-inputs.mjs'
+import { readHeldRegularFile } from './held-receipt-reader.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
@@ -148,18 +149,14 @@ async function readBoundedRegularFile(
   label,
   { allowEmpty = false } = {}
 ) {
-  const info = await lstat(filePath)
-  if (!info.isFile() || info.isSymbolicLink()) {
-    throw new Error(`${label} must be a regular file.`)
-  }
-  if ((!allowEmpty && info.size === 0) || info.size > maxBytes) {
-    throw new Error(`${label} was empty or exceeded its bound.`)
-  }
-  const bytes = await readFile(filePath)
-  if ((!allowEmpty && bytes.length === 0) || bytes.length > maxBytes) {
-    throw new Error(`${label} changed outside its bound while being read.`)
-  }
-  return bytes
+  const resolved = path.resolve(filePath)
+  return readHeldRegularFile({
+    root: path.dirname(resolved),
+    literalPath: path.basename(resolved),
+    label,
+    maxBytes,
+    allowEmpty,
+  })
 }
 
 function waitForReady(runner, timeoutMs = 240_000) {
@@ -483,13 +480,17 @@ function retainOwnedProcess(role, child, sourceSha256) {
 }
 
 async function readOwnedProcessCustody(eventPath, expected) {
-  let bytes
+  let exists
   try {
-    bytes = await readFile(eventPath)
+    exists = await lstat(eventPath)
   } catch (error) {
     if (error?.code === 'ENOENT') return []
     throw error
   }
+  if (!exists.isFile() || exists.isSymbolicLink()) {
+    throw new Error('Owned process custody sidecar was not a regular file.')
+  }
+  const bytes = await readBoundedRegularFile(eventPath, 1024 * 1024, 'Owned process custody sidecar')
   return parseOwnedProcessCustody(bytes, expected)
 }
 
