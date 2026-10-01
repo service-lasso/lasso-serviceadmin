@@ -92,7 +92,7 @@ async function readPrivateReceipt(evidenceRoot, literalPath, label) {
   return value
 }
 
-export async function parseRuntimeInputs(ready, { environment = process.env, source, assets } = {}) {
+export async function parseRuntimeInputs(ready, { environment = process.env, source, assets, observedRunner } = {}) {
   const runtimeInputs = parseExpectedRuntimeInputs(environment)
   const liveReceipt = ready?.liveReceipt
   if (!liveReceipt || typeof liveReceipt !== 'object' || Array.isArray(liveReceipt)) {
@@ -145,6 +145,15 @@ export async function parseRuntimeInputs(ready, { environment = process.env, sou
   ) {
     throw new Error('Real browser prelaunch receipt did not prove its native runner identity.')
   }
+  if (
+    !observedRunner ||
+    prelaunch.runner.pid !== observedRunner.pid ||
+    prelaunch.runner.parentPid !== observedRunner.parentPid ||
+    prelaunch.runner.nativeIdentity.size !== observedRunner.nativeIdentity?.size ||
+    prelaunch.runner.nativeIdentity.sha256 !== observedRunner.nativeIdentity?.sha256
+  ) {
+    throw new Error('Real browser prelaunch receipt did not bind the verifier-observed native runner.')
+  }
   for (const [literalPath, expectedAsset] of Object.entries(assets ?? {})) {
     const observed = prelaunch.assets.find((asset) => asset?.literalPath === literalPath)
     if (!observed || observed.sha256 !== expectedAsset.sha256 || observed.size !== expectedAsset.size) {
@@ -167,6 +176,10 @@ export async function parseRuntimeInputs(ready, { environment = process.env, sou
     receipts.ready.ownerCorrelation?.state !== 'observed' ||
     !Number.isInteger(receipts.ready.ownedProcesses?.runner?.pid) ||
     !Number.isInteger(receipts.ready.ownedProcesses?.admin?.pid) ||
+    receipts.ready.ownedProcesses.runner.pid !== prelaunch.runner.pid ||
+    receipts.ready.ownedProcesses.runner.parentPid !== prelaunch.runner.parentPid ||
+    receipts.ready.ownedProcesses.runner.nativeIdentity?.size !== prelaunch.runner.nativeIdentity.size ||
+    receipts.ready.ownedProcesses.runner.nativeIdentity?.sha256 !== prelaunch.runner.nativeIdentity.sha256 ||
     receipts.ready.ownedProcesses.admin.parentPid !== receipts.ready.ownedProcesses.runner.pid
   ) {
     throw new Error('Real browser ready receipt did not prove its owned native process chain.')

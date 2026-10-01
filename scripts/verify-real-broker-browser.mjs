@@ -46,7 +46,7 @@ import {
   validateExpectedRuntimeFilesystem,
   verifyClosureReceipt,
 } from './real-browser-runtime-inputs.mjs'
-import { readHeldRegularFile } from './held-receipt-reader.mjs'
+import { readHeldJsonFile, readHeldRegularFile } from './held-receipt-reader.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
@@ -157,6 +157,34 @@ async function readBoundedRegularFile(
     maxBytes,
     allowEmpty,
   })
+}
+
+async function verifyControlledProviderFault(runtimeInputs, source) {
+  const read = (literalPath, label) => readHeldJsonFile({
+    root: runtimeInputs.evidenceRoot,
+    literalPath,
+    label,
+    maxBytes: 1024 * 1024,
+  }).then(({ value }) => value)
+  const [armed, consumed] = await Promise.all([
+    read('live-provider-control-receipt.json', 'Real browser provider control receipt'),
+    read('live-provider-control-consumed-receipt.json', 'Real browser provider consumed receipt'),
+  ])
+  const matches = (receipt, state, causalSink) =>
+    receipt?.schema === 'service-lasso.real-admin-browser-provider-control.v1' &&
+    receipt.private === true &&
+    receipt.nonce === runtimeInputs.liveReceipt.nonce &&
+    receipt.source?.head === source.head &&
+    receipt.source?.tree === source.tree &&
+    receipt.phase === 'authenticated_provider_request' &&
+    receipt.state === state &&
+    receipt.causalSink === causalSink
+  if (
+    !matches(armed, 'observed_before_controlled_fault', 'authenticated_vault_provider_request') ||
+    !matches(consumed, 'controlled_fault_consumed', 'next_authenticated_vault_provider_request')
+  ) {
+    throw new Error('Controlled provider 503 did not retain the required private receipt pair.')
+  }
 }
 
 function waitForReady(runner, timeoutMs = 240_000) {
@@ -597,6 +625,7 @@ const trustedUnlockDiagnostics = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
+let controlledProviderFaultVerified = false
 let finalQualificationFailureDiagnostic
 try {
   ready = await waitForReady(runner)
@@ -606,6 +635,14 @@ try {
   runtimeInputs = await parseRuntimeInputs(ready, {
     source: coreSource,
     assets: coreReceiptAssets,
+    observedRunner: {
+      pid: runner.pid,
+      parentPid: process.pid,
+      nativeIdentity: {
+        size: (await lstat(process.execPath)).size,
+        sha256: `sha256:${await sha256File(process.execPath)}`,
+      },
+    },
   })
   const adminUrl = new URL(ready.adminUrl)
   const controlUrl = new URL(ready.controlUrl)
@@ -684,6 +721,10 @@ try {
     throw new Error(
       'Controlled real provider-validation receipt path unexpectedly passed.'
     )
+  }
+  if (trustedUnlockRealProviderControl) {
+    await verifyControlledProviderFault(runtimeInputs, coreSource)
+    controlledProviderFaultVerified = true
   }
   cypressSucceeded = !trustedUnlockRealProviderControl
   if (qualificationMode === 'comprehensive' && cypressSucceeded) {
@@ -803,27 +844,12 @@ const publicOwnerSummary = [
       signal,
     })),
 ]
-const controlledReceipt = finalQualificationFailureDiagnostic?.trustedUnlock
-const controlledCausal = controlledReceipt?.causal
 const controlledObserved =
   finalQualificationFailureDiagnostic?.lastPhase === 'provider_validation_complete' &&
-  controlledReceipt?.receipt?.schema === 'service-admin.trusted-unlock-receipt.v1' &&
-  controlledReceipt.receipt.status === 'observed' &&
-  controlledReceipt.receipt.present === true &&
-  controlledReceipt.receipt.verified === false &&
-  controlledReceipt.receipt.localRoot === false &&
-  controlledReceipt.receipt.loading === false &&
-  controlledReceipt.receipt.unavailable === true &&
-  controlledCausal?.schema === 'service-admin.trusted-identity-causal.v2' &&
-  Number.isInteger(controlledCausal.sequence) &&
-  controlledCausal.sequence >= 1 &&
-  controlledCausal.request === 'transport_failed' &&
-  controlledCausal.contract === 'unobserved' &&
-  controlledCausal.query === 'failed' &&
-  controlledCausal.render === 'unavailable' &&
   finalQualificationFailureDiagnostic?.cypressRunSummary?.state === 'complete' &&
   finalQualificationFailureDiagnostic.cypressRunSummary.totalFailed === 1 &&
   finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
+  controlledProviderFaultVerified &&
   closureVerified
 await writeQualificationCustody(custodyReceiptPath, {
   schema: initialCustody.schema,

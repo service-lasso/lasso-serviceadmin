@@ -48,8 +48,7 @@ const safeTransportErrorCodes = new Set([
   'ERR_TIMED_OUT',
 ])
 
-let controlledProviderRestartControlClicks = 0
-let controlledProviderRestartApiRequests = 0
+let controlledProviderValidationClicks = 0
 
 function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
@@ -150,31 +149,9 @@ function visibleTableRow(content, timeout = 20_000) {
 }
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
-  cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
-    if (!enabled) {
-      waitForManagedServiceReadiness('@secretsbroker')
-      return
-    }
-    cy.intercept('GET', '**/api/runtime/security', { forceNetworkError: true }).as(
-      'controlledRuntimeIdentityFailure'
-    )
-    cy.intercept('POST', '**/api/services/%40secretsbroker/restart', (request) => {
-      controlledProviderRestartApiRequests += 1
-      request.continue()
-    }).as('controlledRestartBrokerFromUi')
-  })
+  waitForManagedServiceReadiness('@secretsbroker')
   const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
-  cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
-    if (!enabled) return
-    cy.document({ log: false }).then((document) => {
-      document.addEventListener('click', (event) => {
-        if (event.target?.textContent?.trim() === 'Restart service') {
-          controlledProviderRestartControlClicks += 1
-        }
-      })
-    })
-  })
   unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
   brokerLifecycleControls(detailReadiness).within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
@@ -185,13 +162,47 @@ function restartBrokerFromUi(expectedRequestCount, requestCount) {
   cy.contains('[role="alertdialog"]', 'Confirm elevated action').within(() => {
     cy.contains('button', /^Restart service$/).click()
   })
-  cy.wait('@restartBrokerFromUi', { timeout: 120_000 }).then(
-    ({ request, response }) => {
-      expect(request.body).to.deep.equal({ confirm: true })
-      expect(response?.statusCode).to.equal(200)
-      expect(requestCount()).to.equal(expectedRequestCount)
-    }
-  )
+  cy.wait('@restartBrokerFromUi', { timeout: 120_000 }).then(({ request, response }) => {
+    expect(request.body).to.deep.equal({ confirm: true })
+    expect(response?.statusCode).to.equal(200)
+    expect(requestCount()).to.equal(expectedRequestCount)
+  })
+}
+
+function consumeControlledProviderFault() {
+  cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
+    if (!enabled) return
+    cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
+      expect(controlUrl).to.match(/^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/)
+      cy.request('POST', `${controlUrl}/fail-next-provider-request`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })
+      })
+    })
+    visibleTableRow('vault-browser').within(() => {
+      cy.contains('button', 'Validate configuration').click()
+    })
+    dialog('Validate provider configuration').within(() => {
+      cy.get('#provider-validation-reason').type('Release browser controlled provider failure')
+      cy.contains('button', 'Validate through Broker').click()
+      controlledProviderValidationClicks += 1
+      cy.contains('Provider validation failed closed.', { timeout: 20_000 }).should('be.visible')
+    })
+    cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
+      cy.request(`${controlUrl}/provider-fault-receipt`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body.outcome).to.equal('provider_fault_observed')
+        expect(body.receipt).to.include({
+          schema: 'service-lasso.real-admin-browser-provider-control.v1',
+          phase: 'authenticated_provider_request',
+          state: 'controlled_fault_consumed',
+        })
+      })
+    })
+    cy.then(() => {
+      throw new Error('Controlled authenticated provider 503 was observed.')
+    })
+  })
 }
 
 function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount) {
@@ -809,8 +820,7 @@ function waitForSuccessfulBrokerEventsUiResponse(
 
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   beforeEach(() => {
-    controlledProviderRestartControlClicks = 0
-    controlledProviderRestartApiRequests = 0
+    controlledProviderValidationClicks = 0
   })
 
   afterEach(() => {
@@ -818,8 +828,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
     return (flushed ?? cy.wrap(null, { log: false })).then(() =>
       cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
         if (!enabled) return
-        expect(controlledProviderRestartControlClicks).to.equal(0)
-        expect(controlledProviderRestartApiRequests).to.equal(0)
+        expect(controlledProviderValidationClicks).to.equal(1)
       })
     )
   })
@@ -1896,6 +1905,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
     qualificationCheckpoint('provider_validation_complete')
+    consumeControlledProviderFault()
 
     restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()

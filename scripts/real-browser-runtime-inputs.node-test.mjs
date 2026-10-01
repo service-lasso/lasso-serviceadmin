@@ -149,9 +149,17 @@ test('runtime consumes fixed private receipt names and rejects public path alias
     const base = { private: true, nonce, source, runtimeInputs: { workspaceRoot: workspace, servicesRoot: services } }
     await writeFile(path.join(evidence, 'live-prelaunch-receipt.json'), JSON.stringify({ ...base, schema: 'service-lasso.real-admin-browser-live-prelaunch.v1', runner: { pid: 1, parentPid: 2, birth: 'observed', nativeIdentity: { size: 1, sha256: `sha256:${'d'.repeat(64)}` } }, assets: [] }))
     await writeFile(path.join(evidence, 'live-initial-receipt.json'), JSON.stringify({ ...base, schema: 'service-lasso.real-admin-browser-live-initial.v1', inputs: { workspaceRoot: workspace, instanceRegistryPath: environment.SERVICE_LASSO_INSTANCE_REGISTRY_PATH, hostPortRegistryPath: environment.SERVICE_LASSO_HOST_PORT_REGISTRY_PATH, servicesRoot: services, evidenceRoot: evidence, supportRoot: support } }))
-    await writeFile(path.join(evidence, 'live-ready-receipt.json'), JSON.stringify({ ...base, schema: 'service-lasso.real-admin-browser-live-initial.v1', ownerCorrelation: { state: 'observed' }, ownedProcesses: { runner: { pid: 1 }, admin: { pid: 2, parentPid: 1 } } }))
+    await writeFile(path.join(evidence, 'live-ready-receipt.json'), JSON.stringify({ ...base, schema: 'service-lasso.real-admin-browser-live-initial.v1', ownerCorrelation: { state: 'observed' }, ownedProcesses: { runner: { pid: 1, parentPid: 2, nativeIdentity: { size: 1, sha256: `sha256:${'d'.repeat(64)}` } }, admin: { pid: 2, parentPid: 1 } } }))
     const ready = { liveReceipt: { schema: 'service-lasso.real-admin-browser-live-initial.v1', nonce } }
-    assert.equal((await parseRuntimeInputs(ready, { environment, source })).workspaceRoot, workspace)
+    assert.equal((await parseRuntimeInputs(ready, {
+      environment,
+      source,
+      observedRunner: {
+        pid: 1,
+        parentPid: 2,
+        nativeIdentity: { size: 1, sha256: `sha256:${'d'.repeat(64)}` },
+      },
+    })).workspaceRoot, workspace)
     await assert.rejects(() => parseRuntimeInputs({ liveReceipt: { ...ready.liveReceipt, initialPath: path.join(evidence, 'live-initial-receipt.json') } }, { environment, source }), /incomplete public live receipt/)
   } finally {
     await rm(root, { recursive: true, force: true })
