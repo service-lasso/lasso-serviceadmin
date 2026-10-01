@@ -305,15 +305,19 @@ test('bounded provider, metadata, and execute network waits retain exact source 
       )
   )
   assert.equal(
-    lifecycleSource.split(
-      'restartBrokerFromUi(3, () => controlledPreClickRestartApiRequests)'
-    ).length - 1,
-    1
-  )
-  assert.equal(
-    lifecycleSource.includes("cy.env(['trustedUnlockReceiptControlFailure'])"),
+    lifecycleSource.includes('trustedUnlockRealProviderControlEnabled'),
     true
   )
+  assert.equal(
+    lifecycleSource.includes('trustedUnlockRealProviderControlFailure'),
+    false
+  )
+  assert.equal(
+    lifecycleSource.includes('forceNetworkError: true'),
+    true
+  )
+  assert.equal(lifecycleSource.includes('document.body.innerHTML ='), false)
+  assert.equal(lifecycleSource.includes('controlledPreClick'), false)
   for (const requestCount of [1, 2]) {
     assert.equal(
       lifecycleSource.split(

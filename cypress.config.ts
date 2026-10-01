@@ -61,9 +61,6 @@ export default defineConfig({
         cypressRunSummary.record(results)
       })
       on('task', {
-        trustedUnlockReceiptControlEnabled() {
-          return false
-        },
         trustedUnlockRealProviderControlEnabled() {
           return (
             String(config.env.trustedUnlockRealProviderControlFailure) === '1'
