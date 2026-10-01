@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { readHeldJsonFile, readHeldRegularFile } from './held-receipt-reader.mjs'
 
@@ -10,6 +10,8 @@ const pathNames = Object.freeze([
   'SERVICE_LASSO_INSTANCE_REGISTRY_PATH',
   'SERVICE_LASSO_HOST_PORT_REGISTRY_PATH',
 ])
+
+const externalRootName = 'SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT'
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
@@ -47,11 +49,69 @@ export function requiredRuntimePaths(environment = process.env) {
   return values
 }
 
+async function absentLiteralPath(candidate, label) {
+  try {
+    await lstat(candidate)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return
+    throw error
+  }
+  throw new Error(`${label} must be absent before qualification starts.`)
+}
+
+async function rejectLinkedAncestors(candidate, label) {
+  const resolved = path.resolve(candidate)
+  let cursor = resolved
+  while (true) {
+    try {
+      const info = await lstat(cursor)
+      if (info.isSymbolicLink()) throw new Error(`${label} has a symbolic-link ancestor.`)
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+    const parent = path.dirname(cursor)
+    if (parent === cursor) return
+    cursor = parent
+  }
+}
+
+async function validateInitialRuntimeCustody(runtimePaths, environment) {
+  const externalRoot = environment[externalRootName]?.trim()
+  if (!externalRoot || !path.isAbsolute(externalRoot)) {
+    throw new Error(`${externalRootName} must be an absolute external qualification root.`)
+  }
+  const external = path.resolve(externalRoot)
+  const workspace = runtimePaths.SERVICE_LASSO_WORKSPACE_ROOT
+  const registries = runtimePaths.SERVICE_LASSO_TEST_REGISTRIES_ROOT
+  if (
+    path.dirname(workspace) !== external ||
+    path.dirname(registries) !== external ||
+    path.basename(workspace) !== 'workspace' ||
+    path.basename(registries) !== 'registries' ||
+    path.dirname(runtimePaths.SERVICE_LASSO_INSTANCE_REGISTRY_PATH) !== registries ||
+    path.dirname(runtimePaths.SERVICE_LASSO_HOST_PORT_REGISTRY_PATH) !== registries
+  ) {
+    throw new Error('Qualification runtime paths must use the literal external workspace and registries layout.')
+  }
+  for (const [label, candidate] of [
+    ['External qualification root', external],
+    ['Qualification workspace', workspace],
+    ['Qualification registries root', registries],
+    ['Instance registry', runtimePaths.SERVICE_LASSO_INSTANCE_REGISTRY_PATH],
+    ['Host-port registry', runtimePaths.SERVICE_LASSO_HOST_PORT_REGISTRY_PATH],
+  ]) {
+    await rejectLinkedAncestors(candidate, label)
+    await absentLiteralPath(candidate, label)
+  }
+  return external
+}
+
 export async function initializeQualificationCustody({
   environment = process.env,
   receiptPath = environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH,
 } = {}) {
   const runtimePaths = requiredRuntimePaths(environment)
+  const externalRoot = await validateInitialRuntimeCustody(runtimePaths, environment)
   const initialReceiptPath =
     environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH ??
     receiptPath
@@ -63,18 +123,13 @@ export async function initializeQualificationCustody({
   ) {
     throw new Error('SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH is required.')
   }
+  await mkdir(externalRoot, { recursive: true })
   await Promise.all([
-    mkdir(runtimePaths.SERVICE_LASSO_WORKSPACE_ROOT, { recursive: true }),
-    mkdir(runtimePaths.SERVICE_LASSO_TEST_REGISTRIES_ROOT, { recursive: true }),
+    mkdir(runtimePaths.SERVICE_LASSO_WORKSPACE_ROOT),
+    mkdir(runtimePaths.SERVICE_LASSO_TEST_REGISTRIES_ROOT),
+    mkdir(path.dirname(receiptPath), { recursive: true }),
+    mkdir(path.dirname(initialReceiptPath), { recursive: true }),
   ])
-  await Promise.all(
-    [
-      runtimePaths.SERVICE_LASSO_INSTANCE_REGISTRY_PATH,
-      runtimePaths.SERVICE_LASSO_HOST_PORT_REGISTRY_PATH,
-      receiptPath,
-      initialReceiptPath,
-    ].map((target) => mkdir(path.dirname(target), { recursive: true }))
-  )
   const receipt = {
     schema,
     state: 'initialized',
@@ -86,6 +141,7 @@ export async function initializeQualificationCustody({
   await writeFile(initialReceiptPath, `${JSON.stringify(receipt)}\n`, {
     encoding: 'utf8',
     mode: 0o600,
+    flag: 'wx',
   })
   return receipt
 }

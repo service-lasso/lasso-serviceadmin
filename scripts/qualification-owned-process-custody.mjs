@@ -20,6 +20,8 @@ function validBirth(record, expected) {
       'pid',
       'role',
       'sourceSha256',
+      'sourceSize',
+      'executableSize',
     ]) &&
     record.event === 'birth' &&
     roles.includes(record.role) &&
@@ -27,8 +29,14 @@ function validBirth(record, expected) {
     isPid(record.pid) &&
     isPid(record.parentPid) &&
     sha256.test(record.executableSha256) &&
+    Number.isSafeInteger(record.sourceSize) && record.sourceSize > 0 &&
+    Number.isSafeInteger(record.executableSize) && record.executableSize > 0 &&
     record.sourceSha256 === expected[record.role]?.sourceSha256 &&
-    record.executableSha256 === expected[record.role]?.executableSha256
+    record.executableSha256 === expected[record.role]?.executableSha256 &&
+    record.sourceSize === expected[record.role]?.sourceSize &&
+    record.executableSize === expected[record.role]?.executableSize &&
+    record.parentPid === expected[record.role]?.parentPid &&
+    record.ownerNonce === expected[record.role]?.ownerNonce
   )
 }
 
@@ -47,6 +55,8 @@ function validClose(record, expected) {
       'role',
       'signal',
       'sourceSha256',
+      'sourceSize',
+      'executableSize',
     ]) &&
     record.event === 'close' &&
     roles.includes(record.role) &&
@@ -54,9 +64,15 @@ function validClose(record, expected) {
     isPid(record.pid) &&
     isPid(record.parentPid) &&
     sha256.test(record.executableSha256) &&
+    Number.isSafeInteger(record.sourceSize) && record.sourceSize > 0 &&
+    Number.isSafeInteger(record.executableSize) && record.executableSize > 0 &&
     terminal &&
     record.sourceSha256 === expected[record.role]?.sourceSha256 &&
-    record.executableSha256 === expected[record.role]?.executableSha256
+    record.executableSha256 === expected[record.role]?.executableSha256 &&
+    record.sourceSize === expected[record.role]?.sourceSize &&
+    record.executableSize === expected[record.role]?.executableSize &&
+    record.parentPid === expected[record.role]?.parentPid &&
+    record.ownerNonce === expected[record.role]?.ownerNonce
   )
 }
 
@@ -106,6 +122,8 @@ export function parseOwnedProcessCustody(bytes, expected) {
       birth.ownerNonce !== close.ownerNonce ||
       birth.pid !== close.pid ||
       birth.parentPid !== close.parentPid
+      || birth.sourceSize !== close.sourceSize
+      || birth.executableSize !== close.executableSize
     ) {
       return []
     }

@@ -1,6 +1,6 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
 import { execFileSync, spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { lstat, readdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -85,6 +85,7 @@ const initialCustodyReceiptPath = requiredPath(
 const ownedProcessEventsPath = requiredPath(
   'SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH'
 )
+const providerControlNonce = randomBytes(32).toString('hex')
 requiredRuntimePaths()
 const adminRoot = path.resolve(
   process.env.SERVICE_LASSO_TEST_ADMIN_ROOT ??
@@ -103,6 +104,23 @@ const coreSource = {
   tree: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD^{tree}'], {
     encoding: 'utf8',
   }).trim(),
+}
+const adminSource = {
+  head: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  tree: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
+}
+for (const [name, source] of [['Core', coreSource], ['Admin', adminSource]]) {
+  if (!/^[a-f0-9]{40}$/.test(source.head) || !/^[a-f0-9]{40}$/.test(source.tree)) {
+    throw new Error(`${name} source identity was invalid.`)
+  }
+}
+for (const [name, actual, expectedHead, expectedTree] of [
+  ['Admin', adminSource, process.env.SERVICE_LASSO_QUALIFICATION_ADMIN_HEAD, process.env.SERVICE_LASSO_QUALIFICATION_ADMIN_TREE],
+  ['Core', coreSource, process.env.SERVICE_LASSO_QUALIFICATION_CORE_HEAD, process.env.SERVICE_LASSO_QUALIFICATION_CORE_TREE],
+]) {
+  if (actual.head !== expectedHead || actual.tree !== expectedTree) {
+    throw new Error(`${name} source did not match its pre-build qualification identity.`)
+  }
 }
 const specPath = path.join(
   root,
@@ -174,8 +192,11 @@ async function verifyControlledProviderFault(runtimeInputs, source) {
     receipt?.schema === 'service-lasso.real-admin-browser-provider-control.v1' &&
     receipt.private === true &&
     receipt.nonce === runtimeInputs.liveReceipt.nonce &&
+    receipt.controlNonce === providerControlNonce &&
     receipt.source?.head === source.head &&
     receipt.source?.tree === source.tree &&
+    receipt.adminSource?.head === adminSource.head &&
+    receipt.adminSource?.tree === adminSource.tree &&
     receipt.phase === 'authenticated_provider_request' &&
     receipt.state === state &&
     receipt.causalSink === causalSink
@@ -465,6 +486,22 @@ function publishSafeChildOutput(capture) {
   if (stderr.length > 0) process.stderr.write(stderr)
 }
 
+function observedParentPid(pid) {
+  try {
+    if (process.platform === 'linux') {
+      const stat = execFileSync('cat', [`/proc/${pid}/stat`], { encoding: 'utf8' })
+      return Number(stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[1])
+    }
+    const command = process.platform === 'win32' ? 'powershell.exe' : 'ps'
+    const args = process.platform === 'win32'
+      ? ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter \"ProcessId=${pid}\").ParentProcessId`]
+      : ['-o', 'ppid=', '-p', String(pid)]
+    return Number(execFileSync(command, args, { encoding: 'utf8', windowsHide: true }).trim())
+  } catch {
+    return null
+  }
+}
+
 await requireDirectory(coreRoot, 'Core root')
 await requireDirectory(adminRoot, 'Packaged Admin root')
 await requireFile(brokerBinary, 'Broker binary')
@@ -478,6 +515,7 @@ const initialCustodyHash = await sha256Receipt(initialCustodyReceiptPath)
 const custodyOwners = []
 function retainOwnedProcess(role, child, sourceSha256) {
   const pid = Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null
+  const parentPid = pid === null ? null : observedParentPid(pid)
   let born = false
   if (pid !== null) {
     try {
@@ -489,8 +527,10 @@ function retainOwnedProcess(role, child, sourceSha256) {
     role,
     parent: 'verifier',
     pid,
+    parentPid,
+    executable: process.execPath,
     sourceSha256,
-    birth: born ? 'observed' : 'unverified',
+    birth: born && parentPid === process.pid ? 'observed' : 'unverified',
     close: 'pending',
     exitCode: 'unavailable',
     signal: 'unavailable',
@@ -544,15 +584,14 @@ const coreReceiptAssets = Object.fromEntries(
     })
   )
 )
-const nestedExpectedSources = {
-  broker_binary: {
-    sourceSha256: ownedSourceHashes.brokerBinary,
-    executableSha256: ownedSourceHashes.brokerBinary,
-  },
-  admin_runtime: {
-    sourceSha256: ownedSourceHashes.adminRuntime,
-    executableSha256: await sha256File(process.execPath),
-  },
+const ownedProcessNonces = {
+  broker_binary: randomBytes(32).toString('hex'),
+  admin_runtime: randomBytes(32).toString('hex'),
+}
+const sourceSizes = {
+  brokerBinary: (await lstat(brokerBinary)).size,
+  adminRuntime: (await lstat(path.join(adminRoot, 'runtime', 'server.js'))).size,
+  node: (await lstat(process.execPath)).size,
 }
 const ownedProcessObserver = path.join(
   root,
@@ -570,11 +609,38 @@ const runner = spawn(process.execPath, [runnerPath], {
     SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH: ownedProcessEventsPath,
     SERVICE_LASSO_QUALIFICATION_BROKER_SHA256: ownedSourceHashes.brokerBinary,
     SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_SHA256: ownedSourceHashes.adminRuntime,
+    SERVICE_LASSO_QUALIFICATION_BROKER_BINARY_NONCE: ownedProcessNonces.broker_binary,
+    SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_NONCE: ownedProcessNonces.admin_runtime,
+    SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce,
+    SERVICE_LASSO_TEST_ADMIN_SOURCE_HEAD: adminSource.head,
+    SERVICE_LASSO_TEST_ADMIN_SOURCE_TREE: adminSource.tree,
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${ownedProcessObserver}`.trim(),
   },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
-retainOwnedProcess('core_runner', runner, ownedSourceHashes.coreRunner)
+const coreRunnerOwner = retainOwnedProcess(
+  'core_runner',
+  runner,
+  ownedSourceHashes.coreRunner
+)
+const nestedExpectedSources = {
+  broker_binary: {
+    sourceSha256: ownedSourceHashes.brokerBinary,
+    sourceSize: sourceSizes.brokerBinary,
+    executableSha256: ownedSourceHashes.brokerBinary,
+    executableSize: sourceSizes.brokerBinary,
+    parentPid: runner.pid,
+    ownerNonce: ownedProcessNonces.broker_binary,
+  },
+  admin_runtime: {
+    sourceSha256: ownedSourceHashes.adminRuntime,
+    sourceSize: sourceSizes.adminRuntime,
+    executableSha256: await sha256File(process.execPath),
+    executableSize: sourceSizes.node,
+    parentPid: runner.pid,
+    ownerNonce: ownedProcessNonces.admin_runtime,
+  },
+}
 const rotationProxyLifecycleEvents = []
 let stderrBytes = 0
 let stderrBuffer = ''
@@ -637,7 +703,7 @@ try {
     assets: coreReceiptAssets,
     observedRunner: {
       pid: runner.pid,
-      parentPid: process.pid,
+      parentPid: coreRunnerOwner.parentPid,
       nativeIdentity: {
         size: (await lstat(process.execPath)).size,
         sha256: `sha256:${await sha256File(process.execPath)}`,
@@ -674,7 +740,7 @@ try {
       '--env',
       `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
         trustedUnlockRealProviderControl
-          ? ',trustedUnlockRealProviderControlFailure=1'
+            ? `,trustedUnlockRealProviderControlFailure=1,providerControlNonce=${providerControlNonce}`
           : ''
       }`,
       '--spec',
@@ -820,6 +886,7 @@ const closureVerified =
   custodyOwners.every(
     (owner) =>
       owner.birth === 'observed' &&
+      owner.parentPid === process.pid &&
       owner.close === 'observed' &&
       Number.isInteger(owner.exitCode) &&
       owner.exitCode >= 0 &&

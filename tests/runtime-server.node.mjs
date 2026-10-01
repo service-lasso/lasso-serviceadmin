@@ -312,7 +312,19 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     lifecycleSource.includes('trustedUnlockRealProviderControlFailure'),
     false
   )
-  assert.equal(lifecycleSource.includes('forceNetworkError: true'), true)
+  assert.equal(lifecycleSource.includes('forceNetworkError: true'), false)
+  assert.equal(
+    lifecycleSource.includes('x-service-lasso-provider-control-nonce'),
+    true
+  )
+  assert.equal(lifecycleSource.includes("body: ''"), true)
+  assert.equal(lifecycleSource.includes('providerControlNonce'), true)
+  assert.equal(
+    lifecycleSource.includes(
+      "'x-service-lasso-provider-control-nonce': providerControlNonce"
+    ),
+    true
+  )
   assert.equal(lifecycleSource.includes('document.body.innerHTML ='), false)
   assert.equal(lifecycleSource.includes('controlledPreClick'), false)
   for (const requestCount of [1, 2]) {
@@ -348,6 +360,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'utf8'
   )
   for (const name of [
+    'SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT',
     'SERVICE_LASSO_WORKSPACE_ROOT',
     'SERVICE_LASSO_INSTANCE_REGISTRY_PATH',
     'SERVICE_LASSO_HOST_PORT_REGISTRY_PATH',
@@ -365,6 +378,22 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   )
   assert.equal(
     verifierSource.includes('provider_validation_transport_failure'),
+    true
+  )
+  for (const requiredProviderBinding of [
+    'SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE',
+    'SERVICE_LASSO_TEST_ADMIN_SOURCE_HEAD',
+    'SERVICE_LASSO_TEST_ADMIN_SOURCE_TREE',
+    'receipt.controlNonce === providerControlNonce',
+    'receipt.adminSource?.head === adminSource.head',
+    'receipt.adminSource?.tree === adminSource.tree',
+  ]) {
+    assert.equal(verifierSource.includes(requiredProviderBinding), true)
+  }
+  assert.equal(
+    browserWorkflowSource.includes(
+      'ref: 179af20e05dd65648aa503a0ff534ed6fc1fa14d'
+    ),
     true
   )
   assert.equal(verifierSource.includes("cypress.kill('SIGKILL')"), false)

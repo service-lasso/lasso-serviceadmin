@@ -1,4 +1,4 @@
-const { createHash, randomBytes } = require('node:crypto')
+const { createHash } = require('node:crypto')
 const { appendFileSync, lstatSync, readFileSync } = require('node:fs')
 const { syncBuiltinESMExports } = require('node:module')
 const childProcess = require('node:child_process')
@@ -13,20 +13,44 @@ function hashRegularFile(candidate) {
   try {
     const info = lstatSync(candidate)
     if (!info.isFile() || info.isSymbolicLink()) return null
-    return createHash('sha256').update(readFileSync(candidate)).digest('hex')
+    return {
+      sha256: createHash('sha256').update(readFileSync(candidate)).digest('hex'),
+      size: info.size,
+    }
+  } catch {
+    return null
+  }
+}
+
+function observedParentPid(pid) {
+  try {
+    if (process.platform === 'linux') {
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+      const tail = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)
+      return Number(tail[1])
+    }
+    const command = process.platform === 'win32' ? 'powershell.exe' : 'ps'
+    const args = process.platform === 'win32'
+      ? ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter \"ProcessId=${pid}\").ParentProcessId`]
+      : ['-o', 'ppid=', '-p', String(pid)]
+    const value = childProcess.execFileSync(command, args, { encoding: 'utf8', windowsHide: true }).trim()
+    return Number(value)
   } catch {
     return null
   }
 }
 
 function classify(command, args) {
-  const executableSha256 = hashRegularFile(command)
-  if (!executableSha256) return null
+  const executable = hashRegularFile(command)
+  if (!executable) return null
   for (const candidate of [command, ...(Array.isArray(args) ? args : [])]) {
     if (typeof candidate !== 'string') continue
-    const sourceSha256 = hashRegularFile(candidate)
-    const role = expectedSources.get(sourceSha256)
-    if (role) return { role, sourceSha256, executableSha256 }
+    const source = hashRegularFile(candidate)
+    const role = source && expectedSources.get(source.sha256)
+    const ownerNonce = process.env[`SERVICE_LASSO_QUALIFICATION_${role?.toUpperCase()}_NONCE`]
+    if (role && /^[a-f0-9]{64}$/.test(ownerNonce)) {
+      return { role, ownerNonce, sourceSha256: source.sha256, sourceSize: source.size, executableSha256: executable.sha256, executableSize: executable.size }
+    }
   }
   return null
 }
@@ -43,7 +67,6 @@ childProcess.spawn = function observedSpawn(command, args, options) {
   const child = Reflect.apply(originalSpawn, this, arguments)
   const source = classify(command, args)
   if (!source) return child
-  const ownerNonce = randomBytes(16).toString('hex')
   const pid = Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null
   let born = false
   if (pid !== null) {
@@ -52,12 +75,12 @@ childProcess.spawn = function observedSpawn(command, args, options) {
       born = true
     } catch {}
   }
-  if (!born) return child
+  const parentPid = pid === null ? null : observedParentPid(pid)
+  if (!born || parentPid !== process.pid) return child
   const identity = {
     ...source,
-    ownerNonce,
     pid,
-    parentPid: process.pid,
+    parentPid,
   }
   publish({ ...identity, event: 'birth' })
   child.once('close', (exitCode, signal) => {

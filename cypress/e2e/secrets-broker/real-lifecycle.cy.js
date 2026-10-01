@@ -172,9 +172,16 @@ function restartBrokerFromUi(expectedRequestCount, requestCount) {
 function consumeControlledProviderFault() {
   cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
     if (!enabled) return
-    cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
+    cy.env(['testControlUrl', 'providerControlNonce']).then(({ testControlUrl: controlUrl, providerControlNonce }) => {
       expect(controlUrl).to.match(/^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/)
-      cy.request('POST', `${controlUrl}/fail-next-provider-request`).then(({ status, body }) => {
+      expect(providerControlNonce).to.match(/^[a-f0-9]{64}$/)
+      cy.request({
+        method: 'POST',
+        url: `${controlUrl}/fail-next-provider-request`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        body: '',
+        log: false,
+      }).then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })
       })
@@ -188,8 +195,12 @@ function consumeControlledProviderFault() {
       controlledProviderValidationClicks += 1
       cy.contains('Provider validation failed closed.', { timeout: 20_000 }).should('be.visible')
     })
-    cy.env(['testControlUrl']).then(({ testControlUrl: controlUrl }) => {
-      cy.request(`${controlUrl}/provider-fault-receipt`).then(({ status, body }) => {
+    cy.env(['testControlUrl', 'providerControlNonce']).then(({ testControlUrl: controlUrl, providerControlNonce }) => {
+      cy.request({
+        url: `${controlUrl}/provider-fault-receipt`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        log: false,
+      }).then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(body.outcome).to.equal('provider_fault_observed')
         expect(body.receipt).to.include({
@@ -197,6 +208,7 @@ function consumeControlledProviderFault() {
           phase: 'authenticated_provider_request',
           state: 'controlled_fault_consumed',
         })
+        expect(body.receipt).not.to.have.property('controlNonce')
       })
     })
     cy.then(() => {

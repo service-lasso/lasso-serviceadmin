@@ -13,10 +13,12 @@ import {
 test('initializes one hash-only custody receipt for three distinct owned paths', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'service-admin-custody-'))
   try {
-    const workspace = path.join(root, 'workspace')
-    const registries = path.join(root, 'registries')
+    const external = path.join(root, 'external')
+    const workspace = path.join(external, 'workspace')
+    const registries = path.join(external, 'registries')
     const environment = {
       SERVICE_LASSO_WORKSPACE_ROOT: workspace,
+      SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT: external,
       SERVICE_LASSO_TEST_REGISTRIES_ROOT: registries,
       SERVICE_LASSO_INSTANCE_REGISTRY_PATH: path.join(
         registries,
@@ -58,10 +60,11 @@ test('finalizes an absent custody closure from the held initial receipt only onc
   const root = await mkdtemp(path.join(os.tmpdir(), 'service-admin-custody-finalize-'))
   try {
     const environment = {
-      SERVICE_LASSO_WORKSPACE_ROOT: path.join(root, 'workspace'),
-      SERVICE_LASSO_TEST_REGISTRIES_ROOT: path.join(root, 'registries'),
-      SERVICE_LASSO_INSTANCE_REGISTRY_PATH: path.join(root, 'registries', 'instances.json'),
-      SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: path.join(root, 'registries', 'host-ports.json'),
+      SERVICE_LASSO_WORKSPACE_ROOT: path.join(root, 'external', 'workspace'),
+      SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT: path.join(root, 'external'),
+      SERVICE_LASSO_TEST_REGISTRIES_ROOT: path.join(root, 'external', 'registries'),
+      SERVICE_LASSO_INSTANCE_REGISTRY_PATH: path.join(root, 'external', 'registries', 'instances.json'),
+      SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: path.join(root, 'external', 'registries', 'host-ports.json'),
       SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH: path.join(root, 'initial.json'),
       SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH: path.join(root, 'closed.json'),
     }
@@ -79,6 +82,7 @@ test('rejects duplicate or unowned runtime registry paths', () => {
     () =>
       requiredRuntimePaths({
         SERVICE_LASSO_WORKSPACE_ROOT: root,
+        SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT: path.dirname(root),
         SERVICE_LASSO_TEST_REGISTRIES_ROOT: path.join(root, 'registries'),
         SERVICE_LASSO_INSTANCE_REGISTRY_PATH: path.join(root, 'registries', 'one.json'),
         SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: path.join(root, 'registries', 'one.json'),
@@ -89,6 +93,7 @@ test('rejects duplicate or unowned runtime registry paths', () => {
     () =>
       requiredRuntimePaths({
         SERVICE_LASSO_WORKSPACE_ROOT: root,
+        SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT: path.dirname(root),
         SERVICE_LASSO_TEST_REGISTRIES_ROOT: path.join(root, 'registries'),
         SERVICE_LASSO_INSTANCE_REGISTRY_PATH: path.join(root, 'registries', 'one.json'),
         SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: path.join(
@@ -98,4 +103,30 @@ test('rejects duplicate or unowned runtime registry paths', () => {
       }),
     /separate registries root/
   )
+})
+
+test('refuses reused, linked, or nonliteral external qualification paths', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'service-admin-custody-layout-'))
+  try {
+    const external = path.join(root, 'external')
+    const environment = {
+      SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT: external,
+      SERVICE_LASSO_WORKSPACE_ROOT: path.join(external, 'workspace'),
+      SERVICE_LASSO_TEST_REGISTRIES_ROOT: path.join(external, 'registries'),
+      SERVICE_LASSO_INSTANCE_REGISTRY_PATH: path.join(external, 'registries', 'instances.json'),
+      SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: path.join(external, 'registries', 'host-ports.json'),
+      SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH: path.join(root, 'initial.json'),
+      SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH: path.join(root, 'closed.json'),
+    }
+    await initializeQualificationCustody({ environment })
+    await assert.rejects(() => initializeQualificationCustody({ environment }), /absent/)
+    await assert.rejects(
+      () => initializeQualificationCustody({
+        environment: { ...environment, SERVICE_LASSO_QUALIFICATION_EXTERNAL_ROOT: path.join(root, 'other') },
+      }),
+      /literal external/
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
