@@ -24,7 +24,7 @@ import {
   parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
   parseRotationRehydrationDiagnostic,
-  parseTrustedUnlockReceiptDiagnostic,
+  parseTrustedUnlockDiagnosticLine,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
 
@@ -528,7 +528,7 @@ const cypressRunSummaryEvents = []
 const providerUiConvergenceEvents = []
 const rotationRehydrationEvents = []
 const lockedWrapperUiEvents = []
-const trustedUnlockReceipts = []
+const trustedUnlockDiagnostics = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -582,7 +582,7 @@ try {
     providerUiConvergenceEvents,
     rotationRehydrationEvents,
     lockedWrapperUiEvents,
-    trustedUnlockReceipts
+    trustedUnlockDiagnostics
   )
   captureCypressRunSummary(cypress, cypressRunSummaryEvents)
   captureCypressChildProvenance(cypress, cypressChildEvents)
@@ -654,7 +654,7 @@ try {
           cypressRunSummary: cypressRunSummaryEvents.at(-1),
           providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
           lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
-          trustedUnlockReceipt: trustedUnlockReceipts.at(-1),
+          trustedUnlockDiagnostic: trustedUnlockDiagnostics.at(-1),
           rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
           transportDiagnostic: buildTransportDiagnostic(
             rotationProxyLifecycleEvents,
@@ -720,9 +720,9 @@ function captureQualificationProgress(
       if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
         lockedWrapperUiTarget.push(lockedWrapperUiEvent)
       }
-      const trustedUnlockReceipt = parseTrustedUnlockReceiptDiagnostic(line)
-      if (trustedUnlockReceipt && trustedUnlockTarget.length < 1) {
-        trustedUnlockTarget.push(trustedUnlockReceipt)
+      const trustedUnlockDiagnostic = parseTrustedUnlockDiagnosticLine(line)
+      if (trustedUnlockDiagnostic && trustedUnlockTarget.length < 1) {
+        trustedUnlockTarget.push(trustedUnlockDiagnostic)
       }
     }
   })

@@ -1,6 +1,7 @@
 // Test-only closed observation; never retain network or DOM objects.
 const receiptSchema = 'service-admin.trusted-unlock-receipt.v1'
-const causalSchema = 'service-admin.trusted-identity-causal.v1'
+const causalSchema = 'service-admin.trusted-identity-causal.v2'
+const diagnosticSchema = 'service-admin.trusted-unlock-diagnostic.v2'
 const receiptKeys = Object.freeze([
   'schema',
   'status',
@@ -10,6 +11,31 @@ const receiptKeys = Object.freeze([
   'loading',
   'unavailable',
 ])
+const causalKeys = Object.freeze([
+  'schema',
+  'sequence',
+  'request',
+  'contract',
+  'query',
+  'render',
+])
+const diagnosticKeys = Object.freeze(['schema', 'receipt', 'causal'])
+
+function hasExactKeys(value, keys) {
+  try {
+    return Object.keys(value).sort().join(',') === keys.slice().sort().join(',')
+  } catch {
+    return false
+  }
+}
+
+function ownValue(value, key) {
+  try {
+    return Object.getOwnPropertyDescriptor(value, key)?.value
+  } catch {
+    return undefined
+  }
+}
 
 function ownBoolean(value, key) {
   try {
@@ -37,17 +63,14 @@ export function createTrustedUnlockReceipt(markers) {
 }
 
 export function createTrustedIdentityCausalReceipt(value) {
-  const own = (key) => {
-    try { return Object.getOwnPropertyDescriptor(value, key)?.value } catch { return undefined }
-  }
-  const sequence = own('sequence')
-  const request = own('request')
-  const contract = own('contract')
-  const query = own('query')
-  const render = own('render')
+  const sequence = ownValue(value, 'sequence')
+  const request = ownValue(value, 'request')
+  const contract = ownValue(value, 'contract')
+  const query = ownValue(value, 'query')
+  const render = ownValue(value, 'render')
   if (
     !Number.isInteger(sequence) || sequence < 0 || sequence > 999 ||
-    !['unobserved', 'started', 'response_delivered'].includes(request) ||
+    !['unobserved', 'started', 'response_delivered', 'transport_failed'].includes(request) ||
     !['unobserved', 'parsed', 'rejected'].includes(contract) ||
     !['unobserved', 'pending', 'settled', 'failed'].includes(query) ||
     !['unobserved', 'loading', 'unavailable', 'unlocked', 'login'].includes(render)
@@ -55,9 +78,17 @@ export function createTrustedIdentityCausalReceipt(value) {
   return { schema: causalSchema, sequence, request, contract, query, render }
 }
 
+export function parseTrustedIdentityCausalReceipt(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  if (!hasExactKeys(value, causalKeys) || ownValue(value, 'schema') !== causalSchema) {
+    return null
+  }
+  return createTrustedIdentityCausalReceipt(value)
+}
+
 export function parseTrustedUnlockReceipt(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  if (Object.keys(value).sort().join(',') !== receiptKeys.slice().sort().join(',')) {
+  if (!hasExactKeys(value, receiptKeys)) {
     return null
   }
   if (
@@ -79,6 +110,21 @@ export function parseTrustedUnlockReceipt(value) {
     loading: value.loading,
     unavailable: value.unavailable,
   }
+}
+
+export function createTrustedUnlockDiagnostic(receipt, causal) {
+  const safeReceipt = parseTrustedUnlockReceipt(receipt)
+  const safeCausal = parseTrustedIdentityCausalReceipt(causal)
+  if (!safeReceipt || !safeCausal) return null
+  return { schema: diagnosticSchema, receipt: safeReceipt, causal: safeCausal }
+}
+
+export function parseTrustedUnlockDiagnostic(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  if (!hasExactKeys(value, diagnosticKeys) || ownValue(value, 'schema') !== diagnosticSchema) {
+    return null
+  }
+  return createTrustedUnlockDiagnostic(ownValue(value, 'receipt'), ownValue(value, 'causal'))
 }
 
 export function createTrustedUnlockObservation() {
@@ -107,7 +153,10 @@ export function createTrustedUnlockObservation() {
       requestState = 'responded'
       httpStatus = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null
     },
-    causalSnapshot(value) { causal = createTrustedIdentityCausalReceipt(value) },
+    causalSnapshot(value) {
+      const next = createTrustedIdentityCausalReceipt(value)
+      if (next) causal = next
+    },
     snapshot(markers) {
       const boolean = (key) => {
         try {

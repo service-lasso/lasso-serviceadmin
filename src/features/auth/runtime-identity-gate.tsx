@@ -78,6 +78,14 @@ export function RuntimeIdentityGate({
     })
   }, [identity, unlocked, setUser])
 
+  useEffect(() => {
+    if (identityQuery.isSuccess) {
+      observeRuntimeIdentityCausalPhase('query_settled')
+    } else if (identityQuery.isError) {
+      observeRuntimeIdentityCausalPhase('query_failed')
+    }
+  }, [identityQuery.isError, identityQuery.isSuccess])
+
   if (identityQuery.isLoading) {
     observeRuntimeIdentityCausalPhase('render_loading')
     return (

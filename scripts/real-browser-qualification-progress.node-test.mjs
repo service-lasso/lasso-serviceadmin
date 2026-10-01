@@ -3,50 +3,61 @@ import test from 'node:test'
 import {
   buildQualificationFailureDiagnostic,
   createCypressRunSummaryRecorder,
-  createTrustedUnlockReceiptRecorder,
+  createTrustedUnlockDiagnosticRecorder,
   parseCypressRunSummaryDiagnostic,
-  parseTrustedUnlockReceiptDiagnostic,
+  parseTrustedUnlockDiagnosticLine,
 } from './real-browser-qualification-progress.mjs'
 
-test('records one afterEach-delivered trusted-unlock receipt only for an actual Cypress failure', () => {
+test('records one closed causal diagnostic only for an actual Cypress failure', () => {
   const records = []
-  const recorder = createTrustedUnlockReceiptRecorder({
+  const recorder = createTrustedUnlockDiagnosticRecorder({
     enabled: true,
     write: (line) => records.push(line.trim()),
   })
   recorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
-  const receipt = {
-    schema: 'service-admin.trusted-unlock-receipt.v1',
-    status: 'observed',
-    present: true,
-    verified: false,
-    localRoot: false,
-    loading: true,
-    unavailable: false,
+  const diagnostic = {
+    schema: 'service-admin.trusted-unlock-diagnostic.v2',
+    receipt: {
+      schema: 'service-admin.trusted-unlock-receipt.v1',
+      status: 'observed',
+      present: true,
+      verified: false,
+      localRoot: false,
+      loading: true,
+      unavailable: false,
+    },
+    causal: {
+      schema: 'service-admin.trusted-identity-causal.v2',
+      sequence: 1,
+      request: 'response_delivered',
+      contract: 'parsed',
+      query: 'settled',
+      render: 'unlocked',
+    },
   }
-  assert.deepEqual(recorder.retain(receipt), receipt)
-  assert.equal(recorder.retain(receipt), null)
+  assert.deepEqual(recorder.retain(diagnostic), diagnostic)
+  assert.equal(recorder.retain(diagnostic), null)
   const result = { tests: [{ state: 'failed' }] }
-  assert.deepEqual(recorder.record(result), receipt)
+  assert.deepEqual(recorder.record(result), diagnostic)
   assert.equal(recorder.record(result), null)
-  assert.deepEqual(records.map(parseTrustedUnlockReceiptDiagnostic), [receipt])
+  assert.deepEqual(records.map(parseTrustedUnlockDiagnosticLine), [diagnostic])
   assert.deepEqual(
     buildQualificationFailureDiagnostic({
       failure: 'nonzero_exit',
-      trustedUnlockReceipt: receipt,
+      trustedUnlockDiagnostic: diagnostic,
     }).trustedUnlock,
-    receipt
+    diagnostic
   )
   assert.equal(JSON.stringify(records).includes('original failure'), false)
   assert.equal(
-    parseTrustedUnlockReceiptDiagnostic(
-      JSON.stringify({ ...receipt, private: 'PRIVATE' })
+    parseTrustedUnlockDiagnosticLine(
+      JSON.stringify({ ...diagnostic, private: 'PRIVATE' })
     ),
     null
   )
-  const successRecorder = createTrustedUnlockReceiptRecorder({ enabled: true })
+  const successRecorder = createTrustedUnlockDiagnosticRecorder({ enabled: true })
   successRecorder.setSpecPath('/private/cypress/e2e/secrets-broker/real-lifecycle.cy.js')
-  successRecorder.retain(receipt)
+  successRecorder.retain(diagnostic)
   assert.equal(successRecorder.record({ tests: [{ state: 'passed' }] }), null)
 })
 

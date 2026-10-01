@@ -1,5 +1,5 @@
 import { providerReadinessDiagnosticMaxAttempts } from './real-browser-qualification-budget.mjs'
-import { parseTrustedUnlockReceipt } from './trusted-unlock-diagnostic.mjs'
+import { parseTrustedUnlockDiagnostic } from './trusted-unlock-diagnostic.mjs'
 
 const progressSchema = 'service-admin.real-browser-progress.v1'
 const failureSchema = 'service-admin.real-browser-qualification-diagnostic.v1'
@@ -8,7 +8,7 @@ const cypressRunSummarySchema = 'service-admin.cypress-run-summary.v1'
 const rotationRehydrationSchema =
   'service-admin.rotation-rehydration-response.v1'
 const lockedWrapperUiSchema = 'service-admin.locked-wrapper-ui.v1'
-const trustedUnlockSchema = 'service-admin.trusted-unlock-receipt.v1'
+const trustedUnlockDiagnosticSchema = 'service-admin.trusted-unlock-diagnostic.v2'
 const cypressChildErrorCodes = new Set([
   'EACCES',
   'EAGAIN',
@@ -291,25 +291,25 @@ export function createCypressRunSummaryRecorder({
   }
 }
 
-export function parseTrustedUnlockReceiptDiagnostic(line) {
-  if (typeof line !== 'string' || line.length > 256) return null
+export function parseTrustedUnlockDiagnosticLine(line) {
+  if (typeof line !== 'string' || line.length > 512) return null
   let value
   try {
     value = JSON.parse(line)
   } catch {
     return null
   }
-  if (value?.schema !== trustedUnlockSchema) return null
-  return parseTrustedUnlockReceipt(value)
+  if (value?.schema !== trustedUnlockDiagnosticSchema) return null
+  return parseTrustedUnlockDiagnostic(value)
 }
 
-export function createTrustedUnlockReceiptRecorder({
+export function createTrustedUnlockDiagnosticRecorder({
   enabled = false,
   write = () => undefined,
 } = {}) {
   let active = false
   let emitted = false
-  let retainedReceipt = null
+  let retainedDiagnostic = null
   return {
     setSpecPath(specPath) {
       active =
@@ -318,26 +318,26 @@ export function createTrustedUnlockReceiptRecorder({
           typeof specPath === 'string' ? specPath : ''
         )
       emitted = false
-      retainedReceipt = null
+      retainedDiagnostic = null
     },
-    retain(receipt) {
-      if (!active || retainedReceipt) return null
-      retainedReceipt = parseTrustedUnlockReceipt(receipt)
-      return retainedReceipt
+    retain(diagnostic) {
+      if (!active || retainedDiagnostic) return null
+      retainedDiagnostic = parseTrustedUnlockDiagnostic(diagnostic)
+      return retainedDiagnostic
     },
     record(results) {
       if (!active || emitted) return null
       const failed = Array.isArray(results?.tests) &&
         results.tests.some((test) => test?.state === 'failed')
-      const receipt = failed ? retainedReceipt : null
-      if (!receipt) return null
+      const diagnostic = failed ? retainedDiagnostic : null
+      if (!diagnostic) return null
       emitted = true
       try {
-        write(`${JSON.stringify(receipt)}\n`)
+        write(`${JSON.stringify(diagnostic)}\n`)
       } catch {
         // Node diagnostic output cannot replace Cypress's original result.
       }
-      return receipt
+      return diagnostic
     },
   }
 }
@@ -473,7 +473,7 @@ export function buildQualificationFailureDiagnostic({
   providerUiDiagnostic,
   rotationRehydrationDiagnostic,
   lockedWrapperUiDiagnostic,
-  trustedUnlockReceipt,
+  trustedUnlockDiagnostic,
   transportDiagnostic,
 }) {
   if (!['timeout', 'nonzero_exit'].includes(failure)) {
@@ -555,8 +555,8 @@ export function buildQualificationFailureDiagnostic({
     rotationRehydration: safeRotationRehydration,
     providerUi: safeProviderUiDiagnostic,
     lockedWrapperUi: safeLockedWrapperUiDiagnostic,
-    trustedUnlock: parseTrustedUnlockReceiptDiagnostic(
-      JSON.stringify(trustedUnlockReceipt)
+    trustedUnlock: parseTrustedUnlockDiagnosticLine(
+      JSON.stringify(trustedUnlockDiagnostic)
     ),
   }
 }

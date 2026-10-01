@@ -1,14 +1,17 @@
 import {
+  createTrustedUnlockDiagnostic,
   createTrustedUnlockObservation,
   observeTrustedUnlockFailure,
 } from '../../scripts/trusted-unlock-diagnostic.mjs'
 
-let retainedTrustedUnlockReceipt = null
+let retainedTrustedUnlockDiagnostic = null
 
 export function flushTrustedUnlockReceipt() {
-  const receipt = retainedTrustedUnlockReceipt
-  retainedTrustedUnlockReceipt = null
-  return receipt ? cy.task('trustedUnlockReceipt', receipt, { log: false }) : undefined
+  const diagnostic = retainedTrustedUnlockDiagnostic
+  retainedTrustedUnlockDiagnostic = null
+  return diagnostic
+    ? cy.task('trustedUnlockDiagnostic', diagnostic, { log: false })
+    : undefined
 }
 
 export function unlockTrustedIdentity(
@@ -65,7 +68,10 @@ export function unlockTrustedIdentity(
         unavailableMarkerPresent: text.includes('Trusted identity unavailable'),
       }
     }, retainFailureReceipt ? readReceiptMarkers : undefined, (receipt) => {
-      retainedTrustedUnlockReceipt = receipt
+      retainedTrustedUnlockDiagnostic = createTrustedUnlockDiagnostic(
+        receipt,
+        observation.snapshot({}).causal
+      )
     })
   })
   cy.window({ log: false }).then((browserWindow) => {

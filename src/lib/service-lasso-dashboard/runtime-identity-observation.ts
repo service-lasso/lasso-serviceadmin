@@ -5,6 +5,7 @@
 export type RuntimeIdentityCausalPhase =
   | 'request_started'
   | 'response_delivered'
+  | 'transport_failed'
   | 'contract_parsed'
   | 'contract_rejected'
   | 'query_settled'
@@ -16,7 +17,7 @@ export type RuntimeIdentityCausalPhase =
 
 type RuntimeIdentityCausalSnapshot = {
   sequence: number
-  request: 'unobserved' | 'started' | 'response_delivered'
+  request: 'unobserved' | 'started' | 'response_delivered' | 'transport_failed'
   contract: 'unobserved' | 'parsed' | 'rejected'
   query: 'unobserved' | 'pending' | 'settled' | 'failed'
   render: 'unobserved' | 'loading' | 'unavailable' | 'unlocked' | 'login'
@@ -52,6 +53,8 @@ export function observeRuntimeIdentityCausalPhase(
     next.render = 'unobserved'
   } else if (phase === 'response_delivered') {
     next.request = 'response_delivered'
+  } else if (phase === 'transport_failed') {
+    next.request = 'transport_failed'
   } else if (phase === 'contract_parsed') {
     next.contract = 'parsed'
   } else if (phase === 'contract_rejected') {

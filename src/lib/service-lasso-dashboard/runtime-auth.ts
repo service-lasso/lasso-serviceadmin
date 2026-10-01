@@ -250,18 +250,22 @@ export async function fetchRuntimeIdentity(): Promise<RuntimeIdentity> {
     return fixtureRuntimeIdentity
   }
   observeRuntimeIdentityCausalPhase('request_started')
+  let payload: RuntimeAuthPayload
   try {
-    const payload = await fetchRuntimeJson<RuntimeAuthPayload>(
+    payload = await fetchRuntimeJson<RuntimeAuthPayload>(
       '/api/runtime/security'
     )
     observeRuntimeIdentityCausalPhase('response_delivered')
+  } catch (error) {
+    observeRuntimeIdentityCausalPhase('transport_failed')
+    throw error
+  }
+  try {
     const identity = normalizeRuntimeIdentity(payload)
     observeRuntimeIdentityCausalPhase('contract_parsed')
-    observeRuntimeIdentityCausalPhase('query_settled')
     return identity
   } catch (error) {
     observeRuntimeIdentityCausalPhase('contract_rejected')
-    observeRuntimeIdentityCausalPhase('query_failed')
     throw error
   }
 }

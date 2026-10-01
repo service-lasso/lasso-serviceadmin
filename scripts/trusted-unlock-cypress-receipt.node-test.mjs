@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildQualificationFailureDiagnostic,
-  parseTrustedUnlockReceiptDiagnostic,
+  parseTrustedUnlockDiagnosticLine,
 } from './real-browser-qualification-progress.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -77,23 +77,34 @@ test('actual Cypress failure reaches the closed Node qualification receipt sink'
     assert.notEqual(exitCode, 0)
     const receipts = output
       .split(/\r?\n/)
-      .map(parseTrustedUnlockReceiptDiagnostic)
+      .map(parseTrustedUnlockDiagnosticLine)
       .filter(Boolean)
     assert.deepEqual(receipts, [
       {
-        schema: 'service-admin.trusted-unlock-receipt.v1',
-        status: 'observed',
-        present: true,
-        verified: false,
-        localRoot: false,
-        loading: true,
-        unavailable: false,
+        schema: 'service-admin.trusted-unlock-diagnostic.v2',
+        receipt: {
+          schema: 'service-admin.trusted-unlock-receipt.v1',
+          status: 'observed',
+          present: true,
+          verified: false,
+          localRoot: false,
+          loading: true,
+          unavailable: false,
+        },
+        causal: {
+          schema: 'service-admin.trusted-identity-causal.v2',
+          sequence: 1,
+          request: 'response_delivered',
+          contract: 'parsed',
+          query: 'settled',
+          render: 'unlocked',
+        },
       },
     ])
     assert.deepEqual(
       buildQualificationFailureDiagnostic({
         failure: 'nonzero_exit',
-        trustedUnlockReceipt: receipts[0],
+        trustedUnlockDiagnostic: receipts[0],
       }).trustedUnlock,
       receipts[0]
     )
