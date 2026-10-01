@@ -347,6 +347,27 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url),
     'utf8'
   )
+  for (const name of [
+    'SERVICE_LASSO_WORKSPACE_ROOT',
+    'SERVICE_LASSO_INSTANCE_REGISTRY_PATH',
+    'SERVICE_LASSO_HOST_PORT_REGISTRY_PATH',
+  ]) {
+    assert.equal(browserWorkflowSource.includes(name), true)
+  }
+  assert.ok(
+    browserWorkflowSource.indexOf(
+      'Initialize private native qualification custody'
+    ) < browserWorkflowSource.indexOf('Build Secrets Broker')
+  )
+  assert.equal(
+    verifierSource.includes("outcome: 'controlled_failure_observed'"),
+    true
+  )
+  assert.equal(
+    verifierSource.includes('provider_validation_transport_failure'),
+    true
+  )
+  assert.equal(verifierSource.includes("cypress.kill('SIGKILL')"), false)
   const stoppedLifecycleVerifierSource = await readFile(
     new URL(
       '../scripts/verify-real-broker-stopped-lifecycle-browser.mjs',

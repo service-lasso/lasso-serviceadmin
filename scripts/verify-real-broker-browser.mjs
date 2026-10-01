@@ -27,6 +27,12 @@ import {
   parseTrustedUnlockDiagnosticLine,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
+import {
+  readQualificationCustody,
+  requiredRuntimePaths,
+  sha256File,
+  writeQualificationCustody,
+} from './qualification-custody.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
@@ -56,6 +62,10 @@ const qualificationMode = ['first-run', 'lockout', 'stopped-lifecycle'].includes
   : 'comprehensive'
 const trustedUnlockRealProviderControl =
   process.env.SERVICE_LASSO_TRUSTED_UNLOCK_REAL_PROVIDER_CONTROL === '1'
+const custodyReceiptPath = requiredPath(
+  'SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH'
+)
+requiredRuntimePaths()
 const adminRoot = path.resolve(
   process.env.SERVICE_LASSO_TEST_ADMIN_ROOT ??
     path.join(root, 'output', 'package', `@serviceadmin-${platform}`)
@@ -123,21 +133,6 @@ async function readBoundedRegularFile(
     throw new Error(`${label} changed outside its bound while being read.`)
   }
   return bytes
-}
-
-function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null) return Promise.resolve(child.exitCode)
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.off('exit', onExit)
-      reject(new Error('Child process exit timed out.'))
-    }, timeoutMs)
-    const onExit = (code) => {
-      clearTimeout(timer)
-      resolve(code)
-    }
-    child.once('exit', onExit)
-  })
 }
 
 function waitForReady(runner, timeoutMs = 240_000) {
@@ -474,6 +469,29 @@ await requireFile(runnerPath, 'Core browser runner')
 await requireFile(path.join(adminRoot, 'runtime', 'server.js'), 'Admin runtime')
 await requireFile(path.join(adminRoot, 'dist', 'index.html'), 'Admin UI entrypoint')
 await requireFile(specPath, 'Cypress lifecycle spec')
+const initialCustody = await readQualificationCustody(custodyReceiptPath)
+const custodyOwners = []
+function retainOwnedProcess(role, child) {
+  const owner = {
+    role,
+    parent: 'verifier',
+    pid: Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null,
+    birth: 'observed',
+    close: 'pending',
+    exitCode: 'unavailable',
+    signal: 'unavailable',
+  }
+  custodyOwners.push(owner)
+  child.once('close', (exitCode, signal) => {
+    owner.close = 'observed'
+    owner.exitCode = Number.isInteger(exitCode) && exitCode >= 0 ? exitCode : null
+    owner.signal =
+      signal === null || ['SIGINT', 'SIGTERM', 'SIGKILL'].includes(signal)
+        ? signal
+        : 'other'
+  })
+  return owner
+}
 
 const runner = spawn(process.execPath, [runnerPath], {
   cwd: coreRoot,
@@ -485,6 +503,7 @@ const runner = spawn(process.execPath, [runnerPath], {
   },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
+retainOwnedProcess('core_runner', runner)
 const rotationProxyLifecycleEvents = []
 let stderrBytes = 0
 let stderrBuffer = ''
@@ -582,6 +601,7 @@ try {
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
+  retainOwnedProcess('cypress', cypress)
   cypressOutput = captureBoundedChildOutput(cypress)
   captureQualificationProgress(
     cypress,
@@ -629,8 +649,7 @@ try {
   runFailure = error
 } finally {
   if (cypress?.exitCode === null) {
-    cypress.kill('SIGKILL')
-    await waitForExit(cypress, 10_000).catch(() => undefined)
+    runFailure = new Error('Cypress did not close at its qualification deadline.')
   }
   if (cypressOutput && !cypressOutputChecked) {
     try {
@@ -679,42 +698,65 @@ try {
   if (runner.exitCode === null) {
     runner.send({ type: 'service-lasso-real-admin-shutdown' })
     try {
-      await waitForExit(runner, 180_000)
+      await waitForCapturedChildClose(runner, 180_000)
     } catch {
-      runner.kill('SIGKILL')
-      await waitForExit(runner, 10_000).catch(() => undefined)
+      runFailure = new Error('Owned Core browser runner did not close after shutdown.')
     }
   }
   if (ready?.tempRoot) await waitForRemoved(path.resolve(ready.tempRoot))
 }
 
+const sourceHashes = {
+  brokerBinary: await sha256File(brokerBinary),
+  coreRunner: await sha256File(runnerPath),
+  adminRuntime: await sha256File(path.join(adminRoot, 'runtime', 'server.js')),
+}
+const controlledReceipt = finalQualificationFailureDiagnostic?.trustedUnlock
+const controlledCausal = controlledReceipt?.causal
+const controlledObserved =
+  finalQualificationFailureDiagnostic?.lastPhase === 'provider_validation_complete' &&
+  controlledReceipt?.receipt?.schema === 'service-admin.trusted-unlock-receipt.v1' &&
+  controlledReceipt.receipt.status === 'observed' &&
+  controlledReceipt.receipt.present === true &&
+  controlledReceipt.receipt.verified === false &&
+  controlledReceipt.receipt.localRoot === false &&
+  controlledReceipt.receipt.loading === false &&
+  controlledReceipt.receipt.unavailable === true &&
+  controlledCausal?.schema === 'service-admin.trusted-identity-causal.v2' &&
+  Number.isInteger(controlledCausal.sequence) &&
+  controlledCausal.sequence >= 1 &&
+  controlledCausal.request === 'transport_failed' &&
+  controlledCausal.contract === 'unobserved' &&
+  controlledCausal.query === 'failed' &&
+  controlledCausal.render === 'unavailable' &&
+  finalQualificationFailureDiagnostic?.cypressRunSummary?.state === 'complete' &&
+  finalQualificationFailureDiagnostic.cypressRunSummary.totalFailed === 1 &&
+  finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
+  custodyOwners.length === 2 &&
+  custodyOwners.every((owner) => owner.birth === 'observed' && owner.close === 'observed')
+await writeQualificationCustody(custodyReceiptPath, {
+  schema: initialCustody.schema,
+  state: 'closed',
+  mode: trustedUnlockRealProviderControl ? 'controlled_negative' : 'positive',
+  outcome: trustedUnlockRealProviderControl
+    ? controlledObserved
+      ? 'controlled_failure_observed'
+      : 'controlled_failure_unverified'
+    : cypressSucceeded
+      ? 'positive_verified'
+      : 'positive_unverified',
+  causal: trustedUnlockRealProviderControl
+    ? controlledObserved
+      ? 'provider_validation_transport_failure'
+      : 'unverified'
+    : 'not_applicable',
+  runtimePathHashes: initialCustody.runtimePathHashes,
+  sourceHashes,
+  owners: custodyOwners,
+})
+
 if (trustedUnlockRealProviderControl) {
-  const receipt = finalQualificationFailureDiagnostic?.trustedUnlock
-  const causal = receipt?.causal
-  const result = finalQualificationFailureDiagnostic?.cypressRunSummary
-  const actualProviderValidation =
-    finalQualificationFailureDiagnostic?.lastPhase ===
-    'provider_validation_complete'
-  const actualQueryLifecycle =
-    receipt?.receipt?.schema === 'service-admin.trusted-unlock-receipt.v1' &&
-    receipt.receipt.status === 'observed' &&
-    receipt.receipt.present === true &&
-    receipt.receipt.verified === false &&
-    receipt.receipt.localRoot === false &&
-    receipt.receipt.loading === false &&
-    receipt.receipt.unavailable === true &&
-    causal?.schema === 'service-admin.trusted-identity-causal.v2' &&
-    Number.isInteger(causal.sequence) &&
-    causal.sequence >= 1 &&
-    causal.request === 'transport_failed' &&
-    causal.contract === 'unobserved' &&
-    causal.query === 'failed' &&
-    causal.render === 'unavailable'
-  const actualCypressFailure =
-    result?.state === 'complete' &&
-    result.totalFailed === 1 &&
-    finalQualificationFailureDiagnostic?.failure === 'nonzero_exit'
-  if (!actualProviderValidation || !actualQueryLifecycle || !actualCypressFailure) {
+  if (!controlledObserved) {
     throw new Error(
       'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
     )
@@ -801,20 +843,27 @@ function captureCypressRunSummary(child, target) {
   })
 }
 
-const brokerSha256 = createHash('sha256')
-  .update(await readFile(brokerBinary))
-  .digest('hex')
 process.stdout.write(
-  `${JSON.stringify({
-    schema: 'service-lasso.real-secrets-browser-result.v1',
-    qualificationMode,
-    outcome: 'verified',
-    platform,
-    coreRevision: process.env.SERVICE_LASSO_TEST_CORE_REVISION ?? 'local',
-    brokerRevision: process.env.SERVICE_LASSO_TEST_BROKER_REVISION ?? 'local',
-    brokerSha256,
-    adminArtifact: path.basename(adminRoot),
-    auditEventCount,
-    rollbackProcessVerified,
-  })}\n`
+  `${JSON.stringify(
+    trustedUnlockRealProviderControl
+      ? {
+          schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
+          qualificationMode,
+          outcome: 'controlled_failure_observed',
+          platform,
+          causalReceipt: 'closed_native_custody',
+        }
+      : {
+          schema: 'service-lasso.real-secrets-browser-result.v1',
+          qualificationMode,
+          outcome: 'verified',
+          platform,
+          coreRevision: process.env.SERVICE_LASSO_TEST_CORE_REVISION ?? 'local',
+          brokerRevision: process.env.SERVICE_LASSO_TEST_BROKER_REVISION ?? 'local',
+          brokerSha256: sourceHashes.brokerBinary,
+          adminArtifact: path.basename(adminRoot),
+          auditEventCount,
+          rollbackProcessVerified,
+        }
+  )}\n`
 )
