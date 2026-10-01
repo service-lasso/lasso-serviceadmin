@@ -44,7 +44,15 @@ export async function initializeQualificationCustody({
   receiptPath = environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH,
 } = {}) {
   const runtimePaths = requiredRuntimePaths(environment)
-  if (!receiptPath || !path.isAbsolute(receiptPath)) {
+  const initialReceiptPath =
+    environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH ??
+    receiptPath
+  if (
+    !receiptPath ||
+    !path.isAbsolute(receiptPath) ||
+    !initialReceiptPath ||
+    !path.isAbsolute(initialReceiptPath)
+  ) {
     throw new Error('SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH is required.')
   }
   await mkdir(runtimePaths.SERVICE_LASSO_WORKSPACE_ROOT, { recursive: true })
@@ -53,15 +61,18 @@ export async function initializeQualificationCustody({
       runtimePaths.SERVICE_LASSO_INSTANCE_REGISTRY_PATH,
       runtimePaths.SERVICE_LASSO_HOST_PORT_REGISTRY_PATH,
       receiptPath,
+      initialReceiptPath,
     ].map((target) => mkdir(path.dirname(target), { recursive: true }))
   )
   const receipt = {
     schema,
     state: 'initialized',
+    // This is a hash-only receipt.  The raw paths remain in the runner
+    // environment and never enter an artifact.
     runtimePathHashes: pathNames.map((name) => sha256(runtimePaths[name])),
     owners: [],
   }
-  await writeFile(receiptPath, `${JSON.stringify(receipt)}\n`, {
+  await writeFile(initialReceiptPath, `${JSON.stringify(receipt)}\n`, {
     encoding: 'utf8',
     mode: 0o600,
   })
@@ -84,6 +95,10 @@ export async function readQualificationCustody(receiptPath) {
     throw new Error('Qualification custody initial receipt was invalid.')
   }
   return value
+}
+
+export async function sha256Receipt(receiptPath) {
+  return createHash('sha256').update(await readFile(receiptPath)).digest('hex')
 }
 
 export async function writeQualificationCustody(receiptPath, receipt) {

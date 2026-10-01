@@ -31,6 +31,7 @@ import {
   readQualificationCustody,
   requiredRuntimePaths,
   sha256File,
+  sha256Receipt,
   writeQualificationCustody,
 } from './qualification-custody.mjs'
 
@@ -64,6 +65,12 @@ const trustedUnlockRealProviderControl =
   process.env.SERVICE_LASSO_TRUSTED_UNLOCK_REAL_PROVIDER_CONTROL === '1'
 const custodyReceiptPath = requiredPath(
   'SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH'
+)
+const initialCustodyReceiptPath = requiredPath(
+  'SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH'
+)
+const ownedProcessEventsPath = requiredPath(
+  'SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH'
 )
 requiredRuntimePaths()
 const adminRoot = path.resolve(
@@ -438,7 +445,6 @@ function captureBoundedChildOutput(child, maxBytes = 4 * 1024 * 1024) {
     capture.bytes += chunk.length
     if (capture.bytes > maxBytes) {
       capture.exceeded = true
-      child.kill('SIGKILL')
       return
     }
     capture[target].push(Buffer.from(chunk))
@@ -469,14 +475,24 @@ await requireFile(runnerPath, 'Core browser runner')
 await requireFile(path.join(adminRoot, 'runtime', 'server.js'), 'Admin runtime')
 await requireFile(path.join(adminRoot, 'dist', 'index.html'), 'Admin UI entrypoint')
 await requireFile(specPath, 'Cypress lifecycle spec')
-const initialCustody = await readQualificationCustody(custodyReceiptPath)
+const initialCustody = await readQualificationCustody(initialCustodyReceiptPath)
+const initialCustodyHash = await sha256Receipt(initialCustodyReceiptPath)
 const custodyOwners = []
-function retainOwnedProcess(role, child) {
+function retainOwnedProcess(role, child, sourceSha256) {
+  const pid = Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null
+  let born = false
+  if (pid !== null) {
+    try {
+      process.kill(pid, 0)
+      born = true
+    } catch {}
+  }
   const owner = {
     role,
     parent: 'verifier',
-    pid: Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null,
-    birth: 'observed',
+    pid,
+    sourceSha256,
+    birth: born ? 'observed' : 'unverified',
     close: 'pending',
     exitCode: 'unavailable',
     signal: 'unavailable',
@@ -493,6 +509,61 @@ function retainOwnedProcess(role, child) {
   return owner
 }
 
+async function readOwnedProcessCustody(eventPath) {
+  let bytes
+  try {
+    bytes = await readFile(eventPath)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw error
+  }
+  if (bytes.length === 0 || bytes.length > 64 * 1024) return []
+  const records = []
+  for (const line of bytes.toString('utf8').split(/\r?\n/).filter(Boolean)) {
+    let record
+    try {
+      record = JSON.parse(line)
+    } catch {
+      return []
+    }
+    if (
+      !record ||
+      typeof record !== 'object' ||
+      Array.isArray(record) ||
+      !['broker_binary', 'admin_runtime'].includes(record.role) ||
+      !/^[a-f0-9]{64}$/.test(record.sourceSha256) ||
+      !['birth', 'close'].includes(record.event) ||
+      Object.keys(record).sort().join(',') !==
+        (record.event === 'birth'
+          ? 'birth,event,role,sourceSha256'
+          : 'event,exitCode,role,signal,sourceSha256')
+    ) {
+      return []
+    }
+    if (
+      (record.event === 'birth' && !['observed', 'unverified'].includes(record.birth)) ||
+      (record.event === 'close' &&
+        (!Number.isInteger(record.exitCode) || record.exitCode < 0 || record.signal !== null))
+    ) {
+      return []
+    }
+    records.push(record)
+  }
+  return records
+}
+
+const ownedSourceHashes = {
+  brokerBinary: await sha256File(brokerBinary),
+  coreRunner: await sha256File(runnerPath),
+  adminRuntime: await sha256File(path.join(adminRoot, 'runtime', 'server.js')),
+  cypressLauncher: await sha256File(cypressBin),
+}
+const ownedProcessObserver = path.join(
+  root,
+  'scripts',
+  'qualification-owned-process-observer.cjs'
+)
+
 const runner = spawn(process.execPath, [runnerPath], {
   cwd: coreRoot,
   env: {
@@ -500,10 +571,14 @@ const runner = spawn(process.execPath, [runnerPath], {
     SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
     SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
     SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
+    SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH: ownedProcessEventsPath,
+    SERVICE_LASSO_QUALIFICATION_BROKER_SHA256: ownedSourceHashes.brokerBinary,
+    SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_SHA256: ownedSourceHashes.adminRuntime,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${ownedProcessObserver}`.trim(),
   },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
-retainOwnedProcess('core_runner', runner)
+retainOwnedProcess('core_runner', runner, ownedSourceHashes.coreRunner)
 const rotationProxyLifecycleEvents = []
 let stderrBytes = 0
 let stderrBuffer = ''
@@ -601,7 +676,7 @@ try {
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
-  retainOwnedProcess('cypress', cypress)
+  retainOwnedProcess('cypress', cypress, ownedSourceHashes.cypressLauncher)
   cypressOutput = captureBoundedChildOutput(cypress)
   captureQualificationProgress(
     cypress,
@@ -703,14 +778,49 @@ try {
       runFailure = new Error('Owned Core browser runner did not close after shutdown.')
     }
   }
-  if (ready?.tempRoot) await waitForRemoved(path.resolve(ready.tempRoot))
+  if (ready?.tempRoot) {
+    try {
+      await waitForRemoved(path.resolve(ready.tempRoot))
+    } catch (error) {
+      runFailure = error
+    }
+  }
 }
 
-const sourceHashes = {
-  brokerBinary: await sha256File(brokerBinary),
-  coreRunner: await sha256File(runnerPath),
-  adminRuntime: await sha256File(path.join(adminRoot, 'runtime', 'server.js')),
+const sourceHashes = ownedSourceHashes
+let nestedOwners = []
+try {
+  nestedOwners = await readOwnedProcessCustody(ownedProcessEventsPath)
+} catch (error) {
+  runFailure = error
 }
+const nestedClosureVerified =
+  ['broker_binary', 'admin_runtime'].every((role) =>
+    nestedOwners.some(
+      (record) => record.role === role && record.event === 'birth' && record.birth === 'observed'
+    )
+  ) &&
+  nestedOwners.filter((record) => record.event === 'close').length >= 2 &&
+  nestedOwners.every(
+    (record) =>
+      record.event === 'birth'
+        ? record.birth === 'observed'
+        : Number.isInteger(record.exitCode) && record.exitCode >= 0 && record.signal === null
+  )
+const closureVerified =
+  runFailure === undefined &&
+  cypressOutput?.exceeded !== true &&
+  nestedClosureVerified &&
+  custodyOwners.length === 2 &&
+  custodyOwners.every(
+    (owner) =>
+      owner.birth === 'observed' &&
+      owner.close === 'observed' &&
+      Number.isInteger(owner.exitCode) &&
+      owner.exitCode >= 0 &&
+      owner.signal === null &&
+      /^[a-f0-9]{64}$/.test(owner.sourceSha256)
+  )
 const controlledReceipt = finalQualificationFailureDiagnostic?.trustedUnlock
 const controlledCausal = controlledReceipt?.causal
 const controlledObserved =
@@ -732,8 +842,7 @@ const controlledObserved =
   finalQualificationFailureDiagnostic?.cypressRunSummary?.state === 'complete' &&
   finalQualificationFailureDiagnostic.cypressRunSummary.totalFailed === 1 &&
   finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
-  custodyOwners.length === 2 &&
-  custodyOwners.every((owner) => owner.birth === 'observed' && owner.close === 'observed')
+  closureVerified
 await writeQualificationCustody(custodyReceiptPath, {
   schema: initialCustody.schema,
   state: 'closed',
@@ -751,8 +860,15 @@ await writeQualificationCustody(custodyReceiptPath, {
       : 'unverified'
     : 'not_applicable',
   runtimePathHashes: initialCustody.runtimePathHashes,
+  initialReceiptSha256: initialCustodyHash,
   sourceHashes,
-  owners: custodyOwners,
+  sourceBindings: [
+    { role: 'core_runner', owner: 'core_runner', sha256: sourceHashes.coreRunner },
+    { role: 'cypress_launcher', owner: 'cypress', sha256: sourceHashes.cypressLauncher },
+    { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
+    { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
+  ],
+  owners: [...custodyOwners, ...nestedOwners],
 })
 
 if (trustedUnlockRealProviderControl) {
@@ -843,9 +959,9 @@ function captureCypressRunSummary(child, target) {
   })
 }
 
-process.stdout.write(
-  `${JSON.stringify(
-    trustedUnlockRealProviderControl
+const qualificationResult =
+  trustedUnlockRealProviderControl
+    ? controlledObserved
       ? {
           schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
           qualificationMode,
@@ -854,6 +970,14 @@ process.stdout.write(
           causalReceipt: 'closed_native_custody',
         }
       : {
+          schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
+          qualificationMode,
+          outcome: 'controlled_failure_unverified',
+          platform,
+          causalReceipt: 'closure_unverified',
+        }
+    : cypressSucceeded && closureVerified
+      ? {
           schema: 'service-lasso.real-secrets-browser-result.v1',
           qualificationMode,
           outcome: 'verified',
@@ -865,5 +989,14 @@ process.stdout.write(
           auditEventCount,
           rollbackProcessVerified,
         }
+      : {
+          schema: 'service-lasso.real-secrets-browser-result.v1',
+          qualificationMode,
+          outcome: 'unverified',
+          platform,
+        }
+process.stdout.write(
+  `${JSON.stringify(
+    qualificationResult
   )}\n`
 )

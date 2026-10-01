@@ -27,7 +27,11 @@ test('initializes one hash-only custody receipt for three distinct owned paths',
       ),
       SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH: path.join(
         root,
-        'receipt.json'
+        'closed-receipt.json'
+      ),
+      SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH: path.join(
+        root,
+        'initial-receipt.json'
       ),
     }
     const receipt = await initializeQualificationCustody({ environment })
@@ -35,12 +39,12 @@ test('initializes one hash-only custody receipt for three distinct owned paths',
     assert.equal(receipt.runtimePathHashes.length, 3)
     assert.deepEqual(
       await readQualificationCustody(
-        environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH
+        environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH
       ),
       receipt
     )
     const serialized = await readFile(
-      environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH,
+      environment.SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH,
       'utf8'
     )
     assert.equal(serialized.includes(root), false)

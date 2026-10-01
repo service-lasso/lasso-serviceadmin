@@ -368,6 +368,26 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     true
   )
   assert.equal(verifierSource.includes("cypress.kill('SIGKILL')"), false)
+  assert.equal(verifierSource.includes("child.kill('SIGKILL')"), false)
+  assert.equal(verifierSource.includes('initialReceiptSha256'), true)
+  assert.equal(verifierSource.includes('closureVerified'), true)
+  assert.equal(verifierSource.includes('nestedClosureVerified'), true)
+  assert.equal(
+    verifierSource.includes('qualification-owned-process-observer.cjs'),
+    true
+  )
+  assert.equal(
+    browserWorkflowSource.includes(
+      'native-custody-initial-${{ matrix.admin_platform }}.json'
+    ),
+    true
+  )
+  assert.equal(
+    browserWorkflowSource.includes(
+      'native-custody-closed-${{ matrix.admin_platform }}.json'
+    ),
+    true
+  )
   const stoppedLifecycleVerifierSource = await readFile(
     new URL(
       '../scripts/verify-real-broker-stopped-lifecycle-browser.mjs',
