@@ -1,5 +1,4 @@
 import {
-  createTrustedUnlockDiagnostic,
   createTrustedUnlockObservation,
   createTrustedUnlockReceipt,
   observeTrustedUnlockFailure,
@@ -77,22 +76,6 @@ export function unlockTrustedIdentity(
   })
   cy.window({ log: false }).then((browserWindow) => {
     observation.causalSnapshot(browserWindow.__serviceAdminRuntimeIdentityCausal)
-  })
-  cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
-    if (retainFailureReceipt && enabled) {
-        const diagnostic = createTrustedUnlockDiagnostic(
-          createTrustedUnlockReceipt(readReceiptMarkers()),
-          observation.snapshot({}).causal ?? {
-            sequence: 0,
-            request: 'unobserved',
-            contract: 'unobserved',
-            query: 'unobserved',
-            render: 'unobserved',
-          }
-        )
-        retainedTrustedUnlockDiagnostic = diagnostic
-        if (diagnostic) cy.task('trustedUnlockDiagnostic', diagnostic, { log: false })
-    }
   })
   cy.contains(/Trusted identity verified|Continue as local-root/, {
     timeout,

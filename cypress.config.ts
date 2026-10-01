@@ -62,7 +62,12 @@ export default defineConfig({
       })
       on('task', {
         trustedUnlockReceiptControlEnabled() {
-          return String(config.env.trustedUnlockReceiptControlFailure) === '1'
+          return false
+        },
+        trustedUnlockRealProviderControlEnabled() {
+          return (
+            String(config.env.trustedUnlockRealProviderControlFailure) === '1'
+          )
         },
         qualificationCheckpoint(phase) {
           progress.record(phase)

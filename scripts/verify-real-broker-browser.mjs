@@ -54,6 +54,8 @@ const qualificationMode = ['first-run', 'lockout', 'stopped-lifecycle'].includes
 )
   ? process.env.SERVICE_LASSO_REAL_BROWSER_MODE
   : 'comprehensive'
+const trustedUnlockRealProviderControl =
+  process.env.SERVICE_LASSO_TRUSTED_UNLOCK_REAL_PROVIDER_CONTROL === '1'
 const adminRoot = path.resolve(
   process.env.SERVICE_LASSO_TEST_ADMIN_ROOT ??
     path.join(root, 'output', 'package', `@serviceadmin-${platform}`)
@@ -532,6 +534,7 @@ const trustedUnlockDiagnostics = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
+let finalQualificationFailureDiagnostic
 try {
   ready = await waitForReady(runner)
   if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
@@ -565,7 +568,11 @@ try {
       '--config',
       `baseUrl=${adminUrl.origin},video=false,screenshotOnRunFailure=false`,
       '--env',
-      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1`,
+      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
+        trustedUnlockRealProviderControl
+          ? ',trustedUnlockRealProviderControlFailure=1'
+          : ''
+      }`,
       '--spec',
       specPath,
     ],
@@ -602,14 +609,22 @@ try {
     qualificationFailureKind = classifyQualificationFailure({
       exitCode: cypressExit,
     })
-    throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
+    if (!trustedUnlockRealProviderControl) {
+      throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
+    }
+  } else if (trustedUnlockRealProviderControl) {
+    throw new Error(
+      'Controlled real provider-validation receipt path unexpectedly passed.'
+    )
   }
-  cypressSucceeded = true
-  if (qualificationMode === 'comprehensive') {
+  cypressSucceeded = !trustedUnlockRealProviderControl
+  if (qualificationMode === 'comprehensive' && cypressSucceeded) {
     await verifyRollbackProcessEvidence(path.resolve(ready.tempRoot))
     rollbackProcessVerified = true
   }
-  auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
+  if (cypressSucceeded) {
+    auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
+  }
 } catch (error) {
   runFailure = error
 } finally {
@@ -645,24 +660,21 @@ try {
     const adminReachability = await probeAdminReachability(
       new URL(ready.adminUrl).origin
     )
-    process.stderr.write(
-      `${JSON.stringify(
-        buildQualificationFailureDiagnostic({
-          failure: qualificationFailureKind,
-          progressEvents: qualificationProgressEvents,
-          cypressChildEvents,
-          cypressRunSummary: cypressRunSummaryEvents.at(-1),
-          providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
-          lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
-          trustedUnlockDiagnostic: trustedUnlockDiagnostics.at(-1),
-          rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
-          transportDiagnostic: buildTransportDiagnostic(
-            rotationProxyLifecycleEvents,
-            adminReachability
-          ),
-        })
-      )}\n`
-    )
+    finalQualificationFailureDiagnostic = buildQualificationFailureDiagnostic({
+      failure: qualificationFailureKind,
+      progressEvents: qualificationProgressEvents,
+      cypressChildEvents,
+      cypressRunSummary: cypressRunSummaryEvents.at(-1),
+      providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+      lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
+      trustedUnlockDiagnostic: trustedUnlockDiagnostics.at(-1),
+      rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
+      transportDiagnostic: buildTransportDiagnostic(
+        rotationProxyLifecycleEvents,
+        adminReachability
+      ),
+    })
+    process.stderr.write(`${JSON.stringify(finalQualificationFailureDiagnostic)}\n`)
   }
   if (runner.exitCode === null) {
     runner.send({ type: 'service-lasso-real-admin-shutdown' })
@@ -674,6 +686,39 @@ try {
     }
   }
   if (ready?.tempRoot) await waitForRemoved(path.resolve(ready.tempRoot))
+}
+
+if (trustedUnlockRealProviderControl) {
+  const receipt = finalQualificationFailureDiagnostic?.trustedUnlock
+  const causal = receipt?.causal
+  const result = finalQualificationFailureDiagnostic?.cypressRunSummary
+  const actualProviderValidation =
+    finalQualificationFailureDiagnostic?.lastPhase ===
+    'provider_validation_complete'
+  const actualQueryLifecycle =
+    receipt?.receipt?.schema === 'service-admin.trusted-unlock-receipt.v1' &&
+    receipt.receipt.status === 'observed' &&
+    receipt.receipt.present === true &&
+    receipt.receipt.verified === false &&
+    receipt.receipt.localRoot === false &&
+    receipt.receipt.loading === false &&
+    receipt.receipt.unavailable === true &&
+    causal?.schema === 'service-admin.trusted-identity-causal.v2' &&
+    Number.isInteger(causal.sequence) &&
+    causal.sequence >= 1 &&
+    causal.request === 'transport_failed' &&
+    causal.contract === 'unobserved' &&
+    causal.query === 'failed' &&
+    causal.render === 'unavailable'
+  const actualCypressFailure =
+    result?.state === 'complete' &&
+    result.totalFailed === 1 &&
+    finalQualificationFailureDiagnostic?.failure === 'nonzero_exit'
+  if (!actualProviderValidation || !actualQueryLifecycle || !actualCypressFailure) {
+    throw new Error(
+      'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
+    )
+  }
 }
 
 if (runFailure) throw runFailure

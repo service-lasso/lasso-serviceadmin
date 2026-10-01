@@ -48,23 +48,8 @@ const safeTransportErrorCodes = new Set([
   'ERR_TIMED_OUT',
 ])
 
-let controlledPreClickRestartControlClicks = 0
-let controlledPreClickRestartApiRequests = 0
-
-function installControlledPreClickUnlockFailure() {
-  cy.document().then((document) => {
-    document.body.innerHTML = `
-      <main>Verifying trusted Service Lasso identity</main>
-      <button type="button">Restart service</button>
-      <div role="alertdialog"><button type="button">Restart service</button></div>
-    `
-    document.addEventListener('click', (event) => {
-      if (event.target?.textContent?.trim() === 'Restart service') {
-        controlledPreClickRestartControlClicks += 1
-      }
-    })
-  })
-}
+let controlledProviderRestartControlClicks = 0
+let controlledProviderRestartApiRequests = 0
 
 function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
@@ -165,13 +150,30 @@ function visibleTableRow(content, timeout = 20_000) {
 }
 
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
-  cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
-    if (!enabled) waitForManagedServiceReadiness('@secretsbroker')
+  cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
+    if (!enabled) {
+      waitForManagedServiceReadiness('@secretsbroker')
+      return
+    }
+    cy.intercept('GET', '**/api/runtime/security', { forceNetworkError: true }).as(
+      'controlledRuntimeIdentityFailure'
+    )
+    cy.intercept('POST', '**/api/services/%40secretsbroker/restart', (request) => {
+      controlledProviderRestartApiRequests += 1
+      request.continue()
+    }).as('controlledRestartBrokerFromUi')
   })
   const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
-  cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
-    if (enabled) installControlledPreClickUnlockFailure()
+  cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
+    if (!enabled) return
+    cy.document({ log: false }).then((document) => {
+      document.addEventListener('click', (event) => {
+        if (event.target?.textContent?.trim() === 'Restart service') {
+          controlledProviderRestartControlClicks += 1
+        }
+      })
+    })
   })
   unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
   brokerLifecycleControls(detailReadiness).within(() => {
@@ -805,68 +807,22 @@ function waitForSuccessfulBrokerEventsUiResponse(
     })
 }
 
-describe('trusted-unlock receipt control', () => {
-  before(function () {
-    cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
-      if (!enabled) this.skip()
-    })
-  })
-
+describe('packaged Service Admin with real Core and Secrets Broker', () => {
   beforeEach(() => {
-    controlledPreClickRestartControlClicks = 0
-    controlledPreClickRestartApiRequests = 0
-    cy.task(
-      'trustedUnlockDiagnostic',
-      {
-        schema: 'service-admin.trusted-unlock-diagnostic.v2',
-        receipt: {
-          schema: 'service-admin.trusted-unlock-receipt.v1',
-          status: 'observed',
-          present: true,
-          verified: false,
-          localRoot: false,
-          loading: true,
-          unavailable: false,
-        },
-        causal: {
-          schema: 'service-admin.trusted-identity-causal.v2',
-          sequence: 0,
-          request: 'unobserved',
-          contract: 'unobserved',
-          query: 'unobserved',
-          render: 'unobserved',
-        },
-      },
-      { log: false }
-    )
+    controlledProviderRestartControlClicks = 0
+    controlledProviderRestartApiRequests = 0
   })
 
   afterEach(() => {
     const flushed = flushTrustedUnlockReceipt()
-    return (flushed ?? cy.wrap(null, { log: false })).then(() => {
-      expect(controlledPreClickRestartControlClicks).to.equal(0)
-      expect(controlledPreClickRestartApiRequests).to.equal(0)
-    })
+    return (flushed ?? cy.wrap(null, { log: false })).then(() =>
+      cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
+        if (!enabled) return
+        expect(controlledProviderRestartControlClicks).to.equal(0)
+        expect(controlledProviderRestartApiRequests).to.equal(0)
+      })
+    )
   })
-
-  it('retains the pre-click failure from the real Broker restart caller', () => {
-    cy.intercept('POST', '**/api/services/%40secretsbroker/restart', (request) => {
-      controlledPreClickRestartApiRequests += 1
-      request.reply({ statusCode: 200, body: {} })
-    })
-    cy.visit('/')
-    restartBrokerFromUi(3, () => controlledPreClickRestartApiRequests)
-  })
-})
-
-describe('packaged Service Admin with real Core and Secrets Broker', () => {
-  before(function () {
-    cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
-      if (enabled) this.skip()
-    })
-  })
-
-  afterEach(() => flushTrustedUnlockReceipt())
 
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
