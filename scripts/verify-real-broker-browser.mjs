@@ -38,6 +38,12 @@ import {
   sha256Receipt,
   writeQualificationCustody,
 } from './qualification-custody.mjs'
+import {
+  brokerAuditPath,
+  noLeakEvidenceRoots,
+  parseRuntimeInputs,
+  rollbackProcessEvidencePath,
+} from './real-browser-runtime-inputs.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
@@ -179,7 +185,7 @@ function waitForReady(runner, timeoutMs = 240_000) {
       for (const line of lines) {
         try {
           const value = JSON.parse(line)
-          if (value.contractVersion === 'service-lasso.real-admin-browser.v1') {
+          if (value.contractVersion === 'service-lasso.real-admin-browser.v2') {
             settle(resolve, value)
             return
           }
@@ -207,14 +213,8 @@ async function waitForRemoved(target, timeoutMs = 30_000) {
   throw new Error('Real browser runtime did not remove its isolated workspace.')
 }
 
-async function verifyBrokerAudit(tempRoot) {
-  const auditPath = path.join(
-    tempRoot,
-    'workspace',
-    '.service-lasso',
-    'secretsbroker',
-    'audit.jsonl'
-  )
+async function verifyBrokerAudit(runtimeInputs) {
+  const auditPath = brokerAuditPath(runtimeInputs)
   const bytes = await readBoundedRegularFile(
     auditPath,
     4 * 1024 * 1024,
@@ -338,33 +338,11 @@ async function listBoundedEvidenceFiles(directory, files = [], depth = 0) {
 }
 
 async function verifyNoLeakEvidence(
-  tempRoot,
+  runtimeInputs,
   runtimeDiagnostics,
   { requireComplete = false } = {}
 ) {
-  const evidenceRoots =
-    qualificationMode === 'comprehensive'
-      ? [
-          {
-            directory: path.join(
-              tempRoot,
-              'services',
-              'sample-service',
-              'logs'
-            ),
-            allowEmptyFiles: true,
-          },
-          {
-            directory: path.join(
-              tempRoot,
-              'workspace',
-              '.service-lasso',
-              'secret-rotations'
-            ),
-            allowEmptyFiles: false,
-          },
-        ]
-      : []
+  const evidenceRoots = noLeakEvidenceRoots(runtimeInputs, qualificationMode)
   let totalBytes = 0
   for (const { directory, allowEmptyFiles } of evidenceRoots) {
     if (requireComplete) {
@@ -406,14 +384,8 @@ async function verifyNoLeakEvidence(
   }
 }
 
-async function verifyRollbackProcessEvidence(tempRoot) {
-  const evidencePath = path.join(
-    tempRoot,
-    'services',
-    'sample-service',
-    '.state',
-    'browser-broker-evidence.json'
-  )
+async function verifyRollbackProcessEvidence(runtimeInputs) {
+  const evidencePath = rollbackProcessEvidencePath(runtimeInputs)
   const evidence = JSON.parse(
     (
       await readBoundedRegularFile(
@@ -506,7 +478,7 @@ function retainOwnedProcess(role, child, sourceSha256) {
     owner.close = 'observed'
     owner.exitCode = Number.isInteger(exitCode) && exitCode >= 0 ? exitCode : null
     owner.signal =
-      signal === null || ['SIGINT', 'SIGTERM', 'SIGKILL'].includes(signal)
+      signal === null || ['SIGINT', 'SIGTERM'].includes(signal)
         ? signal
         : 'other'
   })
@@ -595,6 +567,7 @@ runner.stderr.on('data', (chunk) => {
 })
 
 let ready
+let runtimeInputs
 let cypress
 let cypressOutput
 let cypressOutputChecked = false
@@ -616,6 +589,7 @@ try {
   if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
     throw new Error('Real browser runtime returned an invalid platform.')
   }
+  runtimeInputs = parseRuntimeInputs(ready)
   const adminUrl = new URL(ready.adminUrl)
   const controlUrl = new URL(ready.controlUrl)
   if (
@@ -696,11 +670,11 @@ try {
   }
   cypressSucceeded = !trustedUnlockRealProviderControl
   if (qualificationMode === 'comprehensive' && cypressSucceeded) {
-    await verifyRollbackProcessEvidence(path.resolve(ready.tempRoot))
+    await verifyRollbackProcessEvidence(runtimeInputs)
     rollbackProcessVerified = true
   }
   if (cypressSucceeded) {
-    auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
+    auditEventCount = await verifyBrokerAudit(runtimeInputs)
   }
 } catch (error) {
   runFailure = error
@@ -716,10 +690,10 @@ try {
       runFailure = error
     }
   }
-  if (ready?.tempRoot) {
+  if (runtimeInputs) {
     try {
       await verifyNoLeakEvidence(
-        path.resolve(ready.tempRoot),
+        runtimeInputs,
         stderrEvidence,
         { requireComplete: cypressSucceeded }
       )
