@@ -48,24 +48,6 @@ const safeTransportErrorCodes = new Set([
   'ERR_TIMED_OUT',
 ])
 
-let controlledPreClickRestartControlClicks = 0
-let controlledPreClickRestartApiRequests = 0
-
-function installControlledPreClickUnlockFailure() {
-  cy.document().then((document) => {
-    document.body.innerHTML = `
-      <main>Verifying trusted Service Lasso identity</main>
-      <button type="button">Restart service</button>
-      <div role="alertdialog"><button type="button">Restart service</button></div>
-    `
-    document.addEventListener('click', (event) => {
-      if (event.target?.textContent?.trim() === 'Restart service') {
-        controlledPreClickRestartControlClicks += 1
-      }
-    })
-  })
-}
-
 function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
 }
@@ -164,23 +146,48 @@ function visibleTableRow(content, timeout = 20_000) {
   return cy.contains('tr', content, { timeout }).should('be.visible')
 }
 
-function restartBrokerFromUi(expectedRequestCount, requestCount) {
-  cy.env(['trustedUnlockReceiptControlFailure']).then(
-    ({ trustedUnlockReceiptControlFailure }) => {
-      if (String(trustedUnlockReceiptControlFailure) !== '1') {
-        waitForManagedServiceReadiness('@secretsbroker')
-      }
+function providerControl(pathname, options = {}) {
+  return cy.env('testControlUrl').then((controlUrl) => {
+    expect(controlUrl).to.match(
+      /^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/
+    )
+    return cy.request({
+      failOnStatusCode: false,
+      method: options.method ?? 'GET',
+      url: `${controlUrl}/${pathname}`,
+      timeout: 20_000,
+    })
+  })
+}
+
+function validateProviderConfiguration(expectedOutcome) {
+  visibleTableRow('vault-browser').within(() => {
+    cy.contains('button', 'Validate configuration')
+      .scrollIntoView()
+      .should('be.visible')
+      .and('not.be.disabled')
+      .click()
+  })
+  dialog('Validate provider configuration').within(() => {
+    cy.get('#provider-validation-reason').type('Provider custody qualification')
+    cy.contains('button', 'Validate through Broker').click()
+    if (expectedOutcome === 'ready') {
+      cy.contains('Validation outcome: ready', { timeout: 20_000 }).should(
+        'be.visible'
+      )
+    } else {
+      cy.contains(/provider.*(unavailable|failed)|validation.*(unavailable|failed)/i, {
+        timeout: 20_000,
+      }).should('be.visible')
     }
-  )
+    cy.contains('button', 'Close').click()
+  })
+}
+
+function restartBrokerFromUi(expectedRequestCount, requestCount) {
+  waitForManagedServiceReadiness('@secretsbroker')
   const detailReadiness = observeBrokerDetailReadiness()
   cy.reload()
-  cy.env(['trustedUnlockReceiptControlFailure']).then(
-    ({ trustedUnlockReceiptControlFailure }) => {
-      if (String(trustedUnlockReceiptControlFailure) === '1') {
-        installControlledPreClickUnlockFailure()
-      }
-    }
-  )
   unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
   brokerLifecycleControls(detailReadiness).within(() => {
     cy.contains('button', /^Restart service$/, { timeout: 20_000 })
@@ -813,39 +820,47 @@ function waitForSuccessfulBrokerEventsUiResponse(
     })
 }
 
-describe('trusted-unlock receipt control', () => {
+describe('real provider fault custody control', () => {
   before(function () {
-    cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
+    cy.task('realProviderControlEnabled').then((enabled) => {
       if (!enabled) this.skip()
     })
   })
 
-  beforeEach(() => {
-    controlledPreClickRestartControlClicks = 0
-    controlledPreClickRestartApiRequests = 0
-  })
-
-  afterEach(() => {
-    const flushed = flushTrustedUnlockReceipt()
-    return (flushed ?? cy.wrap(null, { log: false })).then(() => {
-      expect(controlledPreClickRestartControlClicks).to.equal(0)
-      expect(controlledPreClickRestartApiRequests).to.equal(0)
+  it('binds the UI negative path to the next authenticated provider request', () => {
+    cy.visit('/services/%40secretsbroker')
+    unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
+    providerControl('fail-next-provider-request', { method: 'POST' }).then(
+      ({ status, body }) => {
+        expect(status).to.equal(409)
+        expect(body).to.deep.equal({ outcome: 'provider_fault_unobserved' })
+      }
+    )
+    openSecrets()
+    validateProviderConfiguration('ready')
+    providerControl('fail-next-provider-request', { method: 'POST' }).then(
+      ({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })
+      }
+    )
+    validateProviderConfiguration('unavailable')
+    providerControl('provider-fault-receipt').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.outcome).to.equal('provider_fault_observed')
+      expect(body.receipt).to.include({
+        schema: 'service-lasso.real-admin-browser-provider-control.v1',
+        phase: 'authenticated_provider_request',
+      })
+      expect(body.receipt.nonce).to.match(/^[a-f0-9]{64}$/)
     })
-  })
-
-  it('retains the pre-click failure from the real Broker restart caller', () => {
-    cy.intercept('POST', '**/api/services/%40secretsbroker/restart', (request) => {
-      controlledPreClickRestartApiRequests += 1
-      request.reply({ statusCode: 200, body: {} })
-    })
-    cy.visit('/')
-    restartBrokerFromUi(3, () => controlledPreClickRestartApiRequests)
+    validateProviderConfiguration('ready')
   })
 })
 
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
   before(function () {
-    cy.task('trustedUnlockReceiptControlEnabled').then((enabled) => {
+    cy.task('realProviderControlEnabled').then((enabled) => {
       if (enabled) this.skip()
     })
   })
