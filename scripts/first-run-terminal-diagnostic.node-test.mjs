@@ -19,14 +19,16 @@ const run = 'c'.repeat(64)
 const coreCandidate = Object.freeze({
   head: 'e'.repeat(40),
   tree: 'f'.repeat(40),
-  run: 'unavailable',
+  run: 'c'.repeat(64),
 })
 
 function capture(script) {
   return captureFirstRunChild({
     spawnChild: spawn,
     command: process.execPath,
-    args: ['-e', script],
+    // Keep the controlled child alive long enough for the mandatory native
+    // birth observation; the production wrapper never adds a sleep or retry.
+    args: ['-e', `setTimeout(() => { ${script} }, 3000)`],
     options: { stdio: ['ignore', 'pipe', 'pipe'] },
     platform: process.platform,
     run,
@@ -67,7 +69,7 @@ test('projects a successful owned first child only after close and both EOFs', a
 
 test('retains early setup failure privately and projects only a bounded code', async () => {
   const result = await capture(
-    "process.stderr.write(JSON.stringify({schema:'service-lasso.real-admin-browser-failure.v1',code:'runner_start_failed',private:'vault-token'})+'\\n'); process.exit(1)"
+    "process.stderr.write(JSON.stringify({schema:'service-lasso.real-admin-browser-failure.v1',code:'runner_start_failed'})+'\\nprivate vault-token\\n'); process.exit(1)"
   )
   assert.equal(result.exitCode, 1)
   assert.equal(result.diagnostic.safeDiagnosticCode, 'runner_start_failed')

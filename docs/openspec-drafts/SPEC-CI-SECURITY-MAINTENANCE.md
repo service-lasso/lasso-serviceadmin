@@ -113,6 +113,38 @@ This is causal observation only; no passing-summary or exit-status waiver.
 
 ## ISS-651: first-run terminal diagnostic and private custody
 
+### Custody hardening amendment (PR #679)
+
+Before any first-run verifier child is admitted, the Admin wrapper must retain
+and read back a private, owner-restricted initial custody record.  The record
+binds the exact Admin checkout tree and wrapper/verifier/harness bytes, the
+qualified Core public initial-custody projection, and all three owned runtime
+roots (`SERVICE_LASSO_WORKSPACE_ROOT`, `SERVICE_LASSO_INSTANCE_REGISTRY_PATH`, and
+`SERVICE_LASSO_HOST_PORT_REGISTRY_PATH`).  Every root, parent chain and supplied registry
+must be an absolute, regular, non-reparse object owned by the wrapper identity;
+an absent registry is recorded as an owned absence.  A missing, malformed,
+unowned, reparse, unreadable, or unvalidated input is a negative admission
+result: no product child may start.
+
+The Core projection is consumed only as its bounded public tuple: exact
+candidate head/tree, platform, run id/attempt, private initial receipt and
+journal commitments, and a locally validated v3 attestation.  Admin neither
+reads nor projects Core private receipt, journal, stream, tool, registry, or
+filesystem content.  Placeholder digests and `unavailable` candidate values
+are not candidates and may not be represented as retained commitments.
+
+Private journal writes must loop until every byte is written, flush and close
+the owned descriptors before hashing, and read back the closed files.  Spawn,
+identity, ACL, stream, journal, or cleanup faults preserve the primary failure
+and retain an explicit private caller handle when possible.  Public projection
+remains metadata-only.  It is `unresolved` unless the owned child naturally
+closes and both captured streams reach EOF; signals, stream errors, missing
+streams and an error without close are never relabelled as a clean terminal
+state.  Identity observation uses native, platform-appropriate process
+parent/image evidence captured immediately after birth and never a PID-only
+lookup, fabricated process record, global termination, retry, sleep, or
+concurrency change.
+
 The first-run wrapper must own the process it starts and capture both first-child
 streams locally from creation through a natural terminal close and both stream
 EOF events. An early failure before the general verifier reaches readiness must

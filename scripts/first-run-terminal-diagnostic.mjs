@@ -1,391 +1,95 @@
 import { createHash } from 'node:crypto'
-import {
-  closeSync,
-  chmodSync,
-  fsyncSync,
-  mkdtempSync,
-  openSync,
-  readFileSync,
-  writeSync,
-} from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { closeSync, chmodSync, existsSync, fsyncSync, lstatSync, mkdtempSync, openSync, readFileSync, realpathSync, statSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
-export const firstRunTerminalDiagnosticSchema =
-  'service-admin.first-run-terminal-diagnostic.v1'
+export const firstRunTerminalDiagnosticSchema = 'service-admin.first-run-terminal-diagnostic.v2'
+const codes = new Set(['unclassified', 'runner_unavailable', 'runner_start_failed', 'runner_terminated', 'qualification_failed'])
+const hash = (x) => createHash('sha256').update(x).digest('hex')
+export const commitmentDigest = hash
+const sha = (x) => typeof x === 'string' && /^[a-f0-9]{64}$/.test(x)
+const git = (x) => typeof x === 'string' && /^[a-f0-9]{40}$/.test(x)
+const keys = (x, expected) => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).sort().join(',') === [...expected].sort().join(',')
 
-const safeCodes = new Set([
-  'unclassified',
-  'runner_unavailable',
-  'runner_start_failed',
-  'runner_terminated',
-  'qualification_failed',
-])
-const safeSignals = new Set([null, 'SIGINT', 'SIGTERM', 'SIGKILL', 'other'])
-
-export function parseSafeRunnerDiagnostic(line) {
-  if (typeof line !== 'string' || line.length > 256) return null
-  try {
-    const value = JSON.parse(line)
-    if (
-      value?.schema !== 'service-lasso.real-admin-browser-failure.v1' ||
-      typeof value.code !== 'string' ||
-      Object.keys(value).sort().join(',') !== 'code,schema' ||
-      !safeCodes.has(value.code)
-    ) {
-      return null
+// JSON.parse overwrites duplicate keys. This parser preserves the admission
+// boundary by rejecting duplicates, including escaped spellings of the same key.
+export function parseStrictJson(text) {
+  let i = 0
+  const ws = () => { while (/\s/.test(text[i] ?? '')) i += 1 }
+  const str = () => {
+    if (text[i++] !== '"') throw new Error('Expected string.')
+    let out = ''
+    while (i < text.length) {
+      const c = text[i++]; if (c === '"') return out
+      if (c !== '\\') { if (c < ' ') throw new Error('Invalid string.'); out += c; continue }
+      const e = text[i++]; const normal = { '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' }[e]
+      if (normal !== undefined) out += normal
+      else if (e === 'u') { const hex = text.slice(i, i + 4); if (!/^[0-9a-f]{4}$/i.test(hex)) throw new Error('Invalid escape.'); out += String.fromCharCode(Number.parseInt(hex, 16)); i += 4 }
+      else throw new Error('Invalid escape.')
     }
-    return value.code
-  } catch {
-    return null
+    throw new Error('Unterminated string.')
   }
+  const val = () => {
+    ws(); if (text[i] === '"') return str()
+    if (text[i] === '{') { i += 1; ws(); const o = {}; const seen = new Set(); if (text[i] === '}') { i += 1; return o }; while (true) { ws(); const k = str(); if (seen.has(k)) throw new Error('Duplicate JSON key.'); seen.add(k); ws(); if (text[i++] !== ':') throw new Error('Invalid object.'); o[k] = val(); ws(); const c = text[i++]; if (c === '}') return o; if (c !== ',') throw new Error('Invalid object.') } }
+    if (text[i] === '[') { i += 1; ws(); const a = []; if (text[i] === ']') { i += 1; return a }; while (true) { a.push(val()); ws(); const c = text[i++]; if (c === ']') return a; if (c !== ',') throw new Error('Invalid array.') } }
+    if (text.startsWith('true', i)) { i += 4; return true }; if (text.startsWith('false', i)) { i += 5; return false }; if (text.startsWith('null', i)) { i += 4; return null }
+    const n = text.slice(i).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/); if (!n) throw new Error('Invalid JSON value.'); i += n[0].length; return Number(n[0])
+  }
+  const result = val(); ws(); if (i !== text.length) throw new Error('Trailing JSON.'); return result
 }
+export function parseSafeRunnerDiagnostic(line) { try { const x = typeof line === 'string' && line.length <= 256 ? parseStrictJson(line) : null; return keys(x, ['code', 'schema']) && x.schema === 'service-lasso.real-admin-browser-failure.v1' && codes.has(x.code) ? x.code : null } catch { return null } }
+export function safeSignal(signal) { return signal === null || ['SIGINT', 'SIGTERM', 'SIGKILL'].includes(signal) ? signal : signal === undefined ? null : 'other' }
 
-export function safeSignal(signal) {
-  if (signal === null || signal === 'SIGINT' || signal === 'SIGTERM' || signal === 'SIGKILL') {
-    return signal
-  }
-  return signal === undefined ? null : 'other'
+export function validateCoreInitialProjection(bytes, platform) {
+  const x = parseStrictJson(bytes.toString('utf8'))
+  if (!keys(x, ['schema', 'privateVersion', 'candidate', 'platform', 'run', 'privateInitialReceiptSha256', 'privateJournalSha256', 'localValidatorAttestation']) || x.schema !== 'service-lasso.qualification-first-custody-projection.v2' || x.privateVersion !== 'v3' || x.platform !== platform || !keys(x.candidate, ['head', 'tree']) || !git(x.candidate.head) || !git(x.candidate.tree) || !keys(x.run, ['id', 'attempt']) || !/^[0-9]{1,20}$/.test(String(x.run.id)) || !/^[0-9]{1,20}$/.test(String(x.run.attempt)) || !sha(x.privateInitialReceiptSha256) || !sha(x.privateJournalSha256) || !keys(x.localValidatorAttestation, ['schema', 'validated']) || x.localValidatorAttestation.schema !== 'service-lasso.qualification-local-validator-attestation.v2' || x.localValidatorAttestation.validated !== true) throw new Error('Core v3 projection is not admitted.')
+  return x
 }
-
-export function createFirstRunTerminalDiagnostic({
-  stage = 'terminal',
-  platform,
-  run,
-  candidate,
-  coreCandidate,
-  privateCloseJournal,
-  exitCode,
-  signal,
-  naturalClose,
-  stdoutEof,
-  stderrEof,
-  safeDiagnosticCode,
-}) {
-  if (
-    stage !== 'terminal' ||
-    !['darwin', 'linux', 'win32'].includes(platform) ||
-    typeof run !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(run) ||
-    !candidate ||
-    Object.keys(candidate).sort().join(',') !==
-      'harnessSha256,verifierSha256,wrapperSha256' ||
-    !/^[a-f0-9]{64}$/.test(candidate.wrapperSha256) ||
-    !/^[a-f0-9]{64}$/.test(candidate.verifierSha256) ||
-    !/^[a-f0-9]{64}$/.test(candidate.harnessSha256) ||
-    !coreCandidate ||
-    Object.keys(coreCandidate).sort().join(',') !== 'head,run,tree' ||
-    !/^(?:[a-f0-9]{40}|unavailable)$/.test(coreCandidate.head) ||
-    !/^(?:[a-f0-9]{40}|unavailable)$/.test(coreCandidate.tree) ||
-    !/^(?:[a-f0-9]{64}|unavailable)$/.test(coreCandidate.run) ||
-    !privateCloseJournal ||
-    Object.keys(privateCloseJournal).sort().join(',') !== 'sha256,state' ||
-    !(
-      (privateCloseJournal.state === 'retained' && /^[a-f0-9]{64}$/.test(privateCloseJournal.sha256)) ||
-      (privateCloseJournal.state === 'unavailable' && privateCloseJournal.sha256 === null)
-    ) ||
-    !(
-      exitCode === null ||
-      (Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255)
-    ) ||
-    !safeSignals.has(safeSignal(signal)) ||
-    typeof naturalClose !== 'boolean' ||
-    typeof stdoutEof !== 'boolean' ||
-    typeof stderrEof !== 'boolean' ||
-    !safeCodes.has(safeDiagnosticCode)
-  ) {
-    throw new Error('First-run terminal diagnostic input is invalid.')
-  }
-  return Object.freeze({
-    schema: firstRunTerminalDiagnosticSchema,
-    mode: 'first_run',
-    stage,
-    state: naturalClose && stdoutEof && stderrEof ? 'closed' : 'unresolved',
-    platform,
-    run,
-    candidate: {
-      wrapperSha256: candidate.wrapperSha256,
-      verifierSha256: candidate.verifierSha256,
-      harnessSha256: candidate.harnessSha256,
-    },
-    coreCandidate: { head: coreCandidate.head, tree: coreCandidate.tree, run: coreCandidate.run },
-    privateCloseJournal: {
-      state: privateCloseJournal.state,
-      sha256: privateCloseJournal.sha256,
-    },
-    exitCode,
-    signal: safeSignal(signal),
-    naturalClose,
-    stdoutEof,
-    stderrEof,
-    safeDiagnosticCode,
-  })
+function ownerSid() { return execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true }).match(/S-1-[0-9-]+/i)?.[0] ?? null }
+function checkOwned(path, label, allowAbsent = false) {
+  if (typeof path !== 'string' || !isAbsolute(path)) throw new Error(`${label} is not absolute.`)
+  if (allowAbsent && !existsSync(path)) return { state: 'absent', path: resolve(path) }
+  const absolute = resolve(path)
+  for (let current = absolute;; current = dirname(current)) { const stat = lstatSync(current); if (stat.isSymbolicLink() || realpathSync(current) !== current) throw new Error(`${label} has a reparse chain.`); if (dirname(current) === current) break }
+  const stat = statSync(absolute); if (!stat.isFile() && !stat.isDirectory()) throw new Error(`${label} is not regular.`)
+  if (process.platform !== 'win32' && stat.uid !== process.getuid()) throw new Error(`${label} is not owned.`)
+  return { state: 'present', path: absolute, type: stat.isDirectory() ? 'directory' : 'file' }
 }
-
-function createPrivateJournal({ command, args }) {
-  const root = mkdtempSync(join(tmpdir(), 'service-admin-first-run-'), {
-    encoding: 'utf8',
-  })
-  if (process.platform === 'win32') {
-    const identity = execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
-      encoding: 'utf8',
-      windowsHide: true,
-    }).match(/S-1-[0-9-]+/i)?.[0]
-    if (!identity) throw new Error('Private journal owner identity is unavailable.')
-    execFileSync('icacls', [root, '/inheritance:r', '/grant:r', `${identity}:(OI)(CI)F`], {
-      windowsHide: true,
-    })
-  } else {
-    chmodSync(root, 0o700)
-    const directory = openSync(root, 'r')
-    try {
-      fsyncSync(directory)
-    } finally {
-      closeSync(directory)
-    }
-  }
-  const open = (name) => openSync(join(root, name), 'wx', 0o600)
-  const stdout = open('stdout.bin')
-  const stderr = open('stderr.bin')
-  const custody = open('custody.json')
-  let failed = false
-  const write = (descriptor, value) => {
-    try {
-      writeSync(descriptor, value)
-      fsyncSync(descriptor)
-      return true
-    } catch {
-      failed = true
-      return false
-    }
-  }
-  if (!write(
-    custody,
-    Buffer.from(
-      JSON.stringify({
-        schema: 'service-admin.first-run-private-custody.v1',
-        parentPid: process.pid,
-        image: command,
-        args,
-      }) + '\n',
-      'utf8'
-    )
-  )) throw new Error('Initial private custody record was not retained.')
-  return {
-    root,
-    writeStdout(chunk) {
-      return write(stdout, chunk)
-    },
-    writeStderr(chunk) {
-      return write(stderr, chunk)
-    },
-    recordBirth(child) {
-      return write(
-        custody,
-        Buffer.from(
-          JSON.stringify({
-            event: 'birth',
-            pid: child.pid ?? null,
-            parentPid: process.pid,
-            image: command,
-            processChain: [process.pid, child.pid ?? null],
-          }) + '\n',
-          'utf8'
-        )
-      )
-    },
-    finalize(value) {
-      const complete = write(custody, Buffer.from(`${JSON.stringify(value)}\n`, 'utf8'))
-      for (const descriptor of [stdout, stderr, custody]) {
-        try {
-          fsyncSync(descriptor)
-          closeSync(descriptor)
-        } catch {
-          failed = true
-        }
-      }
-      return complete && !failed
-    },
-    commitment() {
-      try {
-        return commitmentDigest(
-          ['stdout.bin', 'stderr.bin', 'custody.json']
-            .map((name) => createHash('sha256').update(readFileSync(join(root, name))).digest('hex'))
-            .join(':')
-        )
-      } catch {
-        return null
-      }
-    },
-  }
+export function admitFirstRunInputs({ workspaceRoot, instanceRegistryPath, hostPortRegistryPath, coreProjectionPath, platform }) {
+  const workspace = checkOwned(workspaceRoot, 'workspace root'); if (workspace.type !== 'directory') throw new Error('Workspace root is not a directory.')
+  const instance = checkOwned(instanceRegistryPath, 'instance registry', true); const ports = checkOwned(hostPortRegistryPath, 'host port registry', true)
+  const core = checkOwned(coreProjectionPath, 'Core initial projection'); if (core.type !== 'file') throw new Error('Core projection is not a file.')
+  const projectionBytes = readFileSync(core.path); const projection = validateCoreInitialProjection(projectionBytes, platform)
+  return { admin: { workspace, instance, ports }, core: { candidate: projection.candidate, run: projection.run, privateInitialReceiptSha256: projection.privateInitialReceiptSha256, privateJournalSha256: projection.privateJournalSha256, projectionSha256: hash(projectionBytes) } }
 }
-
-function privateCapture(stream, onLine, writeRaw) {
-  const chunks = []
-  const hash = createHash('sha256')
-  let bytes = 0
-  let exceeded = false
-  let ended = false
-  let lineBuffer = ''
-  let retained = true
-  stream.on('data', (chunk) => {
-    hash.update(chunk)
-    retained = writeRaw(chunk) && retained
-    bytes += chunk.length
-    if (bytes > 1_048_576) {
-      exceeded = true
-      return
-    }
-    chunks.push(Buffer.from(chunk))
-    lineBuffer += chunk.toString('utf8')
-    const lines = lineBuffer.split(/\r?\n/)
-    lineBuffer = lines.pop() ?? ''
-    for (const line of lines) onLine(line)
-  })
-  stream.once('end', () => {
-    ended = true
-  })
-  return {
-    get eof() {
-      return ended
-    },
-    get exceeded() {
-      return exceeded
-    },
-    get retained() {
-      return retained
-    },
-    commitment() {
-      return hash.digest('hex')
-    },
-    dispose() {
-      chunks.length = 0
-      lineBuffer = ''
-    },
-  }
+function writeAll(fd, data) { const b = Buffer.isBuffer(data) ? data : Buffer.from(data); for (let offset = 0; offset < b.length;) { const n = writeSync(fd, b, offset, b.length - offset); if (!Number.isInteger(n) || n <= 0) throw new Error('Private write was partial.'); offset += n }; fsyncSync(fd) }
+function privateJournal(command, args, admission) {
+  const root = mkdtempSync(join(tmpdir(), 'service-admin-first-run-')); let fault = null
+  if (process.platform === 'win32') { const sid = ownerSid(); if (!sid) throw new Error('Owner SID unavailable.'); execFileSync('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); execFileSync('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }); const acl = execFileSync('icacls', [root], { encoding: 'utf8', windowsHide: true }); if (!/\(OI\)\(CI\)\(F\)/.test(acl) || /\(I\)/.test(acl) || (acl.match(/\(F\)/g) ?? []).length !== 1) throw new Error('Owner-only DACL readback failed.') } else { chmodSync(root, 0o700); if ((statSync(root).mode & 0o777) !== 0o700) throw new Error('Private directory mode readback failed.') }
+  const f = Object.fromEntries(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => [n, openSync(join(root, n), 'wx', 0o600)]))
+  const record = (fd, value) => { try { writeAll(fd, Buffer.isBuffer(value) ? value : `${JSON.stringify(value)}\n`); return true } catch (error) { fault ??= error; return false } }
+  if (!record(f['custody.json'], { schema: 'service-admin.first-run-private-custody.v2', admission, parentPid: process.pid, command, args })) throw fault
+  return { root, stdout: (x) => record(f['stdout.bin'], x), stderr: (x) => record(f['stderr.bin'], x), record: (x) => record(f['custody.json'], x), close: (x) => { record(f['custody.json'], x); for (const fd of Object.values(f)) try { fsyncSync(fd); closeSync(fd) } catch (error) { fault ??= error }; try { return fault ? null : hash(Buffer.concat(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => readFileSync(join(root, n))))) } catch (error) { fault ??= error; return null } }, fault: () => fault }
 }
-
-export async function captureFirstRunChild({
-  spawnChild,
-  command,
-  args,
-  options,
-  platform,
-  run,
-  candidate,
-  coreCandidate,
-}) {
-  let journal
-  try {
-    journal = createPrivateJournal({ command, args })
-  } catch (error) {
-    const diagnostic = createFirstRunTerminalDiagnostic({
-      platform,
-      run,
-      candidate,
-      coreCandidate,
-      privateCloseJournal: { state: 'unavailable', sha256: null },
-      exitCode: null,
-      signal: null,
-      naturalClose: false,
-      stdoutEof: false,
-      stderrEof: false,
-      safeDiagnosticCode: 'runner_start_failed',
-    })
-    return { diagnostic, exitCode: 1, privateFailure: error }
-  }
-  let child
-  try {
-    child = spawnChild(command, args, options)
-  } catch (error) {
-    journal.finalize({ event: 'spawn_throw' })
-    const diagnostic = createFirstRunTerminalDiagnostic({
-      platform,
-      run,
-      candidate,
-      coreCandidate,
-      privateCloseJournal: { state: 'unavailable', sha256: null },
-      exitCode: null,
-      signal: null,
-      naturalClose: false,
-      stdoutEof: false,
-      stderrEof: false,
-      safeDiagnosticCode: 'runner_start_failed',
-    })
-    return { diagnostic, exitCode: 1, privateFailure: error, privateJournalRoot: null }
-  }
-
-  // Held identity and capture are private to this owner. They are deliberately
-  // not copied into the projection or written to disk.
-  const custody = {
-    pid: child.pid ?? null,
-    parentPid: process.pid,
-    image: command,
-    processChain: [process.pid, child.pid ?? null],
-    child,
-  }
-  let code = null
-  let signal = null
-  let closed = false
-  let spawnError = false
-  let safeDiagnosticCode = 'unclassified'
-  const birthRecorded = journal.recordBirth(child)
-  const stdout = privateCapture(child.stdout, () => undefined, journal.writeStdout)
-  const stderr = privateCapture(child.stderr, (line) => {
-    safeDiagnosticCode = parseSafeRunnerDiagnostic(line) ?? safeDiagnosticCode
-  }, journal.writeStderr)
-
-  await new Promise((resolve) => {
-    child.once('error', () => {
-      spawnError = true
-    })
-    child.once('close', (nextCode, nextSignal) => {
-      code = nextCode
-      signal = nextSignal
-      closed = true
-      resolve()
-    })
-  })
-
-  const terminal = {
-    event: 'terminal',
-    exitCode: code,
-    signal: safeSignal(signal),
-    naturalClose: closed && safeSignal(signal) === null && !spawnError && birthRecorded && stdout.retained && stderr.retained && !stdout.exceeded && !stderr.exceeded,
-    stdoutEof: stdout.eof,
-    stderrEof: stderr.eof,
-    stdoutSha256: stdout.commitment(),
-    stderrSha256: stderr.commitment(),
-  }
-  const journalComplete = journal.finalize(terminal)
-  const journalCommitment = journalComplete ? journal.commitment() : null
-  const diagnostic = createFirstRunTerminalDiagnostic({
-    platform,
-    run,
-    candidate,
-    coreCandidate,
-    privateCloseJournal: journalCommitment
-      ? { state: 'retained', sha256: journalCommitment }
-      : { state: 'unavailable', sha256: null },
-    exitCode: code,
-    signal,
-    naturalClose: terminal.naturalClose && journalComplete && journalCommitment !== null,
-    stdoutEof: stdout.eof,
-    stderrEof: stderr.eof,
-    safeDiagnosticCode,
-  })
-  const exitCode = code === 0 && diagnostic.naturalClose && stdout.eof && stderr.eof ? 0 : 1
-  stdout.dispose()
-  stderr.dispose()
-  custody.child = null
-  custody.pid = null
-  custody.parentPid = null
-  custody.image = null
-  custody.processChain = []
-  return { diagnostic, exitCode, privateFailure: null, privateJournalRoot: journal.root }
+function nativeBirth(child) {
+  if (!Number.isInteger(child.pid) || child.pid < 1) throw new Error('Held child has no PID.')
+  if (process.platform === 'win32') { const raw = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter \"ProcessId=${child.pid}\" | Select ProcessId,ParentProcessId,ExecutablePath,CreationDate | ConvertTo-Json -Compress)`], { encoding: 'utf8', windowsHide: true }); const x = parseStrictJson(raw.trim()); if (x.ProcessId !== child.pid || x.ParentProcessId !== process.pid || typeof x.ExecutablePath !== 'string' || !x.CreationDate) throw new Error('Native Windows birth mismatch.'); return x }
+  const raw = execFileSync('ps', ['-p', String(child.pid), '-o', 'pid=,ppid=,lstart=,comm='], { encoding: 'utf8' }).trim(); const fields = raw.split(/\s+/); if (Number(fields[0]) !== child.pid || Number(fields[1]) !== process.pid || !fields[7]) throw new Error('Native POSIX birth mismatch.'); return { pid: child.pid, ppid: process.pid, birth: fields.slice(2, 7).join(' '), image: fields.slice(7).join(' ') }
 }
-
-export function commitmentDigest(content) {
-  return createHash('sha256').update(content).digest('hex')
+function capture(stream, write, line) { let eof = false; let error = null; let h = createHash('sha256'); let pending = ''; if (!stream?.on) return { eof: false, error: new Error('Missing child stream.'), digest: () => null }; stream.on('data', (c) => { const b = Buffer.from(c); h.update(b); if (!write(b)) error ??= new Error('Private raw capture failed.'); pending += b.toString('utf8'); const lines = pending.split(/\r?\n/); pending = lines.pop() ?? ''; for (const x of lines) line(x) }); stream.once('end', () => { eof = true }); stream.once('error', (e) => { error ??= e }); return { get eof() { return eof }, get error() { return error }, digest: () => { try { return h.digest('hex') } catch { return null } } }
+}
+export function createFirstRunTerminalDiagnostic(x) {
+  const { stage = 'terminal', platform, run, candidate, coreCandidate, privateCloseJournal, exitCode, signal, naturalClose, stdoutEof, stderrEof, safeDiagnosticCode } = x
+  if (stage !== 'terminal' || !['win32', 'linux', 'darwin'].includes(platform) || !sha(run) || !keys(candidate, ['wrapperSha256', 'verifierSha256', 'harnessSha256']) || !Object.values(candidate).every(sha) || !keys(coreCandidate, ['head', 'tree', 'run']) || !git(coreCandidate.head) || !git(coreCandidate.tree) || !sha(coreCandidate.run) || !keys(privateCloseJournal, ['state', 'sha256']) || !((privateCloseJournal.state === 'retained' && sha(privateCloseJournal.sha256)) || (privateCloseJournal.state === 'unavailable' && privateCloseJournal.sha256 === null)) || !(exitCode === null || (Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255)) || !codes.has(safeDiagnosticCode) || typeof naturalClose !== 'boolean' || typeof stdoutEof !== 'boolean' || typeof stderrEof !== 'boolean') throw new Error('Invalid terminal projection.')
+  return Object.freeze({ schema: firstRunTerminalDiagnosticSchema, mode: 'first_run', stage, state: naturalClose && stdoutEof && stderrEof ? 'closed' : 'unresolved', platform, run, candidate, coreCandidate, privateCloseJournal, exitCode, signal: safeSignal(signal), naturalClose, stdoutEof, stderrEof, safeDiagnosticCode })
+}
+export async function captureFirstRunChild({ spawnChild, command, args, options, platform, run, candidate, coreCandidate, admission = {} }) {
+  let j; try { j = privateJournal(command, args, admission) } catch (privateFailure) { return fail(null, privateFailure) }
+  let child; try { child = spawnChild(command, args, options); const identity = nativeBirth(child); if (!j.record({ event: 'birth', identity })) throw j.fault() } catch (privateFailure) { return fail(j, privateFailure) }
+  let code = null, signal = null, closed = false, childError = null, diagnosticCode = 'unclassified'; const stdout = capture(child.stdout, j.stdout, () => {}); const stderr = capture(child.stderr, j.stderr, (line) => { diagnosticCode = parseSafeRunnerDiagnostic(line) ?? diagnosticCode })
+  await new Promise((done) => { child.once('error', (e) => { childError ??= e; done() }); child.once('close', (c, s) => { code = c; signal = s; closed = true; done() }) })
+  const natural = closed && !childError && safeSignal(signal) === null && stdout.eof && stderr.eof && !stdout.error && !stderr.error; const commitment = j.close({ event: 'terminal', exitCode: code, signal: safeSignal(signal), naturalClose: natural, stdoutEof: stdout.eof, stderrEof: stderr.eof, stdoutSha256: stdout.digest(), stderrSha256: stderr.digest() }); const d = createFirstRunTerminalDiagnostic({ platform, run, candidate, coreCandidate, privateCloseJournal: commitment ? { state: 'retained', sha256: commitment } : { state: 'unavailable', sha256: null }, exitCode: closed ? code : null, signal: closed ? signal : null, naturalClose: natural && Boolean(commitment), stdoutEof: stdout.eof, stderrEof: stderr.eof, safeDiagnosticCode: diagnosticCode }); return { diagnostic: d, exitCode: code === 0 && d.state === 'closed' ? 0 : 1, privateFailure: j.fault() ?? childError, privateJournalRoot: j.root }
+  function fail(journal, privateFailure) { const commitment = journal?.close({ event: 'spawn_or_birth_failure' }) ?? null; return { diagnostic: createFirstRunTerminalDiagnostic({ platform, run, candidate, coreCandidate, privateCloseJournal: commitment ? { state: 'retained', sha256: commitment } : { state: 'unavailable', sha256: null }, exitCode: null, signal: null, naturalClose: false, stdoutEof: false, stderrEof: false, safeDiagnosticCode: 'runner_start_failed' }), exitCode: 1, privateFailure, privateJournalRoot: journal?.root ?? null } }
 }
