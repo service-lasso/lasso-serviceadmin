@@ -111,6 +111,40 @@ including a CLI that terminates on the executable's exit event.
 Full current-head Admin and owning three-platform Core qualification are required.
 This is causal observation only; no passing-summary or exit-status waiver.
 
+## ISS-651: first-run terminal diagnostic and private custody
+
+The first-run wrapper must own the process it starts and capture both first-child
+streams locally from creation through a natural terminal close and both stream
+EOF events. An early failure before the general verifier reaches readiness must
+therefore yield one closed, schema-validated terminal projection instead of an
+unstructured inherited-stdio failure. This is diagnostic evidence only; it must
+not infer the historical Core exit-1 cause, change the general verifier's
+readiness, timeout, retry, cleanup, trusted-unlock, ownership, or admission
+semantics, or relax qualification.
+
+The public projection is allowlisted to a fixed schema, a fixed phase, a safe
+diagnostic code or `unclassified`, closed exit/signal state, natural-close and
+stdout/stderr EOF booleans, platform/run binding, and candidate commitment
+digests. It must reject unknown fields and emit `unresolved` when the child is
+still live rather than inventing exit, readiness, or cleanup facts. It never
+contains paths, PIDs, commands, environment, raw streams, private receipt
+bytes, ACLs, tool details, upload locations, or secret-bearing material.
+
+Private capture remains local to the owned wrapper process. It begins before
+any fallible spawn-adjacent observation, records held identity and immediate
+birth/process-chain evidence without publishing it, drains terminal exceptions,
+and aggregates cleanup without replacing the primary failure. It must preserve
+the primary failure if private capture, projection, or cleanup observation also
+fails. No global kill, recycled-PID lookup, foreign-session polling, timeout
+widening, sleeps, or concurrency changes are allowed.
+
+Focused real-child fixtures must cover early setup failure, failure before
+readiness, success, stream lag after exit, owner close, and a non-secret
+classifier boundary. They must prove schema rejection and absence of private
+material, rather than mirroring implementation details with regex-only tests.
+An exact-head natural Windows/Linux/macOS packaged run remains required; this
+diagnostic alone neither qualifies a release nor establishes a Core cause.
+
 ## ISS-1504: classify post-acceptance Cypress runner results
 
 Core #1504 retains a macOS packaged lifecycle attempt where the lifecycle spec
