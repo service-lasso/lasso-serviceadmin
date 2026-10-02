@@ -111,6 +111,86 @@ including a CLI that terminates on the executable's exit event.
 Full current-head Admin and owning three-platform Core qualification are required.
 This is causal observation only; no passing-summary or exit-status waiver.
 
+## ISS-651: first-run terminal diagnostic and private custody
+
+### Custody hardening amendment (PR #679)
+
+Before any first-run verifier child is admitted, the Admin wrapper must retain
+and read back a private, owner-restricted initial custody record.  The record
+binds the exact Admin checkout tree and wrapper/verifier/harness bytes, the
+qualified Core public initial-custody projection, and all three owned runtime
+roots (`SERVICE_LASSO_WORKSPACE_ROOT`, `SERVICE_LASSO_INSTANCE_REGISTRY_PATH`, and
+`SERVICE_LASSO_HOST_PORT_REGISTRY_PATH`).  Every root, parent chain and supplied registry
+must be an absolute, regular, non-reparse object owned by the wrapper identity;
+an absent registry is recorded as an owned absence.  A missing, malformed,
+unowned, reparse, unreadable, or unvalidated input is a negative admission
+result: no product child may start.
+
+For an absent registry, Admin must first inspect its existing immediate parent
+and every physical ancestor for reparse traversal, and must verify that parent
+is owned by the wrapper identity; it must not turn a missing leaf into an
+unchecked success.  On Windows, private-root readback must bind the actual
+current SID as owner and sole explicit effective full-control principal, with
+no inherited or other reader/writer ACE.  On POSIX, the root and files must
+read back as the current uid with modes `0700` and `0600` respectively.  These
+are private-custody requirements only and do not alter shared/global parent
+roots or tools.
+
+The Core projection is consumed only as its bounded public tuple: exact
+candidate head/tree, platform, run id/attempt, private initial receipt and
+journal commitments, and a locally validated v3 attestation.  Admin neither
+reads nor projects Core private receipt, journal, stream, tool, registry, or
+filesystem content.  Placeholder digests and `unavailable` candidate values
+are not candidates and may not be represented as retained commitments.
+
+Private journal writes must loop until every byte is written, flush and close
+the owned descriptors before hashing, and read back the closed files.  Spawn,
+identity, ACL, stream, journal, or cleanup faults preserve the primary failure
+and retain an explicit private caller handle when possible.  Public projection
+remains metadata-only.  It is `unresolved` unless the owned child naturally
+closes and both captured streams reach EOF; signals, stream errors, missing
+streams and an error without close are never relabelled as a clean terminal
+state.  Identity observation uses native, platform-appropriate process
+parent/image evidence captured immediately after birth and never a PID-only
+lookup, fabricated process record, global termination, retry, sleep, or
+concurrency change.
+
+The first-run wrapper must own the process it starts and capture both first-child
+streams locally from creation through a natural terminal close and both stream
+EOF events. An early failure before the general verifier reaches readiness must
+therefore yield one closed, schema-validated terminal projection instead of an
+unstructured inherited-stdio failure. This is diagnostic evidence only; it must
+not infer the historical Core exit-1 cause, change the general verifier's
+readiness, timeout, retry, cleanup, trusted-unlock, ownership, or admission
+semantics, or relax qualification.
+
+The public projection is allowlisted to a fixed schema, a fixed phase, a safe
+diagnostic code or `unclassified`, closed exit/signal state, natural-close and
+stdout/stderr EOF booleans, platform/run binding, and candidate commitment
+digests. A locally retained journal may contribute its SHA-256 only after
+successful closed-file readback; otherwise the projection must state that its
+journal commitment is unavailable. It must reject unknown fields and emit `unresolved` when the child is
+still live rather than inventing exit, readiness, or cleanup facts. It never
+contains paths, PIDs, commands, environment, raw streams, private receipt
+bytes, ACLs, tool details, upload locations, or secret-bearing material.
+
+Private capture remains local to the owned wrapper process. Before spawn it
+must create an owner-restricted local journal, then retain the first-child raw
+stdout/stderr, held identity, immediate birth/process-chain evidence, and a
+fsynced terminal close/EOF record there without publishing any of them. It
+drains terminal exceptions and aggregates cleanup without replacing the primary
+failure. It must preserve the primary failure if private capture, projection,
+or cleanup observation also fails. No global kill, recycled-PID lookup,
+foreign-session polling, timeout widening, sleeps, or concurrency changes are
+allowed.
+
+Focused real-child fixtures must cover early setup failure, failure before
+readiness, success, stream lag after exit, owner close, and a non-secret
+classifier boundary. They must prove schema rejection and absence of private
+material, rather than mirroring implementation details with regex-only tests.
+An exact-head natural Windows/Linux/macOS packaged run remains required; this
+diagnostic alone neither qualifies a release nor establishes a Core cause.
+
 ## ISS-1504: classify post-acceptance Cypress runner results
 
 Core #1504 retains a macOS packaged lifecycle attempt where the lifecycle spec

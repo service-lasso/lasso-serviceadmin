@@ -21,6 +21,7 @@
     "test:ui": "playwright test",
     "test:runtime": "node --test tests/runtime-server.node.mjs",
     "test:secrets:trusted-unlock-receipt": "node --test scripts/trusted-unlock-cypress-receipt.node-test.mjs",
+    "test:secrets:first-run-terminal-diagnostic": "node --test scripts/first-run-terminal-diagnostic.node-test.mjs",
     "test:secrets:real-browser": "node scripts/verify-real-broker-browser.mjs",
     "test:secrets:real-provider-control-browser": "node scripts/verify-real-provider-control-browser.mjs",
     "test:secrets:real-first-run-browser": "node scripts/verify-real-broker-first-run-browser.mjs",
