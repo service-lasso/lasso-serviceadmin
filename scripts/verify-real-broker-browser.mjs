@@ -1,10 +1,12 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { lstat, readFile, readdir } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import {
   buildTransportDiagnostic,
@@ -31,7 +33,9 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
 const brokerBinary = requiredPath('SERVICE_LASSO_TEST_BROKER_BINARY')
+const execFileAsync = promisify(execFile)
 const platform = process.platform
+const realProviderControl = process.env.SERVICE_LASSO_REAL_PROVIDER_CONTROL === '1'
 const committedRotationCandidate =
   'browser-rotation-candidate-2026-08-14-verified'
 const rollbackCandidate =
@@ -89,6 +93,20 @@ function requiredPath(name) {
   return path.resolve(value)
 }
 
+function exactIdentity(value, label) {
+  if (typeof value !== 'string' || !/^[a-f0-9]{40}$/.test(value.trim())) {
+    throw new Error(`${label} must be an exact source identity.`)
+  }
+  return value.trim()
+}
+
+async function gitIdentity(...args) {
+  const { stdout } = await execFileAsync('git', ['-C', coreRoot, ...args], {
+    windowsHide: true,
+  })
+  return exactIdentity(stdout, 'Core source identity')
+}
+
 async function requireFile(filePath, label) {
   const info = await lstat(filePath)
   if (!info.isFile() || info.isSymbolicLink()) {
@@ -121,21 +139,6 @@ async function readBoundedRegularFile(
     throw new Error(`${label} changed outside its bound while being read.`)
   }
   return bytes
-}
-
-function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null) return Promise.resolve(child.exitCode)
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.off('exit', onExit)
-      reject(new Error('Child process exit timed out.'))
-    }, timeoutMs)
-    const onExit = (code) => {
-      clearTimeout(timer)
-      resolve(code)
-    }
-    child.once('exit', onExit)
-  })
 }
 
 function waitForReady(runner, timeoutMs = 240_000) {
@@ -171,7 +174,7 @@ function waitForReady(runner, timeoutMs = 240_000) {
       for (const line of lines) {
         try {
           const value = JSON.parse(line)
-          if (value.contractVersion === 'service-lasso.real-admin-browser.v1') {
+          if (value.contractVersion === 'service-lasso.real-admin-browser.v2') {
             settle(resolve, value)
             return
           }
@@ -441,7 +444,6 @@ function captureBoundedChildOutput(child, maxBytes = 4 * 1024 * 1024) {
     capture.bytes += chunk.length
     if (capture.bytes > maxBytes) {
       capture.exceeded = true
-      child.kill('SIGKILL')
       return
     }
     capture[target].push(Buffer.from(chunk))
@@ -473,6 +475,77 @@ await requireFile(path.join(adminRoot, 'runtime', 'server.js'), 'Admin runtime')
 await requireFile(path.join(adminRoot, 'dist', 'index.html'), 'Admin UI entrypoint')
 await requireFile(specPath, 'Cypress lifecycle spec')
 
+// The Core runner refuses implicit paths. Establish each caller-owned input
+// before it imports any Core runtime module and retain the private receipts
+// until the owned runner reports its real closure.
+const qualificationRoot = await mkdtemp(
+  path.join(tmpdir(), 'service-admin-provider-custody-')
+)
+const runtimeInputs = {
+  workspaceRoot: path.join(qualificationRoot, 'workspace'),
+  instanceRegistryPath: path.join(qualificationRoot, 'instances', 'registry.json'),
+  hostPortRegistryPath: path.join(qualificationRoot, 'ports', 'registry.json'),
+  servicesRoot: path.join(qualificationRoot, 'services'),
+  evidenceRoot: path.join(qualificationRoot, 'evidence'),
+  supportRoot: path.join(qualificationRoot, 'support'),
+}
+await Promise.all([
+  mkdir(runtimeInputs.workspaceRoot),
+  mkdir(path.dirname(runtimeInputs.instanceRegistryPath)),
+  mkdir(path.dirname(runtimeInputs.hostPortRegistryPath)),
+  mkdir(runtimeInputs.servicesRoot),
+  mkdir(runtimeInputs.evidenceRoot),
+  mkdir(runtimeInputs.supportRoot),
+])
+const sourceHead = await gitIdentity('rev-parse', 'HEAD')
+const sourceTree = await gitIdentity('rev-parse', 'HEAD^{tree}')
+const requiredCoreRevision = process.env.SERVICE_LASSO_TEST_CORE_REVISION
+if (requiredCoreRevision && exactIdentity(requiredCoreRevision, 'Requested Core revision') !== sourceHead) {
+  throw new Error('Core checkout did not match the requested exact candidate.')
+}
+
+function privateReceipt(pathname, expectedSchema) {
+  return readBoundedRegularFile(pathname, 16 * 1024, 'Private Core receipt')
+    .then((bytes) => JSON.parse(bytes.toString('utf8')))
+    .then((receipt) => {
+      if (
+        !receipt ||
+        receipt.schema !== expectedSchema ||
+        receipt.private !== true ||
+        receipt.source?.head !== sourceHead ||
+        receipt.source?.tree !== sourceTree ||
+        !/^[a-f0-9]{64}$/.test(receipt.nonce ?? '')
+      ) {
+        throw new Error('Private Core receipt did not bind the exact source identity.')
+      }
+      return receipt
+    })
+}
+
+function assertInitialReceipt(receipt) {
+  const expectedInputs = {
+    workspaceRoot: runtimeInputs.workspaceRoot,
+    instanceRegistryPath: runtimeInputs.instanceRegistryPath,
+    hostPortRegistryPath: runtimeInputs.hostPortRegistryPath,
+    servicesRoot: runtimeInputs.servicesRoot,
+    evidenceRoot: runtimeInputs.evidenceRoot,
+    supportRoot: runtimeInputs.supportRoot,
+  }
+  if (
+    JSON.stringify(receipt.inputs) !== JSON.stringify(expectedInputs) ||
+    !/^sha256:[a-f0-9]{64}$/.test(receipt.runtimeAssets?.brokerBinary?.sha256 ?? '') ||
+    !/^sha256:[a-f0-9]{64}$/.test(receipt.runtimeAssets?.adminServer?.sha256 ?? '') ||
+    !Number.isInteger(receipt.ownedProcesses?.runner?.pid) ||
+    !Number.isInteger(receipt.ownedProcesses?.admin?.pid) ||
+    receipt.ownedProcesses.runner.parentPid !== process.pid ||
+    receipt.ownedProcesses.admin.parentPid !== receipt.ownedProcesses.runner.pid ||
+    typeof receipt.ownedProcesses.runner.birth !== 'string' ||
+    typeof receipt.ownedProcesses.admin.birth !== 'string'
+  ) {
+    throw new Error('Initial Core receipt did not prove caller inputs and owned process birth.')
+  }
+}
+
 const runner = spawn(process.execPath, [runnerPath], {
   cwd: coreRoot,
   env: {
@@ -480,6 +553,14 @@ const runner = spawn(process.execPath, [runnerPath], {
     SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
     SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
     SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
+    SERVICE_LASSO_WORKSPACE_ROOT: runtimeInputs.workspaceRoot,
+    SERVICE_LASSO_INSTANCE_REGISTRY_PATH: runtimeInputs.instanceRegistryPath,
+    SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: runtimeInputs.hostPortRegistryPath,
+    SERVICE_LASSO_TEST_SERVICES_ROOT: runtimeInputs.servicesRoot,
+    SERVICE_LASSO_TEST_EVIDENCE_ROOT: runtimeInputs.evidenceRoot,
+    SERVICE_LASSO_TEST_SUPPORT_ROOT: runtimeInputs.supportRoot,
+    SERVICE_LASSO_TEST_SOURCE_HEAD: sourceHead,
+    SERVICE_LASSO_TEST_SOURCE_TREE: sourceTree,
   },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
@@ -553,6 +634,28 @@ try {
   ) {
     throw new Error('Real browser runtime returned an unsafe control URL.')
   }
+  if (
+    ready.liveReceipt?.schema !== 'service-lasso.real-admin-browser-live-initial.v1' ||
+    ready.liveReceipt?.initialPath !==
+      path.join(runtimeInputs.evidenceRoot, 'live-initial-receipt.json') ||
+    ready.liveReceipt?.closurePath !==
+      path.join(runtimeInputs.evidenceRoot, 'live-closure-receipt.json') ||
+    !/^sha256:[a-f0-9]{64}$/.test(ready.liveReceipt?.initialSHA256 ?? '')
+  ) {
+    throw new Error('Real browser runtime did not expose the required private receipt custody.')
+  }
+  const initialReceipt = await privateReceipt(
+    ready.liveReceipt.initialPath,
+    'service-lasso.real-admin-browser-live-initial.v1'
+  )
+  assertInitialReceipt(initialReceipt)
+  if (
+    `sha256:${createHash('sha256')
+      .update(await readFile(ready.liveReceipt.initialPath))
+      .digest('hex')}` !== ready.liveReceipt.initialSHA256
+  ) {
+    throw new Error('Real browser initial receipt changed after readiness.')
+  }
   cypress = spawn(
     process.execPath,
     [
@@ -565,7 +668,9 @@ try {
       '--config',
       `baseUrl=${adminUrl.origin},video=false,screenshotOnRunFailure=false`,
       '--env',
-      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1`,
+      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
+        realProviderControl ? ',realProviderControl=1' : ''
+      }`,
       '--spec',
       specPath,
     ],
@@ -605,17 +710,18 @@ try {
     throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
   }
   cypressSucceeded = true
-  if (qualificationMode === 'comprehensive') {
+  if (qualificationMode === 'comprehensive' && !realProviderControl) {
     await verifyRollbackProcessEvidence(path.resolve(ready.tempRoot))
     rollbackProcessVerified = true
   }
-  auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
+  if (!realProviderControl) {
+    auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
+  }
 } catch (error) {
   runFailure = error
 } finally {
   if (cypress?.exitCode === null) {
-    cypress.kill('SIGKILL')
-    await waitForExit(cypress, 10_000).catch(() => undefined)
+    runFailure = new Error('Cypress did not close at its qualification deadline.')
   }
   if (cypressOutput && !cypressOutputChecked) {
     try {
@@ -667,16 +773,39 @@ try {
   if (runner.exitCode === null) {
     runner.send({ type: 'service-lasso-real-admin-shutdown' })
     try {
-      await waitForExit(runner, 180_000)
+      await waitForCapturedChildClose(runner, 180_000)
     } catch {
-      runner.kill('SIGKILL')
-      await waitForExit(runner, 10_000).catch(() => undefined)
+      runFailure = new Error('Owned Core browser runner did not close after shutdown.')
     }
   }
-  if (ready?.tempRoot) await waitForRemoved(path.resolve(ready.tempRoot))
+  if (ready?.tempRoot) {
+    try {
+      await waitForRemoved(path.resolve(ready.tempRoot))
+    } catch (error) {
+      runFailure = error
+    }
+  }
+  if (ready?.liveReceipt?.closurePath && runner.exitCode !== null) {
+    try {
+      const closureReceipt = await privateReceipt(
+        ready.liveReceipt.closurePath,
+        'service-lasso.real-admin-browser-live-closure.v1'
+      )
+      if (
+        closureReceipt.outcome !== 'closed' ||
+        (realProviderControl && closureReceipt.providerFault !== 'consumed')
+      ) {
+        throw new Error('Core closure receipt did not prove the requested final state.')
+      }
+    } catch (error) {
+      runFailure = error
+    }
+  }
 }
 
 if (runFailure) throw runFailure
+
+await rm(qualificationRoot, { recursive: true, force: false })
 
 function cypressEnvironment() {
   const environment = { ...process.env }

@@ -304,16 +304,21 @@ test('bounded provider, metadata, and execute network waits retain exact source 
         'restartBrokerFromUi(3, () => brokerRestartUiRequests)'
       )
   )
-  assert.equal(
-    lifecycleSource.split(
-      'restartBrokerFromUi(3, () => controlledPreClickRestartApiRequests)'
-    ).length - 1,
-    1
-  )
-  assert.equal(
-    lifecycleSource.includes("cy.env(['trustedUnlockReceiptControlFailure'])"),
-    true
-  )
+  for (const providerControlProof of [
+    'realProviderControlEnabled',
+    "providerControl('fail-next-provider-request', { method: 'POST' })",
+    "outcome: 'provider_fault_unobserved'",
+    "outcome: 'provider_fault_armed'",
+    "providerControl('provider-fault-receipt')",
+    "'provider_fault_observed'",
+    "schema: 'service-lasso.real-admin-browser-provider-control.v1'",
+    "validateProviderConfiguration('ready')",
+    "validateProviderConfiguration('unavailable')",
+  ]) {
+    assert.equal(lifecycleSource.includes(providerControlProof), true)
+  }
+  assert.equal(lifecycleSource.includes('forceNetworkError'), false)
+  assert.equal(lifecycleSource.includes('document.body.innerHTML'), false)
   for (const requestCount of [1, 2]) {
     assert.equal(
       lifecycleSource.split(
@@ -356,6 +361,31 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   assert.equal(
     packageManifest.scripts['test:secrets:real-stopped-lifecycle-browser'],
     'node scripts/verify-real-broker-stopped-lifecycle-browser.mjs'
+  )
+  assert.equal(
+    packageManifest.scripts['test:secrets:real-provider-control-browser'],
+    'node scripts/verify-real-provider-control-browser.mjs'
+  )
+  for (const inputName of [
+    'SERVICE_LASSO_WORKSPACE_ROOT',
+    'SERVICE_LASSO_INSTANCE_REGISTRY_PATH',
+    'SERVICE_LASSO_HOST_PORT_REGISTRY_PATH',
+    'SERVICE_LASSO_TEST_SERVICES_ROOT',
+    'SERVICE_LASSO_TEST_EVIDENCE_ROOT',
+    'SERVICE_LASSO_TEST_SUPPORT_ROOT',
+    'SERVICE_LASSO_TEST_SOURCE_HEAD',
+    'SERVICE_LASSO_TEST_SOURCE_TREE',
+  ]) {
+    assert.equal(verifierSource.includes(inputName), true)
+  }
+  assert.equal(verifierSource.includes('service-lasso.real-admin-browser.v2'), true)
+  assert.equal(verifierSource.includes('assertInitialReceipt'), true)
+  assert.equal(verifierSource.includes('service-lasso.real-admin-browser-live-closure.v1'), true)
+  assert.equal(verifierSource.includes("kill('SIGKILL')"), false)
+  assert.equal(browserWorkflowSource.includes('611f8cdd2f684e8e466d32009cf4af410225c2ec'), true)
+  assert.equal(
+    browserWorkflowSource.includes('pnpm test:secrets:real-provider-control-browser'),
+    true
   )
   assert.equal(
     browserWorkflowSource.split(

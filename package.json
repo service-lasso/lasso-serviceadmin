@@ -22,6 +22,7 @@
     "test:runtime": "node --test tests/runtime-server.node.mjs",
     "test:secrets:trusted-unlock-receipt": "node --test scripts/trusted-unlock-cypress-receipt.node-test.mjs",
     "test:secrets:real-browser": "node scripts/verify-real-broker-browser.mjs",
+    "test:secrets:real-provider-control-browser": "node scripts/verify-real-provider-control-browser.mjs",
     "test:secrets:real-first-run-browser": "node scripts/verify-real-broker-first-run-browser.mjs",
     "test:secrets:real-lockout-browser": "node scripts/verify-real-broker-lockout-browser.mjs",
     "test:secrets:real-stopped-lifecycle-browser": "node scripts/verify-real-broker-stopped-lifecycle-browser.mjs",
