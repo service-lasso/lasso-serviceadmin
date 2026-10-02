@@ -48,6 +48,9 @@ const safeTransportErrorCodes = new Set([
   'ERR_TIMED_OUT',
 ])
 
+let controlledProviderValidationClicks = 0
+let recoveryProviderValidationClicks = 0
+
 function qualificationCheckpoint(phase) {
   return cy.task('qualificationCheckpoint', phase, { log: false })
 }
@@ -146,44 +149,6 @@ function visibleTableRow(content, timeout = 20_000) {
   return cy.contains('tr', content, { timeout }).should('be.visible')
 }
 
-function providerControl(pathname, options = {}) {
-  return cy.env('testControlUrl').then((controlUrl) => {
-    expect(controlUrl).to.match(
-      /^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/
-    )
-    return cy.request({
-      failOnStatusCode: false,
-      method: options.method ?? 'GET',
-      url: `${controlUrl}/${pathname}`,
-      timeout: 20_000,
-    })
-  })
-}
-
-function validateProviderConfiguration(expectedOutcome) {
-  visibleTableRow('vault-browser').within(() => {
-    cy.contains('button', 'Validate configuration')
-      .scrollIntoView()
-      .should('be.visible')
-      .and('not.be.disabled')
-      .click()
-  })
-  dialog('Validate provider configuration').within(() => {
-    cy.get('#provider-validation-reason').type('Provider custody qualification')
-    cy.contains('button', 'Validate through Broker').click()
-    if (expectedOutcome === 'ready') {
-      cy.contains('Validation outcome: ready', { timeout: 20_000 }).should(
-        'be.visible'
-      )
-    } else {
-      cy.contains(/provider.*(unavailable|failed)|validation.*(unavailable|failed)/i, {
-        timeout: 20_000,
-      }).should('be.visible')
-    }
-    cy.contains('button', 'Close').click()
-  })
-}
-
 function restartBrokerFromUi(expectedRequestCount, requestCount) {
   waitForManagedServiceReadiness('@secretsbroker')
   const detailReadiness = observeBrokerDetailReadiness()
@@ -198,13 +163,79 @@ function restartBrokerFromUi(expectedRequestCount, requestCount) {
   cy.contains('[role="alertdialog"]', 'Confirm elevated action').within(() => {
     cy.contains('button', /^Restart service$/).click()
   })
-  cy.wait('@restartBrokerFromUi', { timeout: 120_000 }).then(
-    ({ request, response }) => {
-      expect(request.body).to.deep.equal({ confirm: true })
-      expect(response?.statusCode).to.equal(200)
-      expect(requestCount()).to.equal(expectedRequestCount)
-    }
-  )
+  cy.wait('@restartBrokerFromUi', { timeout: 120_000 }).then(({ request, response }) => {
+    expect(request.body).to.deep.equal({ confirm: true })
+    expect(response?.statusCode).to.equal(200)
+    expect(requestCount()).to.equal(expectedRequestCount)
+  })
+}
+
+function consumeControlledProviderFault() {
+  cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
+    if (!enabled) return
+    cy.env(['testControlUrl', 'providerControlNonce']).then(({ testControlUrl: controlUrl, providerControlNonce }) => {
+      expect(controlUrl).to.match(/^http:\/\/127\.0\.0\.1:\d+\/__service_lasso_test$/)
+      expect(providerControlNonce).to.match(/^[a-f0-9]{64}$/)
+      cy.request({
+        method: 'POST',
+        url: `${controlUrl}/fail-next-provider-request`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        body: '',
+        log: false,
+      }).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })
+      })
+    })
+    visibleTableRow('vault-browser').within(() => {
+      cy.contains('button', 'Validate configuration').click()
+    })
+    dialog('Validate provider configuration').within(() => {
+      cy.get('#provider-validation-reason').type('Release browser controlled provider failure')
+      cy.contains('button', 'Validate through Broker').click()
+      controlledProviderValidationClicks += 1
+      cy.contains('Provider validation failed closed.', { timeout: 20_000 }).should('be.visible')
+    })
+    cy.env(['testControlUrl', 'providerControlNonce']).then(({ testControlUrl: controlUrl, providerControlNonce }) => {
+      cy.request({
+        url: `${controlUrl}/provider-fault-receipt`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        log: false,
+      }).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body.outcome).to.equal('provider_fault_observed')
+        expect(body.receipt).to.include({
+          schema: 'service-lasso.real-admin-browser-provider-control.v1',
+          phase: 'authenticated_provider_request',
+          state: 'controlled_fault_consumed',
+        })
+        expect(body.receipt).not.to.have.property('controlNonce')
+      })
+    })
+    dialog('Validate provider configuration').within(() => {
+      // This is the same rendered consumer control after the real 503.  It
+      // must issue the next authenticated provider request instead of using a
+      // direct control-plane probe or a synthetic response.
+      cy.contains('button', 'Validate through Broker').click()
+      recoveryProviderValidationClicks += 1
+      cy.contains('Provider validation failed closed.', { timeout: 20_000 }).should('be.visible')
+    })
+    cy.env(['testControlUrl', 'providerControlNonce']).then(({ testControlUrl: controlUrl, providerControlNonce }) => {
+      cy.request({
+        method: 'POST',
+        url: `${controlUrl}/fail-next-provider-request`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        body: '',
+        failOnStatusCode: false,
+        log: false,
+      }).then(({ status }) => {
+        expect(status).to.equal(409)
+      })
+    })
+    cy.then(() => {
+      throw new Error('Controlled authenticated provider 503 was observed.')
+    })
+  })
 }
 
 function restartBrokerAndOpenSecrets(expectedRequestCount, requestCount) {
@@ -820,52 +851,22 @@ function waitForSuccessfulBrokerEventsUiResponse(
     })
 }
 
-describe('real provider fault custody control', () => {
-  before(function () {
-    cy.task('realProviderControlEnabled').then((enabled) => {
-      if (!enabled) this.skip()
-    })
-  })
-
-  it('binds the UI negative path to the next authenticated provider request', () => {
-    cy.visit('/services/%40secretsbroker')
-    unlockTrustedIdentity(20_000, { retainFailureReceipt: true })
-    providerControl('fail-next-provider-request', { method: 'POST' }).then(
-      ({ status, body }) => {
-        expect(status).to.equal(409)
-        expect(body).to.deep.equal({ outcome: 'provider_fault_unobserved' })
-      }
-    )
-    openSecrets()
-    validateProviderConfiguration('ready')
-    providerControl('fail-next-provider-request', { method: 'POST' }).then(
-      ({ status, body }) => {
-        expect(status).to.equal(200)
-        expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })
-      }
-    )
-    validateProviderConfiguration('unavailable')
-    providerControl('provider-fault-receipt').then(({ status, body }) => {
-      expect(status).to.equal(200)
-      expect(body.outcome).to.equal('provider_fault_observed')
-      expect(body.receipt).to.include({
-        schema: 'service-lasso.real-admin-browser-provider-control.v1',
-        phase: 'authenticated_provider_request',
-      })
-      expect(body.receipt.nonce).to.match(/^[a-f0-9]{64}$/)
-    })
-    validateProviderConfiguration('ready')
-  })
-})
-
 describe('packaged Service Admin with real Core and Secrets Broker', () => {
-  before(function () {
-    cy.task('realProviderControlEnabled').then((enabled) => {
-      if (enabled) this.skip()
-    })
+  beforeEach(() => {
+    controlledProviderValidationClicks = 0
+    recoveryProviderValidationClicks = 0
   })
 
-  afterEach(() => flushTrustedUnlockReceipt())
+  afterEach(() => {
+    const flushed = flushTrustedUnlockReceipt()
+    return (flushed ?? cy.wrap(null, { log: false })).then(() =>
+      cy.task('trustedUnlockRealProviderControlEnabled').then((enabled) => {
+        if (!enabled) return
+        expect(controlledProviderValidationClicks).to.equal(1)
+        expect(recoveryProviderValidationClicks).to.equal(1)
+      })
+    )
+  })
 
   before(() => {
     Cypress.config('screenshotOnRunFailure', false)
@@ -1939,6 +1940,7 @@ describe('packaged Service Admin with real Core and Secrets Broker', () => {
       cy.contains('button', 'Close').click()
     })
     qualificationCheckpoint('provider_validation_complete')
+    consumeControlledProviderFault()
 
     restartBrokerFromUi(3, () => brokerRestartUiRequests)
     cy.reload()

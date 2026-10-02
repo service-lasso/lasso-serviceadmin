@@ -1,13 +1,16 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
-import { execFile, spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { execFileSync, spawn } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
+import { lstat, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 
+import {
+  hasClosedOwnedProcessCustody,
+  parseOwnedProcessCustody,
+} from './qualification-owned-process-custody.mjs'
 import {
   buildTransportDiagnostic,
   parseRotationProxyLifecycleDiagnostic,
@@ -26,16 +29,30 @@ import {
   parseLockedWrapperUiDiagnostic,
   parseQualificationProgressDiagnostic,
   parseRotationRehydrationDiagnostic,
-  parseTrustedUnlockReceiptDiagnostic,
+  parseTrustedUnlockDiagnosticLine,
   qualificationProgressPhases,
 } from './real-browser-qualification-progress.mjs'
+import {
+  readQualificationCustody,
+  requiredRuntimePaths,
+  sha256File,
+  sha256Receipt,
+  writeQualificationCustody,
+} from './qualification-custody.mjs'
+import {
+  brokerAuditPath,
+  noLeakEvidenceRoots,
+  parseRuntimeInputs,
+  rollbackProcessEvidencePath,
+  validateExpectedRuntimeFilesystem,
+  verifyClosureReceipt,
+} from './real-browser-runtime-inputs.mjs'
+import { readHeldJsonFile, readHeldRegularFile } from './held-receipt-reader.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
 const brokerBinary = requiredPath('SERVICE_LASSO_TEST_BROKER_BINARY')
-const execFileAsync = promisify(execFile)
 const platform = process.platform
-const realProviderControl = process.env.SERVICE_LASSO_REAL_PROVIDER_CONTROL === '1'
 const committedRotationCandidate =
   'browser-rotation-candidate-2026-08-14-verified'
 const rollbackCandidate =
@@ -58,6 +75,20 @@ const qualificationMode = ['first-run', 'lockout', 'stopped-lifecycle'].includes
 )
   ? process.env.SERVICE_LASSO_REAL_BROWSER_MODE
   : 'comprehensive'
+const trustedUnlockRealProviderControl =
+  process.env.SERVICE_LASSO_TRUSTED_UNLOCK_REAL_PROVIDER_CONTROL === '1' ||
+  process.env.SERVICE_LASSO_REAL_PROVIDER_CONTROL === '1'
+const custodyReceiptPath = requiredPath(
+  'SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH'
+)
+const initialCustodyReceiptPath = requiredPath(
+  'SERVICE_LASSO_QUALIFICATION_CUSTODY_INITIAL_RECEIPT_PATH'
+)
+const ownedProcessEventsPath = requiredPath(
+  'SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH'
+)
+const providerControlNonce = randomBytes(32).toString('hex')
+requiredRuntimePaths()
 const adminRoot = path.resolve(
   process.env.SERVICE_LASSO_TEST_ADMIN_ROOT ??
     path.join(root, 'output', 'package', `@serviceadmin-${platform}`)
@@ -68,6 +99,31 @@ const runnerPath = path.join(
   'fixtures',
   'real-admin-browser-runner.mjs'
 )
+const coreSource = {
+  head: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim(),
+  tree: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD^{tree}'], {
+    encoding: 'utf8',
+  }).trim(),
+}
+const adminSource = {
+  head: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  tree: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
+}
+for (const [name, source] of [['Core', coreSource], ['Admin', adminSource]]) {
+  if (!/^[a-f0-9]{40}$/.test(source.head) || !/^[a-f0-9]{40}$/.test(source.tree)) {
+    throw new Error(`${name} source identity was invalid.`)
+  }
+}
+for (const [name, actual, expectedHead, expectedTree] of [
+  ['Admin', adminSource, process.env.SERVICE_LASSO_QUALIFICATION_ADMIN_HEAD, process.env.SERVICE_LASSO_QUALIFICATION_ADMIN_TREE],
+  ['Core', coreSource, process.env.SERVICE_LASSO_QUALIFICATION_CORE_HEAD, process.env.SERVICE_LASSO_QUALIFICATION_CORE_TREE],
+]) {
+  if (actual.head !== expectedHead || actual.tree !== expectedTree) {
+    throw new Error(`${name} source did not match its pre-build qualification identity.`)
+  }
+}
 const specPath = path.join(
   root,
   'cypress',
@@ -93,20 +149,6 @@ function requiredPath(name) {
   return path.resolve(value)
 }
 
-function exactIdentity(value, label) {
-  if (typeof value !== 'string' || !/^[a-f0-9]{40}$/.test(value.trim())) {
-    throw new Error(`${label} must be an exact source identity.`)
-  }
-  return value.trim()
-}
-
-async function gitIdentity(...args) {
-  const { stdout } = await execFileAsync('git', ['-C', coreRoot, ...args], {
-    windowsHide: true,
-  })
-  return exactIdentity(stdout, 'Core source identity')
-}
-
 async function requireFile(filePath, label) {
   const info = await lstat(filePath)
   if (!info.isFile() || info.isSymbolicLink()) {
@@ -127,18 +169,83 @@ async function readBoundedRegularFile(
   label,
   { allowEmpty = false } = {}
 ) {
-  const info = await lstat(filePath)
-  if (!info.isFile() || info.isSymbolicLink()) {
-    throw new Error(`${label} must be a regular file.`)
+  const resolved = path.resolve(filePath)
+  return readHeldRegularFile({
+    root: path.dirname(resolved),
+    literalPath: path.basename(resolved),
+    label,
+    maxBytes,
+    allowEmpty,
+  })
+}
+
+async function verifyControlledProviderFault(runtimeInputs, source) {
+  const read = (literalPath, label) => readHeldJsonFile({
+    root: runtimeInputs.evidenceRoot,
+    literalPath,
+    label,
+    maxBytes: 1024 * 1024,
+  }).then(({ value }) => value)
+  const [armed, consumed, recovered] = await Promise.all([
+    read('live-provider-control-receipt.json', 'Real browser provider control receipt'),
+    read('live-provider-control-consumed-receipt.json', 'Real browser provider consumed receipt'),
+    read('live-provider-control-recovery-receipt.json', 'Real browser provider recovery receipt'),
+  ])
+  const baseKeys = [
+    'schema',
+    'private',
+    'nonce',
+    'platform',
+    'source',
+    'adminSource',
+    'controlNonce',
+    'phase',
+    'causalSink',
+    'state',
+  ]
+  const hasExactKeys = (value, keys) =>
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join(',') === [...keys].sort().join(',')
+  const matches = (receipt, state, causalSink) =>
+    receipt?.schema === 'service-lasso.real-admin-browser-provider-control.v1' &&
+    receipt.private === true &&
+    receipt.nonce === runtimeInputs.liveReceipt.nonce &&
+    receipt.platform === platform &&
+    receipt.controlNonce === providerControlNonce &&
+    receipt.source?.head === source.head &&
+    receipt.source?.tree === source.tree &&
+    receipt.adminSource?.head === adminSource.head &&
+    receipt.adminSource?.tree === adminSource.tree &&
+    receipt.phase === 'authenticated_provider_request' &&
+    receipt.state === state &&
+    receipt.causalSink === causalSink
+  if (
+    !hasExactKeys(armed, baseKeys) ||
+    !matches(armed, 'observed_before_controlled_fault', 'authenticated_vault_provider_request') ||
+    !hasExactKeys(consumed, baseKeys) ||
+    !matches(consumed, 'controlled_fault_consumed', 'next_authenticated_vault_provider_request') ||
+    !matches(recovered, 'controlled_fault_recovered', 'next_authenticated_vault_provider_request') ||
+    !hasExactKeys(recovered, [
+      ...baseKeys,
+      'originalRequest',
+      'baselineStatus',
+      'recoveryStatus',
+      'rearm',
+      'secondConsume',
+    ]) ||
+    !hasExactKeys(recovered.originalRequest, ['method', 'path', 'authClass']) ||
+    recovered.originalRequest?.method !== 'GET' ||
+    recovered.originalRequest?.path !== '/v1/secret/data/browser/provider-control' ||
+    recovered.originalRequest?.authClass !== 'vault_token' ||
+    recovered.baselineStatus !== 404 ||
+    recovered.recoveryStatus !== recovered.baselineStatus ||
+    recovered.rearm !== 'rejected' ||
+    recovered.secondConsume !== false
+  ) {
+    throw new Error('Controlled provider 503 did not retain the required consumed-and-recovered private receipt chain.')
   }
-  if ((!allowEmpty && info.size === 0) || info.size > maxBytes) {
-    throw new Error(`${label} was empty or exceeded its bound.`)
-  }
-  const bytes = await readFile(filePath)
-  if ((!allowEmpty && bytes.length === 0) || bytes.length > maxBytes) {
-    throw new Error(`${label} changed outside its bound while being read.`)
-  }
-  return bytes
 }
 
 function waitForReady(runner, timeoutMs = 240_000) {
@@ -188,28 +295,8 @@ function waitForReady(runner, timeoutMs = 240_000) {
   })
 }
 
-async function waitForRemoved(target, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      await lstat(target)
-    } catch (error) {
-      if (error?.code === 'ENOENT') return
-      throw error
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error('Real browser runtime did not remove its isolated workspace.')
-}
-
-async function verifyBrokerAudit(tempRoot) {
-  const auditPath = path.join(
-    tempRoot,
-    'workspace',
-    '.service-lasso',
-    'secretsbroker',
-    'audit.jsonl'
-  )
+async function verifyBrokerAudit(runtimeInputs) {
+  const auditPath = brokerAuditPath(runtimeInputs)
   const bytes = await readBoundedRegularFile(
     auditPath,
     4 * 1024 * 1024,
@@ -333,33 +420,11 @@ async function listBoundedEvidenceFiles(directory, files = [], depth = 0) {
 }
 
 async function verifyNoLeakEvidence(
-  tempRoot,
+  runtimeInputs,
   runtimeDiagnostics,
   { requireComplete = false } = {}
 ) {
-  const evidenceRoots =
-    qualificationMode === 'comprehensive'
-      ? [
-          {
-            directory: path.join(
-              tempRoot,
-              'services',
-              'sample-service',
-              'logs'
-            ),
-            allowEmptyFiles: true,
-          },
-          {
-            directory: path.join(
-              tempRoot,
-              'workspace',
-              '.service-lasso',
-              'secret-rotations'
-            ),
-            allowEmptyFiles: false,
-          },
-        ]
-      : []
+  const evidenceRoots = noLeakEvidenceRoots(runtimeInputs, qualificationMode)
   let totalBytes = 0
   for (const { directory, allowEmptyFiles } of evidenceRoots) {
     if (requireComplete) {
@@ -401,14 +466,8 @@ async function verifyNoLeakEvidence(
   }
 }
 
-async function verifyRollbackProcessEvidence(tempRoot) {
-  const evidencePath = path.join(
-    tempRoot,
-    'services',
-    'sample-service',
-    '.state',
-    'browser-broker-evidence.json'
-  )
+async function verifyRollbackProcessEvidence(runtimeInputs) {
+  const evidencePath = rollbackProcessEvidencePath(runtimeInputs)
   const evidence = JSON.parse(
     (
       await readBoundedRegularFile(
@@ -467,6 +526,22 @@ function publishSafeChildOutput(capture) {
   if (stderr.length > 0) process.stderr.write(stderr)
 }
 
+function observedParentPid(pid) {
+  try {
+    if (process.platform === 'linux') {
+      const stat = readFileSync(`/proc/${pid}/stat`, { encoding: 'utf8' })
+      return Number(stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[1])
+    }
+    const command = process.platform === 'win32' ? 'powershell.exe' : 'ps'
+    const args = process.platform === 'win32'
+      ? ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter \"ProcessId=${pid}\").ParentProcessId`]
+      : ['-o', 'ppid=', '-p', String(pid)]
+    return Number(execFileSync(command, args, { encoding: 'utf8', windowsHide: true }).trim())
+  } catch {
+    return null
+  }
+}
+
 await requireDirectory(coreRoot, 'Core root')
 await requireDirectory(adminRoot, 'Packaged Admin root')
 await requireFile(brokerBinary, 'Broker binary')
@@ -474,77 +549,95 @@ await requireFile(runnerPath, 'Core browser runner')
 await requireFile(path.join(adminRoot, 'runtime', 'server.js'), 'Admin runtime')
 await requireFile(path.join(adminRoot, 'dist', 'index.html'), 'Admin UI entrypoint')
 await requireFile(specPath, 'Cypress lifecycle spec')
-
-// The Core runner refuses implicit paths. Establish each caller-owned input
-// before it imports any Core runtime module and retain the private receipts
-// until the owned runner reports its real closure.
-const qualificationRoot = await mkdtemp(
-  path.join(tmpdir(), 'service-admin-provider-custody-')
-)
-const runtimeInputs = {
-  workspaceRoot: path.join(qualificationRoot, 'workspace'),
-  instanceRegistryPath: path.join(qualificationRoot, 'instances', 'registry.json'),
-  hostPortRegistryPath: path.join(qualificationRoot, 'ports', 'registry.json'),
-  servicesRoot: path.join(qualificationRoot, 'services'),
-  evidenceRoot: path.join(qualificationRoot, 'evidence'),
-  supportRoot: path.join(qualificationRoot, 'support'),
+await validateExpectedRuntimeFilesystem()
+const initialCustody = await readQualificationCustody(initialCustodyReceiptPath)
+const initialCustodyHash = await sha256Receipt(initialCustodyReceiptPath)
+const custodyOwners = []
+function retainOwnedProcess(role, child, sourceSha256) {
+  const pid = Number.isInteger(child.pid) && child.pid > 0 ? child.pid : null
+  const parentPid = pid === null ? null : observedParentPid(pid)
+  let born = false
+  if (pid !== null) {
+    try {
+      process.kill(pid, 0)
+      born = true
+    } catch {}
+  }
+  const owner = {
+    role,
+    parent: 'verifier',
+    pid,
+    parentPid,
+    executable: process.execPath,
+    sourceSha256,
+    birth: born && parentPid === process.pid ? 'observed' : 'unverified',
+    close: 'pending',
+    exitCode: 'unavailable',
+    signal: 'unavailable',
+  }
+  custodyOwners.push(owner)
+  child.once('close', (exitCode, signal) => {
+    owner.close = 'observed'
+    owner.exitCode = Number.isInteger(exitCode) && exitCode >= 0 ? exitCode : null
+    owner.signal =
+      signal === null || ['SIGINT', 'SIGTERM'].includes(signal)
+        ? signal
+        : 'other'
+  })
+  return owner
 }
-await Promise.all([
-  mkdir(runtimeInputs.workspaceRoot),
-  mkdir(path.dirname(runtimeInputs.instanceRegistryPath)),
-  mkdir(path.dirname(runtimeInputs.hostPortRegistryPath)),
-  mkdir(runtimeInputs.servicesRoot),
-  mkdir(runtimeInputs.evidenceRoot),
-  mkdir(runtimeInputs.supportRoot),
-])
-const sourceHead = await gitIdentity('rev-parse', 'HEAD')
-const sourceTree = await gitIdentity('rev-parse', 'HEAD^{tree}')
-const requiredCoreRevision = process.env.SERVICE_LASSO_TEST_CORE_REVISION
-if (requiredCoreRevision && exactIdentity(requiredCoreRevision, 'Requested Core revision') !== sourceHead) {
-  throw new Error('Core checkout did not match the requested exact candidate.')
+
+async function readOwnedProcessCustody(eventPath, expected) {
+  let exists
+  try {
+    exists = await lstat(eventPath)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw error
+  }
+  if (!exists.isFile() || exists.isSymbolicLink()) {
+    throw new Error('Owned process custody sidecar was not a regular file.')
+  }
+  const bytes = await readBoundedRegularFile(eventPath, 1024 * 1024, 'Owned process custody sidecar')
+  return parseOwnedProcessCustody(bytes, expected)
 }
 
-function privateReceipt(pathname, expectedSchema) {
-  return readBoundedRegularFile(pathname, 16 * 1024, 'Private Core receipt')
-    .then((bytes) => JSON.parse(bytes.toString('utf8')))
-    .then((receipt) => {
-      if (
-        !receipt ||
-        receipt.schema !== expectedSchema ||
-        receipt.private !== true ||
-        receipt.source?.head !== sourceHead ||
-        receipt.source?.tree !== sourceTree ||
-        !/^[a-f0-9]{64}$/.test(receipt.nonce ?? '')
-      ) {
-        throw new Error('Private Core receipt did not bind the exact source identity.')
+const ownedSourceHashes = {
+  brokerBinary: await sha256File(brokerBinary),
+  coreRunner: await sha256File(runnerPath),
+  adminRuntime: await sha256File(path.join(adminRoot, 'runtime', 'server.js')),
+  cypressLauncher: await sha256File(cypressBin),
+}
+const coreReceiptAssets = Object.fromEntries(
+  await Promise.all(
+    [
+      'tests/fixtures/real-admin-browser-runner.mjs',
+      'tests/fixtures/real-admin-browser-shutdown.mjs',
+      'tests/fixtures/real-admin-browser-rollback.mjs',
+    ].map(async (literalPath) => {
+      const filePath = path.join(coreRoot, ...literalPath.split('/'))
+      const info = await lstat(filePath)
+      if (!info.isFile() || info.isSymbolicLink() || info.size < 1) {
+        throw new Error('Expected Core native runner asset was unavailable.')
       }
-      return receipt
+      return [literalPath, { sha256: `sha256:${await sha256File(filePath)}`, size: info.size }]
     })
+  )
+)
+const ownedProcessNonces = {
+  broker_binary: randomBytes(32).toString('hex'),
+  admin_runtime: randomBytes(32).toString('hex'),
 }
-
-function assertInitialReceipt(receipt) {
-  const expectedInputs = {
-    workspaceRoot: runtimeInputs.workspaceRoot,
-    instanceRegistryPath: runtimeInputs.instanceRegistryPath,
-    hostPortRegistryPath: runtimeInputs.hostPortRegistryPath,
-    servicesRoot: runtimeInputs.servicesRoot,
-    evidenceRoot: runtimeInputs.evidenceRoot,
-    supportRoot: runtimeInputs.supportRoot,
-  }
-  if (
-    JSON.stringify(receipt.inputs) !== JSON.stringify(expectedInputs) ||
-    !/^sha256:[a-f0-9]{64}$/.test(receipt.runtimeAssets?.brokerBinary?.sha256 ?? '') ||
-    !/^sha256:[a-f0-9]{64}$/.test(receipt.runtimeAssets?.adminServer?.sha256 ?? '') ||
-    !Number.isInteger(receipt.ownedProcesses?.runner?.pid) ||
-    !Number.isInteger(receipt.ownedProcesses?.admin?.pid) ||
-    receipt.ownedProcesses.runner.parentPid !== process.pid ||
-    receipt.ownedProcesses.admin.parentPid !== receipt.ownedProcesses.runner.pid ||
-    typeof receipt.ownedProcesses.runner.birth !== 'string' ||
-    typeof receipt.ownedProcesses.admin.birth !== 'string'
-  ) {
-    throw new Error('Initial Core receipt did not prove caller inputs and owned process birth.')
-  }
+const sourceSizes = {
+  brokerBinary: (await lstat(brokerBinary)).size,
+  adminRuntime: (await lstat(path.join(adminRoot, 'runtime', 'server.js'))).size,
+  node: (await lstat(process.execPath)).size,
 }
+const ownedProcessObserver = path.join(
+  root,
+  'scripts',
+  'qualification-owned-process-observer.cjs'
+)
 
 const runner = spawn(process.execPath, [runnerPath], {
   cwd: coreRoot,
@@ -553,17 +646,41 @@ const runner = spawn(process.execPath, [runnerPath], {
     SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
     SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
     SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
-    SERVICE_LASSO_WORKSPACE_ROOT: runtimeInputs.workspaceRoot,
-    SERVICE_LASSO_INSTANCE_REGISTRY_PATH: runtimeInputs.instanceRegistryPath,
-    SERVICE_LASSO_HOST_PORT_REGISTRY_PATH: runtimeInputs.hostPortRegistryPath,
-    SERVICE_LASSO_TEST_SERVICES_ROOT: runtimeInputs.servicesRoot,
-    SERVICE_LASSO_TEST_EVIDENCE_ROOT: runtimeInputs.evidenceRoot,
-    SERVICE_LASSO_TEST_SUPPORT_ROOT: runtimeInputs.supportRoot,
-    SERVICE_LASSO_TEST_SOURCE_HEAD: sourceHead,
-    SERVICE_LASSO_TEST_SOURCE_TREE: sourceTree,
+    SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH: ownedProcessEventsPath,
+    SERVICE_LASSO_QUALIFICATION_BROKER_SHA256: ownedSourceHashes.brokerBinary,
+    SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_SHA256: ownedSourceHashes.adminRuntime,
+    SERVICE_LASSO_QUALIFICATION_BROKER_BINARY_NONCE: ownedProcessNonces.broker_binary,
+    SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_NONCE: ownedProcessNonces.admin_runtime,
+    SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce,
+    SERVICE_LASSO_TEST_ADMIN_SOURCE_HEAD: adminSource.head,
+    SERVICE_LASSO_TEST_ADMIN_SOURCE_TREE: adminSource.tree,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${ownedProcessObserver}`.trim(),
   },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
+const coreRunnerOwner = retainOwnedProcess(
+  'core_runner',
+  runner,
+  ownedSourceHashes.coreRunner
+)
+const nestedExpectedSources = {
+  broker_binary: {
+    sourceSha256: ownedSourceHashes.brokerBinary,
+    sourceSize: sourceSizes.brokerBinary,
+    executableSha256: ownedSourceHashes.brokerBinary,
+    executableSize: sourceSizes.brokerBinary,
+    parentPid: runner.pid,
+    ownerNonce: ownedProcessNonces.broker_binary,
+  },
+  admin_runtime: {
+    sourceSha256: ownedSourceHashes.adminRuntime,
+    sourceSize: sourceSizes.adminRuntime,
+    executableSha256: await sha256File(process.execPath),
+    executableSize: sourceSizes.node,
+    parentPid: runner.pid,
+    ownerNonce: ownedProcessNonces.admin_runtime,
+  },
+}
 const rotationProxyLifecycleEvents = []
 let stderrBytes = 0
 let stderrBuffer = ''
@@ -598,6 +715,7 @@ runner.stderr.on('data', (chunk) => {
 })
 
 let ready
+let runtimeInputs
 let cypress
 let cypressOutput
 let cypressOutputChecked = false
@@ -609,15 +727,29 @@ const cypressRunSummaryEvents = []
 const providerUiConvergenceEvents = []
 const rotationRehydrationEvents = []
 const lockedWrapperUiEvents = []
-const trustedUnlockReceipts = []
+const trustedUnlockDiagnostics = []
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
+let controlledProviderFaultVerified = false
+let finalQualificationFailureDiagnostic
 try {
   ready = await waitForReady(runner)
   if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
     throw new Error('Real browser runtime returned an invalid platform.')
   }
+  runtimeInputs = await parseRuntimeInputs(ready, {
+    source: coreSource,
+    assets: coreReceiptAssets,
+    observedRunner: {
+      pid: runner.pid,
+      parentPid: coreRunnerOwner.parentPid,
+      nativeIdentity: {
+        size: (await lstat(process.execPath)).size,
+        sha256: `sha256:${await sha256File(process.execPath)}`,
+      },
+    },
+  })
   const adminUrl = new URL(ready.adminUrl)
   const controlUrl = new URL(ready.controlUrl)
   if (
@@ -634,28 +766,6 @@ try {
   ) {
     throw new Error('Real browser runtime returned an unsafe control URL.')
   }
-  if (
-    ready.liveReceipt?.schema !== 'service-lasso.real-admin-browser-live-initial.v1' ||
-    ready.liveReceipt?.initialPath !==
-      path.join(runtimeInputs.evidenceRoot, 'live-initial-receipt.json') ||
-    ready.liveReceipt?.closurePath !==
-      path.join(runtimeInputs.evidenceRoot, 'live-closure-receipt.json') ||
-    !/^sha256:[a-f0-9]{64}$/.test(ready.liveReceipt?.initialSHA256 ?? '')
-  ) {
-    throw new Error('Real browser runtime did not expose the required private receipt custody.')
-  }
-  const initialReceipt = await privateReceipt(
-    ready.liveReceipt.initialPath,
-    'service-lasso.real-admin-browser-live-initial.v1'
-  )
-  assertInitialReceipt(initialReceipt)
-  if (
-    `sha256:${createHash('sha256')
-      .update(await readFile(ready.liveReceipt.initialPath))
-      .digest('hex')}` !== ready.liveReceipt.initialSHA256
-  ) {
-    throw new Error('Real browser initial receipt changed after readiness.')
-  }
   cypress = spawn(
     process.execPath,
     [
@@ -669,7 +779,9 @@ try {
       `baseUrl=${adminUrl.origin},video=false,screenshotOnRunFailure=false`,
       '--env',
       `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
-        realProviderControl ? ',realProviderControl=1' : ''
+        trustedUnlockRealProviderControl
+          ? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=${providerControlNonce}`
+          : ''
       }`,
       '--spec',
       specPath,
@@ -680,6 +792,7 @@ try {
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
+  retainOwnedProcess('cypress', cypress, ownedSourceHashes.cypressLauncher)
   cypressOutput = captureBoundedChildOutput(cypress)
   captureQualificationProgress(
     cypress,
@@ -687,7 +800,7 @@ try {
     providerUiConvergenceEvents,
     rotationRehydrationEvents,
     lockedWrapperUiEvents,
-    trustedUnlockReceipts
+    trustedUnlockDiagnostics
   )
   captureCypressRunSummary(cypress, cypressRunSummaryEvents)
   captureCypressChildProvenance(cypress, cypressChildEvents)
@@ -707,15 +820,25 @@ try {
     qualificationFailureKind = classifyQualificationFailure({
       exitCode: cypressExit,
     })
-    throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
+    if (!trustedUnlockRealProviderControl) {
+      throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
+    }
+  } else if (trustedUnlockRealProviderControl) {
+    throw new Error(
+      'Controlled real provider-validation receipt path unexpectedly passed.'
+    )
   }
-  cypressSucceeded = true
-  if (qualificationMode === 'comprehensive' && !realProviderControl) {
-    await verifyRollbackProcessEvidence(path.resolve(ready.tempRoot))
+  if (trustedUnlockRealProviderControl) {
+    await verifyControlledProviderFault(runtimeInputs, coreSource)
+    controlledProviderFaultVerified = true
+  }
+  cypressSucceeded = !trustedUnlockRealProviderControl
+  if (qualificationMode === 'comprehensive' && cypressSucceeded) {
+    await verifyRollbackProcessEvidence(runtimeInputs)
     rollbackProcessVerified = true
   }
-  if (!realProviderControl) {
-    auditEventCount = await verifyBrokerAudit(path.resolve(ready.tempRoot))
+  if (cypressSucceeded) {
+    auditEventCount = await verifyBrokerAudit(runtimeInputs)
   }
 } catch (error) {
   runFailure = error
@@ -731,10 +854,10 @@ try {
       runFailure = error
     }
   }
-  if (ready?.tempRoot) {
+  if (runtimeInputs) {
     try {
       await verifyNoLeakEvidence(
-        path.resolve(ready.tempRoot),
+        runtimeInputs,
         stderrEvidence,
         { requireComplete: cypressSucceeded }
       )
@@ -751,24 +874,21 @@ try {
     const adminReachability = await probeAdminReachability(
       new URL(ready.adminUrl).origin
     )
-    process.stderr.write(
-      `${JSON.stringify(
-        buildQualificationFailureDiagnostic({
-          failure: qualificationFailureKind,
-          progressEvents: qualificationProgressEvents,
-          cypressChildEvents,
-          cypressRunSummary: cypressRunSummaryEvents.at(-1),
-          providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
-          lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
-          trustedUnlockReceipt: trustedUnlockReceipts.at(-1),
-          rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
-          transportDiagnostic: buildTransportDiagnostic(
-            rotationProxyLifecycleEvents,
-            adminReachability
-          ),
-        })
-      )}\n`
-    )
+    finalQualificationFailureDiagnostic = buildQualificationFailureDiagnostic({
+      failure: qualificationFailureKind,
+      progressEvents: qualificationProgressEvents,
+      cypressChildEvents,
+      cypressRunSummary: cypressRunSummaryEvents.at(-1),
+      providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+      lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
+      trustedUnlockDiagnostic: trustedUnlockDiagnostics.at(-1),
+      rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
+      transportDiagnostic: buildTransportDiagnostic(
+        rotationProxyLifecycleEvents,
+        adminReachability
+      ),
+    })
+    process.stderr.write(`${JSON.stringify(finalQualificationFailureDiagnostic)}\n`)
   }
   if (runner.exitCode === null) {
     runner.send({ type: 'service-lasso-real-admin-shutdown' })
@@ -778,34 +898,105 @@ try {
       runFailure = new Error('Owned Core browser runner did not close after shutdown.')
     }
   }
-  if (ready?.tempRoot) {
+  if (runtimeInputs) {
     try {
-      await waitForRemoved(path.resolve(ready.tempRoot))
-    } catch (error) {
-      runFailure = error
-    }
-  }
-  if (ready?.liveReceipt?.closurePath && runner.exitCode !== null) {
-    try {
-      const closureReceipt = await privateReceipt(
-        ready.liveReceipt.closurePath,
-        'service-lasso.real-admin-browser-live-closure.v1'
-      )
-      if (
-        closureReceipt.outcome !== 'closed' ||
-        (realProviderControl && closureReceipt.providerFault !== 'consumed')
-      ) {
-        throw new Error('Core closure receipt did not prove the requested final state.')
-      }
+      await verifyClosureReceipt(runtimeInputs, coreSource)
     } catch (error) {
       runFailure = error
     }
   }
 }
 
-if (runFailure) throw runFailure
+const sourceHashes = ownedSourceHashes
+let nestedOwners = []
+try {
+  nestedOwners = await readOwnedProcessCustody(
+    ownedProcessEventsPath,
+    nestedExpectedSources
+  )
+} catch (error) {
+  runFailure = error
+}
+const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
+const closureVerified =
+  runFailure === undefined &&
+  cypressOutput?.exceeded !== true &&
+  nestedClosureVerified &&
+  custodyOwners.length === 2 &&
+  custodyOwners.every(
+    (owner) =>
+      owner.birth === 'observed' &&
+      owner.parentPid === process.pid &&
+      owner.close === 'observed' &&
+      Number.isInteger(owner.exitCode) &&
+      owner.exitCode >= 0 &&
+      owner.signal === null &&
+      /^[a-f0-9]{64}$/.test(owner.sourceSha256)
+  )
+const publicOwnerSummary = [
+  ...custodyOwners.map(({ role, birth, close, exitCode, signal }) => ({
+    role,
+    birth,
+    close,
+    exitCode,
+    signal,
+  })),
+  ...nestedOwners
+    .filter((record) => record.event === 'close')
+    .map(({ role, exitCode, signal }) => ({
+      role,
+      birth: 'observed',
+      close: 'observed',
+      exitCode,
+      signal,
+    })),
+]
+const controlledObserved =
+  finalQualificationFailureDiagnostic?.lastPhase === 'provider_validation_complete' &&
+  finalQualificationFailureDiagnostic?.cypressRunSummary?.state === 'complete' &&
+  finalQualificationFailureDiagnostic.cypressRunSummary.totalFailed === 1 &&
+  finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
+  controlledProviderFaultVerified &&
+  closureVerified
+await writeQualificationCustody(custodyReceiptPath, {
+  schema: initialCustody.schema,
+  state: 'closed',
+  mode: trustedUnlockRealProviderControl ? 'controlled_negative' : 'positive',
+  outcome: trustedUnlockRealProviderControl
+    ? controlledObserved
+      ? 'controlled_failure_observed'
+      : 'controlled_failure_unverified'
+    : cypressSucceeded
+      ? 'positive_verified'
+      : 'positive_unverified',
+  causal: trustedUnlockRealProviderControl
+    ? controlledObserved
+      ? 'provider_validation_transport_failure'
+      : 'unverified'
+    : 'not_applicable',
+  runtimePathHashes: initialCustody.runtimePathHashes,
+  initialReceiptSha256: initialCustodyHash,
+  sourceHashes,
+  sourceBindings: [
+    { role: 'core_runner', owner: 'core_runner', sha256: sourceHashes.coreRunner },
+    { role: 'cypress_launcher', owner: 'cypress', sha256: sourceHashes.cypressLauncher },
+    { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
+    { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
+  ],
+  // PID, parent PID, nonce, executable identity, and the raw sidecar stay in
+  // the private runner.  The retained receipt exposes only typed completion.
+  owners: publicOwnerSummary,
+})
 
-await rm(qualificationRoot, { recursive: true, force: false })
+if (trustedUnlockRealProviderControl) {
+  if (!controlledObserved) {
+    throw new Error(
+      'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
+    )
+  }
+}
+
+if (runFailure) throw runFailure
 
 function cypressEnvironment() {
   const environment = { ...process.env }
@@ -849,9 +1040,9 @@ function captureQualificationProgress(
       if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
         lockedWrapperUiTarget.push(lockedWrapperUiEvent)
       }
-      const trustedUnlockReceipt = parseTrustedUnlockReceiptDiagnostic(line)
-      if (trustedUnlockReceipt && trustedUnlockTarget.length < 1) {
-        trustedUnlockTarget.push(trustedUnlockReceipt)
+      const trustedUnlockDiagnostic = parseTrustedUnlockDiagnosticLine(line)
+      if (trustedUnlockDiagnostic && trustedUnlockTarget.length < 1) {
+        trustedUnlockTarget.push(trustedUnlockDiagnostic)
       }
     }
   })
@@ -885,20 +1076,44 @@ function captureCypressRunSummary(child, target) {
   })
 }
 
-const brokerSha256 = createHash('sha256')
-  .update(await readFile(brokerBinary))
-  .digest('hex')
+const qualificationResult =
+  trustedUnlockRealProviderControl
+    ? controlledObserved
+      ? {
+          schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
+          qualificationMode,
+          outcome: 'controlled_failure_observed',
+          platform,
+          causalReceipt: 'closed_native_custody',
+        }
+      : {
+          schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
+          qualificationMode,
+          outcome: 'controlled_failure_unverified',
+          platform,
+          causalReceipt: 'closure_unverified',
+        }
+    : cypressSucceeded && closureVerified
+      ? {
+          schema: 'service-lasso.real-secrets-browser-result.v1',
+          qualificationMode,
+          outcome: 'verified',
+          platform,
+          coreRevision: process.env.SERVICE_LASSO_TEST_CORE_REVISION ?? 'local',
+          brokerRevision: process.env.SERVICE_LASSO_TEST_BROKER_REVISION ?? 'local',
+          brokerSha256: sourceHashes.brokerBinary,
+          adminArtifact: path.basename(adminRoot),
+          auditEventCount,
+          rollbackProcessVerified,
+        }
+      : {
+          schema: 'service-lasso.real-secrets-browser-result.v1',
+          qualificationMode,
+          outcome: 'unverified',
+          platform,
+        }
 process.stdout.write(
-  `${JSON.stringify({
-    schema: 'service-lasso.real-secrets-browser-result.v1',
-    qualificationMode,
-    outcome: 'verified',
-    platform,
-    coreRevision: process.env.SERVICE_LASSO_TEST_CORE_REVISION ?? 'local',
-    brokerRevision: process.env.SERVICE_LASSO_TEST_BROKER_REVISION ?? 'local',
-    brokerSha256,
-    adminArtifact: path.basename(adminRoot),
-    auditEventCount,
-    rollbackProcessVerified,
-  })}\n`
+  `${JSON.stringify(
+    qualificationResult
+  )}\n`
 )

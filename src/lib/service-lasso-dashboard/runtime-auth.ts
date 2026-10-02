@@ -4,6 +4,7 @@ import {
   isLoopbackLoginOrigin,
   readLocalRootBreakGlass,
 } from './local-operator-session'
+import { observeRuntimeIdentityCausalPhase } from './runtime-identity-observation'
 import { fetchRuntimeJson, serviceLassoStubDataEnabled } from './stub'
 
 export type RuntimeActorKind = 'local-root' | 'zitadel' | 'local-token'
@@ -248,10 +249,25 @@ export async function fetchRuntimeIdentity(): Promise<RuntimeIdentity> {
   if (shouldUseFixtureIdentity()) {
     return fixtureRuntimeIdentity
   }
-
-  return normalizeRuntimeIdentity(
-    await fetchRuntimeJson<RuntimeAuthPayload>('/api/runtime/security')
-  )
+  observeRuntimeIdentityCausalPhase('request_started')
+  let payload: RuntimeAuthPayload
+  try {
+    payload = await fetchRuntimeJson<RuntimeAuthPayload>(
+      '/api/runtime/security'
+    )
+    observeRuntimeIdentityCausalPhase('response_delivered')
+  } catch (error) {
+    observeRuntimeIdentityCausalPhase('transport_failed')
+    throw error
+  }
+  try {
+    const identity = normalizeRuntimeIdentity(payload)
+    observeRuntimeIdentityCausalPhase('contract_parsed')
+    return identity
+  } catch (error) {
+    observeRuntimeIdentityCausalPhase('contract_rejected')
+    throw error
+  }
 }
 
 export function runtimeIdentityAuditContext(identity: RuntimeIdentity) {

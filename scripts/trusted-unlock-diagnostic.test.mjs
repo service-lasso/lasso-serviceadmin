@@ -3,6 +3,9 @@ import { EventEmitter } from 'node:events'
 import { test } from 'vitest'
 import {
   createTrustedUnlockObservation,
+  createTrustedIdentityCausalReceipt,
+  createTrustedUnlockDiagnostic,
+  parseTrustedUnlockDiagnostic,
   createTrustedUnlockReceipt,
   observeTrustedUnlockFailure,
 } from './trusted-unlock-diagnostic.mjs'
@@ -46,6 +49,26 @@ test('closed receipt uses own primitive fields and preserves the original failur
   assert.equal(emitter.listenerCount('fail'), 0)
 })
 
+test('causal receipt retains only fixed phase categories', () => {
+  const receipt = createTrustedIdentityCausalReceipt({
+    sequence: 1,
+    request: 'response_delivered',
+    contract: 'parsed',
+    query: 'settled',
+    render: 'loading',
+    private: 'PRIVATE',
+  })
+  assert.deepEqual(receipt, {
+    schema: 'service-admin.trusted-identity-causal.v2',
+    sequence: 1,
+    request: 'response_delivered',
+    contract: 'parsed',
+    query: 'settled',
+    render: 'loading',
+  })
+  assert.equal(createTrustedIdentityCausalReceipt({ sequence: 1, request: 'PRIVATE' }), null)
+})
+
 test('closed receipt rejects hostile and zero-state input', () => {
   const zero = createTrustedUnlockReceipt({})
   assert.deepEqual(zero, {
@@ -67,6 +90,13 @@ test('failure retains the original error, closes its observer and excludes priva
   observation.begin()
   const token = observation.started()
   observation.responded(token, 503)
+  observation.causalSnapshot({
+    sequence: 1,
+    request: 'response_delivered',
+    contract: 'parsed',
+    query: 'settled',
+    render: 'loading',
+  })
   observeTrustedUnlockFailure(emitter, observation, () => ({
     verifiedMarkerPresent: false, unavailableMarkerPresent: true, private: 'PRIVATE',
     get localRootButtonPresent() { throw new Error('PRIVATE') },
@@ -79,9 +109,49 @@ test('failure retains the original error, closes its observer and excludes priva
   assert.equal(metadata.httpStatus, 503)
   assert.equal(metadata.unavailableMarkerPresent, true)
   assert.equal(metadata.localRootButtonPresent, null)
+  assert.deepEqual(metadata.causal, {
+    schema: 'service-admin.trusted-identity-causal.v2',
+    sequence: 1,
+    request: 'response_delivered',
+    contract: 'parsed',
+    query: 'settled',
+    render: 'loading',
+  })
   assert.doesNotMatch(JSON.stringify(metadata), /PRIVATE/)
   assert.equal(emitter.listenerCount('fail'), 0)
   assert.equal(observation.isActive(), false)
+})
+
+test('causal diagnostic accepts only the versioned exact-key envelope', () => {
+  const receipt = createTrustedUnlockReceipt({ loading: true })
+  const causal = createTrustedIdentityCausalReceipt({
+    sequence: 1,
+    request: 'response_delivered',
+    contract: 'parsed',
+    query: 'settled',
+    render: 'unlocked',
+  })
+  const diagnostic = createTrustedUnlockDiagnostic(receipt, causal)
+  assert.deepEqual(parseTrustedUnlockDiagnostic(diagnostic), diagnostic)
+  assert.equal(parseTrustedUnlockDiagnostic({ ...diagnostic, private: 'PRIVATE' }), null)
+  assert.equal(
+    parseTrustedUnlockDiagnostic({
+      ...diagnostic,
+      causal: { ...causal, query: 'PRIVATE' },
+    }),
+    null
+  )
+  assert.equal(
+    parseTrustedUnlockDiagnostic({
+      ...diagnostic,
+      causal: { ...causal, duplicate: true },
+    }),
+    null
+  )
+  assert.deepEqual(
+    parseTrustedUnlockDiagnostic(JSON.parse(JSON.stringify(diagnostic))),
+    diagnostic
+  )
 })
 
 test('successful cleanup cannot annotate an unrelated failure or accept late responses', () => {

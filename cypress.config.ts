@@ -5,7 +5,7 @@ import {
   createLockedWrapperUiRecorder,
   createQualificationProgressRecorder,
   createRotationRehydrationRecorder,
-  createTrustedUnlockReceiptRecorder,
+  createTrustedUnlockDiagnosticRecorder,
 } from './scripts/real-browser-qualification-progress.mjs'
 
 export default defineConfig({
@@ -37,7 +37,7 @@ export default defineConfig({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
       })
-      const trustedUnlock = createTrustedUnlockReceiptRecorder({
+      const trustedUnlock = createTrustedUnlockDiagnosticRecorder({
         enabled: String(config.env.qualificationProgress) === '1',
         write: (line) => process.stderr.write(line),
       })
@@ -61,8 +61,11 @@ export default defineConfig({
         cypressRunSummary.record(results)
       })
       on('task', {
-        realProviderControlEnabled() {
-          return String(config.env.realProviderControl) === '1'
+        trustedUnlockRealProviderControlEnabled() {
+          return (
+            String(config.env.trustedUnlockRealProviderControlFailure) === '1' ||
+            String(config.env.realProviderControl) === '1'
+          )
         },
         qualificationCheckpoint(phase) {
           progress.record(phase)
@@ -80,9 +83,8 @@ export default defineConfig({
           lockedWrapperUi.record(diagnostic)
           return null
         },
-        trustedUnlockReceipt(receipt) {
-          trustedUnlock.retain(receipt)
-          return null
+        trustedUnlockDiagnostic(diagnostic) {
+          return trustedUnlock.retain(diagnostic)
         },
       })
       return config
