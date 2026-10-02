@@ -315,6 +315,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     lifecycleSource.includes('trustedUnlockRealProviderControlEnabled'),
     true
   )
+  assert.equal(lifecycleSource.includes('realProviderControl'), true)
   assert.equal(
     lifecycleSource.includes('trustedUnlockRealProviderControlFailure'),
     false

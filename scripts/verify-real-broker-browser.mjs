@@ -76,7 +76,8 @@ const qualificationMode = ['first-run', 'lockout', 'stopped-lifecycle'].includes
   ? process.env.SERVICE_LASSO_REAL_BROWSER_MODE
   : 'comprehensive'
 const trustedUnlockRealProviderControl =
-  process.env.SERVICE_LASSO_TRUSTED_UNLOCK_REAL_PROVIDER_CONTROL === '1'
+  process.env.SERVICE_LASSO_TRUSTED_UNLOCK_REAL_PROVIDER_CONTROL === '1' ||
+  process.env.SERVICE_LASSO_REAL_PROVIDER_CONTROL === '1'
 const custodyReceiptPath = requiredPath(
   'SERVICE_LASSO_QUALIFICATION_CUSTODY_RECEIPT_PATH'
 )
@@ -779,7 +780,7 @@ try {
       '--env',
       `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
         trustedUnlockRealProviderControl
-            ? `,trustedUnlockRealProviderControlFailure=1,providerControlNonce=${providerControlNonce}`
+          ? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=${providerControlNonce}`
           : ''
       }`,
       '--spec',

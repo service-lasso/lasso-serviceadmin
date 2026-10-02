@@ -63,7 +63,8 @@ export default defineConfig({
       on('task', {
         trustedUnlockRealProviderControlEnabled() {
           return (
-            String(config.env.trustedUnlockRealProviderControlFailure) === '1'
+            String(config.env.trustedUnlockRealProviderControlFailure) === '1' ||
+            String(config.env.realProviderControl) === '1'
           )
         },
         qualificationCheckpoint(phase) {
