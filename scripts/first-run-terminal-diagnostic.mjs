@@ -47,20 +47,73 @@ export function validateCoreInitialProjection(bytes, platform) {
   if (!keys(x, ['schema', 'privateVersion', 'candidate', 'platform', 'run', 'privateInitialReceiptSha256', 'privateJournalSha256', 'localValidatorAttestation']) || x.schema !== 'service-lasso.qualification-first-custody-projection.v2' || x.privateVersion !== 'v3' || x.platform !== platform || !keys(x.candidate, ['head', 'tree']) || !git(x.candidate.head) || !git(x.candidate.tree) || !keys(x.run, ['id', 'attempt']) || !/^[0-9]{1,20}$/.test(String(x.run.id)) || !/^[0-9]{1,20}$/.test(String(x.run.attempt)) || !sha(x.privateInitialReceiptSha256) || !sha(x.privateJournalSha256) || !keys(x.localValidatorAttestation, ['schema', 'validated']) || x.localValidatorAttestation.schema !== 'service-lasso.qualification-local-validator-attestation.v2' || x.localValidatorAttestation.validated !== true) throw new Error('Core v3 projection is not admitted.')
   return x
 }
-function ownerSid() { return execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true }).match(/S-1-[0-9-]+/i)?.[0] ?? null }
-function checkOwned(path, label, allowAbsent = false) {
-  if (typeof path !== 'string' || !isAbsolute(path)) throw new Error(`${label} is not absolute.`)
-  if (allowAbsent && !existsSync(path)) return { state: 'absent', path: resolve(path) }
-  const absolute = resolve(path)
-  for (let current = absolute;; current = dirname(current)) { const stat = lstatSync(current); if (stat.isSymbolicLink() || realpathSync(current) !== current) throw new Error(`${label} has a reparse chain.`); if (dirname(current) === current) break }
-  const stat = statSync(absolute); if (!stat.isFile() && !stat.isDirectory()) throw new Error(`${label} is not regular.`)
-  if (process.platform !== 'win32' && stat.uid !== process.getuid()) throw new Error(`${label} is not owned.`)
-  return { state: 'present', path: absolute, type: stat.isDirectory() ? 'directory' : 'file' }
+function ownerSid(exec = execFileSync) { return exec('C:\\Windows\\System32\\whoami.exe', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true }).match(/S-1-[0-9-]+/i)?.[0] ?? null }
+const fullControl = 0x1f01ff
+function readWindowsSecurity(path, exec = execFileSync) {
+  const literal = path.replaceAll("'", "''")
+  const script = `$acl=Get-Acl -LiteralPath '${literal}';[pscustomobject]@{ownerSid=$acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value;access=@($acl.Access|ForEach-Object{[pscustomobject]@{identitySid=$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value;accessType=$_.AccessControlType.ToString();rights=[int]$_.FileSystemRights;inherited=[bool]$_.IsInherited;inheritanceFlags=[int]$_.InheritanceFlags}})}|ConvertTo-Json -Compress`
+  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  const raw = exec('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { encoding: 'utf8', windowsHide: true })
+  return parseStrictJson(raw.trim())
 }
-export function admitFirstRunInputs({ workspaceRoot, instanceRegistryPath, hostPortRegistryPath, coreProjectionPath, platform }) {
-  const workspace = checkOwned(workspaceRoot, 'workspace root'); if (workspace.type !== 'directory') throw new Error('Workspace root is not a directory.')
-  const instance = checkOwned(instanceRegistryPath, 'instance registry', true); const ports = checkOwned(hostPortRegistryPath, 'host port registry', true)
-  const core = checkOwned(coreProjectionPath, 'Core initial projection'); if (core.type !== 'file') throw new Error('Core projection is not a file.')
+function samePhysicalPath(left, right, platform) {
+  const normalize = (path) => resolve(path).replace(/^\\\\\?\\(?:UNC\\)?/i, platform === 'win32' ? '\\\\' : '')
+  return platform === 'win32' ? normalize(left).toLowerCase() === normalize(right).toLowerCase() : normalize(left) === normalize(right)
+}
+function ownedWindowsSecurity(security, sid, label, requirePrivateRoot = false) {
+  const access = Array.isArray(security?.access) ? security.access : []
+  const effectiveRights = access.reduce((rights, entry) => rights | (entry?.rights ?? 0), 0)
+  const ownerOnly = access.length > 0 && access.every((entry) => entry?.identitySid === sid && entry?.accessType === 'Allow')
+  const privateRoot = !requirePrivateRoot || (access.length === 1 && access[0]?.inherited === false && (access[0]?.inheritanceFlags & 3) === 3)
+  const allowed = ownerOnly && (effectiveRights & fullControl) === fullControl && privateRoot
+  if (security?.ownerSid !== sid || !allowed) throw new Error(`${label} is not owner-private.`)
+}
+function ownershipCheck(dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform
+  if (typeof dependencies.assertOwned === 'function') return dependencies.assertOwned
+  if (platform === 'win32') {
+    const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync)
+    if (!sid) throw new Error('Owner SID unavailable.')
+    const readSecurity = dependencies.readWindowsSecurity ?? readWindowsSecurity
+    return (path, label) => { if (readSecurity(path, dependencies.execFileSync ?? execFileSync)?.ownerSid !== sid) throw new Error(`${label} is not owned.`) }
+  }
+  const expectedUid = dependencies.uid ?? process.getuid()
+  const stat = dependencies.statSync ?? statSync
+  return (path, label) => { if (stat(path).uid !== expectedUid) throw new Error(`${label} is not owned.`) }
+}
+export function checkOwned(path, label, allowAbsent = false, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform
+  const exists = dependencies.existsSync ?? existsSync
+  const lstat = dependencies.lstatSync ?? lstatSync
+  const realpath = dependencies.realpathSync ?? realpathSync
+  const stat = dependencies.statSync ?? statSync
+  const resolvePath = dependencies.resolve ?? resolve
+  const parent = dependencies.dirname ?? dirname
+  if (typeof path !== 'string' || !isAbsolute(path)) throw new Error(`${label} is not absolute.`)
+  const absolute = resolvePath(path)
+  const absent = !exists(absolute)
+  if (absent && !allowAbsent) throw new Error(`${label} is missing.`)
+  const inspected = absent ? parent(absolute) : absolute
+  if (absent && !exists(inspected)) throw new Error(`${label} has no physical parent.`)
+  for (let current = inspected;; current = parent(current)) {
+    const entry = lstat(current)
+    if (entry.isSymbolicLink() || !samePhysicalPath(realpath(current), current, platform)) throw new Error(`${label} has a reparse chain.`)
+    if (parent(current) === current) break
+  }
+  // Requested runtime roots must be owned. For an absent registry its existing
+  // parent is the requested writable boundary; ancestors are checked only for
+  // physical reparse traversal, so shared OS parents are never hardened.
+  const assertOwned = ownershipCheck(dependencies)
+  assertOwned(inspected, absent ? `${label} parent` : label)
+  if (absent) return { state: 'absent', path: absolute, parent: inspected }
+  const entry = stat(absolute); if (!entry.isFile() && !entry.isDirectory()) throw new Error(`${label} is not regular.`)
+  return { state: 'present', path: absolute, type: entry.isDirectory() ? 'directory' : 'file' }
+}
+export function admitFirstRunInputs({ workspaceRoot, instanceRegistryPath, hostPortRegistryPath, coreProjectionPath, platform }, dependencies = {}) {
+  const check = (path, label, absent = false) => checkOwned(path, label, absent, dependencies)
+  const workspace = check(workspaceRoot, 'workspace root'); if (workspace.type !== 'directory') throw new Error('Workspace root is not a directory.')
+  const instance = check(instanceRegistryPath, 'instance registry', true); const ports = check(hostPortRegistryPath, 'host port registry', true)
+  const core = check(coreProjectionPath, 'Core initial projection'); if (core.type !== 'file') throw new Error('Core projection is not a file.')
   const projectionBytes = readFileSync(core.path); const projection = validateCoreInitialProjection(projectionBytes, platform)
   return { admin: { workspace, instance, ports }, core: { candidate: projection.candidate, run: projection.run, privateInitialReceiptSha256: projection.privateInitialReceiptSha256, privateJournalSha256: projection.privateJournalSha256, projectionSha256: hash(projectionBytes) } }
 }
@@ -78,11 +131,35 @@ function writeAll(fd, data, io = { writeSync, fsyncSync }) {
   io.fsyncSync(fd)
 }
 
+export function verifyPrivateRootSecurity(root, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform
+  const stat = dependencies.statSync ?? statSync
+  if (platform === 'win32') {
+    const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync)
+    if (!sid) throw new Error('Owner SID unavailable.')
+    const readSecurity = dependencies.readWindowsSecurity ?? readWindowsSecurity
+    ownedWindowsSecurity(readSecurity(root, dependencies.execFileSync ?? execFileSync), sid, 'Private journal root', true)
+    return
+  }
+  const entry = stat(root)
+  if (entry.uid !== (dependencies.uid ?? process.getuid()) || (entry.mode & 0o777) !== 0o700) throw new Error('Private directory owner/mode readback failed.')
+}
+export function verifyPrivateFileSecurity(path, dependencies = {}) {
+  if ((dependencies.platform ?? process.platform) === 'win32') {
+    const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync)
+    if (!sid) throw new Error('Owner SID unavailable.')
+    const readSecurity = dependencies.readWindowsSecurity ?? readWindowsSecurity
+    return ownedWindowsSecurity(readSecurity(path, dependencies.execFileSync ?? execFileSync), sid, 'Private journal file')
+  }
+  const entry = (dependencies.statSync ?? statSync)(path)
+  if (entry.uid !== (dependencies.uid ?? process.getuid()) || (entry.mode & 0o777) !== 0o600) throw new Error('Private file owner/mode readback failed.')
+}
 export function createPrivateFirstRunJournal(command, args, admission, dependencies = {}) {
   const io = { closeSync: dependencies.closeSync ?? closeSync, fsyncSync: dependencies.fsyncSync ?? fsyncSync, openSync: dependencies.openSync ?? openSync, readFileSync: dependencies.readFileSync ?? readFileSync, writeSync: dependencies.writeSync ?? writeSync }
-  const root = mkdtempSync(join(tmpdir(), 'service-admin-first-run-')); let fault = null
-  if (process.platform === 'win32') { const sid = ownerSid(); if (!sid) throw new Error('Owner SID unavailable.'); execFileSync('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); execFileSync('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }); const acl = execFileSync('icacls', [root], { encoding: 'utf8', windowsHide: true }); if (!/\(OI\)\(CI\)\(F\)/.test(acl) || /\(I\)/.test(acl) || (acl.match(/\(F\)/g) ?? []).length !== 1) throw new Error('Owner-only DACL readback failed.') } else { chmodSync(root, 0o700); if ((statSync(root).mode & 0o777) !== 0o700) throw new Error('Private directory mode readback failed.') }
-  const f = Object.fromEntries(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => [n, io.openSync(join(root, n), 'wx', 0o600)]))
+  const root = (dependencies.mkdtempSync ?? mkdtempSync)(join(tmpdir(), 'service-admin-first-run-')); let fault = null
+  if ((dependencies.platform ?? process.platform) === 'win32') { const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync); if (!sid) throw new Error('Owner SID unavailable.'); const exec = dependencies.execFileSync ?? execFileSync; exec('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); exec('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }) } else (dependencies.chmodSync ?? chmodSync)(root, 0o700)
+  verifyPrivateRootSecurity(root, dependencies)
+  const f = Object.fromEntries(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => { const path = join(root, n); const fd = io.openSync(path, 'wx', 0o600); verifyPrivateFileSecurity(path, dependencies); return [n, fd] }))
   let custodyBytes = 0
   const record = (fd, value) => { try { const bytes = Buffer.isBuffer(value) ? value : Buffer.from(`${JSON.stringify(value)}\n`); if (fd === f['custody.json'] && custodyBytes + bytes.length > privateCaptureLimits.journalBytes) throw new Error('Private custody journal quota exceeded.'); writeAll(fd, bytes, io); if (fd === f['custody.json']) custodyBytes += bytes.length; return true } catch (error) { fault ??= error; return false } }
   if (!record(f['custody.json'], { schema: 'service-admin.first-run-private-custody.v2', admission, parentPid: process.pid, command, args })) throw fault

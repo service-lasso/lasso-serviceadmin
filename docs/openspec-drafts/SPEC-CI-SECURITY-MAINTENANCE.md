@@ -126,6 +126,16 @@ an absent registry is recorded as an owned absence.  A missing, malformed,
 unowned, reparse, unreadable, or unvalidated input is a negative admission
 result: no product child may start.
 
+For an absent registry, Admin must first inspect its existing immediate parent
+and every physical ancestor for reparse traversal, and must verify that parent
+is owned by the wrapper identity; it must not turn a missing leaf into an
+unchecked success.  On Windows, private-root readback must bind the actual
+current SID as owner and sole explicit effective full-control principal, with
+no inherited or other reader/writer ACE.  On POSIX, the root and files must
+read back as the current uid with modes `0700` and `0600` respectively.  These
+are private-custody requirements only and do not alter shared/global parent
+roots or tools.
+
 The Core projection is consumed only as its bounded public tuple: exact
 candidate head/tree, platform, run id/attempt, private initial receipt and
 journal commitments, and a locally validated v3 attestation.  Admin neither

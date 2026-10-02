@@ -3,15 +3,19 @@ import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { writeSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { test } from 'node:test'
 import {
+  admitFirstRunInputs,
   captureFirstRunChild,
+  checkOwned,
   createPrivateFirstRunJournal,
   createFirstRunTerminalDiagnostic,
   firstRunTerminalDiagnosticSchema,
   parseSafeRunnerDiagnostic,
   privateCaptureLimits,
+  verifyPrivateFileSecurity,
+  verifyPrivateRootSecurity,
 } from './first-run-terminal-diagnostic.mjs'
 
 const candidate = Object.freeze({
@@ -45,6 +49,66 @@ function stream() { return new EventEmitter() }
 function controlledChild() { const child = new EventEmitter(); child.pid = 42; child.stdout = stream(); child.stderr = stream(); return child }
 function journal() { const events = []; return { root: 'private-root', events, stdout: (bytes) => { events.push(['stdout', Buffer.from(bytes)]); return true }, stderr: (bytes) => { events.push(['stderr', Buffer.from(bytes)]); return true }, record: (value) => { events.push(['record', value]); return true }, close: (value) => { events.push(['close', value]); return '1'.repeat(64) }, fault: () => null } }
 const tick = () => new Promise((resolve) => setImmediate(resolve))
+
+function ownedPathDependencies({ absent = [], reparse = [], rejectedOwners = [] } = {}) {
+  const missing = new Set(absent); const links = new Set(reparse); const rejected = new Set(rejectedOwners)
+  const directory = (path) => ({ isSymbolicLink: () => links.has(path), isFile: () => false, isDirectory: () => true, uid: 1000 })
+  return {
+    platform: 'win32', resolve: (path) => path, dirname: win32.dirname,
+    existsSync: (path) => !missing.has(path), lstatSync: directory, realpathSync: (path) => path, statSync: directory,
+    assertOwned: (path) => { if (rejected.has(path)) throw new Error(`wrong owner: ${path}`) },
+  }
+}
+
+test('admits an absent registry only after its physical, owned parent chain is checked', () => {
+  const registry = 'C:\\owned\\registries\\instance.json'
+  const checked = []
+  const dependencies = ownedPathDependencies({ absent: [registry] })
+  dependencies.assertOwned = (path) => checked.push(path)
+  assert.deepEqual(checkOwned(registry, 'instance registry', true, dependencies), {
+    state: 'absent', path: registry, parent: 'C:\\owned\\registries',
+  })
+  assert.deepEqual(checked, ['C:\\owned\\registries'])
+})
+
+test('fails closed for absent registry parents, parent junctions, and wrong requested owners', () => {
+  const registry = 'C:\\owned\\registries\\instance.json'
+  assert.throws(() => checkOwned(registry, 'instance registry', true, ownedPathDependencies({ absent: [registry, 'C:\\owned\\registries'] })), /physical parent/)
+  assert.throws(() => checkOwned(registry, 'instance registry', true, ownedPathDependencies({ absent: [registry], reparse: ['C:\\owned\\registries'] })), /reparse chain/)
+  assert.throws(() => checkOwned('C:\\owned\\workspace', 'workspace root', false, ownedPathDependencies({ rejectedOwners: ['C:\\owned\\workspace'] })), /wrong owner/)
+})
+
+test('requires each Admin runtime root before any verifier admission can reach Core projection parsing', () => {
+  const roots = {
+    workspaceRoot: 'C:\\owned\\workspace', instanceRegistryPath: 'C:\\owned\\instance.json',
+    hostPortRegistryPath: 'C:\\owned\\ports.json', coreProjectionPath: 'C:\\owned\\core.json', platform: 'win32',
+  }
+  for (const required of ['workspaceRoot', 'instanceRegistryPath', 'hostPortRegistryPath']) {
+    const input = { ...roots, [required]: undefined }
+    assert.throws(() => admitFirstRunInputs(input, ownedPathDependencies()), /not absolute/)
+  }
+})
+
+test('rejects Windows private roots unless the current SID is the sole effective full-control principal', () => {
+  const sid = 'S-1-5-21-1000'
+  const privateRoot = 'C:\\private\\journal'
+  const secure = { ownerSid: sid, access: [{ identitySid: sid, accessType: 'Allow', rights: 0x1f01ff, inherited: false, inheritanceFlags: 3 }] }
+  const verify = (security) => verifyPrivateRootSecurity(privateRoot, { platform: 'win32', ownerSid: sid, readWindowsSecurity: () => security })
+  assert.doesNotThrow(() => verify(secure))
+  assert.throws(() => verify({ ...secure, ownerSid: 'S-1-5-21-elsewhere' }), /owner-private/)
+  assert.throws(() => verify({ ...secure, access: [...secure.access, { identitySid: 'S-1-5-32-545', accessType: 'Allow', rights: 0x120089, inherited: false, inheritanceFlags: 0 }] }), /owner-private/)
+  assert.throws(() => verify({ ...secure, access: [{ ...secure.access[0], accessType: 'Deny' }] }), /owner-private/)
+  assert.throws(() => verify({ ...secure, access: [{ ...secure.access[0], inheritanceFlags: 0 }] }), /owner-private/)
+  assert.doesNotThrow(() => verifyPrivateFileSecurity('C:\\private\\journal\\stdout.bin', { platform: 'win32', ownerSid: sid, readWindowsSecurity: () => ({ ...secure, access: [{ ...secure.access[0], inherited: true, inheritanceFlags: 0 }] }) }))
+})
+
+test('rejects POSIX private roots with a wrong owner or mode', () => {
+  const secure = { uid: 1000, mode: 0o40700 }
+  const verify = (entry) => verifyPrivateRootSecurity('/private/journal', { platform: 'linux', uid: 1000, statSync: () => entry })
+  assert.doesNotThrow(() => verify(secure))
+  assert.throws(() => verify({ ...secure, uid: 1001 }), /owner\/mode/)
+  assert.throws(() => verify({ ...secure, mode: 0o40755 }), /owner\/mode/)
+})
 
 test('projects a successful owned first child only after close and both EOFs', async () => {
   const result = await capture("process.stdout.write('ready\\n'); process.exit(0)")
