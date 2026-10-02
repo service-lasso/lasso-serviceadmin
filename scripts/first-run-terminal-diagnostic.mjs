@@ -55,7 +55,7 @@ export function createFirstRunTerminalDiagnostic({
   run,
   candidate,
   coreCandidate,
-  privateCloseJournalSha256,
+  privateCloseJournal,
   exitCode,
   signal,
   naturalClose,
@@ -79,7 +79,12 @@ export function createFirstRunTerminalDiagnostic({
     !/^(?:[a-f0-9]{40}|unavailable)$/.test(coreCandidate.head) ||
     !/^(?:[a-f0-9]{40}|unavailable)$/.test(coreCandidate.tree) ||
     !/^(?:[a-f0-9]{64}|unavailable)$/.test(coreCandidate.run) ||
-    !/^[a-f0-9]{64}$/.test(privateCloseJournalSha256) ||
+    !privateCloseJournal ||
+    Object.keys(privateCloseJournal).sort().join(',') !== 'sha256,state' ||
+    !(
+      (privateCloseJournal.state === 'retained' && /^[a-f0-9]{64}$/.test(privateCloseJournal.sha256)) ||
+      (privateCloseJournal.state === 'unavailable' && privateCloseJournal.sha256 === null)
+    ) ||
     !(
       exitCode === null ||
       (Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255)
@@ -105,7 +110,10 @@ export function createFirstRunTerminalDiagnostic({
       harnessSha256: candidate.harnessSha256,
     },
     coreCandidate: { head: coreCandidate.head, tree: coreCandidate.tree, run: coreCandidate.run },
-    privateCloseJournalSha256,
+    privateCloseJournal: {
+      state: privateCloseJournal.state,
+      sha256: privateCloseJournal.sha256,
+    },
     exitCode,
     signal: safeSignal(signal),
     naturalClose,
@@ -277,7 +285,7 @@ export async function captureFirstRunChild({
       run,
       candidate,
       coreCandidate,
-      privateCloseJournalSha256: commitmentDigest('journal_unavailable'),
+      privateCloseJournal: { state: 'unavailable', sha256: null },
       exitCode: null,
       signal: null,
       naturalClose: false,
@@ -297,7 +305,7 @@ export async function captureFirstRunChild({
       run,
       candidate,
       coreCandidate,
-      privateCloseJournalSha256: commitmentDigest('spawn_throw'),
+      privateCloseJournal: { state: 'unavailable', sha256: null },
       exitCode: null,
       signal: null,
       naturalClose: false,
@@ -357,7 +365,9 @@ export async function captureFirstRunChild({
     run,
     candidate,
     coreCandidate,
-    privateCloseJournalSha256: journalCommitment ?? commitmentDigest('journal_incomplete'),
+    privateCloseJournal: journalCommitment
+      ? { state: 'retained', sha256: journalCommitment }
+      : { state: 'unavailable', sha256: null },
     exitCode: code,
     signal,
     naturalClose: terminal.naturalClose && journalComplete && journalCommitment !== null,

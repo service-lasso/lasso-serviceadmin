@@ -125,7 +125,9 @@ semantics, or relax qualification.
 The public projection is allowlisted to a fixed schema, a fixed phase, a safe
 diagnostic code or `unclassified`, closed exit/signal state, natural-close and
 stdout/stderr EOF booleans, platform/run binding, and candidate commitment
-digests. It must reject unknown fields and emit `unresolved` when the child is
+digests. A locally retained journal may contribute its SHA-256 only after
+successful closed-file readback; otherwise the projection must state that its
+journal commitment is unavailable. It must reject unknown fields and emit `unresolved` when the child is
 still live rather than inventing exit, readiness, or cleanup facts. It never
 contains paths, PIDs, commands, environment, raw streams, private receipt
 bytes, ACLs, tool details, upload locations, or secret-bearing material.
