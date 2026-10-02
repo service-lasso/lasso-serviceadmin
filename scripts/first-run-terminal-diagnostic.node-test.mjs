@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { EventEmitter } from 'node:events'
+import { writeSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   captureFirstRunChild,
+  createPrivateFirstRunJournal,
   createFirstRunTerminalDiagnostic,
   firstRunTerminalDiagnosticSchema,
   parseSafeRunnerDiagnostic,
+  privateCaptureLimits,
 } from './first-run-terminal-diagnostic.mjs'
 
 const candidate = Object.freeze({
@@ -36,6 +40,11 @@ function capture(script) {
     coreCandidate,
   })
 }
+
+function stream() { return new EventEmitter() }
+function controlledChild() { const child = new EventEmitter(); child.pid = 42; child.stdout = stream(); child.stderr = stream(); return child }
+function journal() { const events = []; return { root: 'private-root', events, stdout: (bytes) => { events.push(['stdout', Buffer.from(bytes)]); return true }, stderr: (bytes) => { events.push(['stderr', Buffer.from(bytes)]); return true }, record: (value) => { events.push(['record', value]); return true }, close: (value) => { events.push(['close', value]); return '1'.repeat(64) }, fault: () => null } }
+const tick = () => new Promise((resolve) => setImmediate(resolve))
 
 test('projects a successful owned first child only after close and both EOFs', async () => {
   const result = await capture("process.stdout.write('ready\\n'); process.exit(0)")
@@ -153,4 +162,55 @@ test('rejects an invalid public projection instead of accepting private fields',
       safeDiagnosticCode: 'unclassified',
     })
   )
+})
+
+test('keeps a spawned child observed after native birth failure until it closes and both pipes EOF', async () => {
+  const child = controlledChild(); const held = journal()
+  const pending = captureFirstRunChild({ spawnChild: () => child, command: 'private-command', args: [], options: {}, platform: process.platform, run, candidate, coreCandidate, journalFactory: () => held, birthObserver: () => { throw new Error('birth read failed') } })
+  await tick(); assert.equal(held.events.some(([kind]) => kind === 'close'), false)
+  child.emit('close', 1, null); child.stdout.emit('end'); child.stderr.emit('end')
+  const result = await pending
+  assert.equal(result.diagnostic.state, 'unresolved'); assert.equal(result.diagnostic.safeDiagnosticCode, 'runner_start_failed'); assert.equal(held.events.filter(([kind]) => kind === 'close').length, 1)
+})
+
+test('does not substitute child error for close or delayed stdout EOF', async () => {
+  const child = controlledChild(); const held = journal()
+  const pending = captureFirstRunChild({ spawnChild: () => child, command: 'private-command', args: [], options: {}, platform: process.platform, run, candidate, coreCandidate, journalFactory: () => held, birthObserver: () => ({ held: true }) })
+  child.emit('error', new Error('private child error')); child.stderr.emit('end'); await tick(); assert.equal(held.events.some(([kind]) => kind === 'close'), false)
+  child.emit('close', 1, null); await tick(); assert.equal(held.events.some(([kind]) => kind === 'close'), false); child.stdout.emit('end')
+  const result = await pending
+  assert.equal(result.diagnostic.state, 'unresolved'); assert.equal(result.diagnostic.stdoutEof, true); assert.equal(result.diagnostic.stderrEof, true)
+})
+
+test('projects missing and errored streams as failed, never as clean EOF', async () => {
+  const child = controlledChild(); child.stderr = null; const held = journal()
+  const pending = captureFirstRunChild({ spawnChild: () => child, command: 'private-command', args: [], options: {}, platform: process.platform, run, candidate, coreCandidate, journalFactory: () => held, birthObserver: () => ({ held: true }) })
+  child.stdout.emit('error', new Error('stream failed')); child.emit('close', 1, null)
+  const result = await pending
+  assert.equal(result.diagnostic.state, 'unresolved'); assert.equal(result.diagnostic.stdoutEof, false); assert.equal(result.diagnostic.stderrEof, false)
+})
+
+test('drains oversized no-newline output without retaining beyond the private quotas', async () => {
+  const child = controlledChild(); const held = journal(); const limits = { rawBytesPerStream: 8, pendingTextBytes: 4 }
+  const pending = captureFirstRunChild({ spawnChild: () => child, command: 'private-command', args: [], options: {}, platform: process.platform, run, candidate, coreCandidate, journalFactory: () => held, birthObserver: () => ({ held: true }), limits })
+  child.stdout.emit('data', Buffer.from('0123456789-no-newline')); child.stdout.emit('data', Buffer.alloc(32, 120)); child.stderr.emit('end'); child.stdout.emit('end'); child.emit('close', 0, null)
+  const result = await pending
+  assert.equal(Buffer.concat(held.events.filter(([kind]) => kind === 'stdout').map(([, bytes]) => bytes)).length, 8); assert.equal(result.diagnostic.state, 'unresolved'); assert.equal(held.events.some(([, value]) => value?.event === 'capture_bound_overflow'), true); assert.deepEqual(Object.keys(privateCaptureLimits).sort(), ['journalBytes', 'pendingTextBytes', 'rawBytesPerStream'])
+})
+
+test('loops partial private writes and makes writer faults unavailable rather than synthetic commitments', () => {
+  let calls = 0
+  const partial = createPrivateFirstRunJournal('private-command', [], {}, { writeSync(fd, bytes, offset, length) { calls += 1; return writeSync(fd, bytes, offset, Math.min(length, 1)) } })
+  partial.record({ event: 'partial-write' }); assert.match(partial.close({ event: 'terminal' }), /^[a-f0-9]{64}$/); assert.ok(calls > 2)
+  assert.throws(() => createPrivateFirstRunJournal('private-command', [], {}, { writeSync() { throw new Error('disk fault') } }))
+})
+
+test('keeps spawn throws, signals, and private values out of the public terminal projection', async () => {
+  const held = journal()
+  const spawnFailure = await captureFirstRunChild({ spawnChild: () => { throw new Error('secret spawn detail') }, command: 'private-command', args: ['secret'], options: {}, platform: process.platform, run, candidate, coreCandidate, journalFactory: () => held })
+  assert.equal(spawnFailure.diagnostic.privateCloseJournal.state, 'retained'); assert.equal(JSON.stringify(spawnFailure.diagnostic).includes('secret'), false)
+  const child = controlledChild(); const signalPending = captureFirstRunChild({ spawnChild: () => child, command: 'private-command', args: [], options: {}, platform: process.platform, run, candidate, coreCandidate, journalFactory: journal, birthObserver: () => ({ held: true }) })
+  child.stdout.emit('end'); child.stderr.emit('end'); child.emit('close', null, 'SIGTERM')
+  const signalled = await signalPending
+  assert.equal(signalled.diagnostic.signal, 'SIGTERM'); assert.equal(signalled.diagnostic.state, 'unresolved')
 })
