@@ -1,0 +1,242 @@
+import { createHash } from 'node:crypto'
+
+export const firstRunTerminalDiagnosticSchema =
+  'service-admin.first-run-terminal-diagnostic.v1'
+
+const safeCodes = new Set([
+  'unclassified',
+  'runner_unavailable',
+  'runner_start_failed',
+  'runner_terminated',
+  'qualification_failed',
+])
+const safeSignals = new Set([null, 'SIGINT', 'SIGTERM', 'SIGKILL', 'other'])
+
+export function parseSafeRunnerDiagnostic(line) {
+  if (typeof line !== 'string' || line.length > 256) return null
+  try {
+    const value = JSON.parse(line)
+    if (
+      value?.schema !== 'service-lasso.real-admin-browser-failure.v1' ||
+      typeof value.code !== 'string' ||
+      !safeCodes.has(value.code)
+    ) {
+      return null
+    }
+    return value.code
+  } catch {
+    return null
+  }
+}
+
+export function safeSignal(signal) {
+  if (signal === null || signal === 'SIGINT' || signal === 'SIGTERM' || signal === 'SIGKILL') {
+    return signal
+  }
+  return signal === undefined ? null : 'other'
+}
+
+export function createFirstRunTerminalDiagnostic({
+  stage = 'terminal',
+  platform,
+  run,
+  candidate,
+  coreCandidate,
+  privateCloseJournalSha256,
+  exitCode,
+  signal,
+  naturalClose,
+  stdoutEof,
+  stderrEof,
+  safeDiagnosticCode,
+}) {
+  if (
+    stage !== 'terminal' ||
+    !['darwin', 'linux', 'win32'].includes(platform) ||
+    typeof run !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(run) ||
+    !candidate ||
+    Object.keys(candidate).sort().join(',') !==
+      'harnessSha256,verifierSha256,wrapperSha256' ||
+    !/^[a-f0-9]{64}$/.test(candidate.wrapperSha256) ||
+    !/^[a-f0-9]{64}$/.test(candidate.verifierSha256) ||
+    !/^[a-f0-9]{64}$/.test(candidate.harnessSha256) ||
+    !coreCandidate ||
+    Object.keys(coreCandidate).sort().join(',') !== 'head,run,tree' ||
+    !/^(?:[a-f0-9]{40}|unavailable)$/.test(coreCandidate.head) ||
+    !/^(?:[a-f0-9]{40}|unavailable)$/.test(coreCandidate.tree) ||
+    !/^(?:[a-f0-9]{64}|unavailable)$/.test(coreCandidate.run) ||
+    !/^[a-f0-9]{64}$/.test(privateCloseJournalSha256) ||
+    !(
+      exitCode === null ||
+      (Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255)
+    ) ||
+    !safeSignals.has(safeSignal(signal)) ||
+    typeof naturalClose !== 'boolean' ||
+    typeof stdoutEof !== 'boolean' ||
+    typeof stderrEof !== 'boolean' ||
+    !safeCodes.has(safeDiagnosticCode)
+  ) {
+    throw new Error('First-run terminal diagnostic input is invalid.')
+  }
+  return Object.freeze({
+    schema: firstRunTerminalDiagnosticSchema,
+    mode: 'first_run',
+    stage,
+    state: naturalClose && stdoutEof && stderrEof ? 'closed' : 'unresolved',
+    platform,
+    run,
+    candidate: {
+      wrapperSha256: candidate.wrapperSha256,
+      verifierSha256: candidate.verifierSha256,
+      harnessSha256: candidate.harnessSha256,
+    },
+    coreCandidate: { head: coreCandidate.head, tree: coreCandidate.tree, run: coreCandidate.run },
+    privateCloseJournalSha256,
+    exitCode,
+    signal: safeSignal(signal),
+    naturalClose,
+    stdoutEof,
+    stderrEof,
+    safeDiagnosticCode,
+  })
+}
+
+function privateCapture(stream, onLine) {
+  const chunks = []
+  const hash = createHash('sha256')
+  let bytes = 0
+  let exceeded = false
+  let ended = false
+  let lineBuffer = ''
+  stream.on('data', (chunk) => {
+    hash.update(chunk)
+    bytes += chunk.length
+    if (bytes > 1_048_576) {
+      exceeded = true
+      return
+    }
+    chunks.push(Buffer.from(chunk))
+    lineBuffer += chunk.toString('utf8')
+    const lines = lineBuffer.split(/\r?\n/)
+    lineBuffer = lines.pop() ?? ''
+    for (const line of lines) onLine(line)
+  })
+  stream.once('end', () => {
+    ended = true
+  })
+  return {
+    get eof() {
+      return ended
+    },
+    get exceeded() {
+      return exceeded
+    },
+    commitment() {
+      return hash.digest('hex')
+    },
+    dispose() {
+      chunks.length = 0
+      lineBuffer = ''
+    },
+  }
+}
+
+export async function captureFirstRunChild({
+  spawnChild,
+  command,
+  args,
+  options,
+  platform,
+  run,
+  candidate,
+  coreCandidate,
+}) {
+  let child
+  try {
+    child = spawnChild(command, args, options)
+  } catch (error) {
+    const diagnostic = createFirstRunTerminalDiagnostic({
+      platform,
+      run,
+      candidate,
+      coreCandidate,
+      privateCloseJournalSha256: commitmentDigest('spawn_throw'),
+      exitCode: null,
+      signal: null,
+      naturalClose: false,
+      stdoutEof: false,
+      stderrEof: false,
+      safeDiagnosticCode: 'runner_start_failed',
+    })
+    return { diagnostic, exitCode: 1, privateFailure: error }
+  }
+
+  // Held identity and capture are private to this owner. They are deliberately
+  // not copied into the projection or written to disk.
+  const custody = {
+    pid: child.pid ?? null,
+    parentPid: process.pid,
+    image: command,
+    processChain: [process.pid, child.pid ?? null],
+    child,
+  }
+  let code = null
+  let signal = null
+  let closed = false
+  let spawnError = false
+  let safeDiagnosticCode = 'unclassified'
+  const stdout = privateCapture(child.stdout, () => undefined)
+  const stderr = privateCapture(child.stderr, (line) => {
+    safeDiagnosticCode = parseSafeRunnerDiagnostic(line) ?? safeDiagnosticCode
+  })
+
+  await new Promise((resolve) => {
+    child.once('error', () => {
+      spawnError = true
+    })
+    child.once('close', (nextCode, nextSignal) => {
+      code = nextCode
+      signal = nextSignal
+      closed = true
+      resolve()
+    })
+  })
+
+  const diagnostic = createFirstRunTerminalDiagnostic({
+    platform,
+    run,
+    candidate,
+    coreCandidate,
+    privateCloseJournalSha256: commitmentDigest(
+      JSON.stringify({
+        exitCode: code,
+        signal: safeSignal(signal),
+        naturalClose: closed && !spawnError && !stdout.exceeded && !stderr.exceeded,
+        stdoutEof: stdout.eof,
+        stderrEof: stderr.eof,
+        stdoutSha256: stdout.commitment(),
+        stderrSha256: stderr.commitment(),
+      })
+    ),
+    exitCode: code,
+    signal,
+    naturalClose: closed && !spawnError && !stdout.exceeded && !stderr.exceeded,
+    stdoutEof: stdout.eof,
+    stderrEof: stderr.eof,
+    safeDiagnosticCode,
+  })
+  const exitCode = code === 0 && diagnostic.naturalClose && stdout.eof && stderr.eof ? 0 : 1
+  stdout.dispose()
+  stderr.dispose()
+  custody.child = null
+  custody.pid = null
+  custody.parentPid = null
+  custody.image = null
+  custody.processChain = []
+  return { diagnostic, exitCode, privateFailure: null }
+}
+
+export function commitmentDigest(content) {
+  return createHash('sha256').update(content).digest('hex')
+}
