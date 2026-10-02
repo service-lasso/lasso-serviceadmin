@@ -2,6 +2,7 @@ import { waitForCapturedChildClose } from './captured-child-close.mjs'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
 import { lstat, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -527,7 +528,7 @@ function publishSafeChildOutput(capture) {
 function observedParentPid(pid) {
   try {
     if (process.platform === 'linux') {
-      const stat = execFileSync('cat', [`/proc/${pid}/stat`], { encoding: 'utf8' })
+      const stat = readFileSync(`/proc/${pid}/stat`, { encoding: 'utf8' })
       return Number(stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[1])
     }
     const command = process.platform === 'win32' ? 'powershell.exe' : 'ps'
