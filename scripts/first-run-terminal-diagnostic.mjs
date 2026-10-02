@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto'
 import {
   closeSync,
+  chmodSync,
   fsyncSync,
   mkdtempSync,
   openSync,
-  writeFileSync,
+  readFileSync,
   writeSync,
 } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -29,6 +31,7 @@ export function parseSafeRunnerDiagnostic(line) {
     if (
       value?.schema !== 'service-lasso.real-admin-browser-failure.v1' ||
       typeof value.code !== 'string' ||
+      Object.keys(value).sort().join(',') !== 'code,schema' ||
       !safeCodes.has(value.code)
     ) {
       return null
@@ -116,6 +119,24 @@ function createPrivateJournal({ command, args }) {
   const root = mkdtempSync(join(tmpdir(), 'service-admin-first-run-'), {
     encoding: 'utf8',
   })
+  if (process.platform === 'win32') {
+    const identity = execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    }).match(/S-1-[0-9-]+/i)?.[0]
+    if (!identity) throw new Error('Private journal owner identity is unavailable.')
+    execFileSync('icacls', [root, '/inheritance:r', '/grant:r', `${identity}:(OI)(CI)F`], {
+      windowsHide: true,
+    })
+  } else {
+    chmodSync(root, 0o700)
+    const directory = openSync(root, 'r')
+    try {
+      fsyncSync(directory)
+    } finally {
+      closeSync(directory)
+    }
+  }
   const open = (name) => openSync(join(root, name), 'wx', 0o600)
   const stdout = open('stdout.bin')
   const stderr = open('stderr.bin')
@@ -131,7 +152,7 @@ function createPrivateJournal({ command, args }) {
       return false
     }
   }
-  write(
+  if (!write(
     custody,
     Buffer.from(
       JSON.stringify({
@@ -142,7 +163,7 @@ function createPrivateJournal({ command, args }) {
       }) + '\n',
       'utf8'
     )
-  )
+  )) throw new Error('Initial private custody record was not retained.')
   return {
     root,
     writeStdout(chunk) {
@@ -178,6 +199,13 @@ function createPrivateJournal({ command, args }) {
       }
       return complete && !failed
     },
+    commitment() {
+      return commitmentDigest(
+        ['stdout.bin', 'stderr.bin', 'custody.json']
+          .map((name) => createHash('sha256').update(readFileSync(join(root, name))).digest('hex'))
+          .join(':')
+      )
+    },
   }
 }
 
@@ -188,9 +216,10 @@ function privateCapture(stream, onLine, writeRaw) {
   let exceeded = false
   let ended = false
   let lineBuffer = ''
+  let retained = true
   stream.on('data', (chunk) => {
     hash.update(chunk)
-    writeRaw(chunk)
+    retained = writeRaw(chunk) && retained
     bytes += chunk.length
     if (bytes > 1_048_576) {
       exceeded = true
@@ -211,6 +240,9 @@ function privateCapture(stream, onLine, writeRaw) {
     },
     get exceeded() {
       return exceeded
+    },
+    get retained() {
+      return retained
     },
     commitment() {
       return hash.digest('hex')
@@ -286,7 +318,7 @@ export async function captureFirstRunChild({
   let closed = false
   let spawnError = false
   let safeDiagnosticCode = 'unclassified'
-  journal.recordBirth(child)
+  const birthRecorded = journal.recordBirth(child)
   const stdout = privateCapture(child.stdout, () => undefined, journal.writeStdout)
   const stderr = privateCapture(child.stderr, (line) => {
     safeDiagnosticCode = parseSafeRunnerDiagnostic(line) ?? safeDiagnosticCode
@@ -308,7 +340,7 @@ export async function captureFirstRunChild({
     event: 'terminal',
     exitCode: code,
     signal: safeSignal(signal),
-    naturalClose: closed && !spawnError && !stdout.exceeded && !stderr.exceeded,
+    naturalClose: closed && safeSignal(signal) === null && !spawnError && birthRecorded && stdout.retained && stderr.retained && !stdout.exceeded && !stderr.exceeded,
     stdoutEof: stdout.eof,
     stderrEof: stderr.eof,
     stdoutSha256: stdout.commitment(),
@@ -320,10 +352,10 @@ export async function captureFirstRunChild({
     run,
     candidate,
     coreCandidate,
-    privateCloseJournalSha256: commitmentDigest(JSON.stringify(terminal)),
+    privateCloseJournalSha256: journalComplete ? journal.commitment() : commitmentDigest('journal_incomplete'),
     exitCode: code,
     signal,
-    naturalClose: closed && !spawnError && !stdout.exceeded && !stderr.exceeded && journalComplete,
+    naturalClose: terminal.naturalClose && journalComplete,
     stdoutEof: stdout.eof,
     stderrEof: stderr.eof,
     safeDiagnosticCode,
