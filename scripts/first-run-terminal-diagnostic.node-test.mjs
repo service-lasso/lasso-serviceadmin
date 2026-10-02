@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   captureFirstRunChild,
@@ -50,6 +52,11 @@ test('projects a successful owned first child only after close and both EOFs', a
   assert.equal(result.diagnostic.stderrEof, true)
   assert.equal(result.diagnostic.safeDiagnosticCode, 'unclassified')
   assert.match(result.diagnostic.privateCloseJournalSha256, /^[a-f0-9]{64}$/)
+  assert.equal(await readFile(join(result.privateJournalRoot, 'stdout.bin'), 'utf8'), 'ready\n')
+  assert.equal(
+    (await readFile(join(result.privateJournalRoot, 'custody.json'), 'utf8')).includes('"event":"terminal"'),
+    true
+  )
   assert.equal(result.exitCode, 0)
   assert.equal(JSON.stringify(result.diagnostic).includes('ready'), false)
   for (const forbidden of ['path', 'pid', 'command', 'env', 'receipt']) {
