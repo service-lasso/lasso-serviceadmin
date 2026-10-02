@@ -200,11 +200,15 @@ function createPrivateJournal({ command, args }) {
       return complete && !failed
     },
     commitment() {
-      return commitmentDigest(
-        ['stdout.bin', 'stderr.bin', 'custody.json']
-          .map((name) => createHash('sha256').update(readFileSync(join(root, name))).digest('hex'))
-          .join(':')
-      )
+      try {
+        return commitmentDigest(
+          ['stdout.bin', 'stderr.bin', 'custody.json']
+            .map((name) => createHash('sha256').update(readFileSync(join(root, name))).digest('hex'))
+            .join(':')
+        )
+      } catch {
+        return null
+      }
     },
   }
 }
@@ -347,15 +351,16 @@ export async function captureFirstRunChild({
     stderrSha256: stderr.commitment(),
   }
   const journalComplete = journal.finalize(terminal)
+  const journalCommitment = journalComplete ? journal.commitment() : null
   const diagnostic = createFirstRunTerminalDiagnostic({
     platform,
     run,
     candidate,
     coreCandidate,
-    privateCloseJournalSha256: journalComplete ? journal.commitment() : commitmentDigest('journal_incomplete'),
+    privateCloseJournalSha256: journalCommitment ?? commitmentDigest('journal_incomplete'),
     exitCode: code,
     signal,
-    naturalClose: terminal.naturalClose && journalComplete,
+    naturalClose: terminal.naturalClose && journalComplete && journalCommitment !== null,
     stdoutEof: stdout.eof,
     stderrEof: stderr.eof,
     safeDiagnosticCode,
