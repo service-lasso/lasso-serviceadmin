@@ -130,13 +130,15 @@ still live rather than inventing exit, readiness, or cleanup facts. It never
 contains paths, PIDs, commands, environment, raw streams, private receipt
 bytes, ACLs, tool details, upload locations, or secret-bearing material.
 
-Private capture remains local to the owned wrapper process. It begins before
-any fallible spawn-adjacent observation, records held identity and immediate
-birth/process-chain evidence without publishing it, drains terminal exceptions,
-and aggregates cleanup without replacing the primary failure. It must preserve
-the primary failure if private capture, projection, or cleanup observation also
-fails. No global kill, recycled-PID lookup, foreign-session polling, timeout
-widening, sleeps, or concurrency changes are allowed.
+Private capture remains local to the owned wrapper process. Before spawn it
+must create an owner-restricted local journal, then retain the first-child raw
+stdout/stderr, held identity, immediate birth/process-chain evidence, and a
+fsynced terminal close/EOF record there without publishing any of them. It
+drains terminal exceptions and aggregates cleanup without replacing the primary
+failure. It must preserve the primary failure if private capture, projection,
+or cleanup observation also fails. No global kill, recycled-PID lookup,
+foreign-session polling, timeout widening, sleeps, or concurrency changes are
+allowed.
 
 Focused real-child fixtures must cover early setup failure, failure before
 readiness, success, stream lag after exit, owner close, and a non-secret
