@@ -173,7 +173,9 @@ async function forwardSourceBody(target, method, headers, body, signal, progress
   signal.addEventListener('abort', abort, { once: true })
   try {
     const result = await new Promise((resolve, reject) => {
-      outgoing.once('error', () => reject(new SourceProxyError(502, 'service_lasso_runtime_api_unreachable')))
+      // Native destroy can emit error before close. Preserve the original
+      // deadline/disconnect reason rather than relabeling owned abort as502.
+      outgoing.once('error', () => reject(signal.reason ?? new SourceProxyError(502, 'service_lasso_runtime_api_unreachable')))
       outgoing.once('close', () => {
         if (!incoming) reject(signal.reason ?? new SourceProxyError(502, 'service_lasso_runtime_api_unreachable'))
       })

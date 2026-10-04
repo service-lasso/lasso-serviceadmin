@@ -290,9 +290,13 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     const beforeShared = records.length
     const shared = await raw(baseUrl, ['Content-Length: 5', `Content-Type: ${mime}`], Buffer.from('x'), { keepOpen: true, everyMs: 8_000, writes: 4 })
     setMode('normal')
+    phase = 'shared-ingress-upstream-status'
     assert.match(shared.text, /504/)
+    phase = 'shared-ingress-upstream-original-time'
     assert.ok(shared.elapsedMs >= 40_000 && shared.elapsedMs < 42_000)
+    phase = 'shared-ingress-upstream-forward-count'
     assert.equal(records.length, beforeShared + 1)
+    phase = 'shared-ingress-upstream-body-count'
     assert.equal(records[beforeShared].bytes.length, 5)
     await wait(50)
 
