@@ -548,17 +548,62 @@ async function readBoundedUpstream(response) {
   return Buffer.concat(chunks, size)
 }
 
-async function readBoundedBody(request) {
-  const chunks = []
-  let size = 0
-  for await (const chunk of request) {
-    size += chunk.length
-    if (size > MAX_REQUEST_BODY_BYTES) {
-      throw new Error('request_body_too_large')
-    }
-    chunks.push(chunk)
+function genericFixedBodyLength(request) {
+  const lengths = []
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index].toLowerCase()
+    if (name === 'transfer-encoding') return null
+    if (name === 'content-length') lengths.push(request.rawHeaders[index + 1])
   }
-  return Buffer.concat(chunks)
+  return lengths.length === 1 && /^(?:0|[1-9][0-9]*)$/.test(lengths[0])
+    ? Number(lengths[0]) : null
+}
+
+function readBoundedBody(request, signal, owner) {
+  const declared = genericFixedBodyLength(request)
+  // Only this finite fixed overflow can be completely consumed before413.
+  // Larger declared bodies never allocate or grant an unrestricted drain.
+  if (declared !== null && declared > MAX_REQUEST_BODY_BYTES + 1) {
+    return Promise.reject(new Error('request_body_too_large'))
+  }
+  const bytes = Buffer.alloc(Math.min(declared ?? MAX_REQUEST_BODY_BYTES, MAX_REQUEST_BODY_BYTES))
+  owner.bytes = bytes
+  return new Promise((resolve, reject) => {
+    let size = 0
+    const detach = () => {
+      request.off('data', onData)
+      request.off('end', onEnd)
+      request.off('error', onError)
+      request.off('aborted', onError)
+      signal.removeEventListener('abort', onAbort)
+    }
+    const fail = (error) => { detach(); request.pause(); reject(error) }
+    const onAbort = () => fail(signal.reason ?? new Error('generic_request_timeout'))
+    const onError = () => fail(new Error('generic_request_incomplete'))
+    const onData = (part) => {
+      if (!Buffer.isBuffer(part)) { onError(); return }
+      const next = size + part.length
+      if (next > MAX_REQUEST_BODY_BYTES && (declared !== MAX_REQUEST_BODY_BYTES + 1 || next > declared)) {
+        fail(new Error('request_body_too_large'))
+        return
+      }
+      const retained = Math.min(part.length, Math.max(0, bytes.length - size))
+      if (retained) part.copy(bytes, size, 0, retained)
+      size = next
+    }
+    const onEnd = () => {
+      detach()
+      if (!request.complete || (declared !== null && size !== declared)) reject(new Error('generic_request_incomplete'))
+      else if (size > MAX_REQUEST_BODY_BYTES) reject(new Error('request_body_too_large'))
+      else resolve(bytes.subarray(0, size))
+    }
+    request.on('data', onData)
+    request.once('end', onEnd)
+    request.once('error', onError)
+    request.once('aborted', onError)
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) onAbort()
+  })
 }
 
 function resolveStaticFile(distDir, requestPath) {
@@ -609,6 +654,7 @@ export function createServiceAdminServer(options = {}) {
     options.rotationProxyLifecycleDiagnostics === true
   // Per-server availability ownership, retained until actual HTTP closure.
   let sourceAdmissionActive = false
+  let genericBodyActive = 0
   const sourceAdmissionSockets = new WeakSet()
 
   const server = http.createServer(async (request, response) => {
@@ -660,11 +706,51 @@ export function createServiceAdminServer(options = {}) {
           emitRotationProxyLifecycle('downstream_closed')
         })
       }
+      const ownsGenericBody = !['GET', 'HEAD'].includes(method)
+      let bodyLease
+      if (ownsGenericBody) {
+        const controller = new AbortController()
+        const budget = sourceAdmissionProxyPolicy(method, requestUrl.pathname)
+          ? 30_000 : runtimeApiTimeoutMs(method, requestUrl.pathname)
+        const originalClosed = new Promise((resolve) => request.once('close', resolve))
+        const responseClosed = new Promise((resolve) => response.once('close', resolve))
+        let socketCloseListener
+        const socketClosed = new Promise((resolve) => {
+          socketCloseListener = resolve
+          request.socket.once('close', socketCloseListener)
+        })
+        const observeError = () => {}
+        request.on('error', observeError)
+        const leased = genericBodyActive < 8
+        if (leased) genericBodyActive++
+        bodyLease = { controller, originalClosed, responseClosed, socketClosed, socketCloseListener, observeError, leased, closeSocket: false, bytes: null }
+        const disconnect = () => {
+          if (!response.writableFinished) controller.abort(new Error('generic_client_disconnected'))
+          if (!request.readableEnded) request.destroy()
+        }
+        response.once('close', disconnect)
+        bodyLease.disconnect = disconnect
+        const absoluteEnd = requestStartedAt + budget
+        bodyLease.absoluteEnd = absoluteEnd
+        bodyLease.timer = setInterval(() => {
+          if (performance.now() >= absoluteEnd) {
+            controller.abort(new Error('generic_request_timeout'))
+            if (response.headersSent) request.socket.destroy()
+          }
+        }, 25)
+        bodyLease.timer.unref()
+      }
       try {
+        if (bodyLease && !bodyLease.leased) throw new Error('generic_body_capacity')
         const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, runtimeApiBaseUrl)
         const body = ['GET', 'HEAD'].includes(method)
           ? undefined
-          : await readBoundedBody(request)
+          : await readBoundedBody(request, bodyLease.controller.signal, bodyLease)
+        if (bodyLease) bodyLease.bytes = body
+        if (bodyLease && (performance.now() >= bodyLease.absoluteEnd || bodyLease.controller.signal.aborted)) {
+          if (!bodyLease.controller.signal.aborted) bodyLease.controller.abort(new Error('generic_request_timeout'))
+          throw bodyLease.controller.signal.reason
+        }
         if (tracksRotationLifecycle) {
           emitRotationProxyLifecycle('upstream_started')
         }
@@ -673,7 +759,7 @@ export function createServiceAdminServer(options = {}) {
           headers: resolvePackagedProxyHeaders(request),
           body,
           redirect: 'manual',
-          signal: AbortSignal.timeout(
+          signal: bodyLease?.controller.signal ?? AbortSignal.timeout(
             sourceAdmissionProxyPolicy(method, requestUrl.pathname)
               ? 30_000 // A query/alternate original target did not select this route.
               : runtimeApiTimeoutMs(method, requestUrl.pathname)
@@ -683,6 +769,10 @@ export function createServiceAdminServer(options = {}) {
           emitRotationProxyLifecycle('headers_received', upstream.status)
         }
         const bytes = await readBoundedUpstream(upstream)
+        if (bodyLease && (performance.now() >= bodyLease.absoluteEnd || bodyLease.controller.signal.aborted)) {
+          if (!bodyLease.controller.signal.aborted) bodyLease.controller.abort(new Error('generic_request_timeout'))
+          throw bodyLease.controller.signal.reason
+        }
         if (tracksRotationLifecycle) {
           emitRotationProxyLifecycle('body_received', upstream.status)
         }
@@ -693,8 +783,10 @@ export function createServiceAdminServer(options = {}) {
         })
         response.end(method === 'HEAD' ? undefined : bytes)
       } catch (error) {
+        if (bodyLease) bodyLease.closeSocket = true
+        if (response.destroyed || response.headersSent) return
         if (error instanceof TrustedIngressProxyError) {
-          response.writeHead(403, securityHeaders('application/json; charset=utf-8'))
+          response.writeHead(403, { ...securityHeaders('application/json; charset=utf-8'), ...(bodyLease ? { Connection: 'close' } : {}) })
           response.end(JSON.stringify({
             error: 'trusted_ingress_identity_invalid',
             message: 'Service Admin rejected untrusted or incomplete ingress identity.',
@@ -703,16 +795,33 @@ export function createServiceAdminServer(options = {}) {
         }
         const statusCode = error instanceof Error && error.message === 'request_body_too_large'
           ? 413
+          : error instanceof Error && error.message === 'generic_body_capacity'
+            ? 503
           : 502
-        response.writeHead(statusCode, securityHeaders('application/json; charset=utf-8'))
+        response.writeHead(statusCode, { ...securityHeaders('application/json; charset=utf-8'), ...(bodyLease ? { Connection: 'close' } : {}) })
         response.end(JSON.stringify({
           error: statusCode === 413
             ? 'service_admin_request_too_large'
+            : statusCode === 503 ? 'service_admin_generic_body_busy'
             : 'service_lasso_runtime_api_unreachable',
           message: statusCode === 413
             ? 'The Service Admin request exceeded the proxy limit.'
+            : statusCode === 503 ? 'Service Admin request capacity is occupied.'
             : 'Service Admin could not reach the local Service Lasso runtime.',
         }))
+      } finally {
+        if (bodyLease) {
+          // A413 does not relinquish original unread input or socket ownership.
+          await bodyLease.originalClosed
+          await bodyLease.responseClosed
+          if (bodyLease.closeSocket) await bodyLease.socketClosed
+          clearInterval(bodyLease.timer)
+          response.off('close', bodyLease.disconnect)
+          request.socket.off('close', bodyLease.socketCloseListener)
+          request.off('error', bodyLease.observeError)
+          bodyLease.bytes = null
+          if (bodyLease.leased) genericBodyActive--
+        }
       }
       return
     }

@@ -363,6 +363,30 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     }
     phase = 'generic-1048576-positive'
     assert.equal((await send(baseUrl, '/api/ordinary', Buffer.alloc(1_048_576))).status, 200)
+    phase = 'generic-chunked-1048576-positive'
+    const genericBytes = Buffer.alloc(1_048_576, 7)
+    const beforeChunked = records.length
+    const chunked = await raw(baseUrl, ['Transfer-Encoding: chunked', `Content-Type: ${mime}`],
+      Buffer.concat([Buffer.from('100000\r\n'), genericBytes, Buffer.from('\r\n0\r\n\r\n')]),
+      { target: '/api/ordinary', keepOpen: true })
+    assert.match(chunked.text, /^HTTP\/1\.1 200 /)
+    assert.equal(records.length, beforeChunked + 1)
+    assert.deepEqual(records[beforeChunked].bytes, genericBytes)
+    assert.equal(records[beforeChunked].complete, true)
+    phase = 'generic-original-clock-capacity'
+    const beforeGenericIdle = records.length
+    const genericIdle = Array.from({ length: 8 }, () => raw(baseUrl,
+      ['Content-Length: 2', `Content-Type: ${mime}`], Buffer.from('x'),
+      { target: '/api/ordinary', keepOpen: true }))
+    await wait(100)
+    assert.equal((await send(baseUrl, '/api/ordinary', Buffer.from('busy'))).status, 503)
+    for (const closed of await Promise.all(genericIdle)) {
+      assert.match(closed.text, /^HTTP\/1\.1 502 /)
+      assert.ok(closed.elapsedMs >= 30_000 && closed.elapsedMs < 32_000)
+    }
+    assert.equal(records.length, beforeGenericIdle, 'generic timeout/busy never forwards')
+    await wait(50)
+    assert.equal((await send(baseUrl, '/api/ordinary', Buffer.from('after-original-close'))).status, 200)
   } catch (error) {
     const code = ['ECONNRESET', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE'].includes(error?.code)
       ? error.code : 'fixture_failure'
