@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import http from 'node:http'
 import net from 'node:net'
+import { prepareReceiverTool, startReceiver } from './source-admission-receiver-fixture.mjs'
 
 const stage = `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/content`
 const mime = 'application/vnd.service-lasso.template-project+zip'
@@ -16,6 +17,7 @@ const fixtureErrorCodes = new Set([
   'FIXTURE_HTTP_RESPONSE_CAP', 'FIXTURE_HTTP_RESPONSE_EOF', 'FIXTURE_HTTP_CLOSE_CEILING',
   'FIXTURE_LIFETIME_WRITE', 'FIXTURE_LIFETIME_CAP', 'FIXTURE_LIFETIME_PROTOCOL', 'FIXTURE_LIFETIME_OVERFLOW', 'FIXTURE_LIFETIME_MISSING',
   'FIXTURE_PAUSED_HEADER_CAP', 'FIXTURE_PAUSED_CLOSE_CEILING', 'FIXTURE_PAUSED_EARLY_CLOSE',
+  'FIXTURE_RECEIVER_INPUT', 'FIXTURE_RECEIVER_NATIVE',
 ])
 /** Private metadata only; same raw producer/parser for source and extracted child. */
 export function createSourceAdmissionLifetimeCollector() {
@@ -251,62 +253,20 @@ function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, duration
   })
 }
 
-async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase) {
+async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase, receiverTool) {
   const url = new URL(baseUrl)
-  const socket = new net.Socket()
   const controller = new AbortController()
   const originalRecordCount = records.length
   let originalCursor
   let originalOwner
   let originalClientClosed = false
-  let intentionalClose = false
-  let failure
-  let rejectHeaders
-  let onReadable
-  const fail = (error) => {
-    failure ??= error
-    controller.abort(failure)
-    socket.destroy()
-    rejectHeaders?.(failure)
-  }
-  const closed = new Promise((resolve) => socket.once('close', () => {
-    originalClientClosed = true
-    if (!intentionalClose) fail(new FixtureError('FIXTURE_PAUSED_EARLY_CLOSE'))
-    resolve()
-  }))
-  socket.on('error', fail)
-  // Own the native read side before connecting. Read ONLY bounded headers;
-  // no HTTP client/parser can resume the paused8MiB response behind this owner.
-  socket.pause()
-  const headers = new Promise((resolve, reject) => {
-    rejectHeaders = reject
-    let text = ''
-    onReadable = () => {
-      let byte
-      while ((byte = socket.read(1)) !== null) {
-        text += byte.toString('latin1')
-        if (text.length > 8_192) { fail(new FixtureError('FIXTURE_PAUSED_HEADER_CAP')); return }
-        if (text.endsWith('\r\n\r\n')) {
-          socket.off('readable', onReadable)
-          socket.pause()
-          resolve(text)
-          return
-        }
-      }
-    }
-    socket.on('readable', onReadable)
-  })
-  const ceiling = setTimeout(() => fail(new FixtureError('FIXTURE_PAUSED_CLOSE_CEILING')), 3_000)
-  socket.once('connect', () => {
-    socket.write(`PUT ${stage} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 1\r\nContent-Type: ${mime}\r\n\r\nx`)
-  })
-  socket.connect({ host: url.hostname, port: Number(url.port) })
+  const ceiling = setTimeout(() => controller.abort(new FixtureError('FIXTURE_PAUSED_CLOSE_CEILING')), 3_000)
+  const receiver = startReceiver(receiverTool, Number(url.port), controller.signal)
   try {
     setPhase('paused-original-response-headers')
-    const originalHeaders = await headers
+    const originalHeaders = await receiver.ready
     setPhase('paused-original-response-status')
-    assert.match(originalHeaders, /^HTTP\/1\.1 200 /)
-    if (failure) throw failure
+    assert.equal(originalHeaders.status, 200)
     setPhase('paused-original-server-owner')
     // The prior unique16-byte recovery's real release fences native sequence,
     // not pipe delivery time. This never creates or delays a product lease.
@@ -314,8 +274,7 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase) {
     originalCursor = priorRecovery.seq
     originalOwner = await lifetime.waitFor((event) => event.seq > originalCursor && event.phase === 'acquired' && event.role === 'one', controller.signal)
     setPhase('paused-original-native-open')
-    assert.equal(socket.destroyed, false)
-    assert.equal(socket.readableEnded, false)
+    assert.equal(receiver.isClosed(), false)
     setPhase('paused-busy-original-response')
     const beforeBusyRecords = records.length
     const busyCursor = lifetime.snapshot().length
@@ -340,27 +299,15 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase) {
     })
     setPhase('paused-busy-original-status')
     assert.equal(busy.status, 503)
-    if (failure) throw failure
     setPhase('paused-original-native-close')
-    intentionalClose = true
-    socket.destroy()
-    await closed
+    await receiver.close()
+    originalClientClosed = true
     setPhase('paused-original-server-close')
     await lifetime.waitFor((event) => event.request === originalOwner.request && event.phase === 'socket_closed', controller.signal)
     setPhase('paused-original-server-release')
     await lifetime.waitFor((event) => event.request === originalOwner.request && event.phase === 'released', controller.signal)
-    if (failure) throw failure
-  } catch (error) {
-    intentionalClose = true
-    fail(error)
-    throw failure
   } finally {
-    intentionalClose = true
-    socket.destroy()
-    await closed
-    clearTimeout(ceiling)
-    socket.off('readable', onReadable)
-    socket.off('error', fail)
+    try { await receiver.dispose() } finally { clearTimeout(ceiling) }
   }
 }
 
@@ -368,6 +315,7 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase) {
 export async function verifySourceAdmissionProxy({ baseUrl, records, setMode, lifetime }) {
   // Source-owned fixed labels expose the failing phase without request/header
   // values or credentials. All original assertions remain authoritative.
+  const receiverTool = await prepareReceiverTool()
   let phase = 'full-upload'
   try {
     const full = Buffer.alloc(10_485_760)
@@ -550,7 +498,7 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode, li
     // actual client's read side while an8MiB response is still owned.
     phase = 'paused-downstream-capacity'
     setMode('bounded-response')
-    await pausedDownstreamCapacity(baseUrl, records, lifetime, (value) => { phase = value })
+    await pausedDownstreamCapacity(baseUrl, records, lifetime, (value) => { phase = value }, receiverTool)
     setMode('normal')
     await wait(100)
     phase = 'paused-capacity-recovery-status'

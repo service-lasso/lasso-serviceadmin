@@ -3,6 +3,18 @@ import http from 'node:http'
 import test from 'node:test'
 import { createServiceAdminServer, runtimeApiTimeoutMs, sourceAdmissionProxyPolicy, createSourceAdmissionDiagnosticWriter } from '../runtime/server.js'
 import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy, createSourceAdmissionLifetimeCollector } from '../scripts/source-admission-proxy-fixtures.mjs'
+import { decodeReceiverLine } from '../scripts/source-admission-receiver-fixture.mjs'
+
+test('native receiver codec rejects fabricated terminal and malformed observations', () => {
+  const ready = { schema: 'sa-recv-window.v1', phase: 'ready', requested: 4096, before: 4096, after: 8192, status: 200, headerBytes: 128, bodyBytes: 0, requestBytes: 250 }
+  const closed = { schema: 'sa-recv-window.v1', phase: 'closed', socketClose: true }
+  assert.deepEqual(decodeReceiverLine(JSON.stringify(ready), false), ready)
+  assert.deepEqual(decodeReceiverLine(JSON.stringify(closed), true), closed)
+  for (const [row, seen] of [[closed, false], [ready, true], [{ ...ready, bodyBytes: 1 }, false], [{ ...ready, before: 0 }, false], [{ ...ready, after: 65537 }, false], [{ ...closed, socketClose: false }, true], [{ ...closed, extra: true }, true], [{ schema: 'sa-recv-window.v1', phase: 'failed', code: 'unknown' }, false]]) {
+    assert.throws(() => decodeReceiverLine(JSON.stringify(row), seen), { code: 'FIXTURE_RECEIVER_NATIVE' })
+  }
+  assert.throws(() => decodeReceiverLine('{"schema":"sa-recv-window.v1","phase":"closed","socketClose":false,"socketClose":true}', true), { code: 'FIXTURE_RECEIVER_NATIVE' })
+})
 
 test('SA-P1..SA-P6 original native HTTP producer contract', { timeout: 150_000 }, async () => {
   const records = []
