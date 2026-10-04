@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 
 const modulePath = fileURLToPath(import.meta.url)
 const moduleDir = path.dirname(modulePath)
@@ -222,7 +224,7 @@ async function forwardSourceBody(target, method, headers, body, signal, progress
   }
 }
 
-async function proxySourceAdmission(request, response, target, headers, policy, startedAt, downstreamClosed) {
+async function proxySourceAdmission(request, response, target, headers, policy, startedAt, downstreamClosed, fixtureSender) {
   const controller = new AbortController()
   const absoluteEnd = startedAt + policy.absoluteMs
   let idleEnd = startedAt + (policy.idleMs ?? policy.absoluteMs)
@@ -264,6 +266,11 @@ async function proxySourceAdmission(request, response, target, headers, policy, 
     await new Promise((resolve) => setImmediate(resolve))
     if (request.socket.destroyed || controller.signal.aborted || expired()) {
       throw controller.signal.reason ?? new SourceProxyError(400, 'invalid_upload_framing')
+    }
+    // Qualification-only real socket option. No lease/response barrier or IO.
+    if (fixtureSender && request.method === 'PUT' && count === 1 && body[0] === 0x78) {
+      fixtureSender(request.socket)
+      if (controller.signal.aborted || expired()) throw controller.signal.reason ?? new SourceProxyError(504, 'service_admin_source_admission_timeout')
     }
     headers.set('content-length', String(count))
     if (policy.mediaType) headers.set('content-type', policy.mediaType)
@@ -647,6 +654,38 @@ function resolveStaticFile(distDir, requestPath) {
   }
 }
 
+/** Private fixture input selection only; never an execution or native authority. */
+export async function loadSourceAdmissionFixtureSender() {
+  const failed = () => { const error = new Error('FIXTURE_SENDER_INPUT'); error.code = 'FIXTURE_SENDER_INPUT'; throw error }
+  const rootPath = process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT
+  const expected = process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256
+  if (!path.isAbsolute(rootPath ?? '') || !/^[a-f0-9]{64}$/.test(expected ?? '') || process.version !== 'v22.23.2' || !['win32', 'linux'].includes(process.platform)) failed()
+  const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
+  const readBounded = async (file, max) => {
+    const stat = await fs.promises.stat(file)
+    if (!stat.isFile() || stat.size > max) failed()
+    const bytes = await fs.promises.readFile(file)
+    if (bytes.length > max) failed()
+    return bytes
+  }
+  const bytes = await readBounded(rootPath, 4 * 1024 * 1024)
+  if (hash(bytes) !== expected) failed()
+  const root = JSON.parse(bytes)
+  if (root.schema !== 'sa-sender-artifact.v1' || root.platform !== process.platform || root.nodeVersion !== '22.23.2' || !path.isAbsolute(root.addon ?? '') || !Array.isArray(root.members) || root.members.length < 2 || root.members.length > 20000) failed()
+  const seen = new Set()
+  for (const row of root.members) {
+    if (!path.isAbsolute(row.path ?? '') || seen.has(row.path) || !Number.isSafeInteger(row.size) || row.size < 0 || row.size > 64 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(row.sha256 ?? '')) failed()
+    seen.add(row.path)
+    const actual = await readBounded(row.path, 64 * 1024 * 1024)
+    if (actual.length !== row.size || hash(actual) !== row.sha256) failed()
+  }
+  if (!seen.has(root.addon)) failed()
+  // Native image load only after admitted original artifact/input byte checks.
+  const addon = createRequire(import.meta.url)(root.addon)
+  if (typeof addon.configure !== 'function') failed()
+  return (localPort, remotePort) => addon.configure(localPort, remotePort)
+}
+
 /** Own only diagnostic fd2 writes; never close shared stderr or suppress process errors. */
 export function createSourceAdmissionDiagnosticWriter({ enabled = false, onFailure = () => {}, nativeWrite = fs.write } = {}) {
   const queue = []
@@ -710,6 +749,9 @@ export function createServiceAdminServer(options = {}) {
   const sourceAdmissionSockets = new WeakSet()
 
   const sourceAdmissionLifecycleDiagnostics = options.sourceAdmissionLifecycleDiagnostics === true
+  const fixtureSender = sourceAdmissionLifecycleDiagnostics && typeof options.sourceAdmissionFixtureSender === 'function'
+    ? options.sourceAdmissionFixtureSender : null
+  let senderRecords = 0
   let diagnosticRequest = 0
   let diagnosticSequence = 0
   let diagnosticOverflow = false
@@ -775,7 +817,20 @@ export function createServiceAdminServer(options = {}) {
           if (!ownsCapacity) throw new SourceProxyError(503, 'service_admin_source_admission_busy')
           const headers = resolvePackagedProxyHeaders(request)
           const target = new URL(request.url, runtimeApiBaseUrl)
-          await proxySourceAdmission(request, response, target, headers, sourcePolicy, requestStartedAt, downstreamClosed)
+          await proxySourceAdmission(request, response, target, headers, sourcePolicy, requestStartedAt, downstreamClosed, fixtureSender && ((socket) => {
+            try {
+              if (++senderRecords > 32) throw new Error('FIXTURE_SENDER_NATIVE')
+              const facts = fixtureSender(socket.localPort, socket.remotePort)
+              if (Object.keys(facts).sort().join(',') !== 'after,before,requested' || ![facts.requested, facts.before, facts.after].every(Number.isSafeInteger) || facts.before < 0 || facts.before > 67108864 ||
+                  (process.platform === 'win32' ? facts.requested !== 0 || facts.after !== 0 : process.platform !== 'linux' || facts.requested !== 4096 || facts.after < 1 || facts.after > 16384)) throw new Error('FIXTURE_SENDER_NATIVE')
+              const line = `${JSON.stringify({ schema: 'sa-sender.v1', request: requestOrdinal, platform: process.platform, requested: facts.requested, before: facts.before, after: facts.after })}\n`
+              try { server.emit('sourceAdmissionProxyLifecycle', line) } catch {}
+              diagnosticWriter.write(line)
+            } catch {
+              try { server.emit('sourceAdmissionProxyLifecycleFailure', 'FIXTURE_SENDER_NATIVE') } catch {}
+              throw new SourceProxyError(502, 'service_lasso_runtime_api_unreachable')
+            }
+          }))
         } catch (error) {
           if (!response.destroyed && !response.headersSent) {
             const status = error instanceof TrustedIngressProxyError ? 403 : error instanceof SourceProxyError ? error.status : 502
@@ -976,15 +1031,17 @@ export async function startServiceAdminServer(options = {}) {
   if (!runtimeApiBaseUrl) {
     throw new Error('Service Lasso runtime API is not configured.')
   }
+  const sourceAdmissionLifecycleDiagnostics = options.sourceAdmissionLifecycleDiagnostics ?? process.env.SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME === '1'
+  const sourceAdmissionFixtureSender = sourceAdmissionLifecycleDiagnostics && process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT
+    ? await loadSourceAdmissionFixtureSender() : undefined
   const server = createServiceAdminServer({
     distDir: options.distDir,
     runtimeApiBaseUrl,
     rotationProxyLifecycleDiagnostics:
       options.rotationProxyLifecycleDiagnostics ??
       process.env.SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE === '1',
-    sourceAdmissionLifecycleDiagnostics:
-      options.sourceAdmissionLifecycleDiagnostics ??
-      process.env.SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME === '1',
+    sourceAdmissionLifecycleDiagnostics,
+    sourceAdmissionFixtureSender,
   })
   await new Promise((resolve, reject) => {
     server.once('error', reject)

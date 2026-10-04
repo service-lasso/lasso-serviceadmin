@@ -25,6 +25,7 @@ export function createSourceAdmissionLifetimeCollector() {
   const raw = []
   const subscribers = new Set()
   const requestStates = new Map()
+  const senderFacts = new Map()
   let lastDecision = 0
   let bytes = 0
   let pending = ''
@@ -43,7 +44,19 @@ export function createSourceAdmissionLifetimeCollector() {
       pending = pending.slice(end + 1)
       let event
       try { event = JSON.parse(line) } catch {
-        if (line.includes('sa-lifetime.v1')) fail('FIXTURE_LIFETIME_PROTOCOL')
+        if (line.includes('sa-lifetime.v1') || line.includes('sa-sender.v1')) fail('FIXTURE_LIFETIME_PROTOCOL')
+        continue
+      }
+      if (event?.schema === 'sa-sender.v1') {
+        const state = requestStates.get(event.request)
+        if (line.length > 128 || JSON.stringify(event) !== line || Object.keys(event).sort().join(',') !== 'after,before,platform,request,requested,schema' ||
+            !Number.isInteger(event.request) || !state?.owned || state.role !== 'one' || state.closed || state.released || senderFacts.has(event.request) || senderFacts.size >= 32 ||
+            ![event.before, event.after, event.requested].every(Number.isSafeInteger) || event.before < 0 || event.before > 67108864 ||
+            (event.platform === 'win32' ? event.requested !== 0 || event.after !== 0 : event.platform !== 'linux' || event.requested !== 4096 || event.after < 1 || event.after > 16384)) {
+          fail('FIXTURE_LIFETIME_PROTOCOL'); return
+        }
+        senderFacts.set(event.request, Object.freeze(event))
+        for (const notify of [...subscribers]) notify()
         continue
       }
       if (event?.schema !== 'sa-lifetime.v1') continue
@@ -71,12 +84,12 @@ export function createSourceAdmissionLifetimeCollector() {
       for (const notify of [...subscribers]) notify()
     }
   }
-  const waitFor = (predicate, signal) => new Promise((resolve, reject) => {
+  const waitFor = (predicate, signal, source = () => events) => new Promise((resolve, reject) => {
     const cleanup = () => { subscribers.delete(check); signal?.removeEventListener('abort', abort) }
     const abort = () => { cleanup(); reject(new FixtureError('FIXTURE_LIFETIME_MISSING')) }
     const check = () => {
       if (failure) { cleanup(); reject(failure); return }
-      const event = events.find(predicate)
+      const event = source().find(predicate)
       if (event) { cleanup(); resolve(event) }
     }
     if (subscribers.size >= 8) { reject(new FixtureError('FIXTURE_LIFETIME_CAP')); return }
@@ -87,6 +100,7 @@ export function createSourceAdmissionLifetimeCollector() {
   })
   return {
     feed, waitFor,
+    waitForSender: (request, signal) => waitFor((event) => event.request === request, signal, () => [...senderFacts.values()]),
     invalidate: () => fail('FIXTURE_LIFETIME_WRITE'),
     snapshot: () => { if (failure) throw failure; return events.slice() },
     rawBytes: () => Buffer.concat(raw),
@@ -274,6 +288,10 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase, re
     const priorRecovery = await lifetime.waitFor((event) => event.role === 'sixteen' && event.phase === 'released', controller.signal)
     originalCursor = priorRecovery.seq
     originalOwner = await lifetime.waitFor((event) => event.seq > originalCursor && event.phase === 'acquired' && event.role === 'one', controller.signal)
+    setPhase('paused-original-native-sender-configuration')
+    const sender = await lifetime.waitForSender(originalOwner.request, controller.signal)
+    assert.equal(sender.platform, process.platform)
+    assert.equal(sender.requested, process.platform === 'win32' ? 0 : 4096)
     setPhase('paused-original-native-open')
     assert.equal(receiver.isClosed(), false)
     setPhase('paused-busy-original-response')

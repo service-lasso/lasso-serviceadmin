@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import test from 'node:test'
-import { createServiceAdminServer, runtimeApiTimeoutMs, sourceAdmissionProxyPolicy, createSourceAdmissionDiagnosticWriter } from '../runtime/server.js'
+import { createServiceAdminServer, runtimeApiTimeoutMs, sourceAdmissionProxyPolicy, createSourceAdmissionDiagnosticWriter, loadSourceAdmissionFixtureSender } from '../runtime/server.js'
 import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy, createSourceAdmissionLifetimeCollector } from '../scripts/source-admission-proxy-fixtures.mjs'
 import { decodeReceiverLine } from '../scripts/source-admission-receiver-fixture.mjs'
 
@@ -16,13 +16,56 @@ test('native receiver codec rejects fabricated terminal and malformed observatio
   assert.throws(() => decodeReceiverLine('{"schema":"sa-recv-window.v1","phase":"closed","socketClose":false,"socketClose":true}', true), { code: 'FIXTURE_RECEIVER_NATIVE' })
 })
 
+test('sender observations require the original live owned ordinal and exact native readback', () => {
+  const decision = { schema: 'sa-lifetime.v1', seq: 1, request: 1, role: 'one', phase: 'acquired' }
+  const sender = { schema: 'sa-sender.v1', request: 1, platform: 'win32', requested: 0, before: 65536, after: 0 }
+  const line = (row) => `${JSON.stringify(row)}\n`
+  for (const rows of [[sender], [decision, { ...sender, after: 1 }], [decision, sender, sender], [decision, { ...sender, request: 2 }], [decision, { ...sender, extra: true }], [decision, { ...decision, seq: 2, phase: 'socket_closed' }, sender]]) {
+    const lifetime = createSourceAdmissionLifetimeCollector()
+    for (const row of rows) lifetime.feed(line(row))
+    assert.throws(lifetime.snapshot, { code: 'FIXTURE_LIFETIME_PROTOCOL' })
+  }
+  const lifetime = createSourceAdmissionLifetimeCollector()
+  lifetime.feed(line(decision))
+  lifetime.feed(line(sender))
+  assert.equal(lifetime.snapshot().length, 1, 'setup observation cannot invent a lease/close event')
+})
+
+test('source sender callback failure cannot forward and disabled observer cannot configure', { timeout: 5000 }, async (context) => {
+  for (const enabled of [false, true]) {
+    let forwarded = 0, configured = 0
+    const upstream = http.createServer((request, response) => { forwarded++; request.resume(); request.on('end', () => { response.writeHead(204); response.end() }) })
+    await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+    const proxy = createServiceAdminServer({ runtimeApiBaseUrl: `http://127.0.0.1:${upstream.address().port}`, sourceAdmissionLifecycleDiagnostics: enabled, sourceAdmissionFixtureSender: () => { configured++; throw new Error('FIXTURE_SENDER_NATIVE') } })
+    await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve))
+    try {
+      const response = await new Promise((resolve, reject) => {
+        const request = http.request({ hostname: '127.0.0.1', port: proxy.address().port, path: `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/content`, method: 'PUT', signal: context.signal, headers: { 'Content-Length': 1, 'Content-Type': 'application/vnd.service-lasso.template-project+zip', Connection: 'close' } }, (reply) => { reply.resume(); reply.once('end', () => resolve(reply)) })
+        request.once('error', reject)
+        request.end('x')
+      })
+      assert.equal(response.statusCode, enabled ? 502 : 204)
+      assert.equal(configured, enabled ? 1 : 0)
+      assert.equal(forwarded, enabled ? 0 : 1)
+    } finally {
+      await new Promise((resolve) => proxy.close(resolve))
+      await new Promise((resolve) => upstream.close(resolve))
+      await proxy.sourceAdmissionDiagnosticsRetired
+    }
+  }
+})
+
 test('SA-P1..SA-P6 original native HTTP producer contract', { timeout: 150_000 }, async () => {
+  const sourceAdmissionFixtureSender = await loadSourceAdmissionFixtureSender()
+  for (const ports of [[0, 1], [1, 0], [-1, 1], [65536, 1], [1.5, 1], [NaN, 1], [1, 65535]]) {
+    assert.throws(() => sourceAdmissionFixtureSender(...ports), { code: 'FIXTURE_SENDER_NATIVE' })
+  }
   const records = []
   let mode = 'normal'
   const upstream = http.createServer((request, response) => sourceAdmissionFixtureUpstream(request, response, (row) => records.push(row), () => mode))
   await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve))
   const lifetime = createSourceAdmissionLifetimeCollector()
-  const proxy = createServiceAdminServer({ runtimeApiBaseUrl: `http://127.0.0.1:${upstream.address().port}`, sourceAdmissionLifecycleDiagnostics: true })
+  const proxy = createServiceAdminServer({ runtimeApiBaseUrl: `http://127.0.0.1:${upstream.address().port}`, sourceAdmissionLifecycleDiagnostics: true, sourceAdmissionFixtureSender })
   proxy.on('sourceAdmissionProxyLifecycle', lifetime.feed)
   proxy.on('sourceAdmissionProxyLifecycleFailure', lifetime.invalidate)
   await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve))

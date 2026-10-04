@@ -129,11 +129,15 @@ try {
   let stderrBytes = 0
   let stderrOverflow = false
   const lifetime = createSourceAdmissionLifetimeCollector()
+  assert.ok(path.isAbsolute(process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT ?? ''), 'qualification sender artifact ROOT required')
+  assert.match(process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256 ?? '', /^[a-f0-9]{64}$/, 'qualification sender artifact ROOT byte pin required')
   child = spawn(process.execPath, [path.join(extractionRoot, 'runtime', 'server.js')], {
     cwd: extractionRoot,
     env: {
       ...process.env,
       SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME: '1',
+      SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT: process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT,
+      SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256: process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256,
       SERVICE_HOST: '127.0.0.1',
       SERVICE_PORT: String(serviceAdminPort),
       SERVICE_LASSO_API_BASE_URL: `http://127.0.0.1:${upstreamPort}`,
