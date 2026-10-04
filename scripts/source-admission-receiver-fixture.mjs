@@ -1,6 +1,6 @@
 // Qualification tooling only. Byte selection is never execution admission.
 import { createHash } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
@@ -47,6 +47,8 @@ export async function prepareReceiverTool() {
     if (actual.length !== member.size || digest(actual) !== member.sha256) throw fail()
   }
   if (![root.executable, helper, controller].every((value) => seen.has(value))) throw fail()
+  // A complete run owns a uniquely absent destination; never reuse old bytes.
+  await mkdir(output, { recursive: false })
   return Object.freeze({ executable: root.executable, output })
 }
 
@@ -125,6 +127,6 @@ export function startReceiver(tool, port, signal) {
     ready,
     close: async () => { if (!controlRequested) { controlRequested = true; child.stdin.end('close\n') } await finish() },
     dispose: async () => { if (!terminal) stop(); await finish() },
-    isClosed: () => terminal,
+    isClosed: () => terminal || stopping,
   }
 }

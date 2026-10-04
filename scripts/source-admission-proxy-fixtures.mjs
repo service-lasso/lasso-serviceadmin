@@ -261,8 +261,9 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase, re
   let originalOwner
   let originalClientClosed = false
   const ceiling = setTimeout(() => controller.abort(new FixtureError('FIXTURE_PAUSED_CLOSE_CEILING')), 3_000)
-  const receiver = startReceiver(receiverTool, Number(url.port), controller.signal)
+  let receiver
   try {
+    receiver = startReceiver(receiverTool, Number(url.port), controller.signal)
     setPhase('paused-original-response-headers')
     const originalHeaders = await receiver.ready
     setPhase('paused-original-response-status')
@@ -307,7 +308,7 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase, re
     setPhase('paused-original-server-release')
     await lifetime.waitFor((event) => event.request === originalOwner.request && event.phase === 'released', controller.signal)
   } finally {
-    try { await receiver.dispose() } finally { clearTimeout(ceiling) }
+    try { if (receiver) await receiver.dispose() } finally { clearTimeout(ceiling) }
   }
 }
 
