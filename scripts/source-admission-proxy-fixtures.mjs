@@ -8,6 +8,14 @@ const stage = `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/conten
 const mime = 'application/vnd.service-lasso.template-project+zip'
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+class FixtureError extends Error {
+  constructor(code) { super(code); this.code = code }
+}
+const fixtureErrorCodes = new Set([
+  'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE', 'ABORT_ERR',
+  'FIXTURE_HTTP_RESPONSE_CAP', 'FIXTURE_HTTP_RESPONSE_EOF', 'FIXTURE_HTTP_CLOSE_CEILING',
+  'FIXTURE_PAUSED_HEADER_CAP', 'FIXTURE_PAUSED_CLOSE_CEILING', 'FIXTURE_PAUSED_EARLY_CLOSE',
+])
 const operationProjection = {
   operation: {
     id: `sao_${'c'.repeat(32)}`, kind: 'source_admission', status: 'accepted', replayed: false,
@@ -60,40 +68,49 @@ export function sourceAdmissionFixtureUpstream(request, response, record, mode) 
   })
 }
 
-function send(baseUrl, target, bytes, headers = {}, method = 'PUT') {
+function send(baseUrl, target, bytes, headers = {}, method = 'PUT', signal = undefined) {
   return new Promise((resolve, reject) => {
     let result
     let closed = false
     let finished = false
+    let failure
     let responseSize = 0
     const finish = (error) => {
       if (finished) return
-      finished = true
-      clearTimeout(ceiling)
-      if (error) { request.destroy(); reject(error) } else resolve(result)
+      if (error) {
+        failure ??= error
+        request.destroy()
+      }
+      if (closed && (result || failure)) {
+        finished = true
+        clearTimeout(ceiling)
+        if (failure) reject(failure)
+        else resolve(result)
+      }
     }
-    const settle = () => { if (result && closed) finish() }
+    const settle = () => finish()
     const request = http.request(new URL(target, baseUrl), {
       method,
       headers: { 'Content-Type': mime, 'Content-Length': bytes.length, ...headers },
       agent: false,
+      signal,
     }, (response) => {
       const chunks = []
       response.on('data', (chunk) => {
         responseSize += chunk.length
-        if (responseSize > 65_536) { finish(new Error('fixture response too large')); return }
+        if (responseSize > 65_536) { finish(new FixtureError('FIXTURE_HTTP_RESPONSE_CAP')); return }
         chunks.push(chunk)
       })
       response.once('error', finish)
       response.once('end', () => {
-        if (!response.complete) { finish(new Error('fixture response missing original EOF')); return }
+        if (!response.complete) { finish(new FixtureError('FIXTURE_HTTP_RESPONSE_EOF')); return }
         result = { status: response.statusCode, body: Buffer.concat(chunks).toString() }
         settle()
       })
     })
     // Fixture ceiling does not extend any product clock. A reset or missing
     // response remains failure; successful status also requires native close.
-    const ceiling = setTimeout(() => finish(new Error('fixture HTTP ownership did not close')), 45_000)
+    const ceiling = setTimeout(() => finish(new FixtureError('FIXTURE_HTTP_CLOSE_CEILING')), 45_000)
     request.once('error', finish)
     request.once('close', () => { closed = true; settle() })
     request.end(bytes)
@@ -136,6 +153,84 @@ function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, duration
       resolve({ text, elapsedMs: performance.now() - started })
     })
   })
+}
+
+async function pausedDownstreamCapacity(baseUrl, setPhase) {
+  const url = new URL(baseUrl)
+  const socket = new net.Socket()
+  const controller = new AbortController()
+  let intentionalClose = false
+  let failure
+  let rejectHeaders
+  let onReadable
+  const fail = (error) => {
+    failure ??= error
+    controller.abort(failure)
+    socket.destroy()
+    rejectHeaders?.(failure)
+  }
+  const closed = new Promise((resolve) => socket.once('close', () => {
+    if (!intentionalClose) fail(new FixtureError('FIXTURE_PAUSED_EARLY_CLOSE'))
+    resolve()
+  }))
+  socket.on('error', fail)
+  // Own the native read side before connecting. Read ONLY bounded headers;
+  // no HTTP client/parser can resume the paused8MiB response behind this owner.
+  socket.pause()
+  const headers = new Promise((resolve, reject) => {
+    rejectHeaders = reject
+    let text = ''
+    onReadable = () => {
+      let byte
+      while ((byte = socket.read(1)) !== null) {
+        text += byte.toString('latin1')
+        if (text.length > 8_192) { fail(new FixtureError('FIXTURE_PAUSED_HEADER_CAP')); return }
+        if (text.endsWith('\r\n\r\n')) {
+          socket.off('readable', onReadable)
+          socket.pause()
+          resolve(text)
+          return
+        }
+      }
+    }
+    socket.on('readable', onReadable)
+  })
+  const ceiling = setTimeout(() => fail(new FixtureError('FIXTURE_PAUSED_CLOSE_CEILING')), 3_000)
+  socket.once('connect', () => {
+    socket.write(`PUT ${stage} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 1\r\nContent-Type: ${mime}\r\n\r\nx`)
+  })
+  socket.connect({ host: url.hostname, port: Number(url.port) })
+  try {
+    setPhase('paused-original-response-headers')
+    const originalHeaders = await headers
+    setPhase('paused-original-response-status')
+    assert.match(originalHeaders, /^HTTP\/1\.1 200 /)
+    if (failure) throw failure
+    setPhase('paused-original-native-open')
+    assert.equal(socket.destroyed, false)
+    assert.equal(socket.readableEnded, false)
+    setPhase('paused-busy-original-response')
+    const busy = await send(baseUrl, stage, Buffer.from('busy'), {}, 'PUT', controller.signal)
+    setPhase('paused-busy-original-status')
+    assert.equal(busy.status, 503)
+    if (failure) throw failure
+    setPhase('paused-original-native-close')
+    intentionalClose = true
+    socket.destroy()
+    await closed
+    if (failure) throw failure
+  } catch (error) {
+    intentionalClose = true
+    fail(error)
+    throw failure
+  } finally {
+    intentionalClose = true
+    socket.destroy()
+    await closed
+    clearTimeout(ceiling)
+    socket.off('readable', onReadable)
+    socket.off('error', fail)
+  }
 }
 
 /** All cases run on genuine HTTP sockets, including original 10s/40s timers. */
@@ -324,25 +419,10 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     // actual client's read side while an8MiB response is still owned.
     phase = 'paused-downstream-capacity'
     setMode('bounded-response')
-    await new Promise((resolve, reject) => {
-      const request = http.request(new URL(stage, baseUrl), {
-        method: 'PUT', headers: { 'Content-Type': mime, 'Content-Length': 1 }, agent: false,
-      }, async (response) => {
-        response.on('error', () => {})
-        response.pause()
-        try {
-          assert.equal(response.statusCode, 200)
-          assert.equal((await send(baseUrl, stage, Buffer.from('busy'))).status, 503)
-          request.destroy()
-        } catch (error) { request.destroy(); reject(error) }
-      })
-      const ceiling = setTimeout(() => { request.destroy(); reject(new Error('paused downstream fixture did not close')) }, 3_000)
-      request.on('error', () => {})
-      request.once('close', () => { clearTimeout(ceiling); resolve() })
-      request.end('x')
-    })
+    await pausedDownstreamCapacity(baseUrl, (value) => { phase = value })
     setMode('normal')
     await wait(100)
+    phase = 'paused-capacity-recovery-status'
     assert.equal((await send(baseUrl, stage, Buffer.from('after-response-close'))).status, 204)
 
     for (const mode of ['disconnect', 'oversize', 'stream-oversize', 'truncated', 'stall']) {
@@ -364,7 +444,7 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     phase = 'generic-1048576-positive'
     assert.equal((await send(baseUrl, '/api/ordinary', Buffer.alloc(1_048_576))).status, 200)
   } catch (error) {
-    const code = ['ECONNRESET', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE'].includes(error?.code)
+    const code = fixtureErrorCodes.has(error?.code)
       ? error.code : 'fixture_failure'
     throw new Error(`Source admission fixture failed at ${phase} (${code})`)
   }
@@ -400,7 +480,7 @@ export async function verifyGenericBodyProxy({ baseUrl, records }) {
     await wait(50)
     assert.equal((await send(baseUrl, '/api/ordinary', Buffer.from('after-original-close'))).status, 200)
   } catch (error) {
-    const code = ['ECONNRESET', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE'].includes(error?.code)
+    const code = fixtureErrorCodes.has(error?.code)
       ? error.code : 'fixture_failure'
     throw new Error(`Source admission fixture failed at ${phase} (${code})`)
   }
