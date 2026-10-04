@@ -315,7 +315,77 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     lifecycleSource.includes('trustedUnlockRealProviderControlEnabled'),
     true
   )
-  assert.equal(lifecycleSource.includes('realProviderControl'), true)
+  // Enablement is Node-side; the browser obtains only the URL and nonce via
+  // cy.env. Protect the actual producer/task/consumer chain after that migration.
+  const controlConfigSource = await readFile(
+    new URL('../cypress.config.ts', import.meta.url),
+    'utf8'
+  )
+  const controlVerifierSource = await readFile(
+    new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url),
+    'utf8'
+  )
+  assert.match(controlConfigSource, /allowCypressEnv: false/)
+  assert.match(
+    controlConfigSource,
+    /trustedUnlockRealProviderControlEnabled\(\)\s*\{\s*return\s*\(\s*String\(config\.env\.trustedUnlockRealProviderControlFailure\) === '1' \|\|\s*String\(config\.env\.realProviderControl\) === '1'\s*\)\s*\}/
+  )
+  assert.equal(
+    controlVerifierSource.includes("const providerControlNonce = randomBytes(32).toString('hex')"),
+    true
+  )
+  assert.match(
+    controlVerifierSource,
+    /trustedUnlockRealProviderControl\s*\? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=\$\{providerControlNonce\}`\s*: ''/
+  )
+  assert.equal(
+    controlVerifierSource.includes('SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce'),
+    true
+  )
+  assert.match(
+    controlledProviderFaultSource,
+    /cy\.task\('trustedUnlockRealProviderControlEnabled'\)\.then\(\(enabled\) => \{\s*if \(!enabled\) return\s*cy\.env\(\['testControlUrl', 'providerControlNonce'\]\)/
+  )
+  assert.equal(
+    controlledProviderFaultSource.split("cy.env(['testControlUrl', 'providerControlNonce'])").length - 1,
+    3
+  )
+  for (const proof of [
+    'expect(controlUrl).to.match(/^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/__service_lasso_test$/)',
+    'expect(providerControlNonce).to.match(/^[a-f0-9]{64}$/)',
+    "expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })",
+    "url: `${controlUrl}/provider-fault-receipt`",
+    "expect(body.outcome).to.equal('provider_fault_observed')",
+    "state: 'controlled_fault_consumed'",
+    "expect(body.receipt).not.to.have.property('controlNonce')",
+    "throw new Error('Controlled authenticated provider 503 was observed.')",
+  ]) {
+    assert.equal(controlledProviderFaultSource.split(proof).length - 1, 1)
+  }
+  let controlCursor = 0
+  for (const step of [
+    "outcome: 'provider_fault_armed'",
+    'controlledProviderValidationClicks += 1',
+    "state: 'controlled_fault_consumed'",
+    'recoveryProviderValidationClicks += 1',
+    'expect(status).to.equal(409)',
+    "throw new Error('Controlled authenticated provider 503 was observed.')",
+  ]) {
+    const next = controlledProviderFaultSource.indexOf(step, controlCursor)
+    assert.ok(next >= controlCursor)
+    controlCursor = next + step.length
+  }
+  for (const receiptGuard of [
+    'receipt.controlNonce === providerControlNonce',
+    "!matches(consumed, 'controlled_fault_consumed', 'next_authenticated_vault_provider_request')",
+    "!matches(recovered, 'controlled_fault_recovered', 'next_authenticated_vault_provider_request')",
+    'recovered.recoveryStatus !== recovered.baselineStatus',
+    "recovered.rearm !== 'rejected'",
+    'recovered.secondConsume !== false',
+    'await verifyControlledProviderFault(runtimeInputs, coreSource)',
+  ]) {
+    assert.equal(controlVerifierSource.split(receiptGuard).length - 1, 1)
+  }
   assert.equal(
     lifecycleSource.includes('trustedUnlockRealProviderControlFailure'),
     false
