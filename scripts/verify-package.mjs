@@ -5,7 +5,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy } from './source-admission-proxy-fixtures.mjs'
+import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy } from './source-admission-proxy-fixtures.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const platform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
@@ -167,6 +167,13 @@ try {
     baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
     records: sourceAdmissionRecords,
     setMode: (value) => { sourceAdmissionMode = value },
+  })
+  // Package verification has no source-test150s wrapper. Preserve both shared
+  // cases on the original extracted child, sequentially with normal mode.
+  sourceAdmissionMode = 'normal'
+  await verifyGenericBodyProxy({
+    baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
+    records: sourceAdmissionRecords,
   })
   assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
   process.stdout.write(`${JSON.stringify({ assetName, runtime: 'verified', identityProxy: 'verified' })}\n`)

@@ -363,6 +363,18 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     }
     phase = 'generic-1048576-positive'
     assert.equal((await send(baseUrl, '/api/ordinary', Buffer.alloc(1_048_576))).status, 200)
+  } catch (error) {
+    const code = ['ECONNRESET', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE'].includes(error?.code)
+      ? error.code : 'fixture_failure'
+    throw new Error(`Source admission fixture failed at ${phase} (${code})`)
+  }
+}
+
+/** New generic clocks are a separate bounded source case, not another30s
+ * inside the protected150s original selected/native contract wrapper. */
+export async function verifyGenericBodyProxy({ baseUrl, records }) {
+  let phase = 'generic-chunked-1048576-positive'
+  try {
     phase = 'generic-chunked-1048576-positive'
     const genericBytes = Buffer.alloc(1_048_576, 7)
     const beforeChunked = records.length
