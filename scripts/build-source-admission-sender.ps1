@@ -19,7 +19,8 @@ foreach ($row in $root.members) {
   if ($bytes.Length -ne $row.size -or (Hash-Bytes $bytes) -ne $row.sha256) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
   $seen[$row.path] = $row
 }
-foreach ($required in @($root.compiler, $root.linker, $root.nodeImportLibrary, $root.nativeSource, $PSCommandPath)) {
+if ($root.buildHost -ne (Get-Process -Id $PID).Path) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
+foreach ($required in @($root.buildHost, $root.compiler, $root.linker, $root.nodeImportLibrary, $root.nativeSource, $PSCommandPath)) {
   if (!$seen.ContainsKey($required)) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 }
 $output = [IO.Path]::GetFullPath($root.outputRoot)
