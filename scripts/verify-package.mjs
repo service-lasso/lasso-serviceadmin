@@ -5,6 +5,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy } from './source-admission-proxy-fixtures.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const platform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
@@ -83,6 +84,11 @@ try {
   })
   assert.equal(extraction.status, 0, extraction.stderr)
   await auditExtracted(extractionRoot)
+  assert.deepEqual(
+    await readFile(path.join(extractionRoot, 'runtime', 'server.js')),
+    await readFile(path.join(root, 'runtime', 'server.js')),
+    'packaged proxy must contain the exact selected source bytes'
+  )
   const manifest = JSON.parse(await readFile(path.join(extractionRoot, 'service.json'), 'utf8'))
   const embeddedSbomBytes = await readFile(path.join(extractionRoot, sbomName))
   const sidecarSbomBytes = await readFile(path.join(root, 'output', 'release', sbomName))
@@ -108,10 +114,13 @@ try {
   assert.equal(manifest.artifact.checksum, undefined, 'checksum policy must be platform-scoped for Core consumption')
 
   let observedRequest = null
+  const sourceAdmissionRecords = []
+  let sourceAdmissionMode = 'normal'
   upstream = http.createServer((request, response) => {
-    observedRequest = { headers: request.headers, url: request.url }
-    response.writeHead(200, { 'Content-Type': 'application/json' })
-    response.end(JSON.stringify({ contractVersion: 'service-lasso.auth-status.v1', ok: true }))
+    sourceAdmissionFixtureUpstream(request, response, (record) => {
+      observedRequest = { headers: record.headers, url: record.url }
+      sourceAdmissionRecords.push(record)
+    }, () => sourceAdmissionMode)
   })
   const upstreamPort = await listen(upstream)
   const serviceAdminPort = await reservePort()
@@ -153,6 +162,12 @@ try {
   assert.equal(observedRequest.headers['x-service-lasso-user'], 'usr_release_operator')
   assert.equal(observedRequest.headers['x-service-lasso-actor'], 'usr_release_operator')
   assert.equal(observedRequest.headers['x-service-lasso-workspace-id'], 'workspace-release')
+  assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
+  await verifySourceAdmissionProxy({
+    baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
+    records: sourceAdmissionRecords,
+    setMode: (value) => { sourceAdmissionMode = value },
+  })
   assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
   process.stdout.write(`${JSON.stringify({ assetName, runtime: 'verified', identityProxy: 'verified' })}\n`)
 } finally {
