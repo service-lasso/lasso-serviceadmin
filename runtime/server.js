@@ -674,9 +674,9 @@ export async function loadSourceAdmissionFixtureSender() {
   if (root.schema !== 'sa-sender-artifact.v1' || root.platform !== process.platform || root.nodeVersion !== '22.23.2' || !path.isAbsolute(root.addon ?? '') || !Array.isArray(root.members) || root.members.length < 2 || root.members.length > 20000) failed()
   const seen = new Set()
   for (const row of root.members) {
-    if (!path.isAbsolute(row.path ?? '') || seen.has(row.path) || !Number.isSafeInteger(row.size) || row.size < 0 || row.size > 64 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(row.sha256 ?? '')) failed()
+    if (!path.isAbsolute(row.path ?? '') || seen.has(row.path) || !Number.isSafeInteger(row.size) || row.size < 0 || row.size > 128 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(row.sha256 ?? '')) failed()
     seen.add(row.path)
-    const actual = await readBounded(row.path, 64 * 1024 * 1024)
+    const actual = await readBounded(row.path, 128 * 1024 * 1024)
     if (actual.length !== row.size || hash(actual) !== row.sha256) failed()
   }
   if (!seen.has(root.addon) || !seen.has(process.execPath) || !path.isAbsolute(root.nativeSource ?? '') || !seen.has(root.nativeSource) || !path.isAbsolute(root.runtimeSource ?? '') || !seen.has(root.runtimeSource)) failed()

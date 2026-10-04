@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 function Hash-Bytes($bytes) { [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant() }
 function Bound-Bytes($file) {
   $item = Get-Item -LiteralPath $file
-  if (!$item.PSIsContainer -and $item.Length -le 67108864) { return [IO.File]::ReadAllBytes($item.FullName) }
+  if (!$item.PSIsContainer -and $item.Length -le 134217728) { return [IO.File]::ReadAllBytes($item.FullName) }
   throw 'FIXTURE_SENDER_BUILD_INPUT'
 }
 if (!$IsWindows -or $InputRootSHA256 -notmatch '^[a-f0-9]{64}$' -or ![IO.Path]::IsPathFullyQualified($InputRoot)) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
