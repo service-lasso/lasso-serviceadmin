@@ -647,6 +647,58 @@ function resolveStaticFile(distDir, requestPath) {
   }
 }
 
+/** Own only diagnostic fd2 writes; never close shared stderr or suppress process errors. */
+export function createSourceAdmissionDiagnosticWriter({ enabled = false, onFailure = () => {}, nativeWrite = fs.write } = {}) {
+  const queue = []
+  let admittedLines = 0
+  let admittedBytes = 0
+  let pending = false
+  let retiring = false
+  let failed = false
+  let resolveRetired
+  const retired = new Promise((resolve) => { resolveRetired = resolve })
+  const settleRetirement = () => { if (retiring && !pending && queue.length === 0) resolveRetired() }
+  const fail = () => {
+    if (!failed) {
+      failed = true
+      try { onFailure('FIXTURE_LIFETIME_WRITE') } catch {}
+    }
+    // Discard never-submitted entries; any submitted native callback retains its entry.
+    queue.length = 0
+    settleRetirement()
+  }
+  const pump = () => {
+    if (pending || failed || queue.length === 0) { settleRetirement(); return }
+    const entry = queue[0]
+    pending = true
+    let completed = false
+    const complete = (error, written) => {
+      if (completed) return
+      completed = true
+      pending = false
+      if (error || !Number.isInteger(written) || written <= 0 || written > entry.bytes.length - entry.offset) { fail(); return }
+      entry.offset += written
+      if (entry.offset === entry.bytes.length) queue.shift()
+      pump()
+    }
+    try { nativeWrite(2, entry.bytes, entry.offset, entry.bytes.length - entry.offset, null, complete) }
+    catch { complete(true, 0) }
+  }
+  return {
+    write(line) {
+      if (!enabled) return false
+      if (failed) return false
+      if (retiring) { fail(); return false }
+      if (typeof line !== 'string' || line.length > 128) { fail(); return false }
+      const bytes = Buffer.from(line, 'utf8')
+      if (++admittedLines > 513 || bytes.length > 128 || (admittedBytes += bytes.length) > 65_536) { fail(); return false }
+      queue.push({ bytes, offset: 0 })
+      pump()
+      return true
+    },
+    retire() { retiring = true; settleRetirement(); return retired },
+  }
+}
 export function createServiceAdminServer(options = {}) {
   const distDir = path.resolve(options.distDir ?? path.join(packageRoot, 'dist'))
   const runtimeApiBaseUrl = requiredLoopbackUrl(options.runtimeApiBaseUrl)
@@ -661,6 +713,20 @@ export function createServiceAdminServer(options = {}) {
   let diagnosticRequest = 0
   let diagnosticSequence = 0
   let diagnosticOverflow = false
+  let diagnosticHandlers = 0
+  let diagnosticClosing = false
+  let resolveDiagnosticRetirement
+  const diagnosticRetirement = new Promise((resolve) => { resolveDiagnosticRetirement = resolve })
+  const diagnosticWriter = createSourceAdmissionDiagnosticWriter({
+    enabled: sourceAdmissionLifecycleDiagnostics,
+    onFailure: (code) => {
+      diagnosticOverflow = true
+      try { server.emit('sourceAdmissionProxyLifecycleFailure', code) } catch {}
+    },
+  })
+  const retireDiagnostics = () => {
+    if (diagnosticClosing && diagnosticHandlers === 0) diagnosticWriter.retire().then(resolveDiagnosticRetirement)
+  }
   const observeSourceLifetime = (phase, requestOrdinal, role) => {
     if (!sourceAdmissionLifecycleDiagnostics || diagnosticOverflow) return
     if (diagnosticSequence >= 512 || requestOrdinal > 512) {
@@ -672,7 +738,7 @@ export function createServiceAdminServer(options = {}) {
     const line = `${JSON.stringify({ schema: 'sa-lifetime.v1', seq: ++diagnosticSequence, request: requestOrdinal, role, phase })}\n`
     // Private diagnostic observers can never alter native ownership or outcomes.
     try { server.emit('sourceAdmissionProxyLifecycle', line) } catch {}
-    try { process.stderr.write(line) } catch {}
+    diagnosticWriter.write(line)
   }
 
   const server = http.createServer(async (request, response) => {
@@ -683,6 +749,7 @@ export function createServiceAdminServer(options = {}) {
       const sourcePolicy = sourceAdmissionProxyPolicy(method, request.url ?? '/')
       if (sourcePolicy) {
         sourceAdmissionSockets.add(request.socket)
+        if (sourceAdmissionLifecycleDiagnostics) diagnosticHandlers++
         const originalClosed = new Promise((resolve) => request.once('close', resolve))
         const requestOrdinal = sourceAdmissionLifecycleDiagnostics ? (diagnosticRequest = Math.min(diagnosticRequest + 1, 513)) : 0
         const length = request.headers['content-length']
@@ -725,6 +792,7 @@ export function createServiceAdminServer(options = {}) {
             sourceAdmissionActive = false
             observeSourceLifetime('released', requestOrdinal, diagnosticRole)
           }
+          if (sourceAdmissionLifecycleDiagnostics) { diagnosticHandlers--; retireDiagnostics() }
         }
         return
       }
@@ -873,6 +941,10 @@ export function createServiceAdminServer(options = {}) {
     if (method === 'HEAD') response.end()
     else fs.createReadStream(filePath).pipe(response)
   })
+  // Retirement follows native server close AND all selected async finally owners.
+  // Pending callback-owned diagnostic buffers are retained until actual IO completion.
+  server.sourceAdmissionDiagnosticsRetired = sourceAdmissionLifecycleDiagnostics ? diagnosticRetirement : Promise.resolve()
+  server.once('close', () => { diagnosticClosing = true; retireDiagnostics() })
   server.on('clientError', (error, socket) => {
     if (sourceAdmissionSockets.has(socket)) {
       // The original parser found ambiguous/surplus bytes. Close before the

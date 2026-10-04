@@ -14,7 +14,7 @@ class FixtureError extends Error {
 const fixtureErrorCodes = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE', 'ABORT_ERR',
   'FIXTURE_HTTP_RESPONSE_CAP', 'FIXTURE_HTTP_RESPONSE_EOF', 'FIXTURE_HTTP_CLOSE_CEILING',
-  'FIXTURE_LIFETIME_CAP', 'FIXTURE_LIFETIME_PROTOCOL', 'FIXTURE_LIFETIME_OVERFLOW', 'FIXTURE_LIFETIME_MISSING',
+  'FIXTURE_LIFETIME_WRITE', 'FIXTURE_LIFETIME_CAP', 'FIXTURE_LIFETIME_PROTOCOL', 'FIXTURE_LIFETIME_OVERFLOW', 'FIXTURE_LIFETIME_MISSING',
   'FIXTURE_PAUSED_HEADER_CAP', 'FIXTURE_PAUSED_CLOSE_CEILING', 'FIXTURE_PAUSED_EARLY_CLOSE',
 ])
 /** Private metadata only; same raw producer/parser for source and extracted child. */
@@ -85,6 +85,7 @@ export function createSourceAdmissionLifetimeCollector() {
   })
   return {
     feed, waitFor,
+    invalidate: () => fail('FIXTURE_LIFETIME_WRITE'),
     snapshot: () => { if (failure) throw failure; return events.slice() },
     rawBytes: () => Buffer.concat(raw),
   }
@@ -197,6 +198,21 @@ function send(baseUrl, target, bytes, headers = {}, method = 'PUT', signal = und
   })
 }
 
+async function sendWithLifetime(baseUrl, target, bytes, lifetime) {
+  const cursor = lifetime.snapshot().length
+  const controller = new AbortController()
+  // Same original45s ceiling starts BEFORE original send; native observation
+  // adds no new/extended clock and cannot turn missing bytes into evidence.
+  const ceiling = setTimeout(() => controller.abort(), 45_000)
+  let decision
+  try {
+    const result = await send(baseUrl, target, bytes, {}, 'PUT', controller.signal, async () => {
+      decision = await lifetime.waitFor((event) => event.seq > cursor && event.phase === 'acquired', controller.signal)
+    })
+    await lifetime.waitFor((event) => event.request === decision.request && event.phase === 'released', controller.signal)
+    return result
+  } finally { clearTimeout(ceiling) }
+}
 function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, durationMs = null, writes = Infinity, target = stage, method = 'PUT' } = {}) {
   const url = new URL(baseUrl)
   return new Promise((resolve, reject) => {
@@ -538,16 +554,16 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode, li
     setMode('normal')
     await wait(100)
     phase = 'paused-capacity-recovery-status'
-    assert.equal((await send(baseUrl, stage, Buffer.from('after-response-close'))).status, 204)
+    assert.equal((await sendWithLifetime(baseUrl, stage, Buffer.from('after-response-close'), lifetime)).status, 204)
 
     for (const mode of ['disconnect', 'oversize', 'stream-oversize', 'truncated', 'stall']) {
       phase = 'upstream-failure-cleanup'
       setMode(mode)
-      const failed = await send(baseUrl, stage, Buffer.from('original'))
+      const failed = await sendWithLifetime(baseUrl, stage, Buffer.from('original'), lifetime)
       assert.equal(failed.status, mode === 'stall' ? 504 : 502)
       setMode('normal')
       await wait(50)
-      assert.equal((await send(baseUrl, stage, Buffer.from('next'))).status, 204, `capacity after actual outgoing closure: ${mode}`)
+      assert.equal((await sendWithLifetime(baseUrl, stage, Buffer.from('next'), lifetime)).status, 204, `capacity after actual outgoing closure: ${mode}`)
     }
     // Existing generic 1MiB ceiling and path-selection boundaries stay strict.
     phase = 'generic-1048577-denial'
