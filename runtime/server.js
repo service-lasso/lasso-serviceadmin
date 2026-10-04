@@ -78,6 +78,47 @@ function sourceBodyLength(request, policy) {
   return count
 }
 
+function rejectedFixedBodyLength(request) {
+  const lengths = []
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index].toLowerCase()
+    if (['transfer-encoding', 'content-encoding', 'trailer'].includes(name)) return null
+    if (name === 'content-length') lengths.push(request.rawHeaders[index + 1])
+  }
+  if (lengths.length !== 1 || !/^(?:0|[1-9][0-9]{0,7})$/.test(lengths[0])) return null
+  const count = Number(lengths[0])
+  // Discard availability is finite; this never enlarges the accepted body cap.
+  return count <= MAX_REQUEST_BODY_BYTES ? count : null
+}
+
+async function settleRejectedSourceBody(request, signal, progress) {
+  const count = rejectedFixedBodyLength(request)
+  if (count === null || signal.aborted || request.destroyed || request.readableEnded) return
+  await new Promise((resolve) => {
+    let discarded = 0
+    const detach = () => {
+      request.off('data', onData)
+      request.off('end', finish)
+      request.off('error', finish)
+      request.off('aborted', finish)
+      signal.removeEventListener('abort', finish)
+    }
+    const finish = () => { detach(); request.pause(); resolve() }
+    const onData = (part) => {
+      if (!Buffer.isBuffer(part) || discarded + part.length > count) { finish(); return }
+      discarded += part.length
+      progress()
+    }
+    request.on('data', onData)
+    request.once('end', finish)
+    request.once('error', finish)
+    request.once('aborted', finish)
+    signal.addEventListener('abort', finish, { once: true })
+    request.resume()
+    if (signal.aborted) finish()
+  })
+}
+
 function originalBody(request, count, signal, progress) {
   // No chunk inventory or concat copy: allocate only after original headers pass.
   const bytes = Buffer.alloc(count)
@@ -203,7 +244,18 @@ async function proxySourceAdmission(request, response, target, headers, policy, 
   }, 25)
   timer.unref()
   try {
-    const count = sourceBodyLength(request, policy)
+    let count
+    try {
+      count = sourceBodyLength(request, policy)
+    } catch (error) {
+      // Closing with unread native input can reset the response before the
+      // caller observes400/413. Discard only unambiguous fixed bodies <=1MiB,
+      // with zero body allocation, under this SAME original absolute/idle clock.
+      // Ambiguous/large/stalled input never grants unlimited draining or forwarding.
+      await settleRejectedSourceBody(request, controller.signal, progress)
+      if (controller.signal.aborted) throw controller.signal.reason
+      throw error
+    }
     const body = await originalBody(request, count, controller.signal, progress)
     // Allow the same parser turn's framing failure/close to settle before any
     // upstream effect. Genuine HTTP message EOF is required, not a buffer hash.
