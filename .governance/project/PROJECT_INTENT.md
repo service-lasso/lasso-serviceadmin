@@ -7,3 +7,5 @@ Preserve Service Admin first-run capture, privacy, native birth, terminal projec
 Active requirement: ../specs/SPEC-001-first-run-source-loadability.md FR-SYNTAX-001. Backlog: BACKLOG.md. Existing AGENTS.md and .github PR/check workflows govern the develop landing path. Umbrella governance remains service-lasso/service-lasso .governance; this is a bounded traceability addition, not a bootstrap completion claim.
 ## Runtime-control contract maintenance (#688)
 Preserve the current producer -> Node task -> cy.env nonce consumer contract and real controlled-fault receipts. Active SPEC-002 RC-001; source-only delivery, independent review and new complete ROOT admission before execution.
+
+Admitted runtime-suite continuation: RC-002 corrects the stale checkout assertion against the current named immutable Core source-candidate workflow checkout; all RC-001 provider-binding requirements remain.

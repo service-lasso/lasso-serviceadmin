@@ -497,10 +497,31 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   ]) {
     assert.equal(verifierSource.includes(requiredProviderBinding), true)
   }
+  const coreCheckoutStart = browserWorkflowSource.indexOf(
+    '      - name: Checkout pinned Service Lasso Core revision'
+  )
+  const coreCheckoutEnd = browserWorkflowSource.indexOf(
+    '      - name: Checkout pinned Secrets Broker revision',
+    coreCheckoutStart
+  )
+  assert.ok(coreCheckoutStart >= 0)
+  assert.ok(coreCheckoutEnd > coreCheckoutStart)
+  const coreCheckoutSource = browserWorkflowSource.slice(
+    coreCheckoutStart,
+    coreCheckoutEnd
+  )
+  // Bind the assertion to the actual Core checkout, not an unrelated pin or
+  // comment elsewhere in the workflow. This is still a source candidate.
+  for (const checkoutBinding of [
+    'repository: service-lasso/service-lasso',
+    'ref: 611f8cdd2f684e8e466d32009cf4af410225c2ec',
+    'path: qualification/core',
+  ]) {
+    assert.equal(coreCheckoutSource.split(checkoutBinding).length - 1, 1)
+  }
+  assert.equal([...coreCheckoutSource.matchAll(/^\s+ref:/gm)].length, 1)
   assert.equal(
-    browserWorkflowSource.includes(
-      'ref: 179af20e05dd65648aa503a0ff534ed6fc1fa14d'
-    ),
+    browserWorkflowSource.includes('SERVICE_LASSO_TEST_CORE_QUALIFICATION_KIND=source_candidate'),
     true
   )
   assert.equal(verifierSource.includes("cypress.kill('SIGKILL')"), false)
