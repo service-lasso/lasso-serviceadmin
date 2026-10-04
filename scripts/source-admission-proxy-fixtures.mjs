@@ -68,7 +68,7 @@ export function sourceAdmissionFixtureUpstream(request, response, record, mode) 
   })
 }
 
-function send(baseUrl, target, bytes, headers = {}, method = 'PUT', signal = undefined) {
+function send(baseUrl, target, bytes, headers = {}, method = 'PUT', signal = undefined, observeResponse = undefined) {
   return new Promise((resolve, reject) => {
     let result
     let closed = false
@@ -95,6 +95,7 @@ function send(baseUrl, target, bytes, headers = {}, method = 'PUT', signal = und
       agent: false,
       signal,
     }, (response) => {
+      try { observeResponse?.(response.statusCode) } catch (error) { finish(error); return }
       const chunks = []
       response.on('data', (chunk) => {
         responseSize += chunk.length
@@ -155,10 +156,12 @@ function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, duration
   })
 }
 
-async function pausedDownstreamCapacity(baseUrl, setPhase) {
+async function pausedDownstreamCapacity(baseUrl, records, setPhase) {
   const url = new URL(baseUrl)
   const socket = new net.Socket()
   const controller = new AbortController()
+  const originalRecordCount = records.length
+  let originalClientClosed = false
   let intentionalClose = false
   let failure
   let rejectHeaders
@@ -170,6 +173,7 @@ async function pausedDownstreamCapacity(baseUrl, setPhase) {
     rejectHeaders?.(failure)
   }
   const closed = new Promise((resolve) => socket.once('close', () => {
+    originalClientClosed = true
     if (!intentionalClose) fail(new FixtureError('FIXTURE_PAUSED_EARLY_CLOSE'))
     resolve()
   }))
@@ -210,7 +214,18 @@ async function pausedDownstreamCapacity(baseUrl, setPhase) {
     assert.equal(socket.destroyed, false)
     assert.equal(socket.readableEnded, false)
     setPhase('paused-busy-original-response')
-    const busy = await send(baseUrl, stage, Buffer.from('busy'), {}, 'PUT', controller.signal)
+    const beforeBusyRecords = records.length
+    const busy = await send(baseUrl, stage, Buffer.from('busy'), {}, 'PUT', controller.signal, (status) => {
+      // Only closed classes leave this fixture; no response/header/error values.
+      // Client-close is an actual local receipt, NEVER a server-close inference.
+      const statusClass = status === 503 ? '503' : status === 200 ? '200' : status === 502 ? '502' : status === 504 ? '504' : 'other'
+      const originalClass = beforeBusyRecords === originalRecordCount + 1 ? 'one-original-record' : 'original-record-count-other'
+      const forwardClass = records.length === beforeBusyRecords ? 'no-new-upstream-record' : records.length === beforeBusyRecords + 1 ? 'one-new-upstream-record' : 'upstream-record-count-other'
+      const closeClass = originalClientClosed ? 'client-close-observed' : 'client-close-not-observed'
+      setPhase(`paused-busy-header-${statusClass}-${originalClass}-${forwardClass}-${closeClass}`)
+      assert.equal(status, 503)
+      assert.equal(records.length, beforeBusyRecords, 'busy original must not forward')
+    })
     setPhase('paused-busy-original-status')
     assert.equal(busy.status, 503)
     if (failure) throw failure
@@ -419,7 +434,7 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     // actual client's read side while an8MiB response is still owned.
     phase = 'paused-downstream-capacity'
     setMode('bounded-response')
-    await pausedDownstreamCapacity(baseUrl, (value) => { phase = value })
+    await pausedDownstreamCapacity(baseUrl, records, (value) => { phase = value })
     setMode('normal')
     await wait(100)
     phase = 'paused-capacity-recovery-status'
