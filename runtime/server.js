@@ -62,7 +62,10 @@ function sourceBodyLength(request, policy) {
     return 0
   }
   const types = fields.get('content-type')
-  if (!types || types.length !== 1 || types[0].trim() !== policy.mediaType) {
+  if (
+    !types || types.length !== 1 ||
+    types[0].replace(/^[ \t]+|[ \t]+$/g, '') !== policy.mediaType
+  ) {
     throw new SourceProxyError(400, 'invalid_stage_content_type')
   }
   if (!lengths || lengths.length !== 1 || !/^[1-9][0-9]{0,7}$/.test(lengths[0])) {

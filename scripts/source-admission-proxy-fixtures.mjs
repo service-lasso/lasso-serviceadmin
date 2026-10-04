@@ -84,7 +84,7 @@ function send(baseUrl, target, bytes, headers = {}, method = 'PUT') {
   })
 }
 
-function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, durationMs = null, writes = Infinity } = {}) {
+function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, durationMs = null, writes = Infinity, target = stage, method = 'PUT' } = {}) {
   const url = new URL(baseUrl)
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: url.hostname, port: Number(url.port) })
@@ -94,7 +94,9 @@ function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, duration
     let finalTimer
     const ceiling = setTimeout(() => { socket.destroy(); reject(new Error('original fixture socket did not close')) }, 50_000)
     socket.once('connect', () => {
-      socket.write(`PUT ${stage} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n${fields.join('\r\n')}\r\n\r\n`)
+      // Latin-1 preserves the original HTTP obs-text octet0xA0. UTF-8 would
+      // produce0xC2,0xA0 and fail to exercise the original-header defect.
+      socket.write(Buffer.from(`${method} ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n${fields.join('\r\n')}\r\n\r\n`, 'latin1'))
       if (body.length) socket.write(body)
       if (everyMs) ticker = setInterval(() => {
         socket.write(Buffer.from([1]))
@@ -149,6 +151,36 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
   assert.equal(forwarded.headers['x-service-lasso-zitadel-roles'], 'admin')
   assert.equal(forwarded.headers['x-service-lasso-workspace-id'], 'workspace-release')
   assert.equal(forwarded.headers['x-service-lasso-client-id'], undefined)
+
+  // F1: exact media types allow only original HTTP outer SP/HTAB, never
+  // ECMAScript Unicode whitespace. Exercise both edges on all selected bodies.
+  for (const route of [
+    { target: stage, method: 'PUT', mediaType: mime, body: Buffer.from('original-upload') },
+    ...[
+      '/api/service-source-admission/stages',
+      '/api/service-source-admission/preflights',
+      `/api/service-source-admission/preflights/sap_${'b'.repeat(32)}/commit`,
+    ].map((target) => ({ target, method: 'POST', mediaType: 'application/json', body: Buffer.from('{"original":true}') })),
+  ]) {
+    for (const value of [`\u00a0${route.mediaType}`, `${route.mediaType}\u00a0`, `\u00a0${route.mediaType}\u00a0`]) {
+      const before = records.length
+      const rejectedType = await raw(baseUrl, [`Content-Length: ${route.body.length}`, `Content-Type: ${value}`], route.body, { ...route, keepOpen: true })
+      assert.match(rejectedType.text, /^HTTP\/1\.1 400 /)
+      await wait(50)
+      assert.equal(records.length, before, 'original0xA0 MIME whitespace must never forward')
+    }
+    for (const value of [` ${route.mediaType} `, `\t${route.mediaType}\t`, ` \t${route.mediaType}\t `]) {
+      const before = records.length
+      const allowedType = await raw(baseUrl, [`Content-Length: ${route.body.length}`, `Content-Type: ${value}`], route.body, { ...route, keepOpen: true })
+      assert.match(allowedType.text, route.method === 'PUT' ? /^HTTP\/1\.1 204 / : /^HTTP\/1\.1 200 /)
+      assert.equal(records.length, before + 1)
+      assert.deepEqual(records[before].bytes, route.body)
+      assert.equal(records[before].complete, true)
+      assert.deepEqual(records[before].rawTrailers, [])
+      assert.equal(records[before].headers['content-type'], route.mediaType)
+      assert.equal(records[before].headers['content-length'], String(route.body.length))
+    }
+  }
 
   for (const target of [
     '/api/service-source-admission/stages',
