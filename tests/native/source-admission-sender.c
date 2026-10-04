@@ -16,7 +16,7 @@ typedef struct { unsigned local, remote, matches; uv_tcp_t* match; } selection;
 
 static int endpoints(uv_tcp_t* tcp, unsigned local, unsigned remote) {
   struct sockaddr_storage a, b;
-  int alen = sizeof(a), blen = sizeof(b);
+  int alen = (int)sizeof(a), blen = (int)sizeof(b);
   if (uv_tcp_getsockname(tcp, (struct sockaddr*)&a, &alen) ||
       uv_tcp_getpeername(tcp, (struct sockaddr*)&b, &blen) ||
       a.ss_family != AF_INET || b.ss_family != AF_INET) return 0;
@@ -69,7 +69,7 @@ static napi_value configure(napi_env env, napi_callback_info info) {
   if (uv_fileno((uv_handle_t*)selected.match, &descriptor)) return failure(env);
 #ifdef _WIN32
   const SOCKET socket = (SOCKET)(uintptr_t)descriptor;
-  int requested = 0, option_length = sizeof(int);
+  int requested = 0, option_length = (int)sizeof(int);
   if (socket == INVALID_SOCKET) return failure(env);
 #else
   const int socket = descriptor;
@@ -79,14 +79,14 @@ static napi_value configure(napi_env env, napi_callback_info info) {
 #endif
   int type, before, after;
   if (getsockopt(socket, SOL_SOCKET, SO_TYPE, (char*)&type, &option_length) ||
-      option_length != sizeof(int) || type != SOCK_STREAM) return failure(env);
+      (size_t)option_length != sizeof(int) || type != SOCK_STREAM) return failure(env);
   option_length = sizeof(int);
   if (getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char*)&before, &option_length) ||
-      option_length != sizeof(int) || before < 0 || before > 67108864 ||
+      (size_t)option_length != sizeof(int) || before < 0 || before > 67108864 ||
       setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (const char*)&requested, sizeof(requested))) return failure(env);
   option_length = sizeof(int);
   if (getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char*)&after, &option_length) ||
-      option_length != sizeof(int)) return failure(env);
+      (size_t)option_length != sizeof(int)) return failure(env);
 #ifdef _WIN32
   if (after != 0) return failure(env);
 #else

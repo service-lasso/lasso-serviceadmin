@@ -679,7 +679,9 @@ export async function loadSourceAdmissionFixtureSender() {
     const actual = await readBounded(row.path, 64 * 1024 * 1024)
     if (actual.length !== row.size || hash(actual) !== row.sha256) failed()
   }
-  if (!seen.has(root.addon)) failed()
+  if (!seen.has(root.addon) || !seen.has(process.execPath) || !path.isAbsolute(root.nativeSource ?? '') || !seen.has(root.nativeSource) || !path.isAbsolute(root.runtimeSource ?? '') || !seen.has(root.runtimeSource)) failed()
+  const sourceRow = root.members.find((row) => row.path === root.runtimeSource)
+  if (hash(await readBounded(modulePath, 64 * 1024 * 1024)) !== sourceRow.sha256) failed()
   // Native image load only after admitted original artifact/input byte checks.
   const addon = createRequire(import.meta.url)(root.addon)
   if (typeof addon.configure !== 'function') failed()
