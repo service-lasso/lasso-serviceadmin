@@ -657,6 +657,24 @@ export function createServiceAdminServer(options = {}) {
   let genericBodyActive = 0
   const sourceAdmissionSockets = new WeakSet()
 
+  const sourceAdmissionLifecycleDiagnostics = options.sourceAdmissionLifecycleDiagnostics === true
+  let diagnosticRequest = 0
+  let diagnosticSequence = 0
+  let diagnosticOverflow = false
+  const observeSourceLifetime = (phase, requestOrdinal, role) => {
+    if (!sourceAdmissionLifecycleDiagnostics || diagnosticOverflow) return
+    if (diagnosticSequence >= 512 || requestOrdinal > 512) {
+      diagnosticOverflow = true
+      phase = 'overflow'
+      requestOrdinal = 0
+      role = 'other'
+    }
+    const line = `${JSON.stringify({ schema: 'sa-lifetime.v1', seq: ++diagnosticSequence, request: requestOrdinal, role, phase })}\n`
+    // Private diagnostic observers can never alter native ownership or outcomes.
+    try { server.emit('sourceAdmissionProxyLifecycle', line) } catch {}
+    try { process.stderr.write(line) } catch {}
+  }
+
   const server = http.createServer(async (request, response) => {
     const requestStartedAt = performance.now()
     const method = request.method ?? 'GET'
@@ -666,11 +684,21 @@ export function createServiceAdminServer(options = {}) {
       if (sourcePolicy) {
         sourceAdmissionSockets.add(request.socket)
         const originalClosed = new Promise((resolve) => request.once('close', resolve))
-        const downstreamClosed = new Promise((resolve) => request.socket.once('close', resolve))
+        const requestOrdinal = sourceAdmissionLifecycleDiagnostics ? (diagnosticRequest = Math.min(diagnosticRequest + 1, 513)) : 0
+        const length = request.headers['content-length']
+        const diagnosticRole = method === 'PUT' && ['1', '4', '16'].includes(length)
+          ? ({ '1': 'one', '4': 'four', '16': 'sixteen' })[length] : 'other'
+        const downstreamClosed = new Promise((resolve) => request.socket.once('close', () => {
+          observeSourceLifetime('socket_closed', requestOrdinal, diagnosticRole)
+          resolve()
+        }))
         const observeOriginalError = () => {}
         request.on('error', observeOriginalError)
         const ownsCapacity = !sourceAdmissionActive
-        if (ownsCapacity) sourceAdmissionActive = true
+        if (ownsCapacity) {
+          sourceAdmissionActive = true
+          observeSourceLifetime('acquired', requestOrdinal, diagnosticRole)
+        } else observeSourceLifetime('denied', requestOrdinal, diagnosticRole)
         // Always close selected downstream connections. Malformed/stalled body
         // failure cannot leave unread bytes or parser state on a reused socket.
         response.once('close', () => {
@@ -693,7 +721,10 @@ export function createServiceAdminServer(options = {}) {
           await downstreamClosed
           request.off('error', observeOriginalError)
           sourceAdmissionSockets.delete(request.socket)
-          if (ownsCapacity) sourceAdmissionActive = false
+          if (ownsCapacity) {
+            sourceAdmissionActive = false
+            observeSourceLifetime('released', requestOrdinal, diagnosticRole)
+          }
         }
         return
       }
@@ -879,6 +910,9 @@ export async function startServiceAdminServer(options = {}) {
     rotationProxyLifecycleDiagnostics:
       options.rotationProxyLifecycleDiagnostics ??
       process.env.SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE === '1',
+    sourceAdmissionLifecycleDiagnostics:
+      options.sourceAdmissionLifecycleDiagnostics ??
+      process.env.SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME === '1',
   })
   await new Promise((resolve, reject) => {
     server.once('error', reject)

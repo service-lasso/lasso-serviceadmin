@@ -14,8 +14,81 @@ class FixtureError extends Error {
 const fixtureErrorCodes = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ERR_ASSERTION', 'ERR_STREAM_PREMATURE_CLOSE', 'ABORT_ERR',
   'FIXTURE_HTTP_RESPONSE_CAP', 'FIXTURE_HTTP_RESPONSE_EOF', 'FIXTURE_HTTP_CLOSE_CEILING',
+  'FIXTURE_LIFETIME_CAP', 'FIXTURE_LIFETIME_PROTOCOL', 'FIXTURE_LIFETIME_OVERFLOW', 'FIXTURE_LIFETIME_MISSING',
   'FIXTURE_PAUSED_HEADER_CAP', 'FIXTURE_PAUSED_CLOSE_CEILING', 'FIXTURE_PAUSED_EARLY_CLOSE',
 ])
+/** Private metadata only; same raw producer/parser for source and extracted child. */
+export function createSourceAdmissionLifetimeCollector() {
+  const events = []
+  const raw = []
+  const subscribers = new Set()
+  const requestStates = new Map()
+  let lastDecision = 0
+  let bytes = 0
+  let pending = ''
+  let failure
+  const fail = (code) => { failure ??= new FixtureError(code); for (const notify of [...subscribers]) notify() }
+  const feed = (chunk) => {
+    if (failure) return
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    bytes += buffer.length
+    if (bytes > 65_536) { fail('FIXTURE_LIFETIME_CAP'); return }
+    raw.push(Buffer.from(buffer))
+    pending += buffer.toString('utf8')
+    let end
+    while ((end = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, end)
+      pending = pending.slice(end + 1)
+      let event
+      try { event = JSON.parse(line) } catch {
+        if (line.includes('sa-lifetime.v1')) fail('FIXTURE_LIFETIME_PROTOCOL')
+        continue
+      }
+      if (event?.schema !== 'sa-lifetime.v1') continue
+      if (line.length > 128 || Object.keys(event).sort().join(',') !== 'phase,request,role,schema,seq' ||
+          !Number.isInteger(event.seq) || event.seq !== events.length + 1 || event.seq > 513 ||
+          !Number.isInteger(event.request) || event.request < 0 || event.request > 512 ||
+          !['one', 'four', 'sixteen', 'other'].includes(event.role) ||
+          !['acquired', 'socket_closed', 'released', 'denied', 'overflow'].includes(event.phase)) {
+        fail('FIXTURE_LIFETIME_PROTOCOL'); return
+      }
+      if (event.phase === 'overflow' || event.request === 0) { fail('FIXTURE_LIFETIME_OVERFLOW'); return }
+      let state = requestStates.get(event.request)
+      if (event.phase === 'acquired' || event.phase === 'denied') {
+        if (state || event.request !== ++lastDecision) { fail('FIXTURE_LIFETIME_PROTOCOL'); return }
+        state = { role: event.role, owned: event.phase === 'acquired', closed: false, released: false }
+        requestStates.set(event.request, state)
+      } else if (!state || state.role !== event.role ||
+          (event.phase === 'socket_closed' && state.closed) ||
+          (event.phase === 'released' && (!state.owned || !state.closed || state.released))) {
+        fail('FIXTURE_LIFETIME_PROTOCOL'); return
+      }
+      if (event.phase === 'socket_closed') state.closed = true
+      if (event.phase === 'released') state.released = true
+      events.push(Object.freeze(event))
+      for (const notify of [...subscribers]) notify()
+    }
+  }
+  const waitFor = (predicate, signal) => new Promise((resolve, reject) => {
+    const cleanup = () => { subscribers.delete(check); signal?.removeEventListener('abort', abort) }
+    const abort = () => { cleanup(); reject(new FixtureError('FIXTURE_LIFETIME_MISSING')) }
+    const check = () => {
+      if (failure) { cleanup(); reject(failure); return }
+      const event = events.find(predicate)
+      if (event) { cleanup(); resolve(event) }
+    }
+    if (subscribers.size >= 8) { reject(new FixtureError('FIXTURE_LIFETIME_CAP')); return }
+    subscribers.add(check)
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+    else check()
+  })
+  return {
+    feed, waitFor,
+    snapshot: () => { if (failure) throw failure; return events.slice() },
+    rawBytes: () => Buffer.concat(raw),
+  }
+}
 const operationProjection = {
   operation: {
     id: `sao_${'c'.repeat(32)}`, kind: 'source_admission', status: 'accepted', replayed: false,
@@ -95,19 +168,25 @@ function send(baseUrl, target, bytes, headers = {}, method = 'PUT', signal = und
       agent: false,
       signal,
     }, (response) => {
-      try { observeResponse?.(response.statusCode) } catch (error) { finish(error); return }
-      const chunks = []
-      response.on('data', (chunk) => {
-        responseSize += chunk.length
-        if (responseSize > 65_536) { finish(new FixtureError('FIXTURE_HTTP_RESPONSE_CAP')); return }
-        chunks.push(chunk)
-      })
+      response.pause()
       response.once('error', finish)
-      response.once('end', () => {
-        if (!response.complete) { finish(new FixtureError('FIXTURE_HTTP_RESPONSE_EOF')); return }
-        result = { status: response.statusCode, body: Buffer.concat(chunks).toString() }
-        settle()
-      })
+      // An asynchronous native-evidence observation is part of this owner;
+      // neither response callback return nor request close settles it alone.
+      Promise.resolve().then(() => observeResponse?.(response.statusCode)).then(() => {
+        if (failure) return
+        const chunks = []
+        response.on('data', (chunk) => {
+          responseSize += chunk.length
+          if (responseSize > 65_536) { finish(new FixtureError('FIXTURE_HTTP_RESPONSE_CAP')); return }
+          chunks.push(chunk)
+        })
+        response.once('end', () => {
+          if (!response.complete) { finish(new FixtureError('FIXTURE_HTTP_RESPONSE_EOF')); return }
+          result = { status: response.statusCode, body: Buffer.concat(chunks).toString() }
+          settle()
+        })
+        response.resume()
+      }).catch(finish)
     })
     // Fixture ceiling does not extend any product clock. A reset or missing
     // response remains failure; successful status also requires native close.
@@ -156,11 +235,13 @@ function raw(baseUrl, fields, body, { keepOpen = false, everyMs = null, duration
   })
 }
 
-async function pausedDownstreamCapacity(baseUrl, records, setPhase) {
+async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase) {
   const url = new URL(baseUrl)
   const socket = new net.Socket()
   const controller = new AbortController()
   const originalRecordCount = records.length
+  let originalCursor
+  let originalOwner
   let originalClientClosed = false
   let intentionalClose = false
   let failure
@@ -210,20 +291,35 @@ async function pausedDownstreamCapacity(baseUrl, records, setPhase) {
     setPhase('paused-original-response-status')
     assert.match(originalHeaders, /^HTTP\/1\.1 200 /)
     if (failure) throw failure
+    setPhase('paused-original-server-owner')
+    // The prior unique16-byte recovery's real release fences native sequence,
+    // not pipe delivery time. This never creates or delays a product lease.
+    const priorRecovery = await lifetime.waitFor((event) => event.role === 'sixteen' && event.phase === 'released', controller.signal)
+    originalCursor = priorRecovery.seq
+    originalOwner = await lifetime.waitFor((event) => event.seq > originalCursor && event.phase === 'acquired' && event.role === 'one', controller.signal)
     setPhase('paused-original-native-open')
     assert.equal(socket.destroyed, false)
     assert.equal(socket.readableEnded, false)
     setPhase('paused-busy-original-response')
     const beforeBusyRecords = records.length
-    const busy = await send(baseUrl, stage, Buffer.from('busy'), {}, 'PUT', controller.signal, (status) => {
+    const busyCursor = lifetime.snapshot().length
+    const busy = await send(baseUrl, stage, Buffer.from('busy'), {}, 'PUT', controller.signal, async (status) => {
+      const busyDecision = await lifetime.waitFor((event) => event.seq > busyCursor && event.request !== originalOwner.request && event.role === 'four' && ['acquired', 'denied'].includes(event.phase), controller.signal)
+      const preceding = lifetime.snapshot().filter((event) => event.seq < busyDecision.seq && event.request === originalOwner.request)
+      const serverCloseClass = preceding.some((event) => event.phase === 'socket_closed') ? 'server-close-observed' : 'server-close-not-observed'
+      const releaseClass = preceding.some((event) => event.phase === 'released') ? 'server-release-observed' : 'server-release-not-observed'
+      const decisionClass = busyDecision.phase === 'denied' ? 'busy-denied' : 'busy-acquired'
       // Only closed classes leave this fixture; no response/header/error values.
       // Client-close is an actual local receipt, NEVER a server-close inference.
       const statusClass = status === 503 ? '503' : status === 200 ? '200' : status === 502 ? '502' : status === 504 ? '504' : 'other'
       const originalClass = beforeBusyRecords === originalRecordCount + 1 ? 'one-original-record' : 'original-record-count-other'
       const forwardClass = records.length === beforeBusyRecords ? 'no-new-upstream-record' : records.length === beforeBusyRecords + 1 ? 'one-new-upstream-record' : 'upstream-record-count-other'
       const closeClass = originalClientClosed ? 'client-close-observed' : 'client-close-not-observed'
-      setPhase(`paused-busy-header-${statusClass}-${originalClass}-${forwardClass}-${closeClass}`)
+      setPhase(`paused-busy-header-${statusClass}-${originalClass}-${forwardClass}-${closeClass}-${serverCloseClass}-${releaseClass}-${decisionClass}`)
       assert.equal(status, 503)
+      assert.equal(busyDecision.phase, 'denied')
+      assert.equal(preceding.some((event) => event.phase === 'socket_closed'), false, 'original server socket must still own paused response')
+      assert.equal(preceding.some((event) => event.phase === 'released'), false, 'original selected lease must still be held')
       assert.equal(records.length, beforeBusyRecords, 'busy original must not forward')
     })
     setPhase('paused-busy-original-status')
@@ -233,6 +329,10 @@ async function pausedDownstreamCapacity(baseUrl, records, setPhase) {
     intentionalClose = true
     socket.destroy()
     await closed
+    setPhase('paused-original-server-close')
+    await lifetime.waitFor((event) => event.request === originalOwner.request && event.phase === 'socket_closed', controller.signal)
+    setPhase('paused-original-server-release')
+    await lifetime.waitFor((event) => event.request === originalOwner.request && event.phase === 'released', controller.signal)
     if (failure) throw failure
   } catch (error) {
     intentionalClose = true
@@ -249,7 +349,7 @@ async function pausedDownstreamCapacity(baseUrl, records, setPhase) {
 }
 
 /** All cases run on genuine HTTP sockets, including original 10s/40s timers. */
-export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) {
+export async function verifySourceAdmissionProxy({ baseUrl, records, setMode, lifetime }) {
   // Source-owned fixed labels expose the failing phase without request/header
   // values or credentials. All original assertions remain authoritative.
   let phase = 'full-upload'
@@ -434,7 +534,7 @@ export async function verifySourceAdmissionProxy({ baseUrl, records, setMode }) 
     // actual client's read side while an8MiB response is still owned.
     phase = 'paused-downstream-capacity'
     setMode('bounded-response')
-    await pausedDownstreamCapacity(baseUrl, records, (value) => { phase = value })
+    await pausedDownstreamCapacity(baseUrl, records, lifetime, (value) => { phase = value })
     setMode('normal')
     await wait(100)
     phase = 'paused-capacity-recovery-status'

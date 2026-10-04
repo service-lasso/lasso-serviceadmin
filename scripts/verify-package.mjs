@@ -5,7 +5,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy } from './source-admission-proxy-fixtures.mjs'
+import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy, createSourceAdmissionLifetimeCollector } from './source-admission-proxy-fixtures.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const platform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
@@ -126,10 +126,14 @@ try {
   const serviceAdminPort = await reservePort()
   const stdout = []
   const stderr = []
+  let stderrBytes = 0
+  let stderrOverflow = false
+  const lifetime = createSourceAdmissionLifetimeCollector()
   child = spawn(process.execPath, [path.join(extractionRoot, 'runtime', 'server.js')], {
     cwd: extractionRoot,
     env: {
       ...process.env,
+      SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME: '1',
       SERVICE_HOST: '127.0.0.1',
       SERVICE_PORT: String(serviceAdminPort),
       SERVICE_LASSO_API_BASE_URL: `http://127.0.0.1:${upstreamPort}`,
@@ -137,7 +141,15 @@ try {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   child.stdout.on('data', (chunk) => { if (stdout.join('').length < 65_536) stdout.push(String(chunk)) })
-  child.stderr.on('data', (chunk) => { if (stderr.join('').length < 65_536) stderr.push(String(chunk)) })
+  child.stderr.on('data', (chunk) => {
+    // Preserve original extracted-child bytes in the admitted parent capture.
+    // Exact bounded accumulation rejects overflow rather than treating truncation as proof.
+    process.stderr.write(chunk)
+    lifetime.feed(chunk)
+    stderrBytes += chunk.length
+    if (stderrBytes > 65_536) { stderrOverflow = true; return }
+    stderr.push(String(chunk))
+  })
 
   const shell = await waitForResponse(`http://127.0.0.1:${serviceAdminPort}/`, child)
   assert.match(await shell.text(), /<html/i)
@@ -166,6 +178,7 @@ try {
   await verifySourceAdmissionProxy({
     baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
     records: sourceAdmissionRecords,
+    lifetime,
     setMode: (value) => { sourceAdmissionMode = value },
   })
   // Package verification has no source-test150s wrapper. Preserve both shared
@@ -174,8 +187,11 @@ try {
   await verifyGenericBodyProxy({
     baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
     records: sourceAdmissionRecords,
+    lifetime,
   })
   assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
+  assert.equal(stderrOverflow, false, 'original child stderr must be fully bounded and retained')
+  lifetime.snapshot()
   process.stdout.write(`${JSON.stringify({ assetName, runtime: 'verified', identityProxy: 'verified' })}\n`)
 } finally {
   if (child && child.exitCode === null) {
