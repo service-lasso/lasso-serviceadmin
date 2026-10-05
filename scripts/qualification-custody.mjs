@@ -180,6 +180,8 @@ export async function writeQualificationCustody(receiptPath, receipt) {
   await writeFile(receiptPath, `${JSON.stringify(receipt)}\n`, {
     encoding: 'utf8',
     mode: 0o600,
+    // An existing or partial final record is retained, never truncated/retried.
+    flag: 'wx',
   })
 }
 
