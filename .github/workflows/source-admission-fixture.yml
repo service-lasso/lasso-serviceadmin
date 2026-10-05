@@ -48,18 +48,21 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           INPUT_PAIRS: ${{ inputs.input_pairs }}
           INPUT_PLATFORM: ${{ matrix.platform }}
+          INPUT_PHASE: ${{ inputs.phase }}
         run: |
           if ($env:GITHUB_REF -ne 'refs/heads/develop' -or $env:SOURCE_SHA -notmatch '^[a-f0-9]{40}$' -or (git rev-parse HEAD).Trim() -ne $env:SOURCE_SHA) { throw 'FIXTURE_HANDOFF_SOURCE' }
           $pair = ($env:INPUT_PAIRS | ConvertFrom-Json).($env:INPUT_PLATFORM)
           if (![IO.Path]::IsPathFullyQualified($pair.root) -or $pair.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'FIXTURE_HANDOFF_INPUT' }
           "SERVICE_LASSO_FIXTURE_INPUT_ROOT=$($pair.root)" >> $env:GITHUB_ENV
           "SERVICE_LASSO_FIXTURE_INPUT_SHA256=$($pair.sha256)" >> $env:GITHUB_ENV
-          foreach ($field in @('receiverRoot','receiverSHA256','receiverEvidence')) {
-            if (!$pair.$field) { throw 'FIXTURE_HANDOFF_RECEIVER' }
+          if ($env:INPUT_PHASE -eq 'qualification') {
+            foreach ($field in @('receiverRoot','receiverSHA256','receiverEvidence')) {
+              if (!$pair.$field) { throw 'FIXTURE_HANDOFF_RECEIVER' }
+            }
+            "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT=$($pair.receiverRoot)" >> $env:GITHUB_ENV
+            "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256=$($pair.receiverSHA256)" >> $env:GITHUB_ENV
+            "SERVICE_LASSO_TEST_RECEIVER_EVIDENCE_DIR=$($pair.receiverEvidence)" >> $env:GITHUB_ENV
           }
-          "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT=$($pair.receiverRoot)" >> $env:GITHUB_ENV
-          "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256=$($pair.receiverSHA256)" >> $env:GITHUB_ENV
-          "SERVICE_LASSO_TEST_RECEIVER_EVIDENCE_DIR=$($pair.receiverEvidence)" >> $env:GITHUB_ENV
       - name: Build Windows original stages only
         if: inputs.phase == 'build' && matrix.platform == 'win32'
         shell: pwsh
