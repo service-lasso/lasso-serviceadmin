@@ -1,16 +1,36 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 
-// RC-003: evaluate only the actual owning functions, without launching the
-// verifier's top-level runner. Execution still requires whole input admission.
+// RC-003: parse the whole verifier and exercise its extracted owning functions
+// without launching its top-level runner. All execution requires full admission.
 const verifier = await readFile(new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url), 'utf8')
 const lifecycle = await readFile(new URL('../cypress/e2e/secrets-broker/real-lifecycle.cy.js', import.meta.url), 'utf8')
 const nonce = 'a'.repeat(64)
 const capability = 'b'.repeat(64)
 const controlUrl = 'http://127.0.0.1:12345/__service_lasso_test'
 const runtimeInputs = { liveReceipt: { nonce } }
+test('whole actual verifier parses without evaluating its top-level runner', () => {
+  // Extracted functions omit the owning closure and custody path. Check the
+  // complete actual module with Node's parser, without starting that path.
+  const result = spawnSync(process.execPath, [
+    '--check',
+    fileURLToPath(new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url)),
+  ], {
+    env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' },
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 10_000,
+    maxBuffer: 1024 * 1024,
+  })
+  assert.equal(result.error, undefined)
+  assert.equal(result.signal, null)
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stdout, '')
+})
 const observed = () => ({
   outcome: 'provider_fault_observed',
   receipt: {

@@ -974,7 +974,7 @@ try {
 }
 const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
 const closureVerified =
-  runFailure ??=== undefined &&
+  runFailure === undefined &&
   cypressOutput?.exceeded !== true &&
   nestedClosureVerified &&
   custodyOwners.length === 2 &&

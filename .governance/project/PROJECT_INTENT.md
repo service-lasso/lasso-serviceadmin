@@ -11,3 +11,5 @@ Preserve the current producer -> Node task -> cy.env nonce consumer contract and
 Admitted runtime-suite continuation: RC-002 corrects the stale checkout assertion against the current named immutable Core source-candidate workflow checkout; all RC-001 provider-binding requirements remain.
 
 RC-003 closes the actual consumer's post-409 persistence race through a capability-bound one-shot completion handshake and an independent verifier check before private reads, within the original Cypress clock. Preserve negative-503 provenance, all private binding predicates and the unchanged Core pin; entire cumulative review and new input admission remain mandatory before execution.
+
+The paired1150 SOURCE_NO_GO closure-comparison repair also requires an actual entire-verifier syntax regression, preserving all eight primary-failure assignments and every closure/leak/custody gate. Source preparation remains unrun pending corrected-pair review and complete admission.
