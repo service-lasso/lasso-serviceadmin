@@ -9,7 +9,7 @@ import { closeSuccessfulCoreRunner, hasAcceptedDirectOwnerClosure } from './dire
 
 // RC-005 SOURCE_ONLY_UNRUN. These actual source slices do not run the provider,
 // Cypress or verifier startup and cannot supply qualification/native authority.
-const verifier = (await readFile(new URL('./verify-real-broker-browser.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n')
+const verifier = (await readFile(new URL('./verify-real-broker-browser.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n').replace(/^ {2}/gm, '')
 const custody = (await readFile(new URL('./qualification-custody.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n')
 function slice(source, start, end) {
   const a = source.indexOf(start)
@@ -17,8 +17,9 @@ function slice(source, start, end) {
   assert.ok(a >= 0 && b > a)
   return source.slice(a, b)
 }
-const actualRetention = slice(verifier, 'let runFailure\n', 'let auditEventCount')
-const actualCaller = slice(verifier, '  try {\n    await closeSuccessfulCoreRunner(runner, coreRunnerOwner)', '\n}\n\nconst sourceHashes')
+const actualRetention = slice(verifier, 'let runFailure\n', '// Parent channels are owned')
+const actualOutput = slice(verifier, '// Parent channels are owned', '\ntry {\nconst runner = spawn(')
+const actualCaller = slice(verifier, '  if (cypress?.exitCode === null)', '\n}\n\nconst sourceHashes')
 const actualFinalSink = slice(verifier, 'const closureVerified =', '\nfunction cypressEnvironment()')
 const actualWriter = slice(custody, 'export async function writeQualificationCustody(', '\nexport async function finalizeAbsentQualificationCustody').replace('export ', '')
 const owner = (role, exitCode = 0) => ({ role, exitCode, birth: 'observed', parentPid: 100,
@@ -36,19 +37,30 @@ function prepare({ controlled, receiptPath, writer = writeFile, primaryPresent =
     runtimeInputs: {}, coreSource: {}, verifyClosureReceipt: async () => { reads += 1 },
     cypressOutput: { exceeded: false }, nestedClosureVerified: true, nestedOwners: [],
     custodyOwners: [coreOwner, owner('cypress', controlled ? 1 : 0)],
-    process: { pid: 100, stderr: Object.assign(new EventEmitter(), {
-      write(record) { if (diagnosticError) throw diagnosticError; records.push(record) },
+    process: { pid: 100, stdout: Object.assign(new EventEmitter(), {
+      write(_record, callback) { callback(); return true },
+    }), stderr: Object.assign(new EventEmitter(), {
+      write(record, callback) { if (diagnosticError) throw diagnosticError; records.push(record); callback(); return true },
     }) },
+    performance, setTimeout, clearTimeout,
+    cypress: { exitCode: controlled ? 1 : 0 }, cypressOutputChecked: true,
+    verifyNoLeakEvidence: async () => {}, stderrEvidence: '', stderrBytes: 0,
+    qualificationFailureKind: 'nonzero_exit', ready: { adminUrl: 'http://127.0.0.1' }, URL,
+    probeAdminReachability: async () => 'reachable',
+    buildQualificationFailureDiagnostic: () => controlled ? diagnostic : { failure: 'nonzero_exit' },
+    qualificationProgressEvents: [], cypressChildEvents: [], cypressRunSummaryEvents: [],
+    providerUiConvergenceEvents: [], lockedWrapperUiEvents: [], trustedUnlockDiagnostics: [],
+    rotationRehydrationEvents: [], rotationProxyLifecycleEvents: [], buildTransportDiagnostic: () => ({}),
     trustedUnlockRealProviderControl: controlled, controlledProviderFaultVerified: controlled,
     finalQualificationFailureDiagnostic: controlled ? diagnostic : undefined,
     cypressExit: controlled ? 1 : 0, cypressSucceeded: !controlled,
     custodyReceiptPath: receiptPath, initialCustody: { schema: 'fixture', runtimePathHashes: [] },
     initialCustodyHash: 'fixture', sourceHashes: {}, writeFile: writer,
   })
-  vm.runInContext(`${actualRetention}\n${actualWriter}\n${primaryPresent ? 'retainRunFailure(primary)' : ''}`, sandbox)
+  vm.runInContext(`${actualRetention}\n${actualOutput}\n${actualWriter}\n${primaryPresent ? 'retainRunFailure(primary)' : ''}`, sandbox)
   return { sandbox, records, reads: () => reads,
     run: () => vm.runInContext(`(async () => { ${actualCaller}\n${actualFinalSink} })()`, sandbox),
-    evidence: () => vm.runInContext('({ runFailure, runFailurePresent, finalCustodyWriteFailure, finalCustodyWriteFailurePresent, finalCustodyDiagnosticFailure, finalCustodyDiagnosticFailurePresent })', sandbox) }
+    evidence: () => vm.runInContext('({ runFailure, runFailurePresent, finalCustodyWriteFailure, finalCustodyWriteFailurePresent, finalCustodyDiagnosticFailure, finalCustodyDiagnosticFailurePresent, parentOutputFailures })', sandbox) }
 }
 async function thrown(promise) {
   try { await promise; return { present: false } } catch (value) { return { present: true, value } }
@@ -72,7 +84,7 @@ for (const controlled of [false, true]) {
           assert.equal(evidence.finalCustodyWriteFailurePresent, true)
           assert.equal(evidence.finalCustodyWriteFailure, sinkError)
           assert.equal(evidence.runFailure, primary)
-          assert.deepEqual(fixture.records.map(JSON.parse), [{ schema: 'service-lasso.final-custody-write-failure.v1', state: 'unverified' }])
+          assert.deepEqual(fixture.records.slice(-1).map(JSON.parse), [{ schema: 'service-lasso.final-custody-write-failure.v1', state: 'unverified' }])
         }
       }
       // Arbitrary thrown objects must never be inspected, even for an error code.
@@ -153,6 +165,7 @@ for (const controlled of [false, true]) {
     assert.equal((await thrown(asyncFixture.run())).value, primary)
     asyncFixture.sandbox.process.stderr.emit('error', diagnosticError)
     assert.equal(asyncFixture.evidence().finalCustodyDiagnosticFailure, diagnosticError)
+    assert.ok(asyncFixture.evidence().parentOutputFailures.includes(diagnosticError))
     assert.equal(asyncFixture.evidence().runFailure, primary)
   })
   test(`actual exclusive writer success preserves verified mode and rejects prior nullish failure, controlled=${controlled}`, async () => {

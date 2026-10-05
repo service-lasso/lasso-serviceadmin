@@ -576,8 +576,8 @@ function publishSafeChildOutput(capture) {
   if (forbiddenAuditMaterial.some((value) => combined.includes(value))) {
     throw new Error('Cypress output retained private rollback material.')
   }
-  if (stdout.length > 0) process.stdout.write(stdout)
-  if (stderr.length > 0) process.stderr.write(stderr)
+  if (stdout.length > 0) writeParentOutput(process.stdout, stdout)
+  if (stderr.length > 0) writeParentOutput(process.stderr, stderr)
 }
 
 function observedParentPid(pid) {
@@ -695,96 +695,6 @@ const ownedProcessObserver = path.join(
   'qualification-owned-process-observer.cjs'
 )
 
-const runner = spawn(process.execPath, [runnerPath], {
-  cwd: coreRoot,
-  env: {
-    ...process.env,
-    SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
-    SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
-    SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
-    SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH: ownedProcessEventsPath,
-    SERVICE_LASSO_QUALIFICATION_BROKER_SHA256: ownedSourceHashes.brokerBinary,
-    SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_SHA256: ownedSourceHashes.adminRuntime,
-    SERVICE_LASSO_QUALIFICATION_BROKER_BINARY_NONCE: ownedProcessNonces.broker_binary,
-    SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_NONCE: ownedProcessNonces.admin_runtime,
-    SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce,
-    SERVICE_LASSO_TEST_ADMIN_SOURCE_HEAD: adminSource.head,
-    SERVICE_LASSO_TEST_ADMIN_SOURCE_TREE: adminSource.tree,
-    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${ownedProcessObserver}`.trim(),
-  },
-  stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-})
-const coreRunnerOwner = retainOwnedProcess(
-  'core_runner',
-  runner,
-  ownedSourceHashes.coreRunner
-)
-const nestedExpectedSources = {
-  broker_binary: {
-    sourceSha256: ownedSourceHashes.brokerBinary,
-    sourceSize: sourceSizes.brokerBinary,
-    executableSha256: ownedSourceHashes.brokerBinary,
-    executableSize: sourceSizes.brokerBinary,
-    parentPid: runner.pid,
-    ownerNonce: ownedProcessNonces.broker_binary,
-  },
-  admin_runtime: {
-    sourceSha256: ownedSourceHashes.adminRuntime,
-    sourceSize: sourceSizes.adminRuntime,
-    executableSha256: await sha256File(process.execPath),
-    executableSize: sourceSizes.node,
-    parentPid: runner.pid,
-    ownerNonce: ownedProcessNonces.admin_runtime,
-  },
-}
-const rotationProxyLifecycleEvents = []
-let stderrBytes = 0
-let stderrBuffer = ''
-let stderrEvidence = ''
-runner.stderr.on('data', (chunk) => {
-  stderrBytes = Math.min(1_048_577, stderrBytes + chunk.length)
-  if (stderrEvidence.length <= 1_048_576) {
-    stderrEvidence += chunk.toString('utf8')
-  }
-  if (stderrBuffer.length > 65_536) return
-  stderrBuffer += chunk.toString('utf8')
-  const lines = stderrBuffer.split(/\r?\n/)
-  stderrBuffer = lines.pop() ?? ''
-  for (const line of lines) {
-    const lifecycleEvent = parseRotationProxyLifecycleDiagnostic(line)
-    if (lifecycleEvent && rotationProxyLifecycleEvents.length < 16) {
-      rotationProxyLifecycleEvents.push(lifecycleEvent)
-    }
-    try {
-      const diagnostic = JSON.parse(line)
-      if (
-        diagnostic?.schema === 'service-lasso.real-admin-browser-failure.v1' &&
-        typeof diagnostic.code === 'string' &&
-        /^[a-z0-9_]{1,64}$/.test(diagnostic.code)
-      ) {
-        runner.safeDiagnosticCode = diagnostic.code
-      }
-    } catch {
-      // Child stderr is never echoed; only the bounded typed diagnostic is retained.
-    }
-  }
-})
-
-let ready
-let runtimeInputs
-let cypress
-let cypressOutput
-let cypressOutputChecked = false
-let cypressSucceeded = false
-let qualificationFailureKind
-const qualificationProgressEvents = []
-const cypressChildEvents = []
-const cypressRunSummaryEvents = []
-const providerUiConvergenceEvents = []
-const rotationRehydrationEvents = []
-const lockedWrapperUiEvents = []
-const trustedUnlockDiagnostics = []
-let cypressExit
 let runFailure
 let runFailurePresent = false
 let finalCustodyWriteFailure
@@ -803,407 +713,643 @@ function retainRunFailure(error) {
     runFailurePresent = true
   }
 }
-let auditEventCount = 0
-let rollbackProcessVerified = false
-let controlledProviderFaultVerified = false
-let finalQualificationFailureDiagnostic
-try {
-  ready = await waitForReady(runner)
-  if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
-    throw new Error('Real browser runtime returned an invalid platform.')
-  }
-  runtimeInputs = await parseRuntimeInputs(ready, {
-    source: coreSource,
-    assets: coreReceiptAssets,
-    observedRunner: {
-      pid: runner.pid,
-      parentPid: coreRunnerOwner.parentPid,
-      nativeIdentity: {
-        size: (await lstat(process.execPath)).size,
-        sha256: `sha256:${await sha256File(process.execPath)}`,
-      },
-    },
-  })
-  const adminUrl = new URL(ready.adminUrl)
-  const controlUrl = new URL(ready.controlUrl)
-  if (
-    adminUrl.protocol !== 'http:' ||
-    adminUrl.hostname !== '127.0.0.1' ||
-    adminUrl.pathname !== '/'
-  ) {
-    throw new Error('Real browser runtime returned an unsafe Admin URL.')
-  }
-  if (
-    controlUrl.protocol !== 'http:' ||
-    controlUrl.hostname !== '127.0.0.1' ||
-    controlUrl.pathname !== '/__service_lasso_test'
-  ) {
-    throw new Error('Real browser runtime returned an unsafe control URL.')
-  }
-  cypress = spawn(
-    process.execPath,
-    [
-      '--require',
-      path.join(root, 'scripts', 'cypress-child-exit-preload.cjs'),
-      cypressBin,
-      'run',
-      '--browser',
-      'electron',
-      '--config',
-      `baseUrl=${adminUrl.origin},video=false,screenshotOnRunFailure=false`,
-      '--env',
-      `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
-        trustedUnlockRealProviderControl
-          ? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=${providerControlNonce}`
-          : ''
-      }`,
-      '--spec',
-      specPath,
-    ],
-    {
-      cwd: root,
-      env: cypressEnvironment(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  )
-  retainOwnedProcess('cypress', cypress, ownedSourceHashes.cypressLauncher)
-  cypressOutput = captureBoundedChildOutput(cypress)
-  captureQualificationProgress(
-    cypress,
-    qualificationProgressEvents,
-    providerUiConvergenceEvents,
-    rotationRehydrationEvents,
-    lockedWrapperUiEvents,
-    trustedUnlockDiagnostics
-  )
-  captureCypressRunSummary(cypress, cypressRunSummaryEvents)
-  captureCypressChildProvenance(cypress, cypressChildEvents)
-  // cypressExit is retained outside the try for role-specific closure acceptance.
-  // Start at the existing output-close wait, retaining its original allowance.
-  const cypressCloseDeadline = performance.now() + cypressQualificationTimeoutMs
-  try {
-    cypressExit = await waitForCapturedChildClose(
-      cypress,
-      cypressQualificationTimeoutMs
-    )
-  } catch (error) {
-    qualificationFailureKind = classifyQualificationFailure({ timedOut: true })
-    throw error
-  }
-  cypressOutputChecked = true
-  publishSafeChildOutput(cypressOutput)
-  if (cypressExit !== 0) {
-    qualificationFailureKind = classifyQualificationFailure({
-      exitCode: cypressExit,
-    })
-    if (!trustedUnlockRealProviderControl) {
-      throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
-    }
-  } else if (trustedUnlockRealProviderControl) {
-    throw new Error(
-      'Controlled real provider-validation receipt path unexpectedly passed.'
-    )
-  }
-  if (trustedUnlockRealProviderControl) {
-    await verifyControlledProviderFault(runtimeInputs, coreSource, controlUrl, cypressCloseDeadline)
-    controlledProviderFaultVerified = true
-  }
-  cypressSucceeded = !trustedUnlockRealProviderControl
-  if (qualificationMode === 'comprehensive' && cypressSucceeded) {
-    await verifyRollbackProcessEvidence(runtimeInputs)
-    rollbackProcessVerified = true
-  }
-  if (cypressSucceeded) {
-    auditEventCount = await verifyBrokerAudit(runtimeInputs)
-  }
-} catch (error) {
+// Parent channels are owned before any child birth or parent publication.
+// These listeners intentionally survive every original pending callback and
+// top-level failure. Late channel errors must still make the owner exit fail.
+const parentOutputFailures = []
+const parentOutputPending = new Set()
+const parentOutputChannels = new Map()
+let parentOutputDeadline
+function retainParentOutputFailure(error, diagnosticFailure) {
+  parentOutputFailures.push(error)
   retainRunFailure(error)
-} finally {
-  if (cypress?.exitCode === null) {
-    retainRunFailure(new Error('Cypress did not close at its qualification deadline.'))
+  if (diagnosticFailure) diagnosticFailure(error)
+  process.exitCode = 1
+}
+function completeParentOutput(record) {
+  if (!record.returned || !record.callback ||
+    (record.needsDrain && !record.drained)) return
+  parentOutputPending.delete(record)
+  record.resolve()
+}
+function failParentOutputChannel(channel, error) {
+  channel.unavailable = true
+  if (!channel.failurePresent) {
+    channel.failure = error
+    channel.failurePresent = true
   }
-  if (cypressOutput && !cypressOutputChecked) {
-    try {
-      cypressOutputChecked = true
-      publishSafeChildOutput(cypressOutput)
-    } catch (error) {
-      retainRunFailure(error)
+}
+function ownParentOutputChannel(stream) {
+  const channel = { unavailable: false, failurePresent: false }
+  parentOutputChannels.set(stream, channel)
+  stream.on('error', (error) => {
+    failParentOutputChannel(channel, error)
+    retainParentOutputFailure(error)
+    if (channel.diagnosticFailure) channel.diagnosticFailure(error)
+    for (const record of parentOutputPending) {
+      if (record.stream !== stream) continue
+      if (record.diagnosticFailure) record.diagnosticFailure(error)
+      parentOutputPending.delete(record)
+      record.resolve()
     }
+  })
+  stream.on('close', () => {
+    const error = new Error('Parent qualification output channel closed.')
+    failParentOutputChannel(channel, error)
+    retainParentOutputFailure(error)
+    if (channel.diagnosticFailure) channel.diagnosticFailure(error)
+    for (const record of parentOutputPending) {
+      if (record.stream !== stream) continue
+      if (record.diagnosticFailure) record.diagnosticFailure(error)
+      parentOutputPending.delete(record)
+      record.resolve()
+    }
+  })
+  stream.on('drain', () => {
+    for (const record of parentOutputPending) {
+      if (record.stream !== stream) continue
+      record.drained = true
+      completeParentOutput(record)
+    }
+  })
+}
+function writeParentOutput(stream, bytes, diagnosticFailure) {
+  const channel = parentOutputChannels.get(stream)
+  if (channel && diagnosticFailure) channel.diagnosticFailure = diagnosticFailure
+  if (!channel || channel.unavailable) {
+    retainParentOutputFailure(
+      channel?.failurePresent
+        ? channel.failure
+        : new Error('Parent qualification output channel unavailable.'),
+      diagnosticFailure
+    )
+    return
   }
-  if (runtimeInputs) {
+  const record = { stream, diagnosticFailure, returned: false,
+    callback: false, needsDrain: false, drained: false }
+  record.completion = new Promise((resolve) => { record.resolve = resolve })
+  parentOutputPending.add(record)
+  try {
+    record.needsDrain = stream.write(bytes, (error) => {
+      // Node's callback uses null/undefined for successful completion. Error
+      // event and thrown values are retained by presence, including nullish.
+      if (error !== undefined && error !== null) {
+        failParentOutputChannel(channel, error)
+        retainParentOutputFailure(error, diagnosticFailure)
+        parentOutputPending.delete(record)
+        record.resolve()
+        return
+      }
+      record.callback = true
+      completeParentOutput(record)
+    }) === false
+    record.returned = true
+    completeParentOutput(record)
+  } catch (error) {
+    failParentOutputChannel(channel, error)
+    retainParentOutputFailure(error, diagnosticFailure)
+    parentOutputPending.delete(record)
+    record.resolve()
+  }
+}
+async function settleParentOutput() {
+  if (parentOutputPending.size === 0) return
+  const remaining = parentOutputDeadline - performance.now()
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    retainParentOutputFailure(new Error('Parent qualification output completion unobserved.'))
+    return
+  }
+  let timer
+  try {
+    const completed = await Promise.race([
+      Promise.all([...parentOutputPending].map((record) => record.completion))
+        .then(() => true),
+      new Promise((resolve) => { timer = setTimeout(() => resolve(false), remaining) }),
+    ])
+    if (!completed || parentOutputPending.size !== 0) {
+      retainParentOutputFailure(new Error('Parent qualification output completion unobserved.'))
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+ownParentOutputChannel(process.stdout)
+ownParentOutputChannel(process.stderr)
+
+try {
+  const runner = spawn(process.execPath, [runnerPath], {
+    cwd: coreRoot,
+    env: {
+      ...process.env,
+      SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
+      SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
+      SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
+      SERVICE_LASSO_QUALIFICATION_OWNED_PROCESS_EVENTS_PATH: ownedProcessEventsPath,
+      SERVICE_LASSO_QUALIFICATION_BROKER_SHA256: ownedSourceHashes.brokerBinary,
+      SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_SHA256: ownedSourceHashes.adminRuntime,
+      SERVICE_LASSO_QUALIFICATION_BROKER_BINARY_NONCE: ownedProcessNonces.broker_binary,
+      SERVICE_LASSO_QUALIFICATION_ADMIN_RUNTIME_NONCE: ownedProcessNonces.admin_runtime,
+      SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce,
+      SERVICE_LASSO_TEST_ADMIN_SOURCE_HEAD: adminSource.head,
+      SERVICE_LASSO_TEST_ADMIN_SOURCE_TREE: adminSource.tree,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${ownedProcessObserver}`.trim(),
+    },
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  })
+  const coreRunnerOwner = retainOwnedProcess(
+    'core_runner',
+    runner,
+    ownedSourceHashes.coreRunner
+  )
+  const nestedExpectedSources = {
+    broker_binary: {
+      sourceSha256: ownedSourceHashes.brokerBinary,
+      sourceSize: sourceSizes.brokerBinary,
+      executableSha256: ownedSourceHashes.brokerBinary,
+      executableSize: sourceSizes.brokerBinary,
+      parentPid: runner.pid,
+      ownerNonce: ownedProcessNonces.broker_binary,
+    },
+    admin_runtime: {
+      sourceSha256: ownedSourceHashes.adminRuntime,
+      sourceSize: sourceSizes.adminRuntime,
+      executableSha256: await sha256File(process.execPath),
+      executableSize: sourceSizes.node,
+      parentPid: runner.pid,
+      ownerNonce: ownedProcessNonces.admin_runtime,
+    },
+  }
+  const rotationProxyLifecycleEvents = []
+  let stderrBytes = 0
+  let stderrBuffer = ''
+  let stderrEvidence = ''
+  runner.stderr.on('data', (chunk) => {
+    stderrBytes = Math.min(1_048_577, stderrBytes + chunk.length)
+    if (stderrEvidence.length <= 1_048_576) {
+      stderrEvidence += chunk.toString('utf8')
+    }
+    if (stderrBuffer.length > 65_536) return
+    stderrBuffer += chunk.toString('utf8')
+    const lines = stderrBuffer.split(/\r?\n/)
+    stderrBuffer = lines.pop() ?? ''
+    for (const line of lines) {
+      const lifecycleEvent = parseRotationProxyLifecycleDiagnostic(line)
+      if (lifecycleEvent && rotationProxyLifecycleEvents.length < 16) {
+        rotationProxyLifecycleEvents.push(lifecycleEvent)
+      }
+      try {
+        const diagnostic = JSON.parse(line)
+        if (
+          diagnostic?.schema === 'service-lasso.real-admin-browser-failure.v1' &&
+          typeof diagnostic.code === 'string' &&
+          /^[a-z0-9_]{1,64}$/.test(diagnostic.code)
+        ) {
+          runner.safeDiagnosticCode = diagnostic.code
+        }
+      } catch {
+        // Child stderr is never echoed; only the bounded typed diagnostic is retained.
+      }
+    }
+  })
+
+  let ready
+  let runtimeInputs
+  let cypress
+  let cypressOutput
+  let cypressOutputChecked = false
+  let cypressSucceeded = false
+  let qualificationFailureKind
+  const qualificationProgressEvents = []
+  const cypressChildEvents = []
+  const cypressRunSummaryEvents = []
+  const providerUiConvergenceEvents = []
+  const rotationRehydrationEvents = []
+  const lockedWrapperUiEvents = []
+  const trustedUnlockDiagnostics = []
+  let cypressExit
+  let auditEventCount = 0
+  let rollbackProcessVerified = false
+  let controlledProviderFaultVerified = false
+  let finalQualificationFailureDiagnostic
+  try {
+    ready = await waitForReady(runner)
+    if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
+      throw new Error('Real browser runtime returned an invalid platform.')
+    }
+    runtimeInputs = await parseRuntimeInputs(ready, {
+      source: coreSource,
+      assets: coreReceiptAssets,
+      observedRunner: {
+        pid: runner.pid,
+        parentPid: coreRunnerOwner.parentPid,
+        nativeIdentity: {
+          size: (await lstat(process.execPath)).size,
+          sha256: `sha256:${await sha256File(process.execPath)}`,
+        },
+      },
+    })
+    const adminUrl = new URL(ready.adminUrl)
+    const controlUrl = new URL(ready.controlUrl)
+    if (
+      adminUrl.protocol !== 'http:' ||
+      adminUrl.hostname !== '127.0.0.1' ||
+      adminUrl.pathname !== '/'
+    ) {
+      throw new Error('Real browser runtime returned an unsafe Admin URL.')
+    }
+    if (
+      controlUrl.protocol !== 'http:' ||
+      controlUrl.hostname !== '127.0.0.1' ||
+      controlUrl.pathname !== '/__service_lasso_test'
+    ) {
+      throw new Error('Real browser runtime returned an unsafe control URL.')
+    }
+    cypress = spawn(
+      process.execPath,
+      [
+        '--require',
+        path.join(root, 'scripts', 'cypress-child-exit-preload.cjs'),
+        cypressBin,
+        'run',
+        '--browser',
+        'electron',
+        '--config',
+        `baseUrl=${adminUrl.origin},video=false,screenshotOnRunFailure=false`,
+        '--env',
+        `testControlUrl=${controlUrl.origin}${controlUrl.pathname},qualificationPlatform=${ready.platform},qualificationProgress=1${
+          trustedUnlockRealProviderControl
+            ? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=${providerControlNonce}`
+            : ''
+        }`,
+        '--spec',
+        specPath,
+      ],
+      {
+        cwd: root,
+        env: cypressEnvironment(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
+    retainOwnedProcess('cypress', cypress, ownedSourceHashes.cypressLauncher)
+    cypressOutput = captureBoundedChildOutput(cypress)
+    captureQualificationProgress(
+      cypress,
+      qualificationProgressEvents,
+      providerUiConvergenceEvents,
+      rotationRehydrationEvents,
+      lockedWrapperUiEvents,
+      trustedUnlockDiagnostics
+    )
+    captureCypressRunSummary(cypress, cypressRunSummaryEvents)
+    captureCypressChildProvenance(cypress, cypressChildEvents)
+    // cypressExit is retained outside the try for role-specific closure acceptance.
+    // Start at the existing output-close wait, retaining its original allowance.
+    const cypressCloseDeadline = performance.now() + cypressQualificationTimeoutMs
     try {
-      await verifyNoLeakEvidence(
-        runtimeInputs,
-        stderrEvidence,
-        { requireComplete: cypressSucceeded }
+      cypressExit = await waitForCapturedChildClose(
+        cypress,
+        cypressQualificationTimeoutMs
       )
     } catch (error) {
+      qualificationFailureKind = classifyQualificationFailure({ timedOut: true })
+      throw error
+    }
+    cypressOutputChecked = true
+    publishSafeChildOutput(cypressOutput)
+    if (cypressExit !== 0) {
+      qualificationFailureKind = classifyQualificationFailure({
+        exitCode: cypressExit,
+      })
+      if (!trustedUnlockRealProviderControl) {
+        throw new Error(`Real Broker browser qualification failed (${cypressExit}).`)
+      }
+    } else if (trustedUnlockRealProviderControl) {
+      throw new Error(
+        'Controlled real provider-validation receipt path unexpectedly passed.'
+      )
+    }
+    if (trustedUnlockRealProviderControl) {
+      await verifyControlledProviderFault(runtimeInputs, coreSource, controlUrl, cypressCloseDeadline)
+      controlledProviderFaultVerified = true
+    }
+    cypressSucceeded = !trustedUnlockRealProviderControl
+    if (qualificationMode === 'comprehensive' && cypressSucceeded) {
+      await verifyRollbackProcessEvidence(runtimeInputs)
+      rollbackProcessVerified = true
+    }
+    if (cypressSucceeded) {
+      auditEventCount = await verifyBrokerAudit(runtimeInputs)
+    }
+  } catch (error) {
+    retainRunFailure(error)
+  } finally {
+    if (cypress?.exitCode === null) {
+      retainRunFailure(new Error('Cypress did not close at its qualification deadline.'))
+    }
+    if (cypressOutput && !cypressOutputChecked) {
+      try {
+        cypressOutputChecked = true
+        publishSafeChildOutput(cypressOutput)
+      } catch (error) {
+        retainRunFailure(error)
+      }
+    }
+    if (runtimeInputs) {
+      try {
+        await verifyNoLeakEvidence(
+          runtimeInputs,
+          stderrEvidence,
+          { requireComplete: cypressSucceeded }
+        )
+      } catch (error) {
+        retainRunFailure(error)
+      }
+    }
+    if (stderrBytes > 1_048_576) {
+      retainRunFailure(new Error(
+        'Real browser runtime diagnostic output exceeded its bound.'
+      ))
+    }
+    try {
+      if (qualificationFailureKind && ready) {
+        const adminReachability = await probeAdminReachability(
+          new URL(ready.adminUrl).origin
+        )
+        finalQualificationFailureDiagnostic = buildQualificationFailureDiagnostic({
+          failure: qualificationFailureKind,
+          progressEvents: qualificationProgressEvents,
+          cypressChildEvents,
+          cypressRunSummary: cypressRunSummaryEvents.at(-1),
+          providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
+          lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
+          trustedUnlockDiagnostic: trustedUnlockDiagnostics.at(-1),
+          rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
+          transportDiagnostic: buildTransportDiagnostic(
+            rotationProxyLifecycleEvents,
+            adminReachability
+          ),
+        })
+        writeParentOutput(process.stderr, `${JSON.stringify(finalQualificationFailureDiagnostic)}\n`)
+      }
+    } catch (error) {
       retainRunFailure(error)
     }
+    try {
+      await closeSuccessfulCoreRunner(runner, coreRunnerOwner, (deadline) => {
+        parentOutputDeadline = deadline
+      })
+    } catch (error) {
+      retainRunFailure(error)
+    }
+    if (runtimeInputs) {
+      try {
+        await verifyClosureReceipt(runtimeInputs, coreSource)
+      } catch (error) {
+        retainRunFailure(error)
+      }
+    }
   }
-  if (stderrBytes > 1_048_576) {
-    retainRunFailure(new Error(
-      'Real browser runtime diagnostic output exceeded its bound.'
-    ))
-  }
-  if (qualificationFailureKind && ready) {
-    const adminReachability = await probeAdminReachability(
-      new URL(ready.adminUrl).origin
-    )
-    finalQualificationFailureDiagnostic = buildQualificationFailureDiagnostic({
-      failure: qualificationFailureKind,
-      progressEvents: qualificationProgressEvents,
-      cypressChildEvents,
-      cypressRunSummary: cypressRunSummaryEvents.at(-1),
-      providerUiDiagnostic: providerUiConvergenceEvents.at(-1),
-      lockedWrapperUiDiagnostic: lockedWrapperUiEvents.at(-1),
-      trustedUnlockDiagnostic: trustedUnlockDiagnostics.at(-1),
-      rotationRehydrationDiagnostic: rotationRehydrationEvents.at(-1),
-      transportDiagnostic: buildTransportDiagnostic(
-        rotationProxyLifecycleEvents,
-        adminReachability
-      ),
-    })
-    process.stderr.write(`${JSON.stringify(finalQualificationFailureDiagnostic)}\n`)
-  }
+
+  const sourceHashes = ownedSourceHashes
+  let nestedOwners = []
   try {
-    await closeSuccessfulCoreRunner(runner, coreRunnerOwner)
+    nestedOwners = await readOwnedProcessCustody(
+      ownedProcessEventsPath,
+      nestedExpectedSources
+    )
   } catch (error) {
     retainRunFailure(error)
   }
-  if (runtimeInputs) {
-    try {
-      await verifyClosureReceipt(runtimeInputs, coreSource)
-    } catch (error) {
-      retainRunFailure(error)
-    }
-  }
-}
-
-const sourceHashes = ownedSourceHashes
-let nestedOwners = []
-try {
-  nestedOwners = await readOwnedProcessCustody(
-    ownedProcessEventsPath,
-    nestedExpectedSources
-  )
-} catch (error) {
-  retainRunFailure(error)
-}
-const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
-const closureVerified =
-  !runFailurePresent &&
-  cypressOutput?.exceeded !== true &&
-  nestedClosureVerified &&
-  hasAcceptedDirectOwnerClosure(custodyOwners, {
-    parentPid: process.pid,
-    controlledNegative: trustedUnlockRealProviderControl,
-    controlledProviderFaultVerified,
-    failureDiagnostic: finalQualificationFailureDiagnostic,
-    cypressExit,
-  })
-const publicOwnerSummary = [
-  ...custodyOwners.map(({ role, birth, close, exitCode, signal }) => ({
-    role,
-    birth,
-    close,
-    exitCode,
-    signal,
-  })),
-  ...nestedOwners
-    .filter((record) => record.event === 'close')
-    .map(({ role, exitCode, signal }) => ({
+  const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
+  await settleParentOutput()
+  const closureVerified =
+    !runFailurePresent &&
+    parentOutputFailures.length === 0 && parentOutputPending.size === 0 &&
+    cypressOutput?.exceeded !== true &&
+    nestedClosureVerified &&
+    hasAcceptedDirectOwnerClosure(custodyOwners, {
+      parentPid: process.pid,
+      controlledNegative: trustedUnlockRealProviderControl,
+      controlledProviderFaultVerified,
+      failureDiagnostic: finalQualificationFailureDiagnostic,
+      cypressExit,
+    })
+  const publicOwnerSummary = [
+    ...custodyOwners.map(({ role, birth, close, exitCode, signal }) => ({
       role,
-      birth: 'observed',
-      close: 'observed',
+      birth,
+      close,
       exitCode,
       signal,
     })),
-]
-const controlledObserved =
-  finalQualificationFailureDiagnostic?.lastPhase === 'provider_validation_complete' &&
-  finalQualificationFailureDiagnostic?.cypressRunSummary?.state === 'complete' &&
-  finalQualificationFailureDiagnostic.cypressRunSummary.totalFailed === 1 &&
-  finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
-  controlledProviderFaultVerified &&
-  closureVerified
-try {
-  await writeQualificationCustody(custodyReceiptPath, {
-    schema: initialCustody.schema,
-    state: 'closed',
-    mode: trustedUnlockRealProviderControl ? 'controlled_negative' : 'positive',
-    outcome: trustedUnlockRealProviderControl
-      ? controlledObserved
-        ? 'controlled_failure_observed'
-        : 'controlled_failure_unverified'
-      : cypressSucceeded && closureVerified
-        ? 'positive_verified'
-        : 'positive_unverified',
-    causal: trustedUnlockRealProviderControl
-      ? controlledObserved
-        ? 'provider_validation_transport_failure'
-        : 'unverified'
-      : 'not_applicable',
-    runtimePathHashes: initialCustody.runtimePathHashes,
-    initialReceiptSha256: initialCustodyHash,
-    sourceHashes,
-    sourceBindings: [
-      { role: 'core_runner', owner: 'core_runner', sha256: sourceHashes.coreRunner },
-      { role: 'cypress_launcher', owner: 'cypress', sha256: sourceHashes.cypressLauncher },
-      { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
-      { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
-    ],
-    // PID, parent PID, nonce, executable identity, and the raw sidecar stay in
-    // the private runner.  The retained receipt exposes only typed completion.
-    owners: publicOwnerSummary,
-  })
-} catch (error) {
-  // Retain both exact values privately, without inspecting or mutating them.
-  finalCustodyWriteFailure = error
-  finalCustodyWriteFailurePresent = true
-  retainRunFailure(error)
+    ...nestedOwners
+      .filter((record) => record.event === 'close')
+      .map(({ role, exitCode, signal }) => ({
+        role,
+        birth: 'observed',
+        close: 'observed',
+        exitCode,
+        signal,
+      })),
+  ]
+  const controlledObserved =
+    finalQualificationFailureDiagnostic?.lastPhase === 'provider_validation_complete' &&
+    finalQualificationFailureDiagnostic?.cypressRunSummary?.state === 'complete' &&
+    finalQualificationFailureDiagnostic.cypressRunSummary.totalFailed === 1 &&
+    finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
+    controlledProviderFaultVerified &&
+    closureVerified
   try {
-    // Delivery depends on the existing captured stderr channel. No private
-    // payload, arbitrary getters, coercion, paths or error text enter this record.
-    // Own asynchronous stream errors too, without awaiting a fresh clock.
-    process.stderr.on('error', retainFinalCustodyDiagnosticFailure)
-    process.stderr.write(
-      '{"schema":"service-lasso.final-custody-write-failure.v1","state":"unverified"}\n',
-      (error) => {
-        if (error) retainFinalCustodyDiagnosticFailure(error)
-      }
-    )
-  } catch (diagnosticError) {
-    retainFinalCustodyDiagnosticFailure(diagnosticError)
+    await writeQualificationCustody(custodyReceiptPath, {
+      schema: initialCustody.schema,
+      state: 'closed',
+      mode: trustedUnlockRealProviderControl ? 'controlled_negative' : 'positive',
+      outcome: trustedUnlockRealProviderControl
+        ? controlledObserved
+          ? 'controlled_failure_observed'
+          : 'controlled_failure_unverified'
+        : cypressSucceeded && closureVerified
+          ? 'positive_verified'
+          : 'positive_unverified',
+      causal: trustedUnlockRealProviderControl
+        ? controlledObserved
+          ? 'provider_validation_transport_failure'
+          : 'unverified'
+        : 'not_applicable',
+      runtimePathHashes: initialCustody.runtimePathHashes,
+      initialReceiptSha256: initialCustodyHash,
+      sourceHashes,
+      sourceBindings: [
+        { role: 'core_runner', owner: 'core_runner', sha256: sourceHashes.coreRunner },
+        { role: 'cypress_launcher', owner: 'cypress', sha256: sourceHashes.cypressLauncher },
+        { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
+        { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
+      ],
+      // PID, parent PID, nonce, executable identity, and the raw sidecar stay in
+      // the private runner.  The retained receipt exposes only typed completion.
+      owners: publicOwnerSummary,
+    })
+  } catch (error) {
+    // Retain both exact values privately, without inspecting or mutating them.
+    finalCustodyWriteFailure = error
+    finalCustodyWriteFailurePresent = true
+    retainRunFailure(error)
+    try {
+      // Delivery depends on the existing captured stderr channel. No private
+      // payload, arbitrary getters, coercion, paths or error text enter this record.
+      // Own asynchronous stream errors too, without awaiting a fresh clock.
+      writeParentOutput(process.stderr,
+        '{"schema":"service-lasso.final-custody-write-failure.v1","state":"unverified"}\n',
+        retainFinalCustodyDiagnosticFailure
+      )
+    } catch (diagnosticError) {
+      retainFinalCustodyDiagnosticFailure(diagnosticError)
+    }
   }
-}
 
-if (runFailurePresent) throw runFailure
+  await settleParentOutput()
+  if (runFailurePresent) throw runFailure
 
-if (trustedUnlockRealProviderControl) {
-  if (!controlledObserved) {
-    throw new Error(
-      'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
-    )
+
+  if (trustedUnlockRealProviderControl) {
+    if (!controlledObserved) {
+      throw new Error(
+        'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
+      )
+    }
   }
-}
 
-function cypressEnvironment() {
-  const environment = { ...process.env }
-  // Electron launchers interpret this machine-level developer override and
-  // become plain Node processes, which disables Cypress's browser protocol.
-  delete environment.ELECTRON_RUN_AS_NODE
-  return environment
-}
+  function cypressEnvironment() {
+    const environment = { ...process.env }
+    // Electron launchers interpret this machine-level developer override and
+    // become plain Node processes, which disables Cypress's browser protocol.
+    delete environment.ELECTRON_RUN_AS_NODE
+    return environment
+  }
 
-function captureQualificationProgress(
-  child,
-  target,
-  providerUiTarget,
-  rotationRehydrationTarget,
-  lockedWrapperUiTarget,
-  trustedUnlockTarget
-) {
-  let buffer = ''
-  child.stderr.on('data', (chunk) => {
-    buffer += chunk.toString('utf8')
-    const lines = buffer.split(/\r?\n/)
-    buffer = lines.pop() ?? ''
-    if (buffer.length > 256) buffer = ''
-    for (const line of lines) {
-      const event = parseQualificationProgressDiagnostic(line)
-      if (event && target.length < qualificationProgressPhases.length) {
-        target.push(event)
-      }
-      const providerUiEvent = parseProviderUiConvergenceEvidence(line)
-      if (
-        providerUiEvent &&
-        providerUiTarget.length < providerReadinessDiagnosticEventCap
-      ) {
-        providerUiTarget.push(providerUiEvent)
-      }
-      const rotationRehydration = parseRotationRehydrationDiagnostic(line)
-      if (rotationRehydration && rotationRehydrationTarget.length < 1) {
-        rotationRehydrationTarget.push(rotationRehydration)
-      }
-      const lockedWrapperUiEvent = parseLockedWrapperUiDiagnostic(line)
-      if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
-        lockedWrapperUiTarget.push(lockedWrapperUiEvent)
-      }
-      const trustedUnlockDiagnostic = parseTrustedUnlockDiagnosticLine(line)
-      if (trustedUnlockDiagnostic && trustedUnlockTarget.length < 1) {
-        trustedUnlockTarget.push(trustedUnlockDiagnostic)
-      }
-    }
-  })
-}
-
-function captureCypressChildProvenance(child, target) {
-  let buffer = ''
-  child.stderr.on('data', (chunk) => {
-    buffer += chunk.toString('utf8')
-    const lines = buffer.split(/\r?\n/)
-    buffer = lines.pop() ?? ''
-    if (buffer.length > 256) buffer = ''
-    for (const line of lines) {
-      const event = parseCypressChildProvenance(line)
-      if (event && target.length < 16) target.push(event)
-    }
-  })
-}
-
-function captureCypressRunSummary(child, target) {
-  let buffer = ''
-  child.stderr.on('data', (chunk) => {
-    buffer += chunk.toString('utf8')
-    const lines = buffer.split(/\r?\n/)
-    buffer = lines.pop() ?? ''
-    if (buffer.length > 256) buffer = ''
-    for (const line of lines) {
-      const summary = parseCypressRunSummaryDiagnostic(line)
-      if (summary && target.length < 1) target.push(summary)
-    }
-  })
-}
-
-const qualificationResult =
-  trustedUnlockRealProviderControl
-    ? controlledObserved
-      ? {
-          schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
-          qualificationMode,
-          outcome: 'controlled_failure_observed',
-          platform,
-          causalReceipt: 'closed_native_custody',
+  function captureQualificationProgress(
+    child,
+    target,
+    providerUiTarget,
+    rotationRehydrationTarget,
+    lockedWrapperUiTarget,
+    trustedUnlockTarget
+  ) {
+    let buffer = ''
+    child.stderr.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() ?? ''
+      if (buffer.length > 256) buffer = ''
+      for (const line of lines) {
+        const event = parseQualificationProgressDiagnostic(line)
+        if (event && target.length < qualificationProgressPhases.length) {
+          target.push(event)
         }
-      : {
-          schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
-          qualificationMode,
-          outcome: 'controlled_failure_unverified',
-          platform,
-          causalReceipt: 'closure_unverified',
+        const providerUiEvent = parseProviderUiConvergenceEvidence(line)
+        if (
+          providerUiEvent &&
+          providerUiTarget.length < providerReadinessDiagnosticEventCap
+        ) {
+          providerUiTarget.push(providerUiEvent)
         }
-    : cypressSucceeded && closureVerified
-      ? {
-          schema: 'service-lasso.real-secrets-browser-result.v1',
-          qualificationMode,
-          outcome: 'verified',
-          platform,
-          coreRevision: process.env.SERVICE_LASSO_TEST_CORE_REVISION ?? 'local',
-          brokerRevision: process.env.SERVICE_LASSO_TEST_BROKER_REVISION ?? 'local',
-          brokerSha256: sourceHashes.brokerBinary,
-          adminArtifact: path.basename(adminRoot),
-          auditEventCount,
-          rollbackProcessVerified,
+        const rotationRehydration = parseRotationRehydrationDiagnostic(line)
+        if (rotationRehydration && rotationRehydrationTarget.length < 1) {
+          rotationRehydrationTarget.push(rotationRehydration)
         }
-      : {
-          schema: 'service-lasso.real-secrets-browser-result.v1',
-          qualificationMode,
-          outcome: 'unverified',
-          platform,
+        const lockedWrapperUiEvent = parseLockedWrapperUiDiagnostic(line)
+        if (lockedWrapperUiEvent && lockedWrapperUiTarget.length < 1) {
+          lockedWrapperUiTarget.push(lockedWrapperUiEvent)
         }
-process.stdout.write(
-  `${JSON.stringify(
-    qualificationResult
-  )}\n`
-)
+        const trustedUnlockDiagnostic = parseTrustedUnlockDiagnosticLine(line)
+        if (trustedUnlockDiagnostic && trustedUnlockTarget.length < 1) {
+          trustedUnlockTarget.push(trustedUnlockDiagnostic)
+        }
+      }
+    })
+  }
+
+  function captureCypressChildProvenance(child, target) {
+    let buffer = ''
+    child.stderr.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() ?? ''
+      if (buffer.length > 256) buffer = ''
+      for (const line of lines) {
+        const event = parseCypressChildProvenance(line)
+        if (event && target.length < 16) target.push(event)
+      }
+    })
+  }
+
+  function captureCypressRunSummary(child, target) {
+    let buffer = ''
+    child.stderr.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() ?? ''
+      if (buffer.length > 256) buffer = ''
+      for (const line of lines) {
+        const summary = parseCypressRunSummaryDiagnostic(line)
+        if (summary && target.length < 1) target.push(summary)
+      }
+    })
+  }
+
+  const qualificationResult =
+    trustedUnlockRealProviderControl
+      ? controlledObserved
+        ? {
+            schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
+            qualificationMode,
+            outcome: 'controlled_failure_observed',
+            platform,
+            causalReceipt: 'closed_native_custody',
+          }
+        : {
+            schema: 'service-lasso.real-secrets-browser-controlled-result.v1',
+            qualificationMode,
+            outcome: 'controlled_failure_unverified',
+            platform,
+            causalReceipt: 'closure_unverified',
+          }
+      : cypressSucceeded && closureVerified
+        ? {
+            schema: 'service-lasso.real-secrets-browser-result.v1',
+            qualificationMode,
+            outcome: 'verified',
+            platform,
+            coreRevision: process.env.SERVICE_LASSO_TEST_CORE_REVISION ?? 'local',
+            brokerRevision: process.env.SERVICE_LASSO_TEST_BROKER_REVISION ?? 'local',
+            brokerSha256: sourceHashes.brokerBinary,
+            adminArtifact: path.basename(adminRoot),
+            auditEventCount,
+            rollbackProcessVerified,
+          }
+        : {
+            schema: 'service-lasso.real-secrets-browser-result.v1',
+            qualificationMode,
+            outcome: 'unverified',
+            platform,
+          }
+  // Custody/result bytes are provisional until the genuine verifier exits zero
+  // and its owner observes final output EOF/completion. A channel failure after
+  // custody persistence cannot turn that file into whole-run acceptance.
+  writeParentOutput(process.stdout,
+    `${JSON.stringify(
+      qualificationResult
+    )}\n`
+  )
+  await settleParentOutput()
+  if (runFailurePresent) throw runFailure
+} catch (error) {
+  // Own the final failure sink: Node's default uncaught reporter must never
+  // inspect/coerce the private exact primary value or print its paths/stack.
+  retainRunFailure(error)
+  process.exitCode = 1
+  writeParentOutput(process.stderr,
+    '{"schema":"service-lasso.real-browser-verifier-failure.v1","state":"unverified"}\n'
+  )
+  await settleParentOutput()
+}

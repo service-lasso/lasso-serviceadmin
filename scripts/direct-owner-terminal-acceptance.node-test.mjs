@@ -6,7 +6,7 @@ import vm from 'node:vm'
 import { closeSuccessfulCoreRunner, hasAcceptedDirectOwnerClosure } from './direct-owner-terminal-acceptance.mjs'
 
 // RC-004 SOURCE_ONLY_UNRUN until entire paired review and complete admission.
-const verifier = (await readFile(new URL('./verify-real-broker-browser.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n')
+const verifier = (await readFile(new URL('./verify-real-broker-browser.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n').replace(/^ {2}/gm, '')
 const owner = (role, exitCode = 0) => ({ role, exitCode, birth: 'observed',
   parentPid: 100, close: 'observed', signal: null, error: null, sourceSha256: 'a'.repeat(64) })
 const diagnostic = { lastPhase: 'provider_validation_complete',
@@ -17,7 +17,7 @@ function child(exitCode = 0, signalCode = null) {
     stdout: { readableEnded: true }, stderr: { readableEnded: true },
     send() { throw new Error('already exited child must not receive shutdown') } })
 }
-const start = verifier.indexOf('  try {\n    await closeSuccessfulCoreRunner(runner, coreRunnerOwner)')
+const start = verifier.indexOf('  try {\n    await closeSuccessfulCoreRunner(runner, coreRunnerOwner,')
 const end = verifier.indexOf('\n}\n\nconst sourceHashes', start)
 assert.ok(start >= 0 && end > start)
 const actualCaller = verifier.slice(start, end)
@@ -68,7 +68,7 @@ test('controlled Cypress nonzero is accepted only in its exact verified case', (
   assert.equal(hasAcceptedDirectOwnerClosure([owner('cypress', 1), owner('cypress', 1)], controlled), false)
 })
 test('actual verifier connects role acceptance to final custody, preserving gates', () => {
-  assert.match(verifier, /const closureVerified =\s*!runFailurePresent &&\s*cypressOutput\?\.exceeded !== true &&\s*nestedClosureVerified &&\s*hasAcceptedDirectOwnerClosure/)
+  assert.match(verifier, /const closureVerified =\s*!runFailurePresent &&\s*parentOutputFailures.length === 0 && parentOutputPending.size === 0 &&\s*cypressOutput\?\.exceeded !== true &&\s*nestedClosureVerified &&\s*hasAcceptedDirectOwnerClosure/)
   assert.match(verifier, /child\.on\('error', \(error\) => \{ owner\.error \?\?= error \}\)/)
   assert.match(verifier, /controlledProviderFaultVerified &&\s*closureVerified/)
 })
@@ -88,6 +88,7 @@ async function finalSink(runner, retained, controlledNegative) {
     nestedClosureVerified: true, nestedOwners: [],
     custodyOwners: [retained, owner('cypress', cypressExit)],
     process: { pid: 100 }, hasAcceptedDirectOwnerClosure,
+    parentOutputFailures: [], parentOutputPending: new Set(), settleParentOutput: async () => {},
     trustedUnlockRealProviderControl: controlledNegative,
     controlledProviderFaultVerified: controlledNegative,
     finalQualificationFailureDiagnostic: controlledNegative ? diagnostic : undefined,

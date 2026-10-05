@@ -1,11 +1,16 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
 
-export async function closeSuccessfulCoreRunner(runner, owner) {
+export async function closeSuccessfulCoreRunner(runner, owner, observeDeadline = () => {}) {
   if (runner.exitCode === null && runner.signalCode === null) {
     runner.send({ type: 'service-lasso-real-admin-shutdown' })
   }
   // Always drain output, including when exit happened before this caller.
-  const exitCode = await waitForCapturedChildClose(runner, 180_000)
+  const deadline = performance.now() + 180_000
+  observeDeadline(deadline)
+  const exitCode = await waitForCapturedChildClose(
+    runner,
+    Math.max(0, deadline - performance.now())
+  )
   if (
     exitCode !== 0 || runner.exitCode !== 0 || runner.signalCode !== null ||
     owner.close !== 'observed' || owner.exitCode !== 0 ||
