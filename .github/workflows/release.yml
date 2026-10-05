@@ -59,7 +59,24 @@ jobs:
       - name: Lint
         run: pnpm lint
       - name: Check formatting
+        id: format_check
         run: pnpm format:check
+      - name: Record canonical projections of the two failed public fixtures
+        if: failure() && steps.format_check.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'FORMAT-DIAGNOSTIC-HEAD '
+          git rev-parse HEAD
+          printf 'FORMAT-DIAGNOSTIC-VERSION '
+          pnpm exec prettier --version
+          for file in tests/source-admission-build-callbacks.node.mjs tests/source-admission-proxy.node.mjs; do
+            printf 'FORMAT-DIAGNOSTIC-ORIGINAL %s ' "$file"
+            git hash-object "$file"
+            printf 'FORMAT-DIAGNOSTIC-BEGIN %s\n' "$file"
+            pnpm exec prettier "$file"
+            printf 'FORMAT-DIAGNOSTIC-END %s\n' "$file"
+          done
       - name: Run unit tests
         run: pnpm test:unit
       - name: Install Chromium for browser qualification
