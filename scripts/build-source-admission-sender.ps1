@@ -38,6 +38,8 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
     $stdout = [IO.File]::Open("$output/$stage.stdout.raw", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
     $stderr = [IO.File]::Open("$output/$stage.stderr.raw", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
   } catch { while ($true) { [Threading.Thread]::Sleep(25) } } # Keep any original destination on partial setup.
+  $process=$null; $start=$null
+  try {
   $start = [Diagnostics.ProcessStartInfo]::new($image)
   $start.UseShellExecute = $false; $start.CreateNoWindow = $true
   $start.WorkingDirectory = $output
@@ -47,6 +49,7 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
   $start.Environment['TEMP'] = "$output/temp"; $start.Environment['TMP'] = "$output/temp"
   foreach ($argument in $arguments) { $start.ArgumentList.Add($argument) }
   $process = [Diagnostics.Process]::new(); $process.StartInfo = $start
+  } catch { while ($true) { [Threading.Thread]::Sleep(25) } } # Partial setup retains destinations/process; no terminal receipt.
   $failure = [Collections.Generic.HashSet[string]]::new()
   $observedStartUTC = [DateTime]::UtcNow.ToString('O'); $observedStartMs=$clock.ElapsedMilliseconds
   $originalPID=$null; $kernelStartUTC=$null; $kernelEndUTC=$null
