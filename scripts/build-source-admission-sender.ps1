@@ -29,6 +29,11 @@ Import-Module $evidenceModule -Force
 $output = [IO.Path]::GetFullPath($root.outputRoot)
 $outputParent = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($InputRoot)) + [IO.Path]::DirectorySeparatorChar
 if (!$output.StartsWith($outputParent, [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $output)) { throw 'FIXTURE_SENDER_BUILD_OUTPUT' }
+$ancestor = [IO.DirectoryInfo]::new([IO.Path]::GetDirectoryName($output))
+while ($null -ne $ancestor) {
+  if (!$ancestor.Exists -or ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'FIXTURE_SENDER_BUILD_OUTPUT' }
+  $ancestor = $ancestor.Parent
+}
 if ($root.deadlineMs -ne 120000) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 # One clock covers the separately owned /c compiler and direct linker.
 [IO.Directory]::CreateDirectory($output) | Out-Null

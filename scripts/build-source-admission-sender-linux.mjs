@@ -42,6 +42,7 @@ if (fs.readlinkSync('/lib64/ld-linux-x86-64.so.2') !==
     '/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2' ||
     fs.existsSync('/etc/ld.so.cache') || fs.existsSync('/etc/ld.so.preload')) fail()
 if (root.outputRoot !== `${prefix}/output` || fs.existsSync(root.outputRoot)) fail()
+if (fs.realpathSync(prefix) !== prefix) fail()
 if (root.nativeSource !== `${prefix}/source/tests/native/source-admission-sender.c` ||
     root.runtimeSource !== `${prefix}/source/runtime/server.js`) fail()
 // Namespace/kernel/mount/source choices are parent admission inputs, not inferred here.

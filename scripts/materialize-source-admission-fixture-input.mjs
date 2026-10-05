@@ -8,6 +8,10 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex')
 const [rootPath, pin, destination] = process.argv.slice(2)
 if (!path.isAbsolute(rootPath ?? '') || !path.isAbsolute(destination ?? '') ||
     !/^[a-f0-9]{64}$/.test(pin ?? '') || fs.existsSync(destination)) fail()
+const originalParent = path.dirname(path.resolve(rootPath))
+const destinationParent = path.dirname(path.resolve(destination))
+if (destinationParent !== originalParent ||
+    fs.realpathSync(originalParent) !== originalParent) fail()
 if (fs.statSync(rootPath).size > 4194304) fail()
 const raw = fs.readFileSync(rootPath)
 if (raw.length > 4194304 || sha(raw) !== pin) fail()
