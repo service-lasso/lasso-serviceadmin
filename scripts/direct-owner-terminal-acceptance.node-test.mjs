@@ -66,3 +66,40 @@ test('actual verifier connects role acceptance to final custody, preserving gate
   assert.match(verifier, /child\.on\('error', \(error\) => \{ owner\.error \?\?= error \}\)/)
   assert.match(verifier, /controlledProviderFaultVerified &&\s*closureVerified/)
 })
+
+// Evaluate the actual final custody writer after the actual finally caller,
+// with original receipt available, without starting the verifier's runner.
+const sinkStart = verifier.indexOf('const closureVerified =')
+const sinkEnd = verifier.indexOf('\nif (trustedUnlockRealProviderControl)', sinkStart)
+assert.ok(sinkStart >= 0 && sinkEnd > sinkStart)
+const actualSink = verifier.slice(sinkStart, sinkEnd)
+async function finalSink(runner, retained, controlledNegative) {
+  const completed = await caller(runner, retained)
+  const cypressExit = controlledNegative ? 1 : 0
+  let custody
+  const sandbox = vm.createContext({
+    runFailure: completed.failure, cypressOutput: { exceeded: false },
+    nestedClosureVerified: true, nestedOwners: [],
+    custodyOwners: [retained, owner('cypress', cypressExit)],
+    process: { pid: 100 }, hasAcceptedDirectOwnerClosure,
+    trustedUnlockRealProviderControl: controlledNegative,
+    controlledProviderFaultVerified: controlledNegative,
+    finalQualificationFailureDiagnostic: controlledNegative ? diagnostic : undefined,
+    cypressExit, cypressSucceeded: !controlledNegative,
+    custodyReceiptPath: 'private-fixture', initialCustody: { schema: 'fixture', runtimePathHashes: {} },
+    initialCustodyHash: 'fixture', sourceHashes: {},
+    writeQualificationCustody: async (_path, receipt) => { custody = receipt },
+  })
+  await vm.runInContext(`(async () => { ${actualSink} })()`, sandbox)
+  return custody
+}
+for (const controlledNegative of [false, true]) {
+  test(`actual caller through final custody rejects closed-original Core1 in mode ${controlledNegative}`, async () => {
+    const custody = await finalSink(child(1), owner('core_runner', 1), controlledNegative)
+    assert.equal(custody.outcome, controlledNegative ? 'controlled_failure_unverified' : 'positive_unverified')
+  })
+  test(`actual caller through final custody accepts genuine Core0 in mode ${controlledNegative}`, async () => {
+    const custody = await finalSink(child(), owner('core_runner'), controlledNegative)
+    assert.equal(custody.outcome, controlledNegative ? 'controlled_failure_observed' : 'positive_verified')
+  })
+}
