@@ -1,8 +1,48 @@
 // Prospective ownership regressions only; native callbacks below are test doubles.
 // They never qualify an actual process, pipe, compiler, image or socket.
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
+import { prepareReceiverEvidenceDirectory, receiverEvidenceDestinations } from '../scripts/source-admission-fixture-destinations.mjs'
 import { observeOriginalClose } from '../scripts/source-admission-linux-owned-process.mjs'
+
+// Prospective real filesystem ownership, not native receiver acceptance.
+test('distinct receiver destinations retain first output', async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'sa-destinations-'))
+  const destinations = {
+    source: path.join(parent, 'source-original'),
+    extracted: path.join(parent, 'extracted-original'),
+  }
+  const source = await prepareReceiverEvidenceDirectory(destinations, 'source')
+  const original = Buffer.from([0, 160, 255, 10])
+  const raw = path.join(source, 'receiver.stdout.raw')
+  await writeFile(raw, original, { flag: 'wx' })
+  const extracted = await prepareReceiverEvidenceDirectory(
+    destinations,
+    'extracted'
+  )
+  assert.notEqual(source, extracted)
+  assert.deepEqual(await readFile(raw), original)
+  await assert.rejects(
+    prepareReceiverEvidenceDirectory(destinations, 'source'),
+    /FIXTURE_RECEIVER_DESTINATION/
+  )
+  await assert.rejects(
+    prepareReceiverEvidenceDirectory(destinations, 'extracted'),
+    /FIXTURE_RECEIVER_DESTINATION/
+  )
+  assert.deepEqual(await readFile(raw), original)
+  const aliased = { source, extracted: source }
+  const nested = {
+    source,
+    extracted: path.join(source, 'nested'),
+  }
+  assert.throws(() => receiverEvidenceDestinations(aliased))
+  assert.throws(() => receiverEvidenceDestinations(nested))
+  // Preserve both fresh original outputs; never delete/reuse them for another run.
+})
 
 test('original close observer preserves receiver, callback arguments and later retirement', () => {
   let callback

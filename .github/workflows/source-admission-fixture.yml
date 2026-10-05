@@ -56,12 +56,13 @@ jobs:
           "SERVICE_LASSO_FIXTURE_INPUT_ROOT=$($pair.root)" >> $env:GITHUB_ENV
           "SERVICE_LASSO_FIXTURE_INPUT_SHA256=$($pair.sha256)" >> $env:GITHUB_ENV
           if ($env:INPUT_PHASE -eq 'qualification') {
-            foreach ($field in @('receiverRoot','receiverSHA256','receiverEvidence')) {
+            foreach ($field in @('receiverRoot','receiverSHA256','receiverSourceEvidence','receiverExtractedEvidence')) {
               if (!$pair.$field) { throw 'FIXTURE_HANDOFF_RECEIVER' }
             }
             "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT=$($pair.receiverRoot)" >> $env:GITHUB_ENV
             "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256=$($pair.receiverSHA256)" >> $env:GITHUB_ENV
-            "SERVICE_LASSO_TEST_RECEIVER_EVIDENCE_DIR=$($pair.receiverEvidence)" >> $env:GITHUB_ENV
+            "SERVICE_LASSO_TEST_RECEIVER_SOURCE_EVIDENCE_DIR=$($pair.receiverSourceEvidence)" >> $env:GITHUB_ENV
+            "SERVICE_LASSO_TEST_RECEIVER_EXTRACTED_EVIDENCE_DIR=$($pair.receiverExtractedEvidence)" >> $env:GITHUB_ENV
           }
       - name: Build Windows original stages only
         if: inputs.phase == 'build' && matrix.platform == 'win32'
@@ -99,7 +100,7 @@ jobs:
           "SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256=$env:SERVICE_LASSO_FIXTURE_INPUT_SHA256" >> $env:GITHUB_ENV
       - name: Verify original runtime inputs before qualification
         if: inputs.phase == 'qualification'
-        run: node scripts/require-source-admission-fixture-input.mjs
+        run: node scripts/require-source-admission-fixture-input.mjs source
       - name: Run unchanged complete original source fixture
         if: inputs.phase == 'qualification'
         run: pnpm test:runtime

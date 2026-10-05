@@ -113,7 +113,8 @@ jobs:
       SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].sha256 }}
       SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverRoot }}
       SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverSHA256 }}
-      SERVICE_LASSO_TEST_RECEIVER_EVIDENCE_DIR: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverEvidence }}
+      SERVICE_LASSO_TEST_RECEIVER_SOURCE_EVIDENCE_DIR: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverSourceEvidence }}
+      SERVICE_LASSO_TEST_RECEIVER_EXTRACTED_EVIDENCE_DIR: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverExtractedEvidence }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

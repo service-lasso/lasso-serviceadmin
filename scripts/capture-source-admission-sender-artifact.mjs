@@ -34,6 +34,8 @@ if (!members.has(nodeImage)) fail()
 observe(inputPath)
 const caller = fileURLToPath(import.meta.url)
 if (!members.has(caller)) observe(caller)
+const destinationSelectorSource = fileURLToPath(new URL('./source-admission-fixture-destinations.mjs', import.meta.url))
+if (!members.has(destinationSelectorSource)) observe(destinationSelectorSource)
 const stages = input.platform === 'win32' ? ['compiler', 'linker'] :
   ['frontend', 'assembler', 'linker']
 for (const stage of stages) {
@@ -85,10 +87,14 @@ for (const name of fs.readdirSync(output)) {
 const addon = path.join(output, 'source-admission-sender.node')
 if (!members.get(addon).size || !members.has(input.nativeSource) || !members.has(input.runtimeSource)) fail()
 const projection = { schema: 'sa-sender-artifact.v1', state: 'UNADMITTED_ACTUAL_OUTPUT_OBSERVATION',
-  platform: input.platform, nodeVersion: '22.23.2', nodeImage, addon,
+  platform: input.platform, nodeVersion: '22.23.2', nodeImage, addon, destinationSelectorSource,
   nativeSource: input.nativeSource, runtimeSource: input.runtimeSource,
   sourceRootSHA256: inputSHA, nativeAcceptance: false, members: [...members.values()] }
 const bytes = Buffer.from(JSON.stringify(projection))
 if (members.size < 2 || members.size > 20000 || bytes.length > 4194304) fail()
 fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 })
 // Independent actual image/tool/output review and a NEW runtime admission remain required.
+
+// Build observations deliberately do not invent qualification output paths.
+// Materialization binds both explicitly selected fresh receiver destinations
+// into a NEW unadmitted runtime projection before independent admission.

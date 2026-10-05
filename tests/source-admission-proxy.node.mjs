@@ -200,6 +200,7 @@ test(
     await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve))
     try {
       await verifySourceAdmissionProxy({
+        receiverInvocation: 'source',
         baseUrl: `http://127.0.0.1:${proxy.address().port}`,
         records,
         lifetime,

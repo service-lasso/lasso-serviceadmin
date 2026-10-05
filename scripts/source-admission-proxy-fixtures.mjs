@@ -331,10 +331,10 @@ async function pausedDownstreamCapacity(baseUrl, records, lifetime, setPhase, re
 }
 
 /** All cases run on genuine HTTP sockets, including original 10s/40s timers. */
-export async function verifySourceAdmissionProxy({ baseUrl, records, setMode, lifetime }) {
+export async function verifySourceAdmissionProxy({ baseUrl, records, setMode, lifetime, receiverInvocation }) {
   // Source-owned fixed labels expose the failing phase without request/header
   // values or credentials. All original assertions remain authoritative.
-  const receiverTool = await prepareReceiverTool()
+  const receiverTool = await prepareReceiverTool(receiverInvocation)
   let phase = 'full-upload'
   try {
     const full = Buffer.alloc(10_485_760)

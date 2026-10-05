@@ -1,9 +1,10 @@
 // Qualification tooling only. Byte selection is never execution admission.
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { prepareReceiverEvidenceDirectory, readQualificationReceiverEvidenceDestinations } from './source-admission-fixture-destinations.mjs'
 
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex')
 const helper = fileURLToPath(new URL('../tests/native/source-admission-receiver.py', import.meta.url))
@@ -30,11 +31,11 @@ export function decodeReceiverLine(line, readySeen) {
   return row
 }
 
-export async function prepareReceiverTool() {
+export async function prepareReceiverTool(invocation) {
   const rootPath = process.env.SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT
   const expected = process.env.SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256
-  const output = process.env.SERVICE_LASSO_TEST_RECEIVER_EVIDENCE_DIR
-  if (!rootPath || !path.isAbsolute(rootPath) || !/^[a-f0-9]{64}$/.test(expected ?? '') || !output || !path.isAbsolute(output)) throw fail()
+  const destinations = readQualificationReceiverEvidenceDestinations()
+  if (!rootPath || !path.isAbsolute(rootPath) || !/^[a-f0-9]{64}$/.test(expected ?? '')) throw fail()
   const bytes = await readFile(rootPath)
   if (digest(bytes) !== expected) throw fail()
   const root = JSON.parse(bytes)
@@ -48,7 +49,7 @@ export async function prepareReceiverTool() {
   }
   if (![root.executable, helper, controller].every((value) => seen.has(value))) throw fail()
   // A complete run owns a uniquely absent destination; never reuse old bytes.
-  await mkdir(output, { recursive: false })
+  const output = await prepareReceiverEvidenceDirectory(destinations, invocation)
   return Object.freeze({ executable: root.executable, output })
 }
 

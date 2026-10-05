@@ -2,12 +2,24 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { receiverEvidenceDestinations, selectReceiverEvidenceDestination } from './source-admission-fixture-destinations.mjs'
 
 const fail = () => { throw new Error('FIXTURE_SENDER_MATERIALIZATION') }
 const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex')
-const [rootPath, pin, destination] = process.argv.slice(2)
+const [rootPath, pin, destination, sourceEvidence, extractedEvidence] = process.argv.slice(2)
 if (!path.isAbsolute(rootPath ?? '') || !path.isAbsolute(destination ?? '') ||
     !/^[a-f0-9]{64}$/.test(pin ?? '') || fs.existsSync(destination)) fail()
+// Both exact new destinations join this NEW unadmitted qualification input.
+const receiverDestinations = receiverEvidenceDestinations({
+  source: sourceEvidence, extracted: extractedEvidence,
+})
+selectReceiverEvidenceDestination(receiverDestinations, 'source')
+selectReceiverEvidenceDestination(receiverDestinations, 'extracted')
+for (const evidence of Object.values(receiverDestinations)) {
+  const relative = path.relative(evidence, destination)
+  if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== '..' &&
+      !path.isAbsolute(relative))) fail()
+}
 const originalParent = path.dirname(path.resolve(rootPath))
 const destinationParent = path.dirname(path.resolve(destination))
 if (destinationParent !== originalParent ||
@@ -29,7 +41,7 @@ for (const row of root.members) {
   if (bytes.length !== row.size || sha(bytes) !== row.sha256) fail()
   originals.set(row.path, row)
 }
-for (const file of [root.addon, root.nativeSource, root.runtimeSource]) {
+for (const file of [root.addon, root.nativeSource, root.runtimeSource, root.destinationSelectorSource]) {
   if (!originals.has(file)) fail()
 }
 fs.mkdirSync(destination, { mode: 0o700 })
@@ -54,6 +66,8 @@ if (!originalNode || currentNode.length !== originalNode.size ||
 const node = { ...originalNode, path: process.execPath }
 const members = [...copied.values(), node]
 const projection = { ...root, state: 'NEW_UNADMITTED_MATERIALIZED_INPUT',
+  receiverEvidenceDestinations: receiverDestinations,
+  destinationSelectorSource: copied.get(root.destinationSelectorSource).path,
   nodeImage: process.execPath,
   addon: copied.get(root.addon).path, nativeSource: copied.get(root.nativeSource).path,
   runtimeSource: copied.get(root.runtimeSource).path, members }

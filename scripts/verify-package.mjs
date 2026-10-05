@@ -5,9 +5,11 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { verifySourceAdmissionFixtureInput } from './require-source-admission-fixture-input.mjs'
 import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy, createSourceAdmissionLifetimeCollector } from './source-admission-proxy-fixtures.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+verifySourceAdmissionFixtureInput('extracted')
 const platform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
 const assetName = platform === 'win32'
   ? '@serviceadmin-win32.zip'
@@ -180,6 +182,7 @@ try {
   assert.equal(observedRequest.headers['x-service-lasso-workspace-id'], 'workspace-release')
   assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
   await verifySourceAdmissionProxy({
+    receiverInvocation: 'extracted',
     baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
     records: sourceAdmissionRecords,
     lifetime,
