@@ -94,9 +94,17 @@ async function finalSink(runner, retained, controlledNegative) {
   return custody
 }
 for (const controlledNegative of [false, true]) {
-  test(`actual caller through final custody rejects closed-original Core1 in mode ${controlledNegative}`, async () => {
-    const custody = await finalSink(child(1), owner('core_runner', 1), controlledNegative)
-    assert.equal(custody.outcome, controlledNegative ? 'controlled_failure_unverified' : 'positive_unverified')
+  test(`actual caller through final custody rejects unsuccessful Core closure in mode ${controlledNegative}`, async () => {
+    for (const [runner, retained] of [
+      [child(1), owner('core_runner', 1)],
+      [child(), { ...owner('core_runner'), close: 'pending' }],
+      [child(), { ...owner('core_runner'), error: new Error('close error') }],
+      [child(NaN), owner('core_runner', null)],
+      [child(null, 'SIGTERM'), { ...owner('core_runner', null), signal: 'SIGTERM' }],
+    ]) {
+      const custody = await finalSink(runner, retained, controlledNegative)
+      assert.equal(custody.outcome, controlledNegative ? 'controlled_failure_unverified' : 'positive_unverified')
+    }
   })
   test(`actual caller through final custody accepts genuine Core0 in mode ${controlledNegative}`, async () => {
     const custody = await finalSink(child(), owner('core_runner'), controlledNegative)
