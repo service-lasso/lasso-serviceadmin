@@ -9,6 +9,10 @@ on:
       - develop
   workflow_dispatch:
     inputs:
+      fixture_input_pairs:
+        description: Separately admitted per-OS sender and receiver ROOT paths and SHA JSON
+        required: true
+        type: string
       candidate_sha:
         description: Exact protected develop commit to release
         required: true
@@ -44,7 +48,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 22.23.2
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -55,7 +59,24 @@ jobs:
       - name: Lint
         run: pnpm lint
       - name: Check formatting
+        id: format_check
         run: pnpm format:check
+      - name: Record canonical projections of the two failed public fixtures
+        if: failure() && steps.format_check.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'FORMAT-DIAGNOSTIC-HEAD '
+          git rev-parse HEAD
+          printf 'FORMAT-DIAGNOSTIC-VERSION '
+          pnpm exec prettier --version
+          for file in tests/source-admission-build-callbacks.node.mjs tests/source-admission-proxy.node.mjs; do
+            printf 'FORMAT-DIAGNOSTIC-ORIGINAL %s ' "$file"
+            git hash-object "$file"
+            printf 'FORMAT-DIAGNOSTIC-BEGIN %s\n' "$file"
+            pnpm exec prettier "$file"
+            printf 'FORMAT-DIAGNOSTIC-END %s\n' "$file"
+          done
       - name: Run unit tests
         run: pnpm test:unit
       - name: Install Chromium for browser qualification
@@ -87,6 +108,13 @@ jobs:
             artifact: output/release/@serviceadmin-darwin.tar.gz
             sbom: output/release/serviceadmin-darwin.cdx.json
     runs-on: ${{ matrix.os }}
+    env:
+      SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].root }}
+      SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].sha256 }}
+      SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverRoot }}
+      SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverSHA256 }}
+      SERVICE_LASSO_TEST_RECEIVER_SOURCE_EVIDENCE_DIR: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverSourceEvidence }}
+      SERVICE_LASSO_TEST_RECEIVER_EXTRACTED_EVIDENCE_DIR: ${{ fromJSON(inputs.fixture_input_pairs || '{}')[matrix.platform].receiverExtractedEvidence }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,7 +125,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 22.23.2
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

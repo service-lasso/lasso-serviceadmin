@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 
 const modulePath = fileURLToPath(import.meta.url)
 const moduleDir = path.dirname(modulePath)
@@ -11,6 +13,280 @@ const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 17700
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024
 const MAX_UPSTREAM_BODY_BYTES = 8 * 1024 * 1024
+const SOURCE_UPLOAD_MIME = 'application/vnd.service-lasso.template-project+zip'
+const SOURCE_UPLOAD_PATH = /^\/api\/service-source-admission\/stages\/sas_[a-f0-9]{32}\/content$/
+const SOURCE_COMMIT_PATH = /^\/api\/service-source-admission\/preflights\/sap_[a-f0-9]{32}\/commit$/
+
+/** Exact source-owned route selection; no decoding or caller-selected limit. */
+export function sourceAdmissionProxyPolicy(method, target) {
+  if (method === 'PUT' && SOURCE_UPLOAD_PATH.test(target)) {
+    return { mediaType: SOURCE_UPLOAD_MIME, maxBytes: 10_485_760, absoluteMs: 40_000, idleMs: 10_000 }
+  }
+  if (method === 'POST' && SOURCE_COMMIT_PATH.test(target)) {
+    return { mediaType: 'application/json', maxBytes: 65_536, absoluteMs: 40_000, idleMs: null }
+  }
+  if (method === 'POST' && target === '/api/service-source-admission/preflights') {
+    return { mediaType: 'application/json', maxBytes: 65_536, absoluteMs: 10_000, idleMs: null }
+  }
+  if (method === 'POST' && target === '/api/service-source-admission/stages') {
+    return { mediaType: 'application/json', maxBytes: 65_536, absoluteMs: 30_000, idleMs: null }
+  }
+  if (method === 'GET' && /^\/api\/service-source-admission\/operations\/sao_[a-f0-9]{32}$/.test(target)) {
+    return { mediaType: null, maxBytes: 0, absoluteMs: 30_000, idleMs: null }
+  }
+  return null
+}
+
+class SourceProxyError extends Error {
+  constructor(status, code) {
+    super(code)
+    this.status = status
+    this.code = code
+  }
+}
+
+function sourceBodyLength(request, policy) {
+  const fields = new Map()
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index].toLowerCase()
+    const values = fields.get(name) ?? []
+    values.push(request.rawHeaders[index + 1])
+    fields.set(name, values)
+  }
+  if (['transfer-encoding', 'content-encoding', 'trailer'].some((name) => fields.has(name))) {
+    throw new SourceProxyError(400, 'invalid_upload_framing')
+  }
+  const lengths = fields.get('content-length')
+  if (!policy.mediaType) {
+    if (lengths && (lengths.length !== 1 || lengths[0] !== '0')) {
+      throw new SourceProxyError(400, 'invalid_body')
+    }
+    return 0
+  }
+  const types = fields.get('content-type')
+  if (
+    !types || types.length !== 1 ||
+    types[0].replace(/^[ \t]+|[ \t]+$/g, '') !== policy.mediaType
+  ) {
+    throw new SourceProxyError(400, 'invalid_stage_content_type')
+  }
+  if (!lengths || lengths.length !== 1 || !/^[1-9][0-9]{0,7}$/.test(lengths[0])) {
+    throw new SourceProxyError(400, 'invalid_upload_framing')
+  }
+  const count = Number(lengths[0])
+  if (count > policy.maxBytes) {
+    throw new SourceProxyError(413, policy.mediaType === SOURCE_UPLOAD_MIME ? 'archive_too_large' : 'invalid_body')
+  }
+  return count
+}
+
+function rejectedFixedBodyLength(request) {
+  const lengths = []
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index].toLowerCase()
+    if (['transfer-encoding', 'content-encoding', 'trailer'].includes(name)) return null
+    if (name === 'content-length') lengths.push(request.rawHeaders[index + 1])
+  }
+  if (lengths.length !== 1 || !/^(?:0|[1-9][0-9]{0,7})$/.test(lengths[0])) return null
+  const count = Number(lengths[0])
+  // Discard availability is finite; this never enlarges the accepted body cap.
+  return count <= MAX_REQUEST_BODY_BYTES ? count : null
+}
+
+async function settleRejectedSourceBody(request, signal, progress) {
+  const count = rejectedFixedBodyLength(request)
+  if (count === null || signal.aborted || request.destroyed || request.readableEnded) return
+  await new Promise((resolve) => {
+    let discarded = 0
+    const detach = () => {
+      request.off('data', onData)
+      request.off('end', finish)
+      request.off('error', finish)
+      request.off('aborted', finish)
+      signal.removeEventListener('abort', finish)
+    }
+    const finish = () => { detach(); request.pause(); resolve() }
+    const onData = (part) => {
+      if (!Buffer.isBuffer(part) || discarded + part.length > count) { finish(); return }
+      discarded += part.length
+      progress()
+    }
+    request.on('data', onData)
+    request.once('end', finish)
+    request.once('error', finish)
+    request.once('aborted', finish)
+    signal.addEventListener('abort', finish, { once: true })
+    request.resume()
+    if (signal.aborted) finish()
+  })
+}
+
+function originalBody(request, count, signal, progress) {
+  // No chunk inventory or concat copy: allocate only after original headers pass.
+  const bytes = Buffer.alloc(count)
+  return new Promise((resolve, reject) => {
+    let offset = 0
+    const detach = () => {
+      request.off('data', onData)
+      request.off('end', onEnd)
+      request.off('aborted', onAborted)
+      request.off('error', onError)
+      signal.removeEventListener('abort', onAborted)
+    }
+    const fail = (error) => { detach(); request.pause(); reject(error) }
+    const onAborted = () => fail(signal.reason ?? new SourceProxyError(400, 'invalid_upload_framing'))
+    const onError = () => fail(new SourceProxyError(400, 'invalid_upload_framing'))
+    const onData = (chunk) => {
+      if (!Buffer.isBuffer(chunk) || offset + chunk.length > count) {
+        fail(new SourceProxyError(400, 'invalid_upload_framing'))
+        return
+      }
+      chunk.copy(bytes, offset)
+      offset += chunk.length
+      progress()
+    }
+    const onEnd = () => {
+      detach()
+      if (!request.complete || request.rawTrailers.length !== 0 || offset !== count) {
+        reject(new SourceProxyError(400, 'invalid_upload_framing'))
+      } else resolve(bytes)
+    }
+    request.on('data', onData)
+    request.once('end', onEnd)
+    request.once('aborted', onAborted)
+    request.once('error', onError)
+    signal.addEventListener('abort', onAborted, { once: true })
+    if (signal.aborted) onAborted()
+  })
+}
+
+async function forwardSourceBody(target, method, headers, body, signal, progress) {
+  // Own the actual original outgoing object. Abort is not a closure receipt.
+  const outgoing = http.request(target, {
+    method, headers: Object.fromEntries(headers), agent: false,
+  })
+  const closed = new Promise((resolve) => outgoing.once('close', resolve))
+  let incoming
+  let incomingClosed
+  const abort = () => {
+    incoming?.destroy()
+    outgoing.destroy()
+  }
+  signal.addEventListener('abort', abort, { once: true })
+  try {
+    const result = await new Promise((resolve, reject) => {
+      // Native destroy can emit error before close. Preserve the original
+      // deadline/disconnect reason rather than relabeling owned abort as502.
+      outgoing.once('error', () => reject(signal.reason ?? new SourceProxyError(502, 'service_lasso_runtime_api_unreachable')))
+      outgoing.once('close', () => {
+        if (!incoming) reject(signal.reason ?? new SourceProxyError(502, 'service_lasso_runtime_api_unreachable'))
+      })
+      outgoing.once('response', (upstream) => {
+        incoming = upstream
+        incomingClosed = new Promise((settle) => upstream.once('close', settle))
+        progress()
+        const bytes = Buffer.alloc(MAX_UPSTREAM_BODY_BYTES)
+        let offset = 0
+        const fail = () => {
+          reject(signal.reason ?? new SourceProxyError(502, 'service_lasso_runtime_api_unreachable'))
+          abort()
+        }
+        upstream.once('error', fail)
+        upstream.once('aborted', fail)
+        const declared = upstream.headers['content-length']
+        if (declared !== undefined && (!/^[0-9]+$/.test(declared) || Number(declared) > bytes.length)) {
+          fail()
+          return
+        }
+        upstream.on('data', (part) => {
+          if (!Buffer.isBuffer(part) || offset + part.length > bytes.length) { fail(); return }
+          part.copy(bytes, offset)
+          offset += part.length
+          progress()
+        })
+        upstream.once('end', () => {
+          if (!upstream.complete || (declared !== undefined && offset !== Number(declared))) { fail(); return }
+          resolve({ status: upstream.statusCode, contentType: upstream.headers['content-type'], bytes: bytes.subarray(0, offset) })
+        })
+      })
+      if (signal.aborted) abort()
+      else outgoing.end(body)
+    })
+    if (signal.aborted) throw signal.reason
+    return result
+  } finally {
+    // Keep body/capacity owned until the genuine original outgoing and response
+    // objects close, including errors and late completion after logical timeout.
+    if (!outgoing.destroyed) outgoing.destroy()
+    await closed
+    if (incomingClosed) await incomingClosed
+    signal.removeEventListener('abort', abort)
+  }
+}
+
+async function proxySourceAdmission(request, response, target, headers, policy, startedAt, downstreamClosed, fixtureSender) {
+  const controller = new AbortController()
+  const absoluteEnd = startedAt + policy.absoluteMs
+  let idleEnd = startedAt + (policy.idleMs ?? policy.absoluteMs)
+  const expired = () => performance.now() >= absoluteEnd || (policy.idleMs && performance.now() >= idleEnd)
+  const progress = () => {
+    if (expired()) controller.abort(new SourceProxyError(504, 'service_admin_source_admission_timeout'))
+    else idleEnd = performance.now() + (policy.idleMs ?? policy.absoluteMs)
+  }
+  const disconnect = () => {
+    if (!response.writableFinished) controller.abort(new SourceProxyError(502, 'service_admin_client_disconnected'))
+  }
+  const closeLateDownstream = () => {
+    if (response.headersSent) request.socket.destroy()
+  }
+  controller.signal.addEventListener('abort', closeLateDownstream, { once: true })
+  response.once('close', disconnect)
+  const timer = setInterval(() => {
+    if (expired()) {
+      controller.abort(new SourceProxyError(504, 'service_admin_source_admission_timeout'))
+    }
+  }, 25)
+  timer.unref()
+  try {
+    let count
+    try {
+      count = sourceBodyLength(request, policy)
+    } catch (error) {
+      // Closing with unread native input can reset the response before the
+      // caller observes400/413. Discard only unambiguous fixed bodies <=1MiB,
+      // with zero body allocation, under this SAME original absolute/idle clock.
+      // Ambiguous/large/stalled input never grants unlimited draining or forwarding.
+      await settleRejectedSourceBody(request, controller.signal, progress)
+      if (controller.signal.aborted) throw controller.signal.reason
+      throw error
+    }
+    const body = await originalBody(request, count, controller.signal, progress)
+    // Allow the same parser turn's framing failure/close to settle before any
+    // upstream effect. Genuine HTTP message EOF is required, not a buffer hash.
+    await new Promise((resolve) => setImmediate(resolve))
+    if (request.socket.destroyed || controller.signal.aborted || expired()) {
+      throw controller.signal.reason ?? new SourceProxyError(400, 'invalid_upload_framing')
+    }
+    // Qualification-only real socket option. No lease/response barrier or IO.
+    if (fixtureSender && request.method === 'PUT' && count === 1 && body[0] === 0x78) {
+      fixtureSender(request.socket)
+      if (controller.signal.aborted || expired()) throw controller.signal.reason ?? new SourceProxyError(504, 'service_admin_source_admission_timeout')
+    }
+    headers.set('content-length', String(count))
+    if (policy.mediaType) headers.set('content-type', policy.mediaType)
+    const result = await forwardSourceBody(target, request.method, headers, body, controller.signal, progress)
+    if (controller.signal.aborted || performance.now() >= absoluteEnd) {
+      throw controller.signal.reason ?? new SourceProxyError(504, 'service_admin_source_admission_timeout')
+    }
+    response.writeHead(result.status, { ...securityHeaders(result.contentType ?? 'application/json; charset=utf-8'), Connection: 'close' })
+    response.end(result.bytes)
+    await downstreamClosed
+  } finally {
+    clearInterval(timer)
+    response.off('close', disconnect)
+    controller.signal.removeEventListener('abort', closeLateDownstream)
+  }
+}
 const ROTATION_PROXY_LIFECYCLE_SCHEMA =
   'service-admin.rotation-proxy-lifecycle.v1'
 const rotationProxyLifecyclePhases = new Set([
@@ -201,6 +477,8 @@ export function resolvePackagedProxyHeaders(request) {
 }
 
 export function runtimeApiTimeoutMs(method, pathname) {
+  const sourcePolicy = sourceAdmissionProxyPolicy(method, pathname)
+  if (sourcePolicy) return sourcePolicy.absoluteMs
   if (method === 'POST' && pathname === '/api/setup/bootstrap') {
     return 180_000
   }
@@ -277,17 +555,62 @@ async function readBoundedUpstream(response) {
   return Buffer.concat(chunks, size)
 }
 
-async function readBoundedBody(request) {
-  const chunks = []
-  let size = 0
-  for await (const chunk of request) {
-    size += chunk.length
-    if (size > MAX_REQUEST_BODY_BYTES) {
-      throw new Error('request_body_too_large')
-    }
-    chunks.push(chunk)
+function genericFixedBodyLength(request) {
+  const lengths = []
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index].toLowerCase()
+    if (name === 'transfer-encoding') return null
+    if (name === 'content-length') lengths.push(request.rawHeaders[index + 1])
   }
-  return Buffer.concat(chunks)
+  return lengths.length === 1 && /^(?:0|[1-9][0-9]*)$/.test(lengths[0])
+    ? Number(lengths[0]) : null
+}
+
+function readBoundedBody(request, signal, owner) {
+  const declared = genericFixedBodyLength(request)
+  // Only this finite fixed overflow can be completely consumed before413.
+  // Larger declared bodies never allocate or grant an unrestricted drain.
+  if (declared !== null && declared > MAX_REQUEST_BODY_BYTES + 1) {
+    return Promise.reject(new Error('request_body_too_large'))
+  }
+  const bytes = Buffer.alloc(Math.min(declared ?? MAX_REQUEST_BODY_BYTES, MAX_REQUEST_BODY_BYTES))
+  owner.bytes = bytes
+  return new Promise((resolve, reject) => {
+    let size = 0
+    const detach = () => {
+      request.off('data', onData)
+      request.off('end', onEnd)
+      request.off('error', onError)
+      request.off('aborted', onError)
+      signal.removeEventListener('abort', onAbort)
+    }
+    const fail = (error) => { detach(); request.pause(); reject(error) }
+    const onAbort = () => fail(signal.reason ?? new Error('generic_request_timeout'))
+    const onError = () => fail(new Error('generic_request_incomplete'))
+    const onData = (part) => {
+      if (!Buffer.isBuffer(part)) { onError(); return }
+      const next = size + part.length
+      if (next > MAX_REQUEST_BODY_BYTES && (declared !== MAX_REQUEST_BODY_BYTES + 1 || next > declared)) {
+        fail(new Error('request_body_too_large'))
+        return
+      }
+      const retained = Math.min(part.length, Math.max(0, bytes.length - size))
+      if (retained) part.copy(bytes, size, 0, retained)
+      size = next
+    }
+    const onEnd = () => {
+      detach()
+      if (!request.complete || (declared !== null && size !== declared)) reject(new Error('generic_request_incomplete'))
+      else if (size > MAX_REQUEST_BODY_BYTES) reject(new Error('request_body_too_large'))
+      else resolve(bytes.subarray(0, size))
+    }
+    request.on('data', onData)
+    request.once('end', onEnd)
+    request.once('error', onError)
+    request.once('aborted', onError)
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) onAbort()
+  })
 }
 
 function resolveStaticFile(distDir, requestPath) {
@@ -331,16 +654,205 @@ function resolveStaticFile(distDir, requestPath) {
   }
 }
 
+/** Private fixture input selection only; never an execution or native authority. */
+export async function loadSourceAdmissionFixtureSender() {
+  const failed = () => { const error = new Error('FIXTURE_SENDER_INPUT'); error.code = 'FIXTURE_SENDER_INPUT'; throw error }
+  const rootPath = process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT
+  const expected = process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256
+  if (!path.isAbsolute(rootPath ?? '') || !/^[a-f0-9]{64}$/.test(expected ?? '') || process.version !== 'v22.23.2' || !['win32', 'linux'].includes(process.platform)) failed()
+  const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
+  const readBounded = async (file, max) => {
+    const stat = await fs.promises.stat(file)
+    if (!stat.isFile() || stat.size > max) failed()
+    const bytes = await fs.promises.readFile(file)
+    if (bytes.length > max) failed()
+    return bytes
+  }
+  const bytes = await readBounded(rootPath, 4 * 1024 * 1024)
+  if (hash(bytes) !== expected) failed()
+  const root = JSON.parse(bytes)
+  if (root.schema !== 'sa-sender-artifact.v1' || root.platform !== process.platform || root.nodeVersion !== '22.23.2' || !path.isAbsolute(root.addon ?? '') || !Array.isArray(root.members) || root.members.length < 2 || root.members.length > 20000) failed()
+  const seen = new Set()
+  for (const row of root.members) {
+    if (!path.isAbsolute(row.path ?? '') || seen.has(row.path) || !Number.isSafeInteger(row.size) || row.size < 0 || row.size > 128 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(row.sha256 ?? '')) failed()
+    seen.add(row.path)
+    const actual = await readBounded(row.path, 128 * 1024 * 1024)
+    if (actual.length !== row.size || hash(actual) !== row.sha256) failed()
+  }
+  if (!seen.has(root.addon) || !seen.has(process.execPath) || !path.isAbsolute(root.nativeSource ?? '') || !seen.has(root.nativeSource) || !path.isAbsolute(root.runtimeSource ?? '') || !seen.has(root.runtimeSource)) failed()
+  const sourceRow = root.members.find((row) => row.path === root.runtimeSource)
+  if (hash(await readBounded(modulePath, 64 * 1024 * 1024)) !== sourceRow.sha256) failed()
+  // Native image load only after admitted original artifact/input byte checks.
+  const addon = createRequire(import.meta.url)(root.addon)
+  if (typeof addon.configure !== 'function') failed()
+  return (localPort, remotePort) => addon.configure(localPort, remotePort)
+}
+
+/** Own only diagnostic fd2 writes; never close shared stderr or suppress process errors. */
+export function createSourceAdmissionDiagnosticWriter({ enabled = false, onFailure = () => {}, nativeWrite = fs.write } = {}) {
+  const queue = []
+  let admittedLines = 0
+  let admittedBytes = 0
+  let pending = false
+  let retiring = false
+  let failed = false
+  let resolveRetired
+  const retired = new Promise((resolve) => { resolveRetired = resolve })
+  const settleRetirement = () => { if (retiring && !pending && queue.length === 0) resolveRetired() }
+  const fail = () => {
+    if (!failed) {
+      failed = true
+      try { onFailure('FIXTURE_LIFETIME_WRITE') } catch {}
+    }
+    // Discard never-submitted entries; any submitted native callback retains its entry.
+    queue.length = 0
+    settleRetirement()
+  }
+  const pump = () => {
+    if (pending || failed || queue.length === 0) { settleRetirement(); return }
+    const entry = queue[0]
+    pending = true
+    let completed = false
+    const complete = (error, written) => {
+      if (completed) return
+      completed = true
+      pending = false
+      if (error || !Number.isInteger(written) || written <= 0 || written > entry.bytes.length - entry.offset) { fail(); return }
+      entry.offset += written
+      if (entry.offset === entry.bytes.length) queue.shift()
+      pump()
+    }
+    try { nativeWrite(2, entry.bytes, entry.offset, entry.bytes.length - entry.offset, null, complete) }
+    catch { complete(true, 0) }
+  }
+  return {
+    write(line) {
+      if (!enabled) return false
+      if (failed) return false
+      if (retiring) { fail(); return false }
+      if (typeof line !== 'string' || line.length > 128) { fail(); return false }
+      const bytes = Buffer.from(line, 'utf8')
+      if (++admittedLines > 513 || bytes.length > 128 || (admittedBytes += bytes.length) > 65_536) { fail(); return false }
+      queue.push({ bytes, offset: 0 })
+      pump()
+      return true
+    },
+    retire() { retiring = true; settleRetirement(); return retired },
+  }
+}
 export function createServiceAdminServer(options = {}) {
   const distDir = path.resolve(options.distDir ?? path.join(packageRoot, 'dist'))
   const runtimeApiBaseUrl = requiredLoopbackUrl(options.runtimeApiBaseUrl)
   const rotationProxyLifecycleDiagnostics =
     options.rotationProxyLifecycleDiagnostics === true
+  // Per-server availability ownership, retained until actual HTTP closure.
+  let sourceAdmissionActive = false
+  let genericBodyActive = 0
+  const sourceAdmissionSockets = new WeakSet()
 
-  return http.createServer(async (request, response) => {
+  const sourceAdmissionLifecycleDiagnostics = options.sourceAdmissionLifecycleDiagnostics === true
+  const fixtureSender = sourceAdmissionLifecycleDiagnostics && typeof options.sourceAdmissionFixtureSender === 'function'
+    ? options.sourceAdmissionFixtureSender : null
+  let senderRecords = 0
+  let diagnosticRequest = 0
+  let diagnosticSequence = 0
+  let diagnosticOverflow = false
+  let diagnosticHandlers = 0
+  let diagnosticClosing = false
+  let resolveDiagnosticRetirement
+  const diagnosticRetirement = new Promise((resolve) => { resolveDiagnosticRetirement = resolve })
+  const diagnosticWriter = createSourceAdmissionDiagnosticWriter({
+    enabled: sourceAdmissionLifecycleDiagnostics,
+    onFailure: (code) => {
+      diagnosticOverflow = true
+      try { server.emit('sourceAdmissionProxyLifecycleFailure', code) } catch {}
+    },
+  })
+  const retireDiagnostics = () => {
+    if (diagnosticClosing && diagnosticHandlers === 0) diagnosticWriter.retire().then(resolveDiagnosticRetirement)
+  }
+  const observeSourceLifetime = (phase, requestOrdinal, role) => {
+    if (!sourceAdmissionLifecycleDiagnostics || diagnosticOverflow) return
+    if (diagnosticSequence >= 512 || requestOrdinal > 512) {
+      diagnosticOverflow = true
+      phase = 'overflow'
+      requestOrdinal = 0
+      role = 'other'
+    }
+    const line = `${JSON.stringify({ schema: 'sa-lifetime.v1', seq: ++diagnosticSequence, request: requestOrdinal, role, phase })}\n`
+    // Private diagnostic observers can never alter native ownership or outcomes.
+    try { server.emit('sourceAdmissionProxyLifecycle', line) } catch {}
+    diagnosticWriter.write(line)
+  }
+
+  const server = http.createServer(async (request, response) => {
+    const requestStartedAt = performance.now()
     const method = request.method ?? 'GET'
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (requestUrl.pathname.startsWith('/api/')) {
+      const sourcePolicy = sourceAdmissionProxyPolicy(method, request.url ?? '/')
+      if (sourcePolicy) {
+        sourceAdmissionSockets.add(request.socket)
+        if (sourceAdmissionLifecycleDiagnostics) diagnosticHandlers++
+        const originalClosed = new Promise((resolve) => request.once('close', resolve))
+        const requestOrdinal = sourceAdmissionLifecycleDiagnostics ? (diagnosticRequest = Math.min(diagnosticRequest + 1, 513)) : 0
+        const length = request.headers['content-length']
+        const diagnosticRole = method === 'PUT' && ['1', '4', '16'].includes(length)
+          ? ({ '1': 'one', '4': 'four', '16': 'sixteen' })[length] : 'other'
+        const downstreamClosed = new Promise((resolve) => request.socket.once('close', () => {
+          observeSourceLifetime('socket_closed', requestOrdinal, diagnosticRole)
+          resolve()
+        }))
+        const observeOriginalError = () => {}
+        request.on('error', observeOriginalError)
+        const ownsCapacity = !sourceAdmissionActive
+        if (ownsCapacity) {
+          sourceAdmissionActive = true
+          observeSourceLifetime('acquired', requestOrdinal, diagnosticRole)
+        } else observeSourceLifetime('denied', requestOrdinal, diagnosticRole)
+        // Always close selected downstream connections. Malformed/stalled body
+        // failure cannot leave unread bytes or parser state on a reused socket.
+        response.once('close', () => {
+          if (!request.complete) request.destroy()
+        })
+        try {
+          if (!ownsCapacity) throw new SourceProxyError(503, 'service_admin_source_admission_busy')
+          const headers = resolvePackagedProxyHeaders(request)
+          const target = new URL(request.url, runtimeApiBaseUrl)
+          await proxySourceAdmission(request, response, target, headers, sourcePolicy, requestStartedAt, downstreamClosed, fixtureSender && ((socket) => {
+            try {
+              if (++senderRecords > 32) throw new Error('FIXTURE_SENDER_NATIVE')
+              const facts = fixtureSender(socket.localPort, socket.remotePort)
+              if (Object.keys(facts).sort().join(',') !== 'after,before,requested' || ![facts.requested, facts.before, facts.after].every(Number.isSafeInteger) || facts.before < 0 || facts.before > 67108864 ||
+                  (process.platform === 'win32' ? facts.requested !== 0 || facts.after !== 0 : process.platform !== 'linux' || facts.requested !== 4096 || facts.after < 1 || facts.after > 16384)) throw new Error('FIXTURE_SENDER_NATIVE')
+              const line = `${JSON.stringify({ schema: 'sa-sender.v1', request: requestOrdinal, platform: process.platform, requested: facts.requested, before: facts.before, after: facts.after })}\n`
+              try { server.emit('sourceAdmissionProxyLifecycle', line) } catch {}
+              diagnosticWriter.write(line)
+            } catch {
+              try { server.emit('sourceAdmissionProxyLifecycleFailure', 'FIXTURE_SENDER_NATIVE') } catch {}
+              throw new SourceProxyError(502, 'service_lasso_runtime_api_unreachable')
+            }
+          }))
+        } catch (error) {
+          if (!response.destroyed && !response.headersSent) {
+            const status = error instanceof TrustedIngressProxyError ? 403 : error instanceof SourceProxyError ? error.status : 502
+            const code = error instanceof TrustedIngressProxyError ? 'trusted_ingress_identity_invalid' : error instanceof SourceProxyError ? error.code : 'service_lasso_runtime_api_unreachable'
+            response.writeHead(status, { ...securityHeaders('application/json; charset=utf-8'), Connection: 'close' })
+            response.end(JSON.stringify({ error: code, message: 'Service Admin could not complete the source-admission request.' }))
+          }
+        } finally {
+          await originalClosed
+          await downstreamClosed
+          request.off('error', observeOriginalError)
+          sourceAdmissionSockets.delete(request.socket)
+          if (ownsCapacity) {
+            sourceAdmissionActive = false
+            observeSourceLifetime('released', requestOrdinal, diagnosticRole)
+          }
+          if (sourceAdmissionLifecycleDiagnostics) { diagnosticHandlers--; retireDiagnostics() }
+        }
+        return
+      }
       const tracksRotationLifecycle =
         rotationProxyLifecycleDiagnostics &&
         method === 'POST' &&
@@ -350,11 +862,51 @@ export function createServiceAdminServer(options = {}) {
           emitRotationProxyLifecycle('downstream_closed')
         })
       }
+      const ownsGenericBody = !['GET', 'HEAD'].includes(method)
+      let bodyLease
+      if (ownsGenericBody) {
+        const controller = new AbortController()
+        const budget = sourceAdmissionProxyPolicy(method, requestUrl.pathname)
+          ? 30_000 : runtimeApiTimeoutMs(method, requestUrl.pathname)
+        const originalClosed = new Promise((resolve) => request.once('close', resolve))
+        const responseClosed = new Promise((resolve) => response.once('close', resolve))
+        let socketCloseListener
+        const socketClosed = new Promise((resolve) => {
+          socketCloseListener = resolve
+          request.socket.once('close', socketCloseListener)
+        })
+        const observeError = () => {}
+        request.on('error', observeError)
+        const leased = genericBodyActive < 8
+        if (leased) genericBodyActive++
+        bodyLease = { controller, originalClosed, responseClosed, socketClosed, socketCloseListener, observeError, leased, closeSocket: false, bytes: null }
+        const disconnect = () => {
+          if (!response.writableFinished) controller.abort(new Error('generic_client_disconnected'))
+          if (!request.readableEnded) request.destroy()
+        }
+        response.once('close', disconnect)
+        bodyLease.disconnect = disconnect
+        const absoluteEnd = requestStartedAt + budget
+        bodyLease.absoluteEnd = absoluteEnd
+        bodyLease.timer = setInterval(() => {
+          if (performance.now() >= absoluteEnd) {
+            controller.abort(new Error('generic_request_timeout'))
+            if (response.headersSent) request.socket.destroy()
+          }
+        }, 25)
+        bodyLease.timer.unref()
+      }
       try {
+        if (bodyLease && !bodyLease.leased) throw new Error('generic_body_capacity')
         const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, runtimeApiBaseUrl)
         const body = ['GET', 'HEAD'].includes(method)
           ? undefined
-          : await readBoundedBody(request)
+          : await readBoundedBody(request, bodyLease.controller.signal, bodyLease)
+        if (bodyLease) bodyLease.bytes = body
+        if (bodyLease && (performance.now() >= bodyLease.absoluteEnd || bodyLease.controller.signal.aborted)) {
+          if (!bodyLease.controller.signal.aborted) bodyLease.controller.abort(new Error('generic_request_timeout'))
+          throw bodyLease.controller.signal.reason
+        }
         if (tracksRotationLifecycle) {
           emitRotationProxyLifecycle('upstream_started')
         }
@@ -363,12 +915,20 @@ export function createServiceAdminServer(options = {}) {
           headers: resolvePackagedProxyHeaders(request),
           body,
           redirect: 'manual',
-          signal: AbortSignal.timeout(runtimeApiTimeoutMs(method, requestUrl.pathname)),
+          signal: bodyLease?.controller.signal ?? AbortSignal.timeout(
+            sourceAdmissionProxyPolicy(method, requestUrl.pathname)
+              ? 30_000 // A query/alternate original target did not select this route.
+              : runtimeApiTimeoutMs(method, requestUrl.pathname)
+          ),
         })
         if (tracksRotationLifecycle) {
           emitRotationProxyLifecycle('headers_received', upstream.status)
         }
         const bytes = await readBoundedUpstream(upstream)
+        if (bodyLease && (performance.now() >= bodyLease.absoluteEnd || bodyLease.controller.signal.aborted)) {
+          if (!bodyLease.controller.signal.aborted) bodyLease.controller.abort(new Error('generic_request_timeout'))
+          throw bodyLease.controller.signal.reason
+        }
         if (tracksRotationLifecycle) {
           emitRotationProxyLifecycle('body_received', upstream.status)
         }
@@ -379,8 +939,10 @@ export function createServiceAdminServer(options = {}) {
         })
         response.end(method === 'HEAD' ? undefined : bytes)
       } catch (error) {
+        if (bodyLease) bodyLease.closeSocket = true
+        if (response.destroyed || response.headersSent) return
         if (error instanceof TrustedIngressProxyError) {
-          response.writeHead(403, securityHeaders('application/json; charset=utf-8'))
+          response.writeHead(403, { ...securityHeaders('application/json; charset=utf-8'), ...(bodyLease ? { Connection: 'close' } : {}) })
           response.end(JSON.stringify({
             error: 'trusted_ingress_identity_invalid',
             message: 'Service Admin rejected untrusted or incomplete ingress identity.',
@@ -389,16 +951,33 @@ export function createServiceAdminServer(options = {}) {
         }
         const statusCode = error instanceof Error && error.message === 'request_body_too_large'
           ? 413
+          : error instanceof Error && error.message === 'generic_body_capacity'
+            ? 503
           : 502
-        response.writeHead(statusCode, securityHeaders('application/json; charset=utf-8'))
+        response.writeHead(statusCode, { ...securityHeaders('application/json; charset=utf-8'), ...(bodyLease ? { Connection: 'close' } : {}) })
         response.end(JSON.stringify({
           error: statusCode === 413
             ? 'service_admin_request_too_large'
+            : statusCode === 503 ? 'service_admin_generic_body_busy'
             : 'service_lasso_runtime_api_unreachable',
           message: statusCode === 413
             ? 'The Service Admin request exceeded the proxy limit.'
+            : statusCode === 503 ? 'Service Admin request capacity is occupied.'
             : 'Service Admin could not reach the local Service Lasso runtime.',
         }))
+      } finally {
+        if (bodyLease) {
+          // A413 does not relinquish original unread input or socket ownership.
+          await bodyLease.originalClosed
+          await bodyLease.responseClosed
+          if (bodyLease.closeSocket) await bodyLease.socketClosed
+          clearInterval(bodyLease.timer)
+          response.off('close', bodyLease.disconnect)
+          request.socket.off('close', bodyLease.socketCloseListener)
+          request.off('error', bodyLease.observeError)
+          bodyLease.bytes = null
+          if (bodyLease.leased) genericBodyActive--
+        }
       }
       return
     }
@@ -419,6 +998,24 @@ export function createServiceAdminServer(options = {}) {
     if (method === 'HEAD') response.end()
     else fs.createReadStream(filePath).pipe(response)
   })
+  // Retirement follows native server close AND all selected async finally owners.
+  // Pending callback-owned diagnostic buffers are retained until actual IO completion.
+  server.sourceAdmissionDiagnosticsRetired = sourceAdmissionLifecycleDiagnostics ? diagnosticRetirement : Promise.resolve()
+  server.once('close', () => { diagnosticClosing = true; retireDiagnostics() })
+  server.on('clientError', (error, socket) => {
+    if (sourceAdmissionSockets.has(socket)) {
+      // The original parser found ambiguous/surplus bytes. Close before the
+      // EOF settlement turn can forward an otherwise complete first message.
+      socket.destroy()
+      return
+    }
+    // Preserve Node's normal empty parser-error responses for other routes.
+    if (error.code === 'ECONNRESET' || !socket.writable) return
+    socket.end(error.code === 'HPE_HEADER_OVERFLOW'
+      ? 'HTTP/1.1 431 Request Header Fields Too Large\r\nConnection: close\r\n\r\n'
+      : 'HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n')
+  })
+  return server
 }
 
 export async function startServiceAdminServer(options = {}) {
@@ -436,12 +1033,17 @@ export async function startServiceAdminServer(options = {}) {
   if (!runtimeApiBaseUrl) {
     throw new Error('Service Lasso runtime API is not configured.')
   }
+  const sourceAdmissionLifecycleDiagnostics = options.sourceAdmissionLifecycleDiagnostics ?? process.env.SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME === '1'
+  const sourceAdmissionFixtureSender = sourceAdmissionLifecycleDiagnostics && process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT
+    ? await loadSourceAdmissionFixtureSender() : undefined
   const server = createServiceAdminServer({
     distDir: options.distDir,
     runtimeApiBaseUrl,
     rotationProxyLifecycleDiagnostics:
       options.rotationProxyLifecycleDiagnostics ??
       process.env.SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE === '1',
+    sourceAdmissionLifecycleDiagnostics,
+    sourceAdmissionFixtureSender,
   })
   await new Promise((resolve, reject) => {
     server.once('error', reject)
