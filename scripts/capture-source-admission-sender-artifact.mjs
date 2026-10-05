@@ -73,8 +73,17 @@ for (const stage of stages) {
     }
     if (retirement.destinations.length !== 2 || retirement.destinations.some((row) => !row.closed)) fail()
     for (const facts of result.outputs) {
-      if (!facts.eof || !facts.readbackClosed || facts.failed) fail()
+      if (!facts.eof || !facts.readbackClosed || facts.failed ||
+          facts.terminal !== true || facts.writePending !== false ||
+          facts.retainedChunks !== 0 || facts.retainedBytes !== 0 ||
+          facts.observedBytes !== facts.bytes) fail()
       observe(facts.path, { size: facts.bytes, sha256: facts.sha256 })
+    }
+    for (const role of ['stdoutCopy', 'stderrCopy']) {
+      const facts = retirement[role]
+      if (!facts?.eof || facts.failed || facts.terminal !== true ||
+          facts.writePending !== false || facts.retainedChunks !== 0 ||
+          facts.retainedBytes !== 0 || facts.observedBytes !== facts.bytes) fail()
     }
   }
 }

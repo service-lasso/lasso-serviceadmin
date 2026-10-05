@@ -38,55 +38,105 @@ export function observeOriginalClose(handle, facts) {
   return handle
 }
 
-function ownCopy(reader, fd, facts, owner) {
-  let pending = null
+export function ownCopy(reader, fd, facts, owner, writeOriginal = fs.write) {
+  const queue = []
+  const originalResume = reader.resume
+  let resumeArguments = null
+  let active = false
+  let writeFailed = false
+  let observed = 0
   let written = 0
   const digest = crypto.createHash('sha256')
   facts.end = false
   facts.readerClosed = false
   facts.failed = false
   facts.done = false
-  reader.on('error', () => { facts.failed = true; owner.failed = true })
-  reader.on('close', () => { facts.readerClosed = true })
-  reader.on('end', () => {
-    facts.end = true
-    if (!pending) facts.done = true
-  })
-  reader.on('data', (bytes) => {
-    if (!Buffer.isBuffer(bytes) || pending || facts.failed) {
-      facts.failed = true; owner.failed = true; reader.pause(); return
+  facts.deferredResumes = 0
+  facts.observedChunks = 0
+  const stop = () => {
+    facts.failed = true
+    owner.failed = true
+    reader.destroy()
+  }
+  // Node's own flushStdio calls this same instance method after child exit.
+  // Defer flow, not native retirement, until the original write has completed.
+  reader.resume = function (...args) {
+    if (this !== reader) { stop(); return this }
+    if (active || queue.length || writeFailed) {
+      facts.deferredResumes++
+      resumeArguments = args
+      return reader
     }
-    reader.pause()
-    if (written + bytes.length > 134217728) {
-      pending = { bytes, offset: 0 }
-      facts.failed = true; owner.failed = true; return
-    }
-    pending = { bytes, offset: 0 }
-    const write = () => {
-      const original = pending
-      fs.write(fd, original.bytes, original.offset,
+    return Reflect.apply(originalResume, reader, args)
+  }
+  const finish = () => {
+    facts.done = facts.end && !active && !queue.length && !facts.failed
+    if (facts.done) reader.resume = originalResume
+  }
+  const pump = () => {
+    if (active || writeFailed || !queue.length) { finish(); return }
+    const original = queue[0]
+    active = true
+    try {
+      writeOriginal(fd, original.bytes, original.offset,
         original.bytes.length - original.offset, null, (error, count) => {
+          active = false
           if (error || !Number.isSafeInteger(count) || count <= 0 ||
               count > original.bytes.length - original.offset) {
-            facts.failed = true; owner.failed = true
-            // Retain the exact original buffer after unsuccessful completion.
+            writeFailed = true
+            stop()
+            // Actual failed completion is distinct from a missing callback.
+            // Keep this original Buffer and every later original queued chunk.
             return
           }
           digest.update(original.bytes.subarray(original.offset, original.offset + count))
           original.offset += count
           written += count
-          if (original.offset < original.bytes.length) { write(); return }
-          pending = null
-          if (facts.end) facts.done = true
-          if (!facts.failed) reader.resume()
+          if (original.offset === original.bytes.length) queue.shift()
+          pump()
+          if (!active && !queue.length && !facts.readerClosed && !facts.end && !facts.failed) {
+            const args = resumeArguments ?? []
+            resumeArguments = null
+            Reflect.apply(originalResume, reader, args)
+          }
         })
+    } catch {
+      // A thrown launch cannot establish whether the original operation began.
+      // Keep active and all original buffers; no failed-complete receipt.
+      facts.writeUnknown = true
+      writeFailed = true
+      stop()
     }
-    write()
+  }
+  reader.on('error', () => { facts.failed = true; owner.failed = true })
+  reader.on('close', () => {
+    facts.readerClosed = true
+    if (!facts.end) { facts.failed = true; owner.failed = true }
+    finish()
+  })
+  reader.on('end', () => {
+    facts.end = true
+    finish()
+  })
+  reader.on('data', (bytes) => {
+    if (!Buffer.isBuffer(bytes)) { stop(); return }
+    if (!bytes.length) return
+    reader.pause()
+    queue.push({ bytes, offset: 0 })
+    facts.observedChunks++
+    observed += bytes.length
+    if (observed > 134217728) { writeFailed = true; stop(); return }
+    pump()
   })
   return {
-    get pending() { return pending },
+    get pending() { return queue[0] ?? null },
+    get retained() { return queue.map((entry) => entry.bytes) },
     snapshot() {
       return { ...facts, eof: facts.end && facts.done && !facts.failed,
+        terminal: facts.readerClosed && !active,
+        writePending: active, retainedChunks: queue.length,
+        retainedBytes: queue.reduce((sum, entry) => sum + entry.bytes.length, 0),
+        observedBytes: observed,
         bytes: written, sha256: digest.copy().digest('hex') }
     },
   }
@@ -157,8 +207,8 @@ export async function runOriginalStage(stage, recipe, output, start, rootSHA256)
     // No PID/tree signal, destroyed flag, 'close' aggregate or GC supplies completion.
     while (!(exited && owner.process.nativeCallback && owner.stdoutPipe.nativeCallback &&
         owner.stderrPipe.nativeCallback && owner.stdoutReader.readerClosed &&
-        owner.stderrReader.readerClosed && owner.outCopy.snapshot().eof &&
-        owner.errCopy.snapshot().eof)) {
+        owner.stderrReader.readerClosed && owner.outCopy.snapshot().terminal &&
+        owner.errCopy.snapshot().terminal)) {
       await new Promise((resolve) => setTimeout(resolve, 25))
     }
     if (elapsed() >= 120000) owner.failed = true
@@ -177,7 +227,8 @@ export async function runOriginalStage(stage, recipe, output, start, rootSHA256)
       kernelStartUTC: null, kernelEndUTC: null, kernelCustody: 'UNKNOWN',
       spawned, exitCode: code, exitSignal: signal, outputs, process: owner.process,
       stdoutPipe: owner.stdoutPipe, stderrPipe: owner.stderrPipe,
-      failed: owner.failed || !spawned || code !== 0 || signal !== null,
+      failed: owner.failed || !spawned || code !== 0 || signal !== null ||
+        outputs.some((copy) => !copy.eof),
       elapsedMs: elapsed(), sourceRootSHA256: rootSHA256,
       nativeAcceptance: false, descendantClosureProven: false }
     await callback((done) => fs.writeFile(`${output}/${stage}.RESULT.json`,
@@ -186,13 +237,15 @@ export async function runOriginalStage(stage, recipe, output, start, rootSHA256)
       await callback((done) => fs.close(original.fd, done))
       original.closed = true
     }
-    const retirementFailed = ['process', 'stdoutPipe', 'stderrPipe'].some((role) =>
+    const retirementFailed = outputs.some((copy) => !copy.eof || copy.failed ||
+      copy.retainedChunks !== 0) || ['process', 'stdoutPipe', 'stderrPipe'].some((role) =>
       owner[role].requestFailed || owner[role].callbackFailed)
     await callback((done) => fs.writeFile(`${output}/${stage}.RETIREMENT.json`,
       JSON.stringify({ schema: 'sa-sender-linux-build-retirement.v1', stage,
         originalPID: owner.originalPID, process: owner.process,
         stdoutPipe: owner.stdoutPipe, stderrPipe: owner.stderrPipe,
         stdoutReader: owner.stdoutReader, stderrReader: owner.stderrReader,
+        stdoutCopy: owner.outCopy.snapshot(), stderrCopy: owner.errCopy.snapshot(),
         destinations: owner.destinations, failed: retirementFailed, nativeAcceptance: false }),
       { flag: 'wx', mode: 0o600 }, done))
     if (retirementFailed) await new Promise(() => {})

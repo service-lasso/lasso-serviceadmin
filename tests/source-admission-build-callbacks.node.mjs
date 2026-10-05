@@ -1,6 +1,9 @@
-// Prospective ownership regressions only; native callbacks below are test doubles.
-// They never qualify an actual process, pipe, compiler, image or socket.
+// Prospective ownership regressions: real IO and explicitly labelled adapters.
+// They never qualify a compiler, image or protected paused native fixture.
 import assert from 'node:assert/strict'
+import { ChildProcess } from 'node:child_process'
+import crypto from 'node:crypto'
+import fs from 'node:fs'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,7 +12,146 @@ import {
   prepareReceiverEvidenceDirectory,
   receiverEvidenceDestinations,
 } from '../scripts/source-admission-fixture-destinations.mjs'
-import { observeOriginalClose } from '../scripts/source-admission-linux-owned-process.mjs'
+import {
+  observeOriginalClose,
+  ownCopy,
+} from '../scripts/source-admission-linux-owned-process.mjs'
+
+// Prospective original IO with deliberately delayed callback delivery. The
+// adapter is a source ordering test, never native compiler/image qualification.
+test(
+  'child exit flush retains multi-chunk original bytes through delayed partial writes',
+  { timeout: 10000 },
+  async () => {
+    assert.equal(process.versions.node, '22.23.2')
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'sa-exit-flush-'))
+    const output = path.join(parent, 'stdout.raw')
+    const fd = fs.openSync(output, 'wx', 0o600)
+    const owner = { failed: false }
+    const facts = {}
+    const processFacts = {}
+    const pipeFacts = {}
+    const child = new ChildProcess()
+    const originalProcess = observeOriginalClose(child._handle, processFacts)
+    let exit = null
+    child.on('error', () => {
+      owner.failed = true
+    })
+    child.on('exit', (code, signal) => {
+      exit = { code, signal }
+    })
+    const script =
+      'const fs=require("node:fs");for(let i=0;i<32;i++)fs.writeSync(1,Buffer.alloc(4096,i))'
+    child.spawn({
+      file: process.execPath,
+      args: [process.execPath, '-e', script],
+      envPairs: [],
+      stdio: ['ignore', 'pipe', 'ignore'],
+      detached: false,
+    })
+    const originalPipe = observeOriginalClose(child.stdout._handle, pipeFacts)
+    let writes = 0
+    const copy = ownCopy(
+      child.stdout,
+      fd,
+      facts,
+      owner,
+      (originalFD, bytes, offset, length, position, done) => {
+        writes++
+        fs.write(
+          originalFD,
+          bytes,
+          offset,
+          Math.min(length, 4096),
+          position,
+          (error, count) => setTimeout(() => done(error, count), 40)
+        )
+      }
+    )
+    while (
+      !(
+        exit &&
+        processFacts.nativeCallback &&
+        pipeFacts.nativeCallback &&
+        copy.snapshot().terminal
+      )
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  const observed = copy.snapshot()
+  assert.deepEqual(exit, { code: 0, signal: null })
+  assert.equal(owner.failed, false)
+  assert.equal(observed.eof, true)
+  assert.equal(observed.writePending, false)
+  assert.equal(observed.retainedChunks, 0)
+  assert.ok(observed.observedChunks > 1)
+  assert.ok(observed.deferredResumes > 0)
+  assert.ok(writes > observed.observedChunks)
+  const expected = Buffer.concat(
+    Array.from({ length: 32 }, (_, i) => Buffer.alloc(4096, i))
+  )
+  assert.equal(observed.observedBytes, expected.length)
+  assert.equal(observed.bytes, expected.length)
+  assert.equal(
+    observed.sha256,
+    crypto.createHash('sha256').update(expected).digest('hex')
+  )
+  fs.fsyncSync(fd)
+  fs.closeSync(fd)
+  assert.deepEqual(await readFile(output), expected)
+  assert.ok(originalProcess && originalPipe)
+  // Keep original output. This is not the protected paused native fixture PASS.
+  }
+)
+
+test(
+  'real destination failure retains original buffers without inventing EOF',
+  { timeout: 10000 },
+  async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'sa-write-error-'))
+    const input = path.join(parent, 'input.raw')
+    const bytes = Buffer.from([0, 160, 255, 10])
+    await writeFile(input, bytes, { flag: 'wx' })
+    const readOnly = fs.openSync(input, 'r')
+    const reader = fs.createReadStream(input, { highWaterMark: 2 })
+    const owner = { failed: false }
+    const copy = ownCopy(reader, readOnly, {}, owner)
+    while (!copy.snapshot().terminal)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(owner.failed, true)
+    assert.equal(copy.snapshot().failed, true)
+    assert.equal(copy.snapshot().eof, false)
+    assert.equal(copy.snapshot().writePending, false)
+    assert.equal(copy.snapshot().bytes, 0)
+    assert.ok(copy.retained.length > 0)
+    assert.deepEqual(copy.retained[0], bytes.subarray(0, 2))
+    fs.closeSync(readOnly)
+    assert.deepEqual(await readFile(input), bytes)
+  }
+)
+
+test(
+  'real original read failure remains failed terminal evidence',
+  { timeout: 10000 },
+  async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'sa-read-error-'))
+    const output = path.join(parent, 'stdout.raw')
+    const fd = fs.openSync(output, 'wx', 0o600)
+    const reader = fs.createReadStream(path.join(parent, 'absent-original'))
+    const owner = { failed: false }
+    const copy = ownCopy(reader, fd, {}, owner)
+    while (!copy.snapshot().terminal)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(owner.failed, true)
+    assert.equal(copy.snapshot().failed, true)
+    assert.equal(copy.snapshot().end, false)
+    assert.equal(copy.snapshot().eof, false)
+    assert.equal(copy.snapshot().writePending, false)
+    assert.equal(copy.snapshot().retainedChunks, 0)
+    fs.closeSync(fd)
+    assert.equal((await readFile(output)).length, 0)
+  }
+)
 
 // Prospective real filesystem ownership, not native receiver acceptance.
 test('distinct receiver destinations retain first output', async () => {
