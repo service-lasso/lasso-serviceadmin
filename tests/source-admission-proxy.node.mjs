@@ -14,100 +14,89 @@ import {
   verifyGenericBodyProxy,
   createSourceAdmissionLifetimeCollector,
 } from '../scripts/source-admission-proxy-fixtures.mjs'
-import {
-  decodeReceiverLine,
-} from '../scripts/source-admission-receiver-fixture.mjs'
+import { decodeReceiverLine } from '../scripts/source-admission-receiver-fixture.mjs'
 
-test(
-  'native receiver codec rejects fabricated terminal and malformed observations',
-  () => {
-    const ready = {
-      schema: 'sa-recv-window.v1',
-      phase: 'ready',
-      requested: 4096,
-      before: 4096,
-      after: 8192,
-      status: 200,
-      headerBytes: 128,
-      bodyBytes: 0,
-      requestBytes: 250,
-    }
-    const closed = {
-      schema: 'sa-recv-window.v1',
-      phase: 'closed',
-      socketClose: true,
-    }
-    assert.deepEqual(decodeReceiverLine(JSON.stringify(ready), false), ready)
-    assert.deepEqual(decodeReceiverLine(JSON.stringify(closed), true), closed)
-    for (const [row, seen] of [
-      [closed, false],
-      [ready, true],
-      [{ ...ready, bodyBytes: 1 }, false],
-      [{ ...ready, before: 0 }, false],
-      [{ ...ready, after: 65537 }, false],
-      [{ ...closed, socketClose: false }, true],
-      [{ ...closed, extra: true }, true],
-      [
-        { schema: 'sa-recv-window.v1', phase: 'failed', code: 'unknown' },
-        false,
-      ],
-    ]) {
-      assert.throws(() => decodeReceiverLine(JSON.stringify(row), seen), {
-        code: 'FIXTURE_RECEIVER_NATIVE',
-      })
-    }
-    assert.throws(
-      () =>
-        decodeReceiverLine(
-          '{"schema":"sa-recv-window.v1","phase":"closed","socketClose":false,"socketClose":true}',
-          true
-        ),
-      { code: 'FIXTURE_RECEIVER_NATIVE' }
-    )
+test('native receiver codec rejects fabricated terminal and malformed observations', () => {
+  const ready = {
+    schema: 'sa-recv-window.v1',
+    phase: 'ready',
+    requested: 4096,
+    before: 4096,
+    after: 8192,
+    status: 200,
+    headerBytes: 128,
+    bodyBytes: 0,
+    requestBytes: 250,
   }
-)
+  const closed = {
+    schema: 'sa-recv-window.v1',
+    phase: 'closed',
+    socketClose: true,
+  }
+  assert.deepEqual(decodeReceiverLine(JSON.stringify(ready), false), ready)
+  assert.deepEqual(decodeReceiverLine(JSON.stringify(closed), true), closed)
+  for (const [row, seen] of [
+    [closed, false],
+    [ready, true],
+    [{ ...ready, bodyBytes: 1 }, false],
+    [{ ...ready, before: 0 }, false],
+    [{ ...ready, after: 65537 }, false],
+    [{ ...closed, socketClose: false }, true],
+    [{ ...closed, extra: true }, true],
+    [{ schema: 'sa-recv-window.v1', phase: 'failed', code: 'unknown' }, false],
+  ]) {
+    assert.throws(() => decodeReceiverLine(JSON.stringify(row), seen), {
+      code: 'FIXTURE_RECEIVER_NATIVE',
+    })
+  }
+  assert.throws(
+    () =>
+      decodeReceiverLine(
+        '{"schema":"sa-recv-window.v1","phase":"closed","socketClose":false,"socketClose":true}',
+        true
+      ),
+    { code: 'FIXTURE_RECEIVER_NATIVE' }
+  )
+})
 
-test(
-  'sender observations require the original live owned ordinal and exact native readback',
-  () => {
-    const decision = {
-      schema: 'sa-lifetime.v1',
-      seq: 1,
-      request: 1,
-      role: 'one',
-      phase: 'acquired',
-    }
-    const sender = {
-      schema: 'sa-sender.v1',
-      request: 1,
-      platform: 'win32',
-      requested: 0,
-      before: 65536,
-      after: 0,
-    }
-    const line = (row) => `${JSON.stringify(row)}\n`
-    for (const rows of [
-      [sender],
-      [decision, { ...sender, after: 1 }],
-      [decision, sender, sender],
-      [decision, { ...sender, request: 2 }],
-      [decision, { ...sender, extra: true }],
-      [decision, { ...decision, seq: 2, phase: 'socket_closed' }, sender],
-    ]) {
-      const lifetime = createSourceAdmissionLifetimeCollector()
-      for (const row of rows) lifetime.feed(line(row))
-      assert.throws(lifetime.snapshot, { code: 'FIXTURE_LIFETIME_PROTOCOL' })
-    }
+test('sender observations require the original live owned ordinal and exact native readback', () => {
+  const decision = {
+    schema: 'sa-lifetime.v1',
+    seq: 1,
+    request: 1,
+    role: 'one',
+    phase: 'acquired',
+  }
+  const sender = {
+    schema: 'sa-sender.v1',
+    request: 1,
+    platform: 'win32',
+    requested: 0,
+    before: 65536,
+    after: 0,
+  }
+  const line = (row) => `${JSON.stringify(row)}\n`
+  for (const rows of [
+    [sender],
+    [decision, { ...sender, after: 1 }],
+    [decision, sender, sender],
+    [decision, { ...sender, request: 2 }],
+    [decision, { ...sender, extra: true }],
+    [decision, { ...decision, seq: 2, phase: 'socket_closed' }, sender],
+  ]) {
     const lifetime = createSourceAdmissionLifetimeCollector()
-    lifetime.feed(line(decision))
-    lifetime.feed(line(sender))
-    assert.equal(
-      lifetime.snapshot().length,
-      1,
-      'setup observation cannot invent a lease/close event'
-    )
+    for (const row of rows) lifetime.feed(line(row))
+    assert.throws(lifetime.snapshot, { code: 'FIXTURE_LIFETIME_PROTOCOL' })
   }
-)
+  const lifetime = createSourceAdmissionLifetimeCollector()
+  lifetime.feed(line(decision))
+  lifetime.feed(line(sender))
+  assert.equal(
+    lifetime.snapshot().length,
+    1,
+    'setup observation cannot invent a lease/close event'
+  )
+})
 
 test(
   'source sender callback failure cannot forward and disabled observer cannot configure',
@@ -140,8 +129,7 @@ test(
             {
               hostname: '127.0.0.1',
               port: proxy.address().port,
-              path:
-                `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/content`,
+              path: `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/content`,
               method: 'PUT',
               signal: context.signal,
               headers: {
@@ -260,8 +248,7 @@ test(
 )
 
 test('selected budgets never widen generic route or method defaults', () => {
-  const target =
-    `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/content`
+  const target = `/api/service-source-admission/stages/sas_${'a'.repeat(32)}/content`
   assert.equal(runtimeApiTimeoutMs('PUT', target), 40_000)
   assert.equal(
     runtimeApiTimeoutMs('POST', '/api/service-source-admission/preflights'),
