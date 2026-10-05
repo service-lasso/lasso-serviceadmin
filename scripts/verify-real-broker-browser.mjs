@@ -1,4 +1,5 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
+import { closeSuccessfulCoreRunner, hasAcceptedDirectOwnerClosure } from './direct-owner-terminal-acceptance.mjs'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -625,10 +626,12 @@ function retainOwnedProcess(role, child, sourceSha256) {
     sourceSha256,
     birth: born && parentPid === process.pid ? 'observed' : 'unverified',
     close: 'pending',
+    error: null,
     exitCode: 'unavailable',
     signal: 'unavailable',
   }
   custodyOwners.push(owner)
+  child.on('error', (error) => { owner.error ??= error })
   child.once('close', (exitCode, signal) => {
     owner.close = 'observed'
     owner.exitCode = Number.isInteger(exitCode) && exitCode >= 0 ? exitCode : null
@@ -781,6 +784,7 @@ const providerUiConvergenceEvents = []
 const rotationRehydrationEvents = []
 const lockedWrapperUiEvents = []
 const trustedUnlockDiagnostics = []
+let cypressExit
 let runFailure
 let auditEventCount = 0
 let rollbackProcessVerified = false
@@ -857,7 +861,7 @@ try {
   )
   captureCypressRunSummary(cypress, cypressRunSummaryEvents)
   captureCypressChildProvenance(cypress, cypressChildEvents)
-  let cypressExit
+  // cypressExit is retained outside the try for role-specific closure acceptance.
   // Start at the existing output-close wait, retaining its original allowance.
   const cypressCloseDeadline = performance.now() + cypressQualificationTimeoutMs
   try {
@@ -945,13 +949,10 @@ try {
     })
     process.stderr.write(`${JSON.stringify(finalQualificationFailureDiagnostic)}\n`)
   }
-  if (runner.exitCode === null) {
-    runner.send({ type: 'service-lasso-real-admin-shutdown' })
-    try {
-      await waitForCapturedChildClose(runner, 180_000)
-    } catch {
-      runFailure ??= new Error('Owned Core browser runner did not close after shutdown.')
-    }
+  try {
+    await closeSuccessfulCoreRunner(runner, coreRunnerOwner)
+  } catch (error) {
+    runFailure ??= error
   }
   if (runtimeInputs) {
     try {
@@ -977,17 +978,13 @@ const closureVerified =
   runFailure === undefined &&
   cypressOutput?.exceeded !== true &&
   nestedClosureVerified &&
-  custodyOwners.length === 2 &&
-  custodyOwners.every(
-    (owner) =>
-      owner.birth === 'observed' &&
-      owner.parentPid === process.pid &&
-      owner.close === 'observed' &&
-      Number.isInteger(owner.exitCode) &&
-      owner.exitCode >= 0 &&
-      owner.signal === null &&
-      /^[a-f0-9]{64}$/.test(owner.sourceSha256)
-  )
+  hasAcceptedDirectOwnerClosure(custodyOwners, {
+    parentPid: process.pid,
+    controlledNegative: trustedUnlockRealProviderControl,
+    controlledProviderFaultVerified,
+    failureDiagnostic: finalQualificationFailureDiagnostic,
+    cypressExit,
+  })
 const publicOwnerSummary = [
   ...custodyOwners.map(({ role, birth, close, exitCode, signal }) => ({
     role,
@@ -1021,7 +1018,7 @@ await writeQualificationCustody(custodyReceiptPath, {
     ? controlledObserved
       ? 'controlled_failure_observed'
       : 'controlled_failure_unverified'
-    : cypressSucceeded
+    : cypressSucceeded && closureVerified
       ? 'positive_verified'
       : 'positive_unverified',
   causal: trustedUnlockRealProviderControl
