@@ -24,10 +24,16 @@ const actualCaller = verifier.slice(start, end)
 async function caller(runner, coreRunnerOwner, primary) {
   let receiptReads = 0
   const sandbox = vm.createContext({ runner, coreRunnerOwner, closeSuccessfulCoreRunner,
-    runFailure: primary, runtimeInputs: {}, coreSource: {},
+    runFailure: primary, runFailurePresent: primary !== undefined, runtimeInputs: {}, coreSource: {},
     verifyClosureReceipt: async () => { receiptReads += 1 } })
+  sandbox.retainRunFailure = (error) => {
+    if (!sandbox.runFailurePresent) {
+      sandbox.runFailure = error
+      sandbox.runFailurePresent = true
+    }
+  }
   await vm.runInContext(`(async () => { ${actualCaller} })()`, sandbox)
-  return { failure: sandbox.runFailure, receiptReads }
+  return { failure: sandbox.runFailure, failurePresent: sandbox.runFailurePresent, receiptReads }
 }
 for (const [label, runner, retained] of [
   ['closed original plus copy retirement failure', child(1), owner('core_runner', 1)],
@@ -62,7 +68,7 @@ test('controlled Cypress nonzero is accepted only in its exact verified case', (
   assert.equal(hasAcceptedDirectOwnerClosure([owner('cypress', 1), owner('cypress', 1)], controlled), false)
 })
 test('actual verifier connects role acceptance to final custody, preserving gates', () => {
-  assert.match(verifier, /const closureVerified =\s*runFailure === undefined &&\s*cypressOutput\?\.exceeded !== true &&\s*nestedClosureVerified &&\s*hasAcceptedDirectOwnerClosure/)
+  assert.match(verifier, /const closureVerified =\s*!runFailurePresent &&\s*cypressOutput\?\.exceeded !== true &&\s*nestedClosureVerified &&\s*hasAcceptedDirectOwnerClosure/)
   assert.match(verifier, /child\.on\('error', \(error\) => \{ owner\.error \?\?= error \}\)/)
   assert.match(verifier, /controlledProviderFaultVerified &&\s*closureVerified/)
 })
@@ -78,7 +84,7 @@ async function finalSink(runner, retained, controlledNegative) {
   const cypressExit = controlledNegative ? 1 : 0
   let custody
   const sandbox = vm.createContext({
-    runFailure: completed.failure, cypressOutput: { exceeded: false },
+    runFailure: completed.failure, runFailurePresent: completed.failurePresent, cypressOutput: { exceeded: false },
     nestedClosureVerified: true, nestedOwners: [],
     custodyOwners: [retained, owner('cypress', cypressExit)],
     process: { pid: 100 }, hasAcceptedDirectOwnerClosure,
@@ -90,7 +96,10 @@ async function finalSink(runner, retained, controlledNegative) {
     initialCustodyHash: 'fixture', sourceHashes: {},
     writeQualificationCustody: async (_path, receipt) => { custody = receipt },
   })
-  await vm.runInContext(`(async () => { ${actualSink} })()`, sandbox)
+  await vm.runInContext(`(async () => { ${actualSink} })()`, sandbox).catch((error) => {
+    assert.equal(completed.failurePresent, true)
+    assert.equal(error, completed.failure)
+  })
   return custody
 }
 for (const controlledNegative of [false, true]) {

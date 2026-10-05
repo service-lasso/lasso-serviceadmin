@@ -332,7 +332,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     /trustedUnlockRealProviderControlEnabled\(\)\s*\{\s*return\s*\(\s*String\(config\.env\.trustedUnlockRealProviderControlFailure\) === '1' \|\|\s*String\(config\.env\.realProviderControl\) === '1'\s*\)\s*\}/
   )
   assert.equal(
-    controlVerifierSource.includes("const providerControlNonce = randomBytes(32).toString('hex')"),
+    controlVerifierSource.includes(
+      "const providerControlNonce = randomBytes(32).toString('hex')"
+    ),
     true
   )
   assert.match(
@@ -340,7 +342,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     /trustedUnlockRealProviderControl\s*\? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=\$\{providerControlNonce\}`\s*: ''/
   )
   assert.equal(
-    controlVerifierSource.includes('SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce'),
+    controlVerifierSource.includes(
+      'SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce'
+    ),
     true
   )
   assert.match(
@@ -348,7 +352,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     /cy\.task\('trustedUnlockRealProviderControlEnabled'\)\.then\(\(enabled\) => \{\s*if \(!enabled\) return\s*cy\.env\(\['testControlUrl', 'providerControlNonce'\]\)/
   )
   assert.equal(
-    controlledProviderFaultSource.split("cy.env(['testControlUrl', 'providerControlNonce'])").length - 1,
+    controlledProviderFaultSource.split(
+      "cy.env(['testControlUrl', 'providerControlNonce'])"
+    ).length - 1,
     3
   )
   for (const proof of [
@@ -424,8 +430,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     4
   )
   assert.equal(
-    controlledProviderFaultSource.split('expect(status).to.equal(409)').length -
-      1,
+    controlledProviderFaultSource.split('expect(status).to.equal(409)').length - 1,
     1
   )
   assert.equal(
@@ -527,7 +532,9 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   }
   assert.equal([...coreCheckoutSource.matchAll(/^\s+ref:/gm)].length, 1)
   assert.equal(
-    browserWorkflowSource.includes('SERVICE_LASSO_TEST_CORE_QUALIFICATION_KIND=source_candidate'),
+    browserWorkflowSource.includes(
+      'SERVICE_LASSO_TEST_CORE_QUALIFICATION_KIND=source_candidate'
+    ),
     true
   )
   assert.equal(verifierSource.includes("cypress.kill('SIGKILL')"), false)

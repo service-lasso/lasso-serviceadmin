@@ -786,6 +786,23 @@ const lockedWrapperUiEvents = []
 const trustedUnlockDiagnostics = []
 let cypressExit
 let runFailure
+let runFailurePresent = false
+let finalCustodyWriteFailure
+let finalCustodyWriteFailurePresent = false
+let finalCustodyDiagnosticFailure
+let finalCustodyDiagnosticFailurePresent = false
+function retainFinalCustodyDiagnosticFailure(error) {
+  if (!finalCustodyDiagnosticFailurePresent) {
+    finalCustodyDiagnosticFailure = error
+    finalCustodyDiagnosticFailurePresent = true
+  }
+}
+function retainRunFailure(error) {
+  if (!runFailurePresent) {
+    runFailure = error
+    runFailurePresent = true
+  }
+}
 let auditEventCount = 0
 let rollbackProcessVerified = false
 let controlledProviderFaultVerified = false
@@ -900,17 +917,17 @@ try {
     auditEventCount = await verifyBrokerAudit(runtimeInputs)
   }
 } catch (error) {
-  runFailure ??= error
+  retainRunFailure(error)
 } finally {
   if (cypress?.exitCode === null) {
-    runFailure ??= new Error('Cypress did not close at its qualification deadline.')
+    retainRunFailure(new Error('Cypress did not close at its qualification deadline.'))
   }
   if (cypressOutput && !cypressOutputChecked) {
     try {
       cypressOutputChecked = true
       publishSafeChildOutput(cypressOutput)
     } catch (error) {
-      runFailure ??= error
+      retainRunFailure(error)
     }
   }
   if (runtimeInputs) {
@@ -921,13 +938,13 @@ try {
         { requireComplete: cypressSucceeded }
       )
     } catch (error) {
-      runFailure ??= error
+      retainRunFailure(error)
     }
   }
   if (stderrBytes > 1_048_576) {
-    runFailure ??= new Error(
+    retainRunFailure(new Error(
       'Real browser runtime diagnostic output exceeded its bound.'
-    )
+    ))
   }
   if (qualificationFailureKind && ready) {
     const adminReachability = await probeAdminReachability(
@@ -952,13 +969,13 @@ try {
   try {
     await closeSuccessfulCoreRunner(runner, coreRunnerOwner)
   } catch (error) {
-    runFailure ??= error
+    retainRunFailure(error)
   }
   if (runtimeInputs) {
     try {
       await verifyClosureReceipt(runtimeInputs, coreSource)
     } catch (error) {
-      runFailure ??= error
+      retainRunFailure(error)
     }
   }
 }
@@ -971,11 +988,11 @@ try {
     nestedExpectedSources
   )
 } catch (error) {
-  runFailure ??= error
+  retainRunFailure(error)
 }
 const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
 const closureVerified =
-  runFailure === undefined &&
+  !runFailurePresent &&
   cypressOutput?.exceeded !== true &&
   nestedClosureVerified &&
   hasAcceptedDirectOwnerClosure(custodyOwners, {
@@ -1010,45 +1027,66 @@ const controlledObserved =
   finalQualificationFailureDiagnostic.failure === 'nonzero_exit' &&
   controlledProviderFaultVerified &&
   closureVerified
-await writeQualificationCustody(custodyReceiptPath, {
-  schema: initialCustody.schema,
-  state: 'closed',
-  mode: trustedUnlockRealProviderControl ? 'controlled_negative' : 'positive',
-  outcome: trustedUnlockRealProviderControl
-    ? controlledObserved
-      ? 'controlled_failure_observed'
-      : 'controlled_failure_unverified'
-    : cypressSucceeded && closureVerified
-      ? 'positive_verified'
-      : 'positive_unverified',
-  causal: trustedUnlockRealProviderControl
-    ? controlledObserved
-      ? 'provider_validation_transport_failure'
-      : 'unverified'
-    : 'not_applicable',
-  runtimePathHashes: initialCustody.runtimePathHashes,
-  initialReceiptSha256: initialCustodyHash,
-  sourceHashes,
-  sourceBindings: [
-    { role: 'core_runner', owner: 'core_runner', sha256: sourceHashes.coreRunner },
-    { role: 'cypress_launcher', owner: 'cypress', sha256: sourceHashes.cypressLauncher },
-    { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
-    { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
-  ],
-  // PID, parent PID, nonce, executable identity, and the raw sidecar stay in
-  // the private runner.  The retained receipt exposes only typed completion.
-  owners: publicOwnerSummary,
-})
+try {
+  await writeQualificationCustody(custodyReceiptPath, {
+    schema: initialCustody.schema,
+    state: 'closed',
+    mode: trustedUnlockRealProviderControl ? 'controlled_negative' : 'positive',
+    outcome: trustedUnlockRealProviderControl
+      ? controlledObserved
+        ? 'controlled_failure_observed'
+        : 'controlled_failure_unverified'
+      : cypressSucceeded && closureVerified
+        ? 'positive_verified'
+        : 'positive_unverified',
+    causal: trustedUnlockRealProviderControl
+      ? controlledObserved
+        ? 'provider_validation_transport_failure'
+        : 'unverified'
+      : 'not_applicable',
+    runtimePathHashes: initialCustody.runtimePathHashes,
+    initialReceiptSha256: initialCustodyHash,
+    sourceHashes,
+    sourceBindings: [
+      { role: 'core_runner', owner: 'core_runner', sha256: sourceHashes.coreRunner },
+      { role: 'cypress_launcher', owner: 'cypress', sha256: sourceHashes.cypressLauncher },
+      { role: 'broker_binary', owner: 'core_runner', sha256: sourceHashes.brokerBinary },
+      { role: 'admin_runtime', owner: 'core_runner', sha256: sourceHashes.adminRuntime },
+    ],
+    // PID, parent PID, nonce, executable identity, and the raw sidecar stay in
+    // the private runner.  The retained receipt exposes only typed completion.
+    owners: publicOwnerSummary,
+  })
+} catch (error) {
+  // Retain both exact values privately, without inspecting or mutating them.
+  finalCustodyWriteFailure = error
+  finalCustodyWriteFailurePresent = true
+  retainRunFailure(error)
+  try {
+    // Delivery depends on the existing captured stderr channel. No private
+    // payload, arbitrary getters, coercion, paths or error text enter this record.
+    // Own asynchronous stream errors too, without awaiting a fresh clock.
+    process.stderr.on('error', retainFinalCustodyDiagnosticFailure)
+    process.stderr.write(
+      '{"schema":"service-lasso.final-custody-write-failure.v1","state":"unverified"}\n',
+      (error) => {
+        if (error) retainFinalCustodyDiagnosticFailure(error)
+      }
+    )
+  } catch (diagnosticError) {
+    retainFinalCustodyDiagnosticFailure(diagnosticError)
+  }
+}
+
+if (runFailurePresent) throw runFailure
 
 if (trustedUnlockRealProviderControl) {
   if (!controlledObserved) {
-    throw runFailure ?? new Error(
+    throw new Error(
       'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
     )
   }
 }
-
-if (runFailure) throw runFailure
 
 function cypressEnvironment() {
   const environment = { ...process.env }
