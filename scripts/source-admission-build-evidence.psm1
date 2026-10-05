@@ -17,7 +17,12 @@ function Get-SourceAdmissionOutputFacts([IO.FileStream]$stream, [string]$path, $
     $facts.sha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($reader)).ToLowerInvariant()
     if ($reader.Position -ne $facts.bytes -or $stream.Length -ne $facts.bytes) { throw 'OriginalOutputLengthMismatch' }
   } catch { $facts.errorClass='OutputObservationFailure'; $facts.sha256=$null }
-  finally { if ($null -ne $reader) { $reader.Dispose() } }
+  finally {
+    if ($null -ne $reader) {
+      try { $reader.Dispose() }
+      catch { while ($true) { [Threading.Thread]::Sleep(25) } } # Retain original reader on unknown retirement.
+    }
+  }
   return $facts
 }
 Export-ModuleMember -Function Get-SourceAdmissionCopyFacts,Get-SourceAdmissionOutputFacts
