@@ -101,6 +101,7 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
   try { [IO.File]::WriteAllText("$output/$stage.RETIREMENT.json",($retirement|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false)) }
   catch { while ($true) { [Threading.Thread]::Sleep(25) } }
   if ($retirement.failed) { while ($true) { [Threading.Thread]::Sleep(25) } }
+  if ($clock.ElapsedMilliseconds -ge 120000) { throw 'FIXTURE_SENDER_BUILD_FAILED' }
   if ($exitCode -ne 0 -or $failure.Count -ne 0) { throw 'FIXTURE_SENDER_BUILD_FAILED' }
 }
 $compileArguments = @('/nologo','/c','/MT','/O2','/W4','/WX','/std:c17','/DNAPI_VERSION=2','/DNODE_GYP_MODULE_NAME=source_admission_sender',
@@ -112,4 +113,5 @@ foreach ($library in $root.libraryDirectories) { $linkArguments += "/LIBPATH:$li
 Invoke-OwnedImage 'linker' $root.linker $linkArguments
 $artifact = Get-Item -LiteralPath "$output/source-admission-sender.node"
 if ($artifact.Length -eq 0) { throw 'FIXTURE_SENDER_BUILD_FAILED' }
+if ($clock.ElapsedMilliseconds -ge 120000) { throw 'FIXTURE_SENDER_BUILD_FAILED' }
 # No artifact receipt, load, native acceptance, or execution authority is issued.
