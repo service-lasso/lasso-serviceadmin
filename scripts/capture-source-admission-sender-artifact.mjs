@@ -59,7 +59,8 @@ for (const stage of stages) {
   } else {
     if (result.failed || result.exitSignal !== null || result.outputs.length !== 2) fail()
     for (const role of ['process', 'stdoutPipe', 'stderrPipe']) {
-      if (!retirement[role]?.nativeCallback || retirement[role].callbackFailed) fail()
+      if (!retirement[role]?.nativeCallback || retirement[role].callbackFailed ||
+          retirement[role].requestFailed) fail()
     }
     for (const role of ['stdoutReader', 'stderrReader']) {
       if (!retirement[role]?.readerClosed || retirement[role].failed) fail()

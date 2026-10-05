@@ -18,7 +18,9 @@ test('original close observer preserves receiver, callback arguments and later r
   callback.call(handle, 7)
   assert.equal(facts.nativeCallback, true)
   assert.equal(originalCallback, 1)
-  assert.throws(() => handle.close(), /FIXTURE_SENDER_LINUX_OWNERSHIP/)
+  handle.close()
+  assert.equal(requests, 1)
+  assert.equal(facts.requestFailed, true)
 })
 
 test('callback failure remains failed observation rather than a fabricated clean retirement', () => {
@@ -37,7 +39,8 @@ test('missing and wrong-receiver originals do not produce native callback eviden
   const facts = {}
   const handle = { close() { throw new Error('must not call') } }
   observeOriginalClose(handle, facts)
-  assert.throws(() => handle.close.call({}), /FIXTURE_SENDER_LINUX_OWNERSHIP/)
+  handle.close.call({})
+  assert.equal(facts.requestFailed, true)
   assert.equal(facts.requested, false)
   assert.equal(facts.nativeCallback, false)
 })

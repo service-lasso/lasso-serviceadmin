@@ -18,20 +18,22 @@ export function observeOriginalClose(handle, facts) {
   facts.returned = false
   facts.nativeCallback = false
   handle.close = function (...args) {
-    if (this !== handle || facts.requested) throw failure()
+    if (this !== handle || facts.requested) { facts.requestFailed = true; return }
     facts.requested = true
     const supplied = args[0]
-    if (supplied !== undefined && typeof supplied !== 'function') throw failure()
+    if (supplied !== undefined && typeof supplied !== 'function') { facts.requestFailed = true; return }
     args[0] = function (...values) {
-      if (facts.nativeCallback) throw failure()
+      if (facts.nativeCallback) { facts.callbackFailed = true; return }
       facts.nativeCallback = true
       facts.callbackUTC = new Date().toISOString()
       try { if (supplied) Reflect.apply(supplied, this, values) }
       catch { facts.callbackFailed = true }
     }
-    const value = Reflect.apply(original, handle, args)
-    facts.returned = true
-    return value
+    try {
+      const value = Reflect.apply(original, handle, args)
+      facts.returned = true
+      return value
+    } catch { facts.requestFailed = true }
   }
   return handle
 }
@@ -117,8 +119,8 @@ export async function runOriginalStage(stage, recipe, output, start, rootSHA256)
   unresolved.add(owner)
   const elapsed = () => Number((process.hrtime.bigint() - start) / 1000000n)
   const holding = setInterval(() => {
-    if (elapsed() >= 120000 || owner.process.callbackFailed ||
-        owner.stdoutPipe.callbackFailed || owner.stderrPipe.callbackFailed) owner.failed = true
+    if (elapsed() >= 120000 || ['process', 'stdoutPipe', 'stderrPipe'].some((role) =>
+      owner[role].callbackFailed || owner[role].requestFailed)) owner.failed = true
   }, 25)
   try {
     for (const role of ['stdout', 'stderr']) {
