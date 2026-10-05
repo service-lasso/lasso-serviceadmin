@@ -80,7 +80,7 @@ for (const name of fs.readdirSync(output)) {
 const addon = path.join(output, 'source-admission-sender.node')
 if (!members.get(addon).size || !members.has(input.nativeSource) || !members.has(input.runtimeSource)) fail()
 const projection = { schema: 'sa-sender-artifact.v1', state: 'UNADMITTED_ACTUAL_OUTPUT_OBSERVATION',
-  platform: input.platform, nodeVersion: '22.23.2', addon,
+  platform: input.platform, nodeVersion: '22.23.2', nodeImage, addon,
   nativeSource: input.nativeSource, runtimeSource: input.runtimeSource,
   sourceRootSHA256: inputSHA, nativeAcceptance: false, members: [...members.values()] }
 const bytes = Buffer.from(JSON.stringify(projection))

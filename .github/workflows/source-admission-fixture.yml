@@ -54,6 +54,12 @@ jobs:
           if (![IO.Path]::IsPathFullyQualified($pair.root) -or $pair.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'FIXTURE_HANDOFF_INPUT' }
           "SERVICE_LASSO_FIXTURE_INPUT_ROOT=$($pair.root)" >> $env:GITHUB_ENV
           "SERVICE_LASSO_FIXTURE_INPUT_SHA256=$($pair.sha256)" >> $env:GITHUB_ENV
+          foreach ($field in @('receiverRoot','receiverSHA256','receiverEvidence')) {
+            if (!$pair.$field) { throw 'FIXTURE_HANDOFF_RECEIVER' }
+          }
+          "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT=$($pair.receiverRoot)" >> $env:GITHUB_ENV
+          "SERVICE_LASSO_TEST_RECEIVER_TOOL_ROOT_SHA256=$($pair.receiverSHA256)" >> $env:GITHUB_ENV
+          "SERVICE_LASSO_TEST_RECEIVER_EVIDENCE_DIR=$($pair.receiverEvidence)" >> $env:GITHUB_ENV
       - name: Build Windows original stages only
         if: inputs.phase == 'build' && matrix.platform == 'win32'
         shell: pwsh
@@ -61,7 +67,27 @@ jobs:
       - name: Build Linux original stages only inside independently admitted namespace
         if: inputs.phase == 'build' && matrix.platform == 'linux'
         shell: bash
-        run: node scripts/build-source-admission-sender-linux.mjs "$SERVICE_LASSO_FIXTURE_INPUT_ROOT" "$SERVICE_LASSO_FIXTURE_INPUT_SHA256"
+        run: /opt/service-lasso/admin683-linux-candidate/node-distribution/bin/node /opt/service-lasso/admin683-linux-candidate/caller/build-source-admission-sender-linux.mjs "$SERVICE_LASSO_FIXTURE_INPUT_ROOT" "$SERVICE_LASSO_FIXTURE_INPUT_SHA256"
+      - name: Observe genuine build outputs as UNADMITTED data only
+        if: inputs.phase == 'build'
+        shell: pwsh
+        env:
+          INPUT_PAIRS: ${{ inputs.input_pairs }}
+          INPUT_PLATFORM: ${{ matrix.platform }}
+        run: |
+          $pair = ($env:INPUT_PAIRS | ConvertFrom-Json).($env:INPUT_PLATFORM)
+          foreach ($field in @('output','nodeImage','observation')) {
+            if (![IO.Path]::IsPathFullyQualified($pair.$field)) { throw 'FIXTURE_HANDOFF_OBSERVATION' }
+          }
+          node scripts/capture-source-admission-sender-artifact.mjs $env:SERVICE_LASSO_FIXTURE_INPUT_ROOT $env:SERVICE_LASSO_FIXTURE_INPUT_SHA256 $pair.output $pair.nodeImage $pair.observation
+      - name: Install exact pnpm for separately admitted qualification
+        if: inputs.phase == 'qualification'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          version: 10.34.5
+      - name: Install frozen qualification dependencies
+        if: inputs.phase == 'qualification'
+        run: pnpm install --frozen-lockfile
       - name: Bind separately admitted runtime artifact; do not compile
         if: inputs.phase == 'qualification'
         shell: pwsh
@@ -73,7 +99,16 @@ jobs:
         run: node scripts/require-source-admission-fixture-input.mjs
       - name: Run unchanged complete original source fixture
         if: inputs.phase == 'qualification'
-        run: node --test tests/runtime-server.node.mjs tests/source-admission-proxy.node.mjs
+        run: pnpm test:runtime
+      - name: Build UI for original extracted-package fixture
+        if: inputs.phase == 'qualification'
+        run: pnpm build
+      - name: Package exact original platform
+        if: inputs.phase == 'qualification'
+        run: pnpm package:artifact -- ${{ matrix.platform }}
+      - name: Verify unchanged extracted-child fixture
+        if: inputs.phase == 'qualification'
+        run: pnpm package:verify -- ${{ matrix.platform }}
 
 # Input bytes must already exist at their original admitted paths on the runner.
 # No namespace installation, artifact fallback, compiler-to-load transition,

@@ -40,10 +40,15 @@ for (const row of originals.values()) {
   associations.push({ original: row, copy: actual })
 }
 // The actual consumer Node must be separately present with exactly original bytes.
-const node = originals.get(process.execPath)
-if (!node || process.version !== 'v22.23.2' || process.platform !== root.platform) fail()
+const originalNode = originals.get(root.nodeImage)
+const currentNode = fs.readFileSync(process.execPath)
+if (!originalNode || currentNode.length !== originalNode.size ||
+    sha(currentNode) !== originalNode.sha256 || process.version !== 'v22.23.2' ||
+    process.platform !== root.platform) fail()
+const node = { ...originalNode, path: process.execPath }
 const members = [...copied.values(), node]
 const projection = { ...root, state: 'NEW_UNADMITTED_MATERIALIZED_INPUT',
+  nodeImage: process.execPath,
   addon: copied.get(root.addon).path, nativeSource: copied.get(root.nativeSource).path,
   runtimeSource: copied.get(root.runtimeSource).path, members }
 const bytes = Buffer.from(JSON.stringify(projection))

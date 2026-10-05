@@ -8,6 +8,7 @@ import { runOriginalStage } from './source-admission-linux-owned-process.mjs'
 const fail = () => { throw new Error('FIXTURE_SENDER_LINUX_INPUT') }
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex')
 const prefix = '/opt/service-lasso/admin683-linux-candidate'
+if (process.execPath !== `${prefix}/node-distribution/bin/node`) fail()
 const rootPath = process.argv[2]
 const pin = process.argv[3]
 if (process.platform !== 'linux' || process.arch !== 'x64' || process.version !== 'v22.23.2' ||
