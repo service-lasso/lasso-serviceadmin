@@ -1,0 +1,80 @@
+name: Source admission fixture input handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact reviewed develop source SHA; source eligibility is not execution admission
+        required: true
+        type: string
+      phase:
+        description: Separately admitted build or qualification; never automatic build-to-load
+        required: true
+        type: choice
+        options:
+          - build
+          - qualification
+      input_pairs:
+        description: Private per-OS absolute input ROOT and SHA JSON, selected by complete external admission
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  handoff:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact selected source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha }}
+      - name: Setup exact Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.23.2
+      - name: Require independent complete input selection
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          INPUT_PAIRS: ${{ inputs.input_pairs }}
+          INPUT_PLATFORM: ${{ matrix.platform }}
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/develop' -or $env:SOURCE_SHA -notmatch '^[a-f0-9]{40}$' -or (git rev-parse HEAD).Trim() -ne $env:SOURCE_SHA) { throw 'FIXTURE_HANDOFF_SOURCE' }
+          $pair = ($env:INPUT_PAIRS | ConvertFrom-Json).($env:INPUT_PLATFORM)
+          if (![IO.Path]::IsPathFullyQualified($pair.root) -or $pair.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'FIXTURE_HANDOFF_INPUT' }
+          "SERVICE_LASSO_FIXTURE_INPUT_ROOT=$($pair.root)" >> $env:GITHUB_ENV
+          "SERVICE_LASSO_FIXTURE_INPUT_SHA256=$($pair.sha256)" >> $env:GITHUB_ENV
+      - name: Build Windows original stages only
+        if: inputs.phase == 'build' && matrix.platform == 'win32'
+        shell: pwsh
+        run: ./scripts/build-source-admission-sender.ps1 -InputRoot $env:SERVICE_LASSO_FIXTURE_INPUT_ROOT -InputRootSHA256 $env:SERVICE_LASSO_FIXTURE_INPUT_SHA256
+      - name: Build Linux original stages only inside independently admitted namespace
+        if: inputs.phase == 'build' && matrix.platform == 'linux'
+        shell: bash
+        run: node scripts/build-source-admission-sender-linux.mjs "$SERVICE_LASSO_FIXTURE_INPUT_ROOT" "$SERVICE_LASSO_FIXTURE_INPUT_SHA256"
+      - name: Bind separately admitted runtime artifact; do not compile
+        if: inputs.phase == 'qualification'
+        shell: pwsh
+        run: |
+          "SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT=$env:SERVICE_LASSO_FIXTURE_INPUT_ROOT" >> $env:GITHUB_ENV
+          "SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256=$env:SERVICE_LASSO_FIXTURE_INPUT_SHA256" >> $env:GITHUB_ENV
+      - name: Verify original runtime inputs before qualification
+        if: inputs.phase == 'qualification'
+        run: node scripts/require-source-admission-fixture-input.mjs
+      - name: Run unchanged complete original source fixture
+        if: inputs.phase == 'qualification'
+        run: node --test tests/runtime-server.node.mjs tests/source-admission-proxy.node.mjs
+
+# Input bytes must already exist at their original admitted paths on the runner.
+# No namespace installation, artifact fallback, compiler-to-load transition,
+# provider setting, grant, credential, resource creation or native receipt occurs.
