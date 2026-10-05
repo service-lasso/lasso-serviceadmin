@@ -20,9 +20,11 @@ foreach ($row in $root.members) {
   $seen[$row.path] = $row
 }
 if ($root.buildHost -ne (Get-Process -Id $PID).Path) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
-foreach ($required in @($root.buildHost, $root.compiler, $root.linker, $root.nodeImportLibrary, $root.nativeSource, $PSCommandPath)) {
+$evidenceModule = Join-Path $PSScriptRoot 'source-admission-build-evidence.psm1'
+foreach ($required in @($root.buildHost, $root.compiler, $root.linker, $root.nodeImportLibrary, $root.nativeSource, $PSCommandPath, $evidenceModule)) {
   if (!$seen.ContainsKey($required)) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 }
+Import-Module $evidenceModule -Force
 $output = [IO.Path]::GetFullPath($root.outputRoot)
 if (!$output.StartsWith('D:\projects\service-lasso\_audit\', [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $output)) { throw 'FIXTURE_SENDER_BUILD_OUTPUT' }
 if ($root.deadlineMs -ne 120000) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
@@ -43,9 +45,12 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
   foreach ($argument in $arguments) { $start.ArgumentList.Add($argument) }
   $process = [Diagnostics.Process]::new(); $process.StartInfo = $start
   $failure = [Collections.Generic.HashSet[string]]::new()
+  $observedStartUTC = [DateTime]::UtcNow.ToString('O'); $observedStartMs=$clock.ElapsedMilliseconds
+  $originalPID=$null; $kernelStartUTC=$null; $kernelEndUTC=$null
   $started = $false; $outTask = $null; $errTask = $null; $killRequested = $false
   try { $started = $process.Start() } catch { $failure.Add('ProcessStartFailure') | Out-Null }
   if ($started) {
+    try { $originalPID=$process.Id; $kernelStartUTC=$process.StartTime.ToUniversalTime().ToString('O') } catch { $failure.Add('UnknownProcessIdentity') | Out-Null }
     try { $outTask = $process.StandardOutput.BaseStream.CopyToAsync($stdout) } catch { $failure.Add('StdoutCopyLaunchFailure') | Out-Null }
     try { $errTask = $process.StandardError.BaseStream.CopyToAsync($stderr) } catch { $failure.Add('StderrCopyLaunchFailure') | Out-Null }
   }
@@ -71,12 +76,23 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
     [Threading.Thread]::Sleep(25)
   }
   if ($clock.ElapsedMilliseconds -ge 120000) { $failure.Add('Deadline') | Out-Null }
-  $exitCode = $process.ExitCode
+  $observedEndUTC=[DateTime]::UtcNow.ToString('O'); $observedEndMs=$clock.ElapsedMilliseconds
+  $exitCode=$null
+  try { $exitCode=$process.ExitCode; $kernelEndUTC=$process.ExitTime.ToUniversalTime().ToString('O'); if ($process.Id -ne $originalPID) { throw 'IdentityMismatch' } } catch { $failure.Add('UnknownProcessExitObservation') | Out-Null }
   foreach ($task in @($outTask,$errTask)) { try { $task.GetAwaiter().GetResult() } catch {} }
-  $stdout.Flush(); $stderr.Flush()
-  $stdout.Dispose(); $stderr.Dispose(); $process.Dispose()
-  $result = [ordered]@{schema='sa-sender-build-result.v1';stage=$stage;exitCode=$exitCode;elapsedMs=$clock.ElapsedMilliseconds;failures=@($failure);killRequested=$killRequested;image=$image;arguments=$arguments;sourceRootSHA256=$InputRootSHA256;nativeAcceptance=$false;descendantClosureProven=$false}
-  [IO.File]::WriteAllText("$output/$stage.RESULT.json",($result|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
+  $outFacts=Get-SourceAdmissionOutputFacts $stdout "$output/$stage.stdout.raw" $outTask
+  $errFacts=Get-SourceAdmissionOutputFacts $stderr "$output/$stage.stderr.raw" $errTask
+  foreach ($facts in @($outFacts,$errFacts)) { if ($null -ne $facts.errorClass) { $failure.Add($facts.errorClass) | Out-Null }; if (!$facts.copy.eof) { $failure.Add('IncompleteRawEOF') | Out-Null } }
+  $result = [ordered]@{schema='sa-sender-build-result.v1';state='ORIGINAL_EVIDENCE_CAPTURED_RETIREMENT_PENDING';stage=$stage;originalPID=$originalPID;kernelStartUTC=$kernelStartUTC;kernelEndUTC=$kernelEndUTC;observedStartUTC=$observedStartUTC;observedEndUTC=$observedEndUTC;observedStartMs=$observedStartMs;observedEndMs=$observedEndMs;stdout=$outFacts;stderr=$errFacts;exitCode=$exitCode;elapsedMs=$clock.ElapsedMilliseconds;failures=@($failure);killRequested=$killRequested;image=$image;arguments=$arguments;sourceRootSHA256=$InputRootSHA256;nativeAcceptance=$false;descendantClosureProven=$false}
+  try { [IO.File]::WriteAllText("$output/$stage.RESULT.json",($result|ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false)) }
+  catch { while ($true) { [Threading.Thread]::Sleep(25) } } # Original resources remain owned on unknown durable capture.
+  $retirement=[ordered]@{schema='sa-sender-build-retirement.v1';stage=$stage;originalPID=$originalPID;stdoutDisposed=$false;stderrDisposed=$false;processDisposed=$false;failed=$false;nativeAcceptance=$false}
+  foreach ($pair in @(@('stdoutDisposed',$stdout),@('stderrDisposed',$stderr),@('processDisposed',$process))) {
+    try { $pair[1].Dispose(); $retirement[$pair[0]]=$true } catch { $retirement.failed=$true }
+  }
+  try { [IO.File]::WriteAllText("$output/$stage.RETIREMENT.json",($retirement|ConvertTo-Json),[Text.UTF8Encoding]::new($false)) }
+  catch { while ($true) { [Threading.Thread]::Sleep(25) } }
+  if ($retirement.failed) { while ($true) { [Threading.Thread]::Sleep(25) } }
   if ($exitCode -ne 0 -or $failure.Count -ne 0) { throw 'FIXTURE_SENDER_BUILD_FAILED' }
 }
 $compileArguments = @('/nologo','/c','/MT','/O2','/W4','/WX','/std:c17','/DNAPI_VERSION=2','/DNODE_GYP_MODULE_NAME=source_admission_sender',
