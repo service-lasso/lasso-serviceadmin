@@ -33,8 +33,11 @@ if ($root.deadlineMs -ne 120000) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 [IO.Directory]::CreateDirectory("$output/temp") | Out-Null
 $clock = [Diagnostics.Stopwatch]::StartNew()
 function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments) {
-  $stdout = [IO.File]::Open("$output/$stage.stdout.raw", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
-  $stderr = [IO.File]::Open("$output/$stage.stderr.raw", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+  $stdout=$null; $stderr=$null; $outReader=$null; $errReader=$null; $outReadPipe=$null; $errReadPipe=$null
+  try {
+    $stdout = [IO.File]::Open("$output/$stage.stdout.raw", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    $stderr = [IO.File]::Open("$output/$stage.stderr.raw", [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+  } catch { while ($true) { [Threading.Thread]::Sleep(25) } } # Keep any original destination on partial setup.
   $start = [Diagnostics.ProcessStartInfo]::new($image)
   $start.UseShellExecute = $false; $start.CreateNoWindow = $true
   $start.WorkingDirectory = $output
@@ -51,8 +54,8 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
   try { $started = $process.Start() } catch { $failure.Add('ProcessStartFailure') | Out-Null }
   if ($started) {
     try { $originalPID=$process.Id; $kernelStartUTC=$process.StartTime.ToUniversalTime().ToString('O') } catch { $failure.Add('UnknownProcessIdentity') | Out-Null }
-    try { $outTask = $process.StandardOutput.BaseStream.CopyToAsync($stdout) } catch { $failure.Add('StdoutCopyLaunchFailure') | Out-Null }
-    try { $errTask = $process.StandardError.BaseStream.CopyToAsync($stderr) } catch { $failure.Add('StderrCopyLaunchFailure') | Out-Null }
+    try { $outReader=$process.StandardOutput; $outReadPipe=$outReader.BaseStream; $outTask=$outReadPipe.CopyToAsync($stdout) } catch { $failure.Add('StdoutCopyLaunchFailure') | Out-Null }
+    try { $errReader=$process.StandardError; $errReadPipe=$errReader.BaseStream; $errTask=$errReadPipe.CopyToAsync($stderr) } catch { $failure.Add('StderrCopyLaunchFailure') | Out-Null }
   }
   while ($true) {
     $exited = $false
@@ -86,11 +89,11 @@ function Invoke-OwnedImage([string]$stage, [string]$image, [string[]]$arguments)
   $result = [ordered]@{schema='sa-sender-build-result.v1';state='ORIGINAL_EVIDENCE_CAPTURED_RETIREMENT_PENDING';stage=$stage;originalPID=$originalPID;kernelStartUTC=$kernelStartUTC;kernelEndUTC=$kernelEndUTC;observedStartUTC=$observedStartUTC;observedEndUTC=$observedEndUTC;observedStartMs=$observedStartMs;observedEndMs=$observedEndMs;stdout=$outFacts;stderr=$errFacts;exitCode=$exitCode;elapsedMs=$clock.ElapsedMilliseconds;failures=@($failure);killRequested=$killRequested;image=$image;arguments=$arguments;sourceRootSHA256=$InputRootSHA256;nativeAcceptance=$false;descendantClosureProven=$false}
   try { [IO.File]::WriteAllText("$output/$stage.RESULT.json",($result|ConvertTo-Json -Depth 7),[Text.UTF8Encoding]::new($false)) }
   catch { while ($true) { [Threading.Thread]::Sleep(25) } } # Original resources remain owned on unknown durable capture.
-  $retirement=[ordered]@{schema='sa-sender-build-retirement.v1';stage=$stage;originalPID=$originalPID;stdoutDisposed=$false;stderrDisposed=$false;processDisposed=$false;failed=$false;nativeAcceptance=$false}
-  foreach ($pair in @(@('stdoutDisposed',$stdout),@('stderrDisposed',$stderr),@('processDisposed',$process))) {
-    try { $pair[1].Dispose(); $retirement[$pair[0]]=$true } catch { $retirement.failed=$true }
-  }
-  try { [IO.File]::WriteAllText("$output/$stage.RETIREMENT.json",($retirement|ConvertTo-Json),[Text.UTF8Encoding]::new($false)) }
+  # Exact getter-exposed readers are caller-owned; Process.Dispose is not their retirement.
+  $originalResources=[ordered]@{stdoutReadPipe=$outReadPipe;stderrReadPipe=$errReadPipe;stdoutReader=$outReader;stderrReader=$errReader;stdoutDestination=$stdout;stderrDestination=$stderr;process=$process}
+  $retired=Invoke-SourceAdmissionResourceRetirement $originalResources
+  $retirement=[ordered]@{schema='sa-sender-build-retirement.v1';stage=$stage;originalPID=$originalPID;resources=$retired.resources;failed=$retired.failed;nativeAcceptance=$false;descendantClosureProven=$false}
+  try { [IO.File]::WriteAllText("$output/$stage.RETIREMENT.json",($retirement|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false)) }
   catch { while ($true) { [Threading.Thread]::Sleep(25) } }
   if ($retirement.failed) { while ($true) { [Threading.Thread]::Sleep(25) } }
   if ($exitCode -ne 0 -or $failure.Count -ne 0) { throw 'FIXTURE_SENDER_BUILD_FAILED' }

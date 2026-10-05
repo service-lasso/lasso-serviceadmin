@@ -21,3 +21,23 @@ try {
   Require (!$closed.flushSucceeded -and $closed.errorClass -eq 'OutputFlushFailure' -and $null -eq $closed.sha256)
 } finally { $stream.Dispose() }
 # Retain actual fixture bytes for owning runner disposition; no cleanup claim.
+$originalRead=[IO.MemoryStream]::new([byte[]]@(0,10,255))
+$originalReader=[IO.StreamReader]::new($originalRead)
+$originalBase=$originalReader.BaseStream
+$originalDestination=[IO.MemoryStream]::new()
+$originalCopy=$originalBase.CopyToAsync($originalDestination)
+$originalCopy.GetAwaiter().GetResult()
+Require ((Get-SourceAdmissionCopyFacts $originalCopy).eof)
+$originalOwners=[ordered]@{readPipe=$originalBase;reader=$originalReader;destination=$originalDestination}
+$retired=Invoke-SourceAdmissionResourceRetirement $originalOwners
+Require (!$retired.failed -and !$originalBase.CanRead -and !$originalDestination.CanWrite)
+foreach($label in $originalOwners.Keys){Require ($retired.resources[$label].present -and $retired.resources[$label].disposeAttempted -and $retired.resources[$label].disposeReturned)}
+# EOF remains real after later retirement; missing/throwing resource never gains success.
+Require ((Get-SourceAdmissionCopyFacts $originalCopy).eof)
+$throwing=[pscustomobject]@{attempted=$false}
+$throwing|Add-Member -MemberType ScriptMethod -Name Dispose -Value {$this.attempted=$true;throw 'fixed retirement fixture failure'}
+$unresolved=[ordered]@{throwing=$throwing;missing=$null}
+$failed=Invoke-SourceAdmissionResourceRetirement $unresolved
+Require ($failed.failed -and $throwing.attempted -and !$failed.resources.throwing.disposeReturned -and $failed.resources.throwing.errorClass -eq 'OriginalResourceRetirementFailure')
+Require (!$failed.resources.missing.present -and !$failed.resources.missing.disposeAttempted -and !$failed.resources.missing.disposeReturned -and $failed.resources.missing.errorClass -eq 'UnknownOriginalResource')
+Require ([object]::ReferenceEquals($unresolved.throwing,$throwing))

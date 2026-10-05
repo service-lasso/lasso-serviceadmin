@@ -25,4 +25,19 @@ function Get-SourceAdmissionOutputFacts([IO.FileStream]$stream, [string]$path, $
   }
   return $facts
 }
-Export-ModuleMember -Function Get-SourceAdmissionCopyFacts,Get-SourceAdmissionOutputFacts
+function Invoke-SourceAdmissionResourceRetirement($resources) {
+  $observations=[ordered]@{}; $failed=$false
+  foreach ($label in $resources.Keys) {
+    $resource=$resources[$label]
+    $facts=[ordered]@{present=($null -ne $resource);disposeAttempted=$false;disposeReturned=$false;errorClass=$null}
+    if ($null -eq $resource) { $facts.errorClass='UnknownOriginalResource'; $failed=$true }
+    else {
+      $facts.disposeAttempted=$true
+      try { $resource.Dispose(); $facts.disposeReturned=$true }
+      catch { $facts.errorClass='OriginalResourceRetirementFailure'; $failed=$true }
+    }
+    $observations[$label]=$facts
+  }
+  return [ordered]@{resources=$observations;failed=$failed}
+}
+Export-ModuleMember -Function Get-SourceAdmissionCopyFacts,Get-SourceAdmissionOutputFacts,Invoke-SourceAdmissionResourceRetirement
