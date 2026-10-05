@@ -9,6 +9,7 @@ function Bound-Bytes($file) {
 }
 if (!$IsWindows -or $InputRootSHA256 -notmatch '^[a-f0-9]{64}$' -or ![IO.Path]::IsPathFullyQualified($InputRoot)) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 $rootBytes = Bound-Bytes $InputRoot
+if ($rootBytes.Length -gt 4194304) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 if ((Hash-Bytes $rootBytes) -ne $InputRootSHA256) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 $root = [Text.Encoding]::UTF8.GetString($rootBytes) | ConvertFrom-Json
 if ($root.schema -ne 'sa-sender-build.v1' -or $root.platform -ne 'win32' -or $root.nodeVersion -ne '22.23.2' -or $root.members.Count -lt 1 -or $root.members.Count -gt 20000) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
@@ -26,7 +27,8 @@ foreach ($required in @($root.buildHost, $root.compiler, $root.linker, $root.nod
 }
 Import-Module $evidenceModule -Force
 $output = [IO.Path]::GetFullPath($root.outputRoot)
-if (!$output.StartsWith('D:\projects\service-lasso\_audit\', [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $output)) { throw 'FIXTURE_SENDER_BUILD_OUTPUT' }
+$outputParent = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($InputRoot)) + [IO.Path]::DirectorySeparatorChar
+if (!$output.StartsWith($outputParent, [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $output)) { throw 'FIXTURE_SENDER_BUILD_OUTPUT' }
 if ($root.deadlineMs -ne 120000) { throw 'FIXTURE_SENDER_BUILD_INPUT' }
 # One clock covers the separately owned /c compiler and direct linker.
 [IO.Directory]::CreateDirectory($output) | Out-Null
