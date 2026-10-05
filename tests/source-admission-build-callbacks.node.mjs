@@ -68,39 +68,37 @@ test(
         )
       }
     )
-    while (
-      !(
-        exit &&
-        processFacts.nativeCallback &&
-        pipeFacts.nativeCallback &&
-        copy.snapshot().terminal
-      )
-    ) {
+    while (!(
+      exit &&
+      processFacts.nativeCallback &&
+      pipeFacts.nativeCallback &&
+      copy.snapshot().terminal
+    )) {
       await new Promise((resolve) => setTimeout(resolve, 5))
-  }
-  const observed = copy.snapshot()
-  assert.deepEqual(exit, { code: 0, signal: null })
-  assert.equal(owner.failed, false)
-  assert.equal(observed.eof, true)
-  assert.equal(observed.writePending, false)
-  assert.equal(observed.retainedChunks, 0)
-  assert.ok(observed.observedChunks > 1)
-  assert.ok(observed.deferredResumes > 0)
-  assert.ok(writes > observed.observedChunks)
-  const expected = Buffer.concat(
-    Array.from({ length: 32 }, (_, i) => Buffer.alloc(4096, i))
-  )
-  assert.equal(observed.observedBytes, expected.length)
-  assert.equal(observed.bytes, expected.length)
-  assert.equal(
-    observed.sha256,
-    crypto.createHash('sha256').update(expected).digest('hex')
-  )
-  fs.fsyncSync(fd)
-  fs.closeSync(fd)
-  assert.deepEqual(await readFile(output), expected)
-  assert.ok(originalProcess && originalPipe)
-  // Keep original output. This is not the protected paused native fixture PASS.
+    }
+    const observed = copy.snapshot()
+    assert.deepEqual(exit, { code: 0, signal: null })
+    assert.equal(owner.failed, false)
+    assert.equal(observed.eof, true)
+    assert.equal(observed.writePending, false)
+    assert.equal(observed.retainedChunks, 0)
+    assert.ok(observed.observedChunks > 1)
+    assert.ok(observed.deferredResumes > 0)
+    assert.ok(writes > observed.observedChunks)
+    const expected = Buffer.concat(
+      Array.from({ length: 32 }, (_, i) => Buffer.alloc(4096, i))
+    )
+    assert.equal(observed.observedBytes, expected.length)
+    assert.equal(observed.bytes, expected.length)
+    assert.equal(
+      observed.sha256,
+      crypto.createHash('sha256').update(expected).digest('hex')
+    )
+    fs.fsyncSync(fd)
+    fs.closeSync(fd)
+    assert.deepEqual(await readFile(output), expected)
+    assert.ok(originalProcess && originalPipe)
+    // Keep original output. This is not the protected paused native fixture PASS.
   }
 )
 
