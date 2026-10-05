@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 
 const fail = () => { throw new Error('FIXTURE_SENDER_ARTIFACT_EVIDENCE') }
 const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex')
@@ -30,6 +31,8 @@ if (!Array.isArray(input.members) || input.members.length > 20000) fail()
 for (const row of input.members) observe(row.path, row)
 if (!members.has(nodeImage)) fail()
 observe(inputPath)
+const caller = fileURLToPath(import.meta.url)
+if (!members.has(caller)) observe(caller)
 const stages = input.platform === 'win32' ? ['compiler', 'linker'] :
   ['frontend', 'assembler', 'linker']
 for (const stage of stages) {
