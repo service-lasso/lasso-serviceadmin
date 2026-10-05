@@ -8,6 +8,7 @@ const sha = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex')
 const [rootPath, pin, destination] = process.argv.slice(2)
 if (!path.isAbsolute(rootPath ?? '') || !path.isAbsolute(destination ?? '') ||
     !/^[a-f0-9]{64}$/.test(pin ?? '') || fs.existsSync(destination)) fail()
+if (fs.statSync(rootPath).size > 4194304) fail()
 const raw = fs.readFileSync(rootPath)
 if (raw.length > 4194304 || sha(raw) !== pin) fail()
 const root = JSON.parse(raw)
@@ -19,6 +20,7 @@ for (const row of root.members) {
   if (!path.isAbsolute(row.path) || originals.has(row.path) ||
       !Number.isSafeInteger(row.size) || row.size < 0 || row.size > 134217728 ||
       !/^[a-f0-9]{64}$/.test(row.sha256)) fail()
+  if (fs.statSync(row.path).size !== row.size) fail()
   const bytes = fs.readFileSync(row.path)
   if (bytes.length !== row.size || sha(bytes) !== row.sha256) fail()
   originals.set(row.path, row)

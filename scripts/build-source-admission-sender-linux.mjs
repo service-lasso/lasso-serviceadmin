@@ -13,6 +13,7 @@ const rootPath = process.argv[2]
 const pin = process.argv[3]
 if (process.platform !== 'linux' || process.arch !== 'x64' || process.version !== 'v22.23.2' ||
     !path.isAbsolute(rootPath ?? '') || !/^[a-f0-9]{64}$/.test(pin ?? '')) fail()
+if (fs.statSync(rootPath).size > 4194304) fail()
 const raw = fs.readFileSync(rootPath)
 if (raw.length > 4194304 || hash(raw) !== pin) fail()
 const root = JSON.parse(raw)
@@ -23,6 +24,7 @@ const members = new Map()
 for (const row of root.members) {
   if (!path.isAbsolute(row.path) || members.has(row.path) || !Number.isSafeInteger(row.size) ||
       row.size < 0 || row.size > 134217728 || !/^[a-f0-9]{64}$/.test(row.sha256)) fail()
+  if (fs.statSync(row.path).size !== row.size) fail()
   const bytes = fs.readFileSync(row.path)
   if (bytes.length !== row.size || hash(bytes) !== row.sha256) fail()
   members.set(row.path, row)

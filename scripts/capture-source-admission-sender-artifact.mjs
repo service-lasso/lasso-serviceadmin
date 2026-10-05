@@ -11,6 +11,7 @@ for (const name of [inputPath, output, nodeImage, destination]) {
   if (!path.isAbsolute(name ?? '')) fail()
 }
 if (!/^[a-f0-9]{64}$/.test(inputSHA ?? '') || fs.existsSync(destination)) fail()
+if (fs.statSync(inputPath).size > 4194304) fail()
 const raw = fs.readFileSync(inputPath)
 if (raw.length > 4194304 || sha(raw) !== inputSHA) fail()
 const input = JSON.parse(raw)
