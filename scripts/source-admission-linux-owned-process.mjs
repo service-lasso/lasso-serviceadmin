@@ -186,13 +186,16 @@ export async function runOriginalStage(stage, recipe, output, start, rootSHA256)
       await callback((done) => fs.close(original.fd, done))
       original.closed = true
     }
+    const retirementFailed = ['process', 'stdoutPipe', 'stderrPipe'].some((role) =>
+      owner[role].requestFailed || owner[role].callbackFailed)
     await callback((done) => fs.writeFile(`${output}/${stage}.RETIREMENT.json`,
       JSON.stringify({ schema: 'sa-sender-linux-build-retirement.v1', stage,
         originalPID: owner.originalPID, process: owner.process,
         stdoutPipe: owner.stdoutPipe, stderrPipe: owner.stderrPipe,
         stdoutReader: owner.stdoutReader, stderrReader: owner.stderrReader,
-        destinations: owner.destinations, failed: false, nativeAcceptance: false }),
+        destinations: owner.destinations, failed: retirementFailed, nativeAcceptance: false }),
       { flag: 'wx', mode: 0o600 }, done))
+    if (retirementFailed) await new Promise(() => {})
     unresolved.delete(owner)
     clearInterval(holding)
     if (result.failed || elapsed() >= 120000) throw failure()
