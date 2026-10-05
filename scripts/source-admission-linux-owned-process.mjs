@@ -27,7 +27,7 @@ export function observeOriginalClose(handle, facts) {
       facts.nativeCallback = true
       facts.callbackUTC = new Date().toISOString()
       try { if (supplied) Reflect.apply(supplied, this, values) }
-      catch { facts.callbackFailed = true; throw failure() }
+      catch { facts.callbackFailed = true }
     }
     const value = Reflect.apply(original, handle, args)
     facts.returned = true
@@ -55,6 +55,10 @@ function ownCopy(reader, fd, facts, owner) {
       facts.failed = true; owner.failed = true; reader.pause(); return
     }
     reader.pause()
+    if (written + bytes.length > 134217728) {
+      pending = { bytes, offset: 0 }
+      facts.failed = true; owner.failed = true; return
+    }
     pending = { bytes, offset: 0 }
     const write = () => {
       const original = pending
@@ -113,7 +117,8 @@ export async function runOriginalStage(stage, recipe, output, start, rootSHA256)
   unresolved.add(owner)
   const elapsed = () => Number((process.hrtime.bigint() - start) / 1000000n)
   const holding = setInterval(() => {
-    if (elapsed() >= 120000) owner.failed = true
+    if (elapsed() >= 120000 || owner.process.callbackFailed ||
+        owner.stdoutPipe.callbackFailed || owner.stderrPipe.callbackFailed) owner.failed = true
   }, 25)
   try {
     for (const role of ['stdout', 'stderr']) {
