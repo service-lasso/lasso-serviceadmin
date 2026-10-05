@@ -5,7 +5,10 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { prepareReceiverEvidenceDirectory, receiverEvidenceDestinations } from '../scripts/source-admission-fixture-destinations.mjs'
+import {
+  prepareReceiverEvidenceDirectory,
+  receiverEvidenceDestinations,
+} from '../scripts/source-admission-fixture-destinations.mjs'
 import { observeOriginalClose } from '../scripts/source-admission-linux-owned-process.mjs'
 
 // Prospective real filesystem ownership, not native receiver acceptance.
