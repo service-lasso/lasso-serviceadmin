@@ -9,3 +9,5 @@ Active requirement: ../specs/SPEC-001-first-run-source-loadability.md FR-SYNTAX-
 Preserve the current producer -> Node task -> cy.env nonce consumer contract and real controlled-fault receipts. Active SPEC-002 RC-001; source-only delivery, independent review and new complete ROOT admission before execution.
 
 Admitted runtime-suite continuation: RC-002 corrects the stale checkout assertion against the current named immutable Core source-candidate workflow checkout; all RC-001 provider-binding requirements remain.
+
+RC-003 closes the actual consumer's post-409 persistence race through a capability-bound one-shot completion handshake and an independent verifier check before private reads, within the original Cypress clock. Preserve negative-503 provenance, all private binding predicates and the unchanged Core pin; entire cumulative review and new input admission remain mandatory before execution.

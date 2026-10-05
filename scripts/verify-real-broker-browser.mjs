@@ -179,7 +179,60 @@ async function readBoundedRegularFile(
   })
 }
 
-async function verifyControlledProviderFault(runtimeInputs, source) {
+async function awaitProviderRecoveryCompletion(runtimeInputs, controlUrl, deadline) {
+  const remaining = deadline - performance.now()
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    throw new Error('Controlled provider recovery completion deadline expired.')
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), Math.min(5_000, remaining))
+  try {
+    const response = await fetch(`${controlUrl}/provider-fault-receipt?wait=recovery`, {
+      headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+      redirect: 'error',
+      signal: controller.signal,
+    })
+    if (response.status !== 200 || !response.body) {
+      throw new Error('Controlled provider recovery completion was not observed.')
+    }
+    const reader = response.body.getReader()
+    const chunks = []
+    let bytes = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        bytes += value.byteLength
+        if (bytes > 4096) {
+          throw new Error('Controlled provider recovery completion exceeded its bound.')
+        }
+        chunks.push(Buffer.from(value))
+      }
+    } finally {
+      await reader.cancel()
+      reader.releaseLock()
+    }
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    const exact = (value, keys) => value && typeof value === 'object' &&
+      !Array.isArray(value) && Object.keys(value).sort().join(',') === keys.sort().join(',')
+    if (
+      controller.signal.aborted || performance.now() >= deadline ||
+      !exact(body, ['outcome', 'receipt']) || body.outcome !== 'provider_fault_observed' ||
+      !exact(body.receipt, ['schema', 'phase', 'nonce', 'state']) ||
+      body.receipt.schema !== 'service-lasso.real-admin-browser-provider-control.v1' ||
+      body.receipt.phase !== 'authenticated_provider_request' ||
+      body.receipt.nonce !== runtimeInputs.liveReceipt.nonce ||
+      body.receipt.state !== 'controlled_fault_consumed'
+    ) {
+      throw new Error('Controlled provider recovery completion was invalid.')
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function verifyControlledProviderFault(runtimeInputs, source, controlUrl, deadline) {
+  await awaitProviderRecoveryCompletion(runtimeInputs, controlUrl, deadline)
   const read = (literalPath, label) => readHeldJsonFile({
     root: runtimeInputs.evidenceRoot,
     literalPath,
@@ -805,6 +858,8 @@ try {
   captureCypressRunSummary(cypress, cypressRunSummaryEvents)
   captureCypressChildProvenance(cypress, cypressChildEvents)
   let cypressExit
+  // Start at the existing output-close wait, retaining its original allowance.
+  const cypressCloseDeadline = performance.now() + cypressQualificationTimeoutMs
   try {
     cypressExit = await waitForCapturedChildClose(
       cypress,
@@ -829,7 +884,7 @@ try {
     )
   }
   if (trustedUnlockRealProviderControl) {
-    await verifyControlledProviderFault(runtimeInputs, coreSource)
+    await verifyControlledProviderFault(runtimeInputs, coreSource, controlUrl, cypressCloseDeadline)
     controlledProviderFaultVerified = true
   }
   cypressSucceeded = !trustedUnlockRealProviderControl
@@ -841,17 +896,17 @@ try {
     auditEventCount = await verifyBrokerAudit(runtimeInputs)
   }
 } catch (error) {
-  runFailure = error
+  runFailure ??= error
 } finally {
   if (cypress?.exitCode === null) {
-    runFailure = new Error('Cypress did not close at its qualification deadline.')
+    runFailure ??= new Error('Cypress did not close at its qualification deadline.')
   }
   if (cypressOutput && !cypressOutputChecked) {
     try {
       cypressOutputChecked = true
       publishSafeChildOutput(cypressOutput)
     } catch (error) {
-      runFailure = error
+      runFailure ??= error
     }
   }
   if (runtimeInputs) {
@@ -862,11 +917,11 @@ try {
         { requireComplete: cypressSucceeded }
       )
     } catch (error) {
-      runFailure = error
+      runFailure ??= error
     }
   }
   if (stderrBytes > 1_048_576) {
-    runFailure = new Error(
+    runFailure ??= new Error(
       'Real browser runtime diagnostic output exceeded its bound.'
     )
   }
@@ -895,14 +950,14 @@ try {
     try {
       await waitForCapturedChildClose(runner, 180_000)
     } catch {
-      runFailure = new Error('Owned Core browser runner did not close after shutdown.')
+      runFailure ??= new Error('Owned Core browser runner did not close after shutdown.')
     }
   }
   if (runtimeInputs) {
     try {
       await verifyClosureReceipt(runtimeInputs, coreSource)
     } catch (error) {
-      runFailure = error
+      runFailure ??= error
     }
   }
 }
@@ -915,11 +970,11 @@ try {
     nestedExpectedSources
   )
 } catch (error) {
-  runFailure = error
+  runFailure ??= error
 }
 const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
 const closureVerified =
-  runFailure === undefined &&
+  runFailure ??=== undefined &&
   cypressOutput?.exceeded !== true &&
   nestedClosureVerified &&
   custodyOwners.length === 2 &&
@@ -990,7 +1045,7 @@ await writeQualificationCustody(custodyReceiptPath, {
 
 if (trustedUnlockRealProviderControl) {
   if (!controlledObserved) {
-    throw new Error(
+    throw runFailure ?? new Error(
       'Controlled real provider-validation receipt did not reach the closed final Node failure sink.'
     )
   }

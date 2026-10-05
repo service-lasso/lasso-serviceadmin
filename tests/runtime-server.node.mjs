@@ -4,6 +4,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import './provider-recovery-completion.node.mjs'
 import {
   resolvePackagedProxyHeaders,
   rotationProxyLifecycleEvidence,
@@ -360,7 +361,11 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     "expect(body.receipt).not.to.have.property('controlNonce')",
     "throw new Error('Controlled authenticated provider 503 was observed.')",
   ]) {
-    assert.equal(controlledProviderFaultSource.split(proof).length - 1, 1)
+    const count = [
+      "expect(body.outcome).to.equal('provider_fault_observed')",
+      "state: 'controlled_fault_consumed'",
+    ].includes(proof) ? 2 : 1
+    assert.equal(controlledProviderFaultSource.split(proof).length - 1, count)
   }
   let controlCursor = 0
   for (const step of [
@@ -369,6 +374,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     "state: 'controlled_fault_consumed'",
     'recoveryProviderValidationClicks += 1',
     'expect(status).to.equal(409)',
+    'url: `${controlUrl}/provider-fault-receipt?wait=recovery`',
     "throw new Error('Controlled authenticated provider 503 was observed.')",
   ]) {
     const next = controlledProviderFaultSource.indexOf(step, controlCursor)
@@ -382,7 +388,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'recovered.recoveryStatus !== recovered.baselineStatus',
     "recovered.rearm !== 'rejected'",
     'recovered.secondConsume !== false',
-    'await verifyControlledProviderFault(runtimeInputs, coreSource)',
+    'await verifyControlledProviderFault(runtimeInputs, coreSource, controlUrl, cypressCloseDeadline)',
   ]) {
     assert.equal(controlVerifierSource.split(receiptGuard).length - 1, 1)
   }
@@ -415,7 +421,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     controlledProviderFaultSource.split(
       "'x-service-lasso-provider-control-nonce': providerControlNonce"
     ).length - 1,
-    3
+    4
   )
   assert.equal(
     controlledProviderFaultSource.split('expect(status).to.equal(409)').length -
