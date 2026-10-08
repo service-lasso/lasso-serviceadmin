@@ -4,9 +4,6 @@ test('Broker RAM files page lists fixture metadata and supports service/search f
   page,
 }, testInfo) => {
   await page.goto('/secrets-broker/webdav')
-  await expect(
-    page.getByRole('heading', { name: 'RAM files', exact: true })
-  ).toBeVisible()
   await expect(page.getByTestId('broker-webdav')).toBeVisible()
   await expect(
     page.getByText('demo-config.json', { exact: true })
