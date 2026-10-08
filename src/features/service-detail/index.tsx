@@ -131,6 +131,7 @@ import {
 import { SecretsBrokerLifecyclePanel } from './secrets-lifecycle-panel'
 import { SecretsBrokerOperationsPanel } from './secrets-operations-panel'
 import { SecretsBrokerTopologyPanel } from './secrets-topology-panel'
+import { SecretsWebDAVPanel } from './secrets-webdav-panel'
 import { ServiceConfigEditor } from './service-config-editor'
 import {
   defaultServiceDetailTab,
@@ -1775,6 +1776,7 @@ export function ServiceDetail({
                       value='secrets'
                       className='mt-0 min-h-0 flex-1 space-y-4 overflow-auto'
                     >
+                      <SecretsWebDAVPanel />
                       <SecretsBrokerOperationsPanel />
                       <SecretsBrokerLifecyclePanel />
                       <SecretsBrokerTopologyPanel />

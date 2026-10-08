@@ -11,6 +11,11 @@ type ScreenCase = {
 
 const appScreens: ScreenCase[] = [
   {
+    path: '/secrets-broker/webdav',
+    heading: /^RAM files$/i,
+    title: 'Service Admin - Broker RAM files',
+  },
+  {
     path: '/',
     heading: /^Dashboard$/i,
     title: 'Service Admin - Dashboard',
