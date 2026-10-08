@@ -5,14 +5,15 @@ import { renderRoute } from './render-route'
 
 type ScreenCase = {
   path: string
-  heading: RegExp
+  heading?: RegExp
+  testId?: string
   title?: string
 }
 
 const appScreens: ScreenCase[] = [
   {
     path: '/secrets-broker/webdav',
-    heading: /^RAM files$/i,
+    testId: 'broker-webdav',
     title: 'Service Admin - Broker RAM files',
   },
   {
@@ -153,17 +154,27 @@ function mockCatalogApi() {
 }
 
 describe('app screens', () => {
-  it.each(appScreens)('renders $path', async ({ path, heading, title }) => {
-    await renderRoute(path)
+  it.each(appScreens)(
+    'renders $path',
+    async ({ path, heading, testId, title }) => {
+      await renderRoute(path)
 
-    expect(await screen.findByRole('heading', { name: heading })).toBeVisible()
+      if (heading) {
+        expect(
+          await screen.findByRole('heading', { name: heading })
+        ).toBeVisible()
+      }
+      if (testId) {
+        expect(await screen.findByTestId(testId)).toBeVisible()
+      }
 
-    if (title) {
-      await waitFor(() => {
-        expect(document.title).toBe(title)
-      })
+      if (title) {
+        await waitFor(() => {
+          expect(document.title).toBe(title)
+        })
+      }
     }
-  })
+  )
 
   it('redirects the retired users surface to Security', async () => {
     const { router } = await renderRoute('/users')

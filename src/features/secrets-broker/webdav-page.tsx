@@ -20,12 +20,6 @@ export function SecretsBrokerWebDAVPage() {
         </HeaderActions>
       </Header>
       <Main>
-        <div className='mb-6'>
-          <h1 className='text-2xl font-bold'>RAM files</h1>
-          <p className='text-muted-foreground'>
-            Broker WebDAV state and service file usage.
-          </p>
-        </div>
         <SecretsWebDAVPanel />
       </Main>
     </>
