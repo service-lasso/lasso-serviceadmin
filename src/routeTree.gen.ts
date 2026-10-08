@@ -50,6 +50,7 @@ import { Route as AuthenticatedSecretsBrokerSecretsRouteImport } from './routes/
 import { Route as AuthenticatedSecretsBrokerSingleRevealRouteImport } from './routes/_authenticated/secrets-broker/single-reveal'
 import { Route as AuthenticatedSecretsBrokerSourcesRouteImport } from './routes/_authenticated/secrets-broker/sources'
 import { Route as AuthenticatedSecretsBrokerTopologyRouteImport } from './routes/_authenticated/secrets-broker/topology'
+import { Route as AuthenticatedSecretsBrokerWebdavRouteImport } from './routes/_authenticated/secrets-broker/webdav'
 import { Route as AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport } from './routes/_authenticated/secrets-broker/workflow-boundaries'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
 import { Route as AuthenticatedServiceRoutesIndexRouteImport } from './routes/_authenticated/service-routes/index'
@@ -293,6 +294,12 @@ const AuthenticatedSecretsBrokerTopologyRoute =
     path: '/secrets-broker/topology',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSecretsBrokerWebdavRoute =
+  AuthenticatedSecretsBrokerWebdavRouteImport.update({
+    id: '/secrets-broker/webdav',
+    path: '/secrets-broker/webdav',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecretsBrokerWorkflowBoundariesRoute =
   AuthenticatedSecretsBrokerWorkflowBoundariesRouteImport.update({
     id: '/secrets-broker/workflow-boundaries',
@@ -406,6 +413,7 @@ export interface FileRoutesByFullPath {
   '/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
   '/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
   '/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/secrets-broker/webdav': typeof AuthenticatedSecretsBrokerWebdavRoute
   '/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -461,6 +469,7 @@ export interface FileRoutesByTo {
   '/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
   '/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
   '/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/secrets-broker/webdav': typeof AuthenticatedSecretsBrokerWebdavRoute
   '/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -519,6 +528,7 @@ export interface FileRoutesById {
   '/_authenticated/secrets-broker/single-reveal': typeof AuthenticatedSecretsBrokerSingleRevealRoute
   '/_authenticated/secrets-broker/sources': typeof AuthenticatedSecretsBrokerSourcesRoute
   '/_authenticated/secrets-broker/topology': typeof AuthenticatedSecretsBrokerTopologyRoute
+  '/_authenticated/secrets-broker/webdav': typeof AuthenticatedSecretsBrokerWebdavRoute
   '/_authenticated/secrets-broker/workflow-boundaries': typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   '/_authenticated/services/$serviceId': typeof AuthenticatedServicesServiceIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -577,6 +587,7 @@ export interface FileRouteTypes {
     | '/secrets-broker/single-reveal'
     | '/secrets-broker/sources'
     | '/secrets-broker/topology'
+    | '/secrets-broker/webdav'
     | '/secrets-broker/workflow-boundaries'
     | '/services/$serviceId'
     | '/settings/account'
@@ -632,6 +643,7 @@ export interface FileRouteTypes {
     | '/secrets-broker/single-reveal'
     | '/secrets-broker/sources'
     | '/secrets-broker/topology'
+    | '/secrets-broker/webdav'
     | '/secrets-broker/workflow-boundaries'
     | '/services/$serviceId'
     | '/settings/account'
@@ -689,6 +701,7 @@ export interface FileRouteTypes {
     | '/_authenticated/secrets-broker/single-reveal'
     | '/_authenticated/secrets-broker/sources'
     | '/_authenticated/secrets-broker/topology'
+    | '/_authenticated/secrets-broker/webdav'
     | '/_authenticated/secrets-broker/workflow-boundaries'
     | '/_authenticated/services/$serviceId'
     | '/_authenticated/settings/account'
@@ -1019,6 +1032,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecretsBrokerTopologyRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/secrets-broker/webdav': {
+      id: '/_authenticated/secrets-broker/webdav'
+      path: '/secrets-broker/webdav'
+      fullPath: '/secrets-broker/webdav'
+      preLoaderRoute: typeof AuthenticatedSecretsBrokerWebdavRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/secrets-broker/workflow-boundaries': {
       id: '/_authenticated/secrets-broker/workflow-boundaries'
       path: '/secrets-broker/workflow-boundaries'
@@ -1165,6 +1185,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSecretsBrokerSingleRevealRoute: typeof AuthenticatedSecretsBrokerSingleRevealRoute
   AuthenticatedSecretsBrokerSourcesRoute: typeof AuthenticatedSecretsBrokerSourcesRoute
   AuthenticatedSecretsBrokerTopologyRoute: typeof AuthenticatedSecretsBrokerTopologyRoute
+  AuthenticatedSecretsBrokerWebdavRoute: typeof AuthenticatedSecretsBrokerWebdavRoute
   AuthenticatedSecretsBrokerWorkflowBoundariesRoute: typeof AuthenticatedSecretsBrokerWorkflowBoundariesRoute
   AuthenticatedServicesServiceIdRoute: typeof AuthenticatedServicesServiceIdRoute
   AuthenticatedAppsIndexRoute: typeof AuthenticatedAppsIndexRoute
@@ -1220,6 +1241,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedSecretsBrokerSourcesRoute,
   AuthenticatedSecretsBrokerTopologyRoute:
     AuthenticatedSecretsBrokerTopologyRoute,
+  AuthenticatedSecretsBrokerWebdavRoute: AuthenticatedSecretsBrokerWebdavRoute,
   AuthenticatedSecretsBrokerWorkflowBoundariesRoute:
     AuthenticatedSecretsBrokerWorkflowBoundariesRoute,
   AuthenticatedServicesServiceIdRoute: AuthenticatedServicesServiceIdRoute,

@@ -115,6 +115,10 @@ import {
   type ServiceTelemetrySignal,
   type TelemetryPreview,
 } from './types'
+import {
+  normalizeWebDAVInventory,
+  type WebDAVInventory,
+} from './webdav-contract'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -9703,4 +9707,40 @@ export async function runServiceRecoveryDoctorAction(serviceId: string) {
   const payload = (await response.json()) as ServiceRecoveryDoctorActionResult
   applyServiceRecoveryState(serviceId, payload.recovery)
   return structuredClone(payload)
+}
+
+export async function fetchBrokerWebDAV(
+  cursor = '0'
+): Promise<WebDAVInventory> {
+  if (!/^\d{1,6}$/.test(cursor) || Number(cursor) > 131072)
+    throw new Error('Invalid inventory cursor.')
+  if (serviceLassoStubDataEnabled)
+    return {
+      state: 'listening',
+      generatedAt: new Date().toISOString(),
+      capacityBytes: 67108864,
+      usedBytes: 48,
+      activeGrants: 1,
+      fileCount: 1,
+      downloads: 2,
+      servedBytes: 96,
+      files: [
+        {
+          grantId: 'a'.repeat(32),
+          workspaceId: 'demo',
+          serviceId: 'echo-webdav',
+          path: 'demo-config.json',
+          sizeBytes: 48,
+          createdAt: '2026-10-08T00:00:00Z',
+          downloads: 2,
+          servedBytes: 96,
+          lastAccessAt: '2026-10-08T00:01:00Z',
+        },
+      ],
+    }
+  return normalizeWebDAVInventory(
+    await fetchRuntimeJson<unknown>(
+      `${buildBrokerOperationsApiPath('webdav')}?limit=100&cursor=${cursor}`
+    )
+  )
 }
