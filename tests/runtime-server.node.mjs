@@ -4,6 +4,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import './provider-recovery-completion.node.mjs'
 import {
   resolvePackagedProxyHeaders,
   rotationProxyLifecycleEvidence,
@@ -315,7 +316,88 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     lifecycleSource.includes('trustedUnlockRealProviderControlEnabled'),
     true
   )
-  assert.equal(lifecycleSource.includes('realProviderControl'), true)
+  // Enablement is Node-side; the browser obtains only the URL and nonce via
+  // cy.env. Protect the actual producer/task/consumer chain after that migration.
+  const controlConfigSource = await readFile(
+    new URL('../cypress.config.ts', import.meta.url),
+    'utf8'
+  )
+  const controlVerifierSource = await readFile(
+    new URL('../scripts/verify-real-broker-browser.mjs', import.meta.url),
+    'utf8'
+  )
+  assert.match(controlConfigSource, /allowCypressEnv: false/)
+  assert.match(
+    controlConfigSource,
+    /trustedUnlockRealProviderControlEnabled\(\)\s*\{\s*return\s*\(\s*String\(config\.env\.trustedUnlockRealProviderControlFailure\) === '1' \|\|\s*String\(config\.env\.realProviderControl\) === '1'\s*\)\s*\}/
+  )
+  assert.equal(
+    controlVerifierSource.includes(
+      "const providerControlNonce = randomBytes(32).toString('hex')"
+    ),
+    true
+  )
+  assert.match(
+    controlVerifierSource,
+    /trustedUnlockRealProviderControl\s*\? `,trustedUnlockRealProviderControlFailure=1,realProviderControl=1,providerControlNonce=\$\{providerControlNonce\}`\s*: ''/
+  )
+  assert.equal(
+    controlVerifierSource.includes(
+      'SERVICE_LASSO_TEST_PROVIDER_CONTROL_NONCE: providerControlNonce'
+    ),
+    true
+  )
+  assert.match(
+    controlledProviderFaultSource,
+    /cy\.task\('trustedUnlockRealProviderControlEnabled'\)\.then\(\(enabled\) => \{\s*if \(!enabled\) return\s*cy\.env\(\['testControlUrl', 'providerControlNonce'\]\)/
+  )
+  assert.equal(
+    controlledProviderFaultSource.split(
+      "cy.env(['testControlUrl', 'providerControlNonce'])"
+    ).length - 1,
+    3
+  )
+  for (const proof of [
+    'expect(controlUrl).to.match(/^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/__service_lasso_test$/)',
+    'expect(providerControlNonce).to.match(/^[a-f0-9]{64}$/)',
+    "expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })",
+    "url: `${controlUrl}/provider-fault-receipt`",
+    "expect(body.outcome).to.equal('provider_fault_observed')",
+    "state: 'controlled_fault_consumed'",
+    "expect(body.receipt).not.to.have.property('controlNonce')",
+    "throw new Error('Controlled authenticated provider 503 was observed.')",
+  ]) {
+    const count = [
+      "expect(body.outcome).to.equal('provider_fault_observed')",
+      "state: 'controlled_fault_consumed'",
+    ].includes(proof) ? 2 : 1
+    assert.equal(controlledProviderFaultSource.split(proof).length - 1, count)
+  }
+  let controlCursor = 0
+  for (const step of [
+    "outcome: 'provider_fault_armed'",
+    'controlledProviderValidationClicks += 1',
+    "state: 'controlled_fault_consumed'",
+    'recoveryProviderValidationClicks += 1',
+    'expect(status).to.equal(409)',
+    'url: `${controlUrl}/provider-fault-receipt?wait=recovery`',
+    "throw new Error('Controlled authenticated provider 503 was observed.')",
+  ]) {
+    const next = controlledProviderFaultSource.indexOf(step, controlCursor)
+    assert.ok(next >= controlCursor)
+    controlCursor = next + step.length
+  }
+  for (const receiptGuard of [
+    'receipt.controlNonce === providerControlNonce',
+    "!matches(consumed, 'controlled_fault_consumed', 'next_authenticated_vault_provider_request')",
+    "!matches(recovered, 'controlled_fault_recovered', 'next_authenticated_vault_provider_request')",
+    'recovered.recoveryStatus !== recovered.baselineStatus',
+    "recovered.rearm !== 'rejected'",
+    'recovered.secondConsume !== false',
+    'await verifyControlledProviderFault(runtimeInputs, coreSource, controlUrl, cypressCloseDeadline)',
+  ]) {
+    assert.equal(controlVerifierSource.split(receiptGuard).length - 1, 1)
+  }
   assert.equal(
     lifecycleSource.includes('trustedUnlockRealProviderControlFailure'),
     false
@@ -345,11 +427,10 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     controlledProviderFaultSource.split(
       "'x-service-lasso-provider-control-nonce': providerControlNonce"
     ).length - 1,
-    3
+    4
   )
   assert.equal(
-    controlledProviderFaultSource.split('expect(status).to.equal(409)').length -
-      1,
+    controlledProviderFaultSource.split('expect(status).to.equal(409)').length - 1,
     1
   )
   assert.equal(
@@ -427,9 +508,32 @@ test('bounded provider, metadata, and execute network waits retain exact source 
   ]) {
     assert.equal(verifierSource.includes(requiredProviderBinding), true)
   }
+  const coreCheckoutStart = browserWorkflowSource.indexOf(
+    '      - name: Checkout pinned Service Lasso Core revision'
+  )
+  const coreCheckoutEnd = browserWorkflowSource.indexOf(
+    '      - name: Checkout pinned Secrets Broker revision',
+    coreCheckoutStart
+  )
+  assert.ok(coreCheckoutStart >= 0)
+  assert.ok(coreCheckoutEnd > coreCheckoutStart)
+  const coreCheckoutSource = browserWorkflowSource.slice(
+    coreCheckoutStart,
+    coreCheckoutEnd
+  )
+  // Bind the assertion to the actual Core checkout, not an unrelated pin or
+  // comment elsewhere in the workflow. This is still a source candidate.
+  for (const checkoutBinding of [
+    'repository: service-lasso/service-lasso',
+    'ref: 611f8cdd2f684e8e466d32009cf4af410225c2ec',
+    'path: qualification/core',
+  ]) {
+    assert.equal(coreCheckoutSource.split(checkoutBinding).length - 1, 1)
+  }
+  assert.equal([...coreCheckoutSource.matchAll(/^\s+ref:/gm)].length, 1)
   assert.equal(
     browserWorkflowSource.includes(
-      'ref: 179af20e05dd65648aa503a0ff534ed6fc1fa14d'
+      'SERVICE_LASSO_TEST_CORE_QUALIFICATION_KIND=source_candidate'
     ),
     true
   )

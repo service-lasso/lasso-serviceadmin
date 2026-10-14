@@ -120,6 +120,11 @@ export const sidebarData: SidebarData = {
       title: 'Secrets Broker',
       items: [
         {
+          title: 'RAM files',
+          url: '/secrets-broker/webdav',
+          icon: HardDrive,
+        },
+        {
           title: 'Secrets',
           url: '/secrets-broker/secrets',
           icon: BookKey,

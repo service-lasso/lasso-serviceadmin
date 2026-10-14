@@ -24,6 +24,7 @@ import {
   runtimeIdentityAuditContext,
   type RuntimeIdentity,
 } from './runtime-auth'
+import { fetchBrokerWebDAV } from './stub'
 import {
   applyBrokerBulkCampaign,
   applyBrokerLifecycleRestore,
@@ -944,5 +945,14 @@ export function useServiceRecoveryDoctorAction() {
       )
       queryClient.invalidateQueries({ queryKey: dashboardQueryKey })
     },
+  })
+}
+
+export function useBrokerWebDAV(cursor = '0', enabled = true) {
+  return useQuery({
+    queryKey: [...brokerOperationsQueryKey, 'webdav', cursor],
+    queryFn: () => fetchBrokerWebDAV(cursor),
+    enabled,
+    refetchInterval: 30000,
   })
 }
