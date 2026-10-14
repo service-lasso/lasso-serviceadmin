@@ -231,6 +231,27 @@ function consumeControlledProviderFault() {
       }).then(({ status }) => {
         expect(status).to.equal(409)
       })
+      // The 409 is a completed rejection; recovery persistence finishes later.
+      // Wait once on the capability-bound completion endpoint before failing.
+      cy.request({
+        url: `${controlUrl}/provider-fault-receipt?wait=recovery`,
+        headers: { 'x-service-lasso-provider-control-nonce': providerControlNonce },
+        timeout: 5_000,
+        retryOnNetworkFailure: false,
+        retryOnStatusCodeFailure: false,
+        log: false,
+      }).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body).to.have.all.keys('outcome', 'receipt')
+        expect(body.outcome).to.equal('provider_fault_observed')
+        expect(body.receipt).to.have.all.keys('schema', 'phase', 'nonce', 'state')
+        expect(body.receipt).to.include({
+          schema: 'service-lasso.real-admin-browser-provider-control.v1',
+          phase: 'authenticated_provider_request',
+          state: 'controlled_fault_consumed',
+        })
+        expect(body.receipt.nonce).to.match(/^[a-f0-9]{64}$/)
+      })
     })
     cy.then(() => {
       throw new Error('Controlled authenticated provider 503 was observed.')
