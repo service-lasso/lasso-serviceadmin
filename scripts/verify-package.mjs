@@ -5,8 +5,11 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { verifySourceAdmissionFixtureInput } from './require-source-admission-fixture-input.mjs'
+import { sourceAdmissionFixtureUpstream, verifySourceAdmissionProxy, verifyGenericBodyProxy, createSourceAdmissionLifetimeCollector } from './source-admission-proxy-fixtures.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+verifySourceAdmissionFixtureInput('extracted')
 const platform = process.argv.slice(2).find((argument) => argument !== '--') ?? process.platform
 const assetName = platform === 'win32'
   ? '@serviceadmin-win32.zip'
@@ -83,6 +86,11 @@ try {
   })
   assert.equal(extraction.status, 0, extraction.stderr)
   await auditExtracted(extractionRoot)
+  assert.deepEqual(
+    await readFile(path.join(extractionRoot, 'runtime', 'server.js')),
+    await readFile(path.join(root, 'runtime', 'server.js')),
+    'packaged proxy must contain the exact selected source bytes'
+  )
   const manifest = JSON.parse(await readFile(path.join(extractionRoot, 'service.json'), 'utf8'))
   const embeddedSbomBytes = await readFile(path.join(extractionRoot, sbomName))
   const sidecarSbomBytes = await readFile(path.join(root, 'output', 'release', sbomName))
@@ -108,19 +116,30 @@ try {
   assert.equal(manifest.artifact.checksum, undefined, 'checksum policy must be platform-scoped for Core consumption')
 
   let observedRequest = null
+  const sourceAdmissionRecords = []
+  let sourceAdmissionMode = 'normal'
   upstream = http.createServer((request, response) => {
-    observedRequest = { headers: request.headers, url: request.url }
-    response.writeHead(200, { 'Content-Type': 'application/json' })
-    response.end(JSON.stringify({ contractVersion: 'service-lasso.auth-status.v1', ok: true }))
+    sourceAdmissionFixtureUpstream(request, response, (record) => {
+      observedRequest = { headers: record.headers, url: record.url }
+      sourceAdmissionRecords.push(record)
+    }, () => sourceAdmissionMode)
   })
   const upstreamPort = await listen(upstream)
   const serviceAdminPort = await reservePort()
   const stdout = []
   const stderr = []
+  let stderrBytes = 0
+  let stderrOverflow = false
+  const lifetime = createSourceAdmissionLifetimeCollector()
+  assert.ok(path.isAbsolute(process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT ?? ''), 'qualification sender artifact ROOT required')
+  assert.match(process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256 ?? '', /^[a-f0-9]{64}$/, 'qualification sender artifact ROOT byte pin required')
   child = spawn(process.execPath, [path.join(extractionRoot, 'runtime', 'server.js')], {
     cwd: extractionRoot,
     env: {
       ...process.env,
+      SERVICE_LASSO_TEST_SOURCE_PROXY_LIFETIME: '1',
+      SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT: process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT,
+      SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256: process.env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT_SHA256,
       SERVICE_HOST: '127.0.0.1',
       SERVICE_PORT: String(serviceAdminPort),
       SERVICE_LASSO_API_BASE_URL: `http://127.0.0.1:${upstreamPort}`,
@@ -128,7 +147,15 @@ try {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   child.stdout.on('data', (chunk) => { if (stdout.join('').length < 65_536) stdout.push(String(chunk)) })
-  child.stderr.on('data', (chunk) => { if (stderr.join('').length < 65_536) stderr.push(String(chunk)) })
+  child.stderr.on('data', (chunk) => {
+    // Preserve original extracted-child bytes in the admitted parent capture.
+    // Exact bounded accumulation rejects overflow rather than treating truncation as proof.
+    process.stderr.write(chunk)
+    lifetime.feed(chunk)
+    stderrBytes += chunk.length
+    if (stderrBytes > 65_536) { stderrOverflow = true; return }
+    stderr.push(String(chunk))
+  })
 
   const shell = await waitForResponse(`http://127.0.0.1:${serviceAdminPort}/`, child)
   assert.match(await shell.text(), /<html/i)
@@ -154,6 +181,24 @@ try {
   assert.equal(observedRequest.headers['x-service-lasso-actor'], 'usr_release_operator')
   assert.equal(observedRequest.headers['x-service-lasso-workspace-id'], 'workspace-release')
   assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
+  await verifySourceAdmissionProxy({
+    receiverInvocation: 'extracted',
+    baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
+    records: sourceAdmissionRecords,
+    lifetime,
+    setMode: (value) => { sourceAdmissionMode = value },
+  })
+  // Package verification has no source-test150s wrapper. Preserve both shared
+  // cases on the original extracted child, sequentially with normal mode.
+  sourceAdmissionMode = 'normal'
+  await verifyGenericBodyProxy({
+    baseUrl: `http://127.0.0.1:${serviceAdminPort}`,
+    records: sourceAdmissionRecords,
+    lifetime,
+  })
+  assert.equal(JSON.stringify({ observedRequest, stdout, stderr }).includes('browser-secret-must-not-forward'), false)
+  assert.equal(stderrOverflow, false, 'original child stderr must be fully bounded and retained')
+  lifetime.snapshot()
   process.stdout.write(`${JSON.stringify({ assetName, runtime: 'verified', identityProxy: 'verified' })}\n`)
 } finally {
   if (child && child.exitCode === null) {
