@@ -1,4 +1,5 @@
 import { waitForCapturedChildClose } from './captured-child-close.mjs'
+import { nestedCoreRunnerEnvironment } from './core-runner-environment.mjs'
 import { closeSuccessfulCoreRunner, hasAcceptedDirectOwnerClosure } from './direct-owner-terminal-acceptance.mjs'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -839,8 +840,7 @@ ownParentOutputChannel(process.stderr)
 try {
   const runner = spawn(process.execPath, [runnerPath], {
     cwd: coreRoot,
-    env: {
-      ...process.env,
+    env: nestedCoreRunnerEnvironment(process.env, {
       SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
       SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
       SERVICE_LASSO_TEST_ROTATION_PROXY_LIFECYCLE: '1',
@@ -853,7 +853,7 @@ try {
       SERVICE_LASSO_TEST_ADMIN_SOURCE_HEAD: adminSource.head,
       SERVICE_LASSO_TEST_ADMIN_SOURCE_TREE: adminSource.tree,
       NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${ownedProcessObserver}`.trim(),
-    },
+    }),
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
   const coreRunnerOwner = retainOwnedProcess(
