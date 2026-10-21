@@ -189,7 +189,7 @@ export function createFirstRunTerminalDiagnostic(x) {
 }
 export async function captureFirstRunChild({ spawnChild, command, args, options, platform, run, candidate, coreCandidate, admission = {}, journalFactory = createPrivateFirstRunJournal, birthObserver = nativeBirth, limits = privateCaptureLimits }) {
   let journal
-  try { journal = journalFactory(command, args, admission) } catch (privateFailure) { return project(null, privateFailure, null, null, false, false, false, 'runner_start_failed') }
+  try { journal = journalFactory(command, args, admission) } catch (privateFailure) { process.stderr.write(`DEBUG714 ${privateFailure?.stack ?? privateFailure}\n`); return project(null, privateFailure, null, null, false, false, false, 'runner_start_failed') }
   let child
   try { child = spawnChild(command, args, options) } catch (privateFailure) { return project(journal, privateFailure, null, null, false, false, false, 'runner_start_failed') }
   let code = null; let signal = null; let closed = false; let primaryFailure = null; let birthFailure = null; let journalFailure = false; let diagnosticCode = 'unclassified'
