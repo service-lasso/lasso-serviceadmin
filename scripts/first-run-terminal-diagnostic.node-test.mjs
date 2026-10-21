@@ -285,6 +285,25 @@ test('re-owns each Windows journal file to the current SID before the owner-priv
   assert.match(journal.close({ event: 'terminal' }), /^[a-f0-9]{64}$/)
 })
 
+test('drops explicit default-DACL grants from the Windows journal root before the single-ACE readback', () => {
+  const sid = 'S-1-5-21-1000'
+  const owned = { identitySid: sid, accessType: 'Allow', rights: 0x1f01ff, inherited: false, inheritanceFlags: 3 }
+  let rootAces = [{ ...owned, identitySid: 'S-1-5-18' }, { ...owned, identitySid: 'S-1-5-32-544' }, owned]
+  let root = null
+  const removed = []
+  const journal = createPrivateFirstRunJournal('private-command', [], {}, {
+    platform: 'win32',
+    ownerSid: sid,
+    execFileSync(command, args) {
+      if (command === 'icacls' && args[1] === '/remove:g') { removed.push(...args.slice(2)); rootAces = rootAces.filter((entry) => !args.includes(`*${entry.identitySid}`)) }
+      return ''
+    },
+    readWindowsSecurity: (path) => { root ??= path; return { ownerSid: sid, access: path === root ? rootAces : [owned] } },
+  })
+  assert.deepEqual(removed, ['*S-1-5-18', '*S-1-5-32-544'])
+  assert.match(journal.close({ event: 'terminal' }), /^[a-f0-9]{64}$/)
+})
+
 test('loops partial private writes and makes writer faults unavailable rather than synthetic commitments', () => {
   let calls = 0
   const partial = createPrivateFirstRunJournal('private-command', [], {}, { writeSync(fd, bytes, offset, length) { calls += 1; return writeSync(fd, bytes, offset, Math.min(length, 1)) } })

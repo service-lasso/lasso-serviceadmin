@@ -32,6 +32,6 @@ try {
     coreCandidate: { head: admission.core.candidate.head, tree: admission.core.candidate.tree, run: admission.core.projectionSha256 }, admission,
     options: { cwd: root, env: { ...process.env, SERVICE_LASSO_REAL_BROWSER_MODE: 'first-run' }, stdio: ['ignore', 'pipe', 'pipe'] },
   })
-} catch (error) { process.stderr.write(`DEBUG714 ${error?.stack ?? error} ${JSON.stringify(error?.errors?.map(e => String(e?.stack ?? e)) ?? null)}\n`); result = { ...projectFailure(error), exitCode: 1 } }
+} catch (error) { result = { ...projectFailure(error), exitCode: 1 } }
 process.stderr.write(`${JSON.stringify(result.diagnostic)}\n`)
 process.exitCode = result.exitCode

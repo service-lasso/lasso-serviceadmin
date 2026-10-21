@@ -66,7 +66,7 @@ function ownedWindowsSecurity(security, sid, label, requirePrivateRoot = false) 
   const ownerOnly = access.length > 0 && access.every((entry) => entry?.identitySid === sid && entry?.accessType === 'Allow')
   const privateRoot = !requirePrivateRoot || (access.length === 1 && access[0]?.inherited === false && (access[0]?.inheritanceFlags & 3) === 3)
   const allowed = ownerOnly && (effectiveRights & fullControl) === fullControl && privateRoot
-  if (security?.ownerSid !== sid || !allowed) throw new Error(`${label} is not owner-private. DEBUG ${sid} ${JSON.stringify(security)}`)
+  if (security?.ownerSid !== sid || !allowed) throw new Error(`${label} is not owner-private.`)
 }
 function ownershipCheck(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform
@@ -164,10 +164,21 @@ function bindPrivateFileOwner(path, dependencies = {}) {
   if (!sid) throw new Error('Owner SID unavailable.')
   ;(dependencies.execFileSync ?? execFileSync)('icacls', [path, '/setowner', `*${sid}`], { windowsHide: true })
 }
+// An elevated token without inheritable parent ACEs stamps its default DACL
+// (SYSTEM, Administrators) onto the new root as explicit ACEs that
+// /inheritance:r does not remove. Drop every explicit non-owner grant so the
+// strict single-ACE owner-private readback holds.
+function dropForeignRootAces(root, sid, dependencies = {}) {
+  const exec = dependencies.execFileSync ?? execFileSync
+  const readSecurity = dependencies.readWindowsSecurity ?? readWindowsSecurity
+  const access = readSecurity(root, exec)?.access
+  const foreign = [...new Set((Array.isArray(access) ? access : []).map((entry) => entry?.identitySid).filter((other) => typeof other === 'string' && other !== sid))]
+  if (foreign.length) exec('icacls', [root, '/remove:g', ...foreign.map((other) => `*${other}`)], { windowsHide: true })
+}
 export function createPrivateFirstRunJournal(command, args, admission, dependencies = {}) {
   const io = { closeSync: dependencies.closeSync ?? closeSync, fsyncSync: dependencies.fsyncSync ?? fsyncSync, openSync: dependencies.openSync ?? openSync, readFileSync: dependencies.readFileSync ?? readFileSync, writeSync: dependencies.writeSync ?? writeSync }
   const root = (dependencies.mkdtempSync ?? mkdtempSync)(join(tmpdir(), 'service-admin-first-run-')); let fault = null
-  if ((dependencies.platform ?? process.platform) === 'win32') { const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync); if (!sid) throw new Error('Owner SID unavailable.'); const exec = dependencies.execFileSync ?? execFileSync; exec('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); exec('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }) } else (dependencies.chmodSync ?? chmodSync)(root, 0o700)
+  if ((dependencies.platform ?? process.platform) === 'win32') { const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync); if (!sid) throw new Error('Owner SID unavailable.'); const exec = dependencies.execFileSync ?? execFileSync; exec('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); exec('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }); dropForeignRootAces(root, sid, dependencies) } else (dependencies.chmodSync ?? chmodSync)(root, 0o700)
   verifyPrivateRootSecurity(root, dependencies)
   const f = Object.fromEntries(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => { const path = join(root, n); const fd = io.openSync(path, 'wx', 0o600); bindPrivateFileOwner(path, dependencies); verifyPrivateFileSecurity(path, dependencies); return [n, fd] }))
   let custodyBytes = 0
@@ -189,7 +200,7 @@ export function createFirstRunTerminalDiagnostic(x) {
 }
 export async function captureFirstRunChild({ spawnChild, command, args, options, platform, run, candidate, coreCandidate, admission = {}, journalFactory = createPrivateFirstRunJournal, birthObserver = nativeBirth, limits = privateCaptureLimits }) {
   let journal
-  try { journal = journalFactory(command, args, admission) } catch (privateFailure) { process.stderr.write(`DEBUG714 ${privateFailure?.stack ?? privateFailure}\n`); return project(null, privateFailure, null, null, false, false, false, 'runner_start_failed') }
+  try { journal = journalFactory(command, args, admission) } catch (privateFailure) { return project(null, privateFailure, null, null, false, false, false, 'runner_start_failed') }
   let child
   try { child = spawnChild(command, args, options) } catch (privateFailure) { return project(journal, privateFailure, null, null, false, false, false, 'runner_start_failed') }
   let code = null; let signal = null; let closed = false; let primaryFailure = null; let birthFailure = null; let journalFailure = false; let diagnosticCode = 'unclassified'
