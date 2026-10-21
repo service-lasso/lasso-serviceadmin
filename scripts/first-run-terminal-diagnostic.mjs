@@ -66,7 +66,7 @@ function ownedWindowsSecurity(security, sid, label, requirePrivateRoot = false) 
   const ownerOnly = access.length > 0 && access.every((entry) => entry?.identitySid === sid && entry?.accessType === 'Allow')
   const privateRoot = !requirePrivateRoot || (access.length === 1 && access[0]?.inherited === false && (access[0]?.inheritanceFlags & 3) === 3)
   const allowed = ownerOnly && (effectiveRights & fullControl) === fullControl && privateRoot
-  if (security?.ownerSid !== sid || !allowed) throw new Error(`${label} is not owner-private.`)
+  if (security?.ownerSid !== sid || !allowed) throw new Error(`${label} is not owner-private. DEBUG ${sid} ${JSON.stringify(security)}`)
 }
 function ownershipCheck(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform
