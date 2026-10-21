@@ -262,6 +262,29 @@ test('drains oversized no-newline output without retaining beyond the private qu
   assert.equal(Buffer.concat(held.events.filter(([kind]) => kind === 'stdout').map(([, bytes]) => bytes)).length, 8); assert.equal(result.diagnostic.state, 'unresolved'); assert.equal(held.events.some(([, value]) => value?.event === 'capture_bound_overflow'), true); assert.deepEqual(Object.keys(privateCaptureLimits).sort(), ['journalBytes', 'pendingTextBytes', 'rawBytesPerStream'])
 })
 
+test('re-owns each Windows journal file to the current SID before the owner-private readback', () => {
+  const sid = 'S-1-5-21-1000'
+  const calls = []
+  const owners = new Map()
+  const secure = (owner) => ({ ownerSid: owner, access: [{ identitySid: sid, accessType: 'Allow', rights: 0x1f01ff, inherited: false, inheritanceFlags: 3 }] })
+  const journal = createPrivateFirstRunJournal('private-command', [], {}, {
+    platform: 'win32',
+    ownerSid: sid,
+    execFileSync(command, args) {
+      calls.push([command, ...args])
+      if (command === 'icacls' && args[1] === '/setowner') owners.set(args[0], args[2].slice(1))
+      return ''
+    },
+    // A file the elevated token created keeps its Administrators default owner
+    // until it is explicitly re-owned; the root is re-owned by its own icacls call.
+    readWindowsSecurity: (path) => secure(owners.get(path) ?? 'S-1-5-32-544'),
+  })
+  const reowned = calls.filter(([command, , action]) => command === 'icacls' && action === '/setowner').map(([, target]) => target)
+  assert.equal(reowned.length, 4)
+  for (const name of ['stdout.bin', 'stderr.bin', 'custody.json']) assert.ok(reowned.some((target) => target.endsWith(name)))
+  assert.match(journal.close({ event: 'terminal' }), /^[a-f0-9]{64}$/)
+})
+
 test('loops partial private writes and makes writer faults unavailable rather than synthetic commitments', () => {
   let calls = 0
   const partial = createPrivateFirstRunJournal('private-command', [], {}, { writeSync(fd, bytes, offset, length) { calls += 1; return writeSync(fd, bytes, offset, Math.min(length, 1)) } })
