@@ -154,12 +154,33 @@ export function verifyPrivateFileSecurity(path, dependencies = {}) {
   const entry = (dependencies.statSync ?? statSync)(path)
   if (entry.uid !== (dependencies.uid ?? process.getuid()) || (entry.mode & 0o777) !== 0o600) throw new Error('Private file owner/mode readback failed.')
 }
+// An elevated Windows token gives new files its default owner (the
+// Administrators group) instead of the user. The private root is already
+// re-owned explicitly; give each journal file the same explicit owner so the
+// strict owner-private readback below holds on elevated hosted runners too.
+function bindPrivateFileOwner(path, dependencies = {}) {
+  if ((dependencies.platform ?? process.platform) !== 'win32') return
+  const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync)
+  if (!sid) throw new Error('Owner SID unavailable.')
+  ;(dependencies.execFileSync ?? execFileSync)('icacls', [path, '/setowner', `*${sid}`], { windowsHide: true })
+}
+// An elevated token without inheritable parent ACEs stamps its default DACL
+// (SYSTEM, Administrators) onto the new root as explicit ACEs that
+// /inheritance:r does not remove. Drop every explicit non-owner grant so the
+// strict single-ACE owner-private readback holds.
+function dropForeignRootAces(root, sid, dependencies = {}) {
+  const exec = dependencies.execFileSync ?? execFileSync
+  const readSecurity = dependencies.readWindowsSecurity ?? readWindowsSecurity
+  const access = readSecurity(root, exec)?.access
+  const foreign = [...new Set((Array.isArray(access) ? access : []).map((entry) => entry?.identitySid).filter((other) => typeof other === 'string' && other !== sid))]
+  if (foreign.length) exec('icacls', [root, '/remove:g', ...foreign.map((other) => `*${other}`)], { windowsHide: true })
+}
 export function createPrivateFirstRunJournal(command, args, admission, dependencies = {}) {
   const io = { closeSync: dependencies.closeSync ?? closeSync, fsyncSync: dependencies.fsyncSync ?? fsyncSync, openSync: dependencies.openSync ?? openSync, readFileSync: dependencies.readFileSync ?? readFileSync, writeSync: dependencies.writeSync ?? writeSync }
   const root = (dependencies.mkdtempSync ?? mkdtempSync)(join(tmpdir(), 'service-admin-first-run-')); let fault = null
-  if ((dependencies.platform ?? process.platform) === 'win32') { const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync); if (!sid) throw new Error('Owner SID unavailable.'); const exec = dependencies.execFileSync ?? execFileSync; exec('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); exec('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }) } else (dependencies.chmodSync ?? chmodSync)(root, 0o700)
+  if ((dependencies.platform ?? process.platform) === 'win32') { const sid = dependencies.ownerSid ?? ownerSid(dependencies.execFileSync ?? execFileSync); if (!sid) throw new Error('Owner SID unavailable.'); const exec = dependencies.execFileSync ?? execFileSync; exec('icacls', [root, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { windowsHide: true }); exec('icacls', [root, '/setowner', `*${sid}`], { windowsHide: true }); dropForeignRootAces(root, sid, dependencies) } else (dependencies.chmodSync ?? chmodSync)(root, 0o700)
   verifyPrivateRootSecurity(root, dependencies)
-  const f = Object.fromEntries(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => { const path = join(root, n); const fd = io.openSync(path, 'wx', 0o600); verifyPrivateFileSecurity(path, dependencies); return [n, fd] }))
+  const f = Object.fromEntries(['stdout.bin', 'stderr.bin', 'custody.json'].map((n) => { const path = join(root, n); const fd = io.openSync(path, 'wx', 0o600); bindPrivateFileOwner(path, dependencies); verifyPrivateFileSecurity(path, dependencies); return [n, fd] }))
   let custodyBytes = 0
   const record = (fd, value) => { try { const bytes = Buffer.isBuffer(value) ? value : Buffer.from(`${JSON.stringify(value)}\n`); if (fd === f['custody.json'] && custodyBytes + bytes.length > privateCaptureLimits.journalBytes) throw new Error('Private custody journal quota exceeded.'); writeAll(fd, bytes, io); if (fd === f['custody.json']) custodyBytes += bytes.length; return true } catch (error) { fault ??= error; return false } }
   if (!record(f['custody.json'], { schema: 'service-admin.first-run-private-custody.v2', admission, parentPid: process.pid, command, args })) throw fault
