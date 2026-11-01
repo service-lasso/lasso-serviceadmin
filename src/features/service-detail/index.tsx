@@ -113,10 +113,12 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import {
   fetchServiceLogChunk,
   fetchServiceLogInfo,
+  fetchServiceTerminalState,
   sendServiceTerminalInput,
   terminalLinesFromChunk,
   type ServiceLogChunk,
   type ServiceLogInfo,
+  type ServiceTerminalSessionState,
   type ServiceTerminalStdinCapability,
 } from '@/features/logs/provider'
 import { ServiceDetailLogsPanel } from '@/features/logs/service-log-viewer'
@@ -143,6 +145,7 @@ import {
 } from './service-detail-tabs'
 import { ServiceIsolationCard } from './service-isolation-card'
 import { ServiceRunStatusCards } from './service-run-status-cards'
+import { ServiceTerminalEmulator } from './service-terminal-emulator'
 
 const editableShortcutTargetSelector = [
   'input',
@@ -821,6 +824,8 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<ServiceLogInfo | null>(null)
+  const [terminalSession, setTerminalSession] =
+    useState<ServiceTerminalSessionState | null>(null)
   const [chunk, setChunk] = useState<ServiceLogChunk | null>(null)
   const [paused, setPaused] = useState(false)
   const [input, setInput] = useState('')
@@ -860,6 +865,15 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
     setLoading(true)
     setInfo(null)
     setChunk(null)
+    setTerminalSession(null)
+
+    void fetchServiceTerminalState(service)
+      .then((state) => {
+        if (!cancelled) setTerminalSession(state)
+      })
+      .catch(() => {
+        if (!cancelled) setTerminalSession(null)
+      })
 
     void (async () => {
       await loadCombinedOutput()
@@ -967,6 +981,12 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
         </div>
       </CardHeader>
       <CardContent className='space-y-4'>
+        {terminalSession?.available ? (
+          <ServiceTerminalEmulator
+            service={service}
+            initialState={terminalSession}
+          />
+        ) : null}
         <div className='rounded-md border bg-muted/20'>
           <div className='flex flex-wrap items-center justify-between gap-2 border-b p-3'>
             <div className='font-medium'>Combined I/O</div>
@@ -1499,7 +1519,7 @@ export function ServiceDetail({
                         <FavoriteToggle service={service} />
                       </div>
                       <p className='text-sm text-muted-foreground'>
-                        {service.id} · {service.role}
+                        {service.id} Ã‚Â· {service.role}
                       </p>
                     </div>
                   </div>

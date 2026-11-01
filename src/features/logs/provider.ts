@@ -367,3 +367,109 @@ export async function sendServiceTerminalInput(
 
   return parseJsonResponse<ServiceTerminalInputResult>(response)
 }
+
+export type ServiceTerminalSessionState = {
+  serviceId: string
+  available: boolean
+  rows: number
+  cols: number
+  sequence: number
+  childPid: number | null
+  error: string | null
+  readOnly: boolean
+  reason: string | null
+}
+
+export type ServiceTerminalOutput = ServiceTerminalSessionState & {
+  data: string
+  truncated: boolean
+}
+
+export type ServiceTerminalAttachResult = {
+  serviceId: string
+  sessionToken: string
+  readOnly: boolean
+  rows: number
+  cols: number
+  expiresAt: number
+}
+
+function buildServiceTerminalUrl(serviceId: string) {
+  return `${resolveLogsApiBaseUrl()}/api/services/${encodeServiceId(
+    serviceId
+  )}/terminal`
+}
+
+export async function fetchServiceTerminalState(service: DashboardService) {
+  const response = await fetch(buildServiceTerminalUrl(service.id))
+  return parseJsonResponse<ServiceTerminalSessionState>(response)
+}
+
+export async function attachServiceTerminal(service: DashboardService) {
+  const response = await fetch(
+    `${buildServiceTerminalUrl(service.id)}/attach`,
+    {
+      method: 'POST',
+    }
+  )
+  return parseJsonResponse<ServiceTerminalAttachResult>(response)
+}
+
+export async function fetchServiceTerminalOutput(
+  service: DashboardService,
+  after: number,
+  sessionToken: string
+) {
+  const response = await fetch(
+    `${buildServiceTerminalUrl(service.id)}/output?after=${String(
+      Math.max(0, Math.trunc(after))
+    )}`,
+    { headers: { 'x-service-lasso-terminal-token': sessionToken } }
+  )
+  return parseJsonResponse<ServiceTerminalOutput>(response)
+}
+
+export async function sendServiceTerminalRawInput(
+  service: DashboardService,
+  dataBase64: string,
+  sessionToken: string
+) {
+  const response = await fetch(`${buildServiceTerminalUrl(service.id)}/input`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-service-lasso-terminal-token': sessionToken,
+    },
+    body: JSON.stringify({ data: dataBase64 }),
+  })
+  return parseJsonResponse<{
+    serviceId: string
+    accepted: boolean
+    byteLength: number
+  }>(response)
+}
+
+export async function sendServiceTerminalResize(
+  service: DashboardService,
+  rows: number,
+  cols: number,
+  sessionToken: string
+) {
+  const response = await fetch(
+    `${buildServiceTerminalUrl(service.id)}/resize`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-service-lasso-terminal-token': sessionToken,
+      },
+      body: JSON.stringify({ rows, cols }),
+    }
+  )
+  return parseJsonResponse<{
+    serviceId: string
+    resized: boolean
+    rows: number
+    cols: number
+  }>(response)
+}
