@@ -70,12 +70,14 @@ describe('sidebar optional page classification', () => {
     )
 
     expect(secretsBrokerGroup?.items.map((item) => item.url)).toEqual([
+      '/secrets-broker/webdav',
       '/secrets-broker/secrets',
       '/secrets-broker/sources',
       '/secrets-broker/topology',
       '/secrets-broker/review',
     ])
     expect(secretsBrokerGroup?.items.map((item) => item.title)).toEqual([
+      'RAM files',
       'Secrets',
       'Providers',
       'Topology',
