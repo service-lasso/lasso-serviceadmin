@@ -1,6 +1,5 @@
 import {
   createTrustedUnlockObservation,
-  createTrustedUnlockReceipt,
   observeTrustedUnlockFailure,
 } from '../../scripts/trusted-unlock-diagnostic.mjs'
 

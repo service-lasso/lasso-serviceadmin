@@ -27,3 +27,5 @@
 
 # Preserve the byte-for-byte canonical Secrets Broker conformance fixture.
 /src/lib/secrets-broker/fixtures/contract-states.json
+tests/provider-recovery-completion.node.mjs
+tests/runtime-server.node.mjs
