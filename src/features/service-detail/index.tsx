@@ -884,7 +884,7 @@ function ServiceTerminalPanel({ service }: { service: DashboardService }) {
     return () => {
       cancelled = true
     }
-  }, [loadCombinedOutput])
+  }, [loadCombinedOutput, service])
 
   useEffect(() => {
     if (service.status !== 'running' || paused) return
