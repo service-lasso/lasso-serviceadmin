@@ -91,6 +91,7 @@ jobs:
         run: pnpm build
 
   package:
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
