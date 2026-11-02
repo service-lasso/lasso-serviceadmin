@@ -3491,7 +3491,7 @@ const releaseFixtureOverlays: Record<string, Partial<DashboardService>> = {
 
 services = services.map((service) => ({
   ...service,
-  ...(releaseFixtureOverlays[service.id] ?? {}),
+  ...releaseFixtureOverlays[service.id],
   recovery: service.recovery ?? createDemoRecoveryState(service.id),
   setup: service.setup ?? createDemoSetupState(service.id),
 }))

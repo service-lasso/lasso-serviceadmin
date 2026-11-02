@@ -1,6 +1,7 @@
 import { render, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ServiceTerminalSessionState } from '@/features/logs/provider'
+import { ServiceTerminalEmulator } from './service-terminal-emulator'
 
 const mocks = vi.hoisted(() => ({
   attachServiceTerminal: vi.fn(),
@@ -23,14 +24,17 @@ const {
   terminalWrite,
   terminalDispose,
   inputSubscriptionDispose,
-  fit,
 } = mocks
 
 vi.mock('@/features/logs/provider', () => ({
-  attachServiceTerminal: (...args: unknown[]) => mocks.attachServiceTerminal(...args),
-  fetchServiceTerminalOutput: (...args: unknown[]) => mocks.fetchServiceTerminalOutput(...args),
-  sendServiceTerminalRawInput: (...args: unknown[]) => mocks.sendServiceTerminalRawInput(...args),
-  sendServiceTerminalResize: (...args: unknown[]) => mocks.sendServiceTerminalResize(...args),
+  attachServiceTerminal: (...args: unknown[]) =>
+    mocks.attachServiceTerminal(...args),
+  fetchServiceTerminalOutput: (...args: unknown[]) =>
+    mocks.fetchServiceTerminalOutput(...args),
+  sendServiceTerminalRawInput: (...args: unknown[]) =>
+    mocks.sendServiceTerminalRawInput(...args),
+  sendServiceTerminalResize: (...args: unknown[]) =>
+    mocks.sendServiceTerminalResize(...args),
 }))
 
 vi.mock('@xterm/xterm', () => ({
@@ -48,10 +52,12 @@ vi.mock('@xterm/xterm', () => ({
   },
 }))
 
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit = mocks.fit } }))
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    fit = mocks.fit
+  },
+}))
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
-
-import { ServiceTerminalEmulator } from './service-terminal-emulator'
 
 class FakeResizeObserver {
   constructor(callback: () => void) {
