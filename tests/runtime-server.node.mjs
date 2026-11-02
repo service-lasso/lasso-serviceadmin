@@ -4,6 +4,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import './provider-recovery-completion.node.mjs'
 import {
   resolvePackagedProxyHeaders,
   rotationProxyLifecycleEvidence,
@@ -75,7 +76,6 @@ import {
   parseRotationProxyLifecycleDiagnostic,
   probeAdminReachability,
 } from '../scripts/real-browser-transport-diagnostics.mjs'
-import './provider-recovery-completion.node.mjs'
 
 test('locked wrapper accepts only named contained launch failures', () => {
   assert.equal(
@@ -361,7 +361,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     'expect(controlUrl).to.match(/^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/__service_lasso_test$/)',
     'expect(providerControlNonce).to.match(/^[a-f0-9]{64}$/)',
     "expect(body).to.deep.equal({ outcome: 'provider_fault_armed' })",
-    'url: `${controlUrl}/provider-fault-receipt`',
+    "url: `${controlUrl}/provider-fault-receipt`",
     "expect(body.outcome).to.equal('provider_fault_observed')",
     "state: 'controlled_fault_consumed'",
     "expect(body.receipt).not.to.have.property('controlNonce')",
@@ -370,9 +370,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     const count = [
       "expect(body.outcome).to.equal('provider_fault_observed')",
       "state: 'controlled_fault_consumed'",
-    ].includes(proof)
-      ? 2
-      : 1
+    ].includes(proof) ? 2 : 1
     assert.equal(controlledProviderFaultSource.split(proof).length - 1, count)
   }
   let controlCursor = 0
@@ -432,8 +430,7 @@ test('bounded provider, metadata, and execute network waits retain exact source 
     4
   )
   assert.equal(
-    controlledProviderFaultSource.split('expect(status).to.equal(409)').length -
-      1,
+    controlledProviderFaultSource.split('expect(status).to.equal(409)').length - 1,
     1
   )
   assert.equal(

@@ -12,10 +12,7 @@ const verifier = await readFile(
   'utf8'
 )
 const lifecycle = await readFile(
-  new URL(
-    '../cypress/e2e/secrets-broker/real-lifecycle.cy.js',
-    import.meta.url
-  ),
+  new URL('../cypress/e2e/secrets-broker/real-lifecycle.cy.js', import.meta.url),
   'utf8'
 )
 const nonce = 'a'.repeat(64)
@@ -82,9 +79,7 @@ function verifierContext(
     clearTimeout: () => {},
     providerControlNonce: capability,
   })
-  const start = verifier.indexOf(
-    'async function awaitProviderRecoveryCompletion('
-  )
+  const start = verifier.indexOf('async function awaitProviderRecoveryCompletion(')
   const end = verifier.indexOf('function waitForReady(', start)
   assert.ok(start >= 0 && end > start)
   vm.runInContext(verifier.slice(start, end), context)
@@ -226,12 +221,7 @@ test('actual verifier rejects absent, failed, wrong-live-nonce and expanded comp
       }
     )
     await assert.rejects(
-      context.verifyControlledProviderFault(
-        runtimeInputs,
-        {},
-        controlUrl,
-        20_000
-      )
+      context.verifyControlledProviderFault(runtimeInputs, {}, controlUrl, 20_000)
     )
     assert.equal(reads, 0)
     assert.equal(requests, 1)
@@ -248,11 +238,7 @@ test('actual verifier never grants a fresh budget and caps a one-shot request at
     /deadline expired/
   )
   assert.equal(requests, 0)
-  await context.awaitProviderRecoveryCompletion(
-    runtimeInputs,
-    controlUrl,
-    20_000
-  )
+  await context.awaitProviderRecoveryCompletion(runtimeInputs, controlUrl, 20_000)
   assert.equal(requests, 1)
   assert.equal(timers[0].ms, 5000)
 })
@@ -442,27 +428,18 @@ test('actual Cypress consumer delays its deliberate 503 failure until the one-sh
 })
 test('actual Cypress consumer fails closed on rejected or expanded completion', async () => {
   for (const response of [
-    {
-      status: 409,
-      body: { outcome: 'provider_fault_unobserved', receipt: null },
-    },
-    {
-      status: 500,
-      body: { outcome: 'provider_fault_unobserved', receipt: null },
-    },
+    { status: 409, body: { outcome: 'provider_fault_unobserved', receipt: null } },
+    { status: 500, body: { outcome: 'provider_fault_unobserved', receipt: null } },
     { status: 200, body: { ...observed(), controlNonce: capability } },
   ]) {
     const caller = cypressConsumer(async () => response)
     await assert.rejects(
       caller.drain(),
       (error) =>
-        !error.message.includes(
-          'Controlled authenticated provider 503 was observed'
-        )
+        !error.message.includes('Controlled authenticated provider 503 was observed')
     )
     assert.equal(
-      caller.requests.filter(({ url }) => url.endsWith('?wait=recovery'))
-        .length,
+      caller.requests.filter(({ url }) => url.endsWith('?wait=recovery')).length,
       1
     )
   }
