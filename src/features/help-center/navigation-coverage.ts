@@ -76,7 +76,12 @@ export const helpCenterNavigationCoverage: HelpCenterNavigationCoverage[] = [
   },
   {
     route: '/secrets-broker/webdav',
-    exception: { kind: 'article-planned', issue: 'service-lasso/lasso-serviceadmin#720', reason: 'The RAM files page guide is planned; the secret-file workflow is documented in the service secrets guide.' },
+    exception: {
+      kind: 'article-planned',
+      issue: 'service-lasso/lasso-serviceadmin#720',
+      reason:
+        'The RAM files page guide is planned; the secret-file workflow is documented in the service secrets guide.',
+    },
   },
   {
     route: '/secrets-broker/secrets',
