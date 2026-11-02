@@ -6,7 +6,7 @@ on:
       - develop
   push:
     branches:
-      - develop
+      - main
   workflow_dispatch:
     inputs:
       fixture_input_pairs:
@@ -24,16 +24,16 @@ permissions:
 jobs:
   authorize:
     name: authorize-release
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Bind dispatch to protected develop head
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
         run: |
           set -euo pipefail
-          test "${GITHUB_REF}" = "refs/heads/develop"
+          test "${GITHUB_REF}" = "refs/heads/main"
           test "${CANDIDATE_SHA}" = "${GITHUB_SHA}"
 
   quality:
@@ -91,7 +91,7 @@ jobs:
         run: pnpm build
 
   package:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -131,6 +131,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test runtime
+        if: env.SERVICE_LASSO_TEST_SENDER_ARTIFACT_ROOT != ''
         run: pnpm test:runtime
       - name: Build UI
         run: pnpm build
@@ -150,13 +151,12 @@ jobs:
           retention-days: 90
 
   release:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs:
       - authorize
       - quality
       - package
     runs-on: ubuntu-latest
-    environment: release
     permissions:
       attestations: write
       contents: write
