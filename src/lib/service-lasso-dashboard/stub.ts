@@ -4201,8 +4201,19 @@ export function setFirstRunSetupFixtureForTests(
     : defaults
 }
 
+let firstRunSetupTestOverrideApplied = false
+
 export async function fetchFirstRunSetupState() {
   if (isServiceAdminStubModeEnabled()) {
+    const testOverride = (
+      globalThis as {
+        __SERVICE_ADMIN_FIRST_RUN_SETUP__?: Partial<FirstRunSetupState>
+      }
+    ).__SERVICE_ADMIN_FIRST_RUN_SETUP__
+    if (testOverride && !firstRunSetupTestOverrideApplied) {
+      firstRunSetupTestOverrideApplied = true
+      setFirstRunSetupFixtureForTests(testOverride)
+    }
     return structuredClone(firstRunSetupFixture)
   }
 
