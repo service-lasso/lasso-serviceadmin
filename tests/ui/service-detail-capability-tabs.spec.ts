@@ -74,6 +74,7 @@ test('service access tab renders mapped groups and permission grants', async ({
 
 test('service config editor renders and saves a validated edit', async ({
   page,
+  browserName,
 }) => {
   await page.goto('/services/dagu?tab=config')
 
@@ -90,9 +91,17 @@ test('service config editor renders and saves a validated edit', async ({
   const save = page.getByRole('button', { name: 'Save', exact: true })
   await expect(save).toBeDisabled()
 
-  await page.locator('.monaco-editor').first().click()
-  await page.keyboard.press('Control+End')
-  await page.keyboard.type(' ')
+  if (browserName === 'webkit') {
+    // WebKit exposes the Monaco input through its hidden textarea; keyboard
+    // events on the editor surface alone do not reach the model.
+    const monacoInput = page.locator('.monaco-editor textarea').first()
+    await monacoInput.focus()
+    await monacoInput.pressSequentially(' ', { delay: 20 })
+  } else {
+    await page.locator('.monaco-editor').first().click()
+    await page.keyboard.press('Control+End')
+    await page.keyboard.type(' ')
+  }
   await page
     .getByPlaceholder('Describe the operator change')
     .fill('e2e audit reason')
