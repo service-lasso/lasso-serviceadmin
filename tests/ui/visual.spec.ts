@@ -137,17 +137,13 @@ async function installTerminalRoutes(page: Page) {
 }
 
 async function settle(page: Page) {
-  await page.evaluate(async () => {
-    await document.fonts.ready
-  })
   // The router progress bar animates on JS timers and settles at a
   // non-deterministic point; it is chrome, not part of the screen under test.
-  await page.evaluate(() => {
-    for (const element of document.querySelectorAll('div')) {
-      if (element.style.zIndex === '99999999999') {
-        element.style.visibility = 'hidden'
-      }
-    }
+  await page.addStyleTag({
+    content: '.navigation-progress { visibility: hidden !important; }',
+  })
+  await page.evaluate(async () => {
+    await document.fonts.ready
   })
 }
 
