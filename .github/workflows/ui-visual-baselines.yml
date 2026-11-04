@@ -2,12 +2,18 @@ name: UI Visual Baselines
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - labeled
 
 permissions:
   contents: read
 
 jobs:
   generate:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'update-visual-baselines')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
