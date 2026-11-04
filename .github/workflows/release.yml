@@ -79,8 +79,8 @@ jobs:
           done
       - name: Run unit tests
         run: pnpm test:unit
-      - name: Install Chromium for browser qualification
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install browser engines for qualification
+        run: pnpm exec playwright install --with-deps chromium webkit
       - name: Run browser qualification
         run: pnpm test:ui
       - name: Install Cypress

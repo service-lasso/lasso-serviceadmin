@@ -31,5 +31,11 @@ export default defineConfig({
         ...(chromiumChannel ? { channel: chromiumChannel } : {}),
       },
     },
+    {
+      name: 'webkit',
+      use: {
+        ...devices['Desktop Safari'],
+      },
+    },
   ],
 })
