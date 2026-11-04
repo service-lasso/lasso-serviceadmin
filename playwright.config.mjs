@@ -9,7 +9,13 @@ export default defineConfig({
   timeout: 60_000,
   expect: {
     timeout: 10_000,
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+    },
   },
+  snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{arg}{ext}',
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     trace: 'on-first-retry',
@@ -33,6 +39,9 @@ export default defineConfig({
     },
     {
       name: 'webkit',
+      // Visual baselines are generated and compared on Linux Chromium only.
+      // WebKit still runs the full behavioural suite.
+      testIgnore: '**/visual.spec.ts',
       use: {
         ...devices['Desktop Safari'],
       },
