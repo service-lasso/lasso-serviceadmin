@@ -42,6 +42,10 @@ export function ServiceTerminalEmulator({
   const hostRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [attached, setAttached] = useState(false)
+  const serviceRef = useRef(service)
+  useEffect(() => {
+    serviceRef.current = service
+  }, [service])
 
   useEffect(() => {
     const host = hostRef.current
@@ -76,7 +80,7 @@ export function ServiceTerminalEmulator({
       }
       try {
         const output = await fetchServiceTerminalOutput(
-          service,
+          serviceRef.current,
           sequence,
           sessionToken
         )
@@ -106,7 +110,7 @@ export function ServiceTerminalEmulator({
 
     void (async () => {
       try {
-        const session = await attachServiceTerminal(service)
+        const session = await attachServiceTerminal(serviceRef.current)
         if (disposed) {
           return
         }
@@ -132,7 +136,7 @@ export function ServiceTerminalEmulator({
         return
       }
       void sendServiceTerminalRawInput(
-        service,
+        serviceRef.current,
         bytesToBase64(new TextEncoder().encode(data)),
         sessionToken
       ).catch((nextError: unknown) => {
@@ -152,7 +156,7 @@ export function ServiceTerminalEmulator({
       }
       if (sessionToken) {
         void sendServiceTerminalResize(
-          service,
+          serviceRef.current,
           terminal.rows,
           terminal.cols,
           sessionToken
@@ -174,7 +178,10 @@ export function ServiceTerminalEmulator({
       terminal.dispose()
     }
   }, [
-    service,
+    // The dashboard query can return a new object with the same id on every
+    // refetch. Re-attaching on identity churn starts a second Core terminal
+    // session, which Core rejects with 409 while the first is still active.
+    service.id,
     initialState.rows,
     initialState.cols,
     initialState.readOnly,
