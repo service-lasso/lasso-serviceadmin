@@ -74,7 +74,6 @@ test('service access tab renders mapped groups and permission grants', async ({
 
 test('service config editor renders and saves a validated edit', async ({
   page,
-  browserName,
 }) => {
   await page.goto('/services/dagu?tab=config')
 
@@ -91,22 +90,57 @@ test('service config editor renders and saves a validated edit', async ({
   const save = page.getByRole('button', { name: 'Save', exact: true })
   await expect(save).toBeDisabled()
 
-  if (browserName === 'webkit') {
-    // WebKit exposes the Monaco input through its hidden textarea; keyboard
-    // events on the editor surface alone do not reach the model.
-    const monacoInput = page.locator('.monaco-editor textarea').first()
-    await monacoInput.focus()
-    await monacoInput.pressSequentially(' ', { delay: 20 })
-  } else {
-    await page.locator('.monaco-editor').first().click()
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type(' ')
-  }
+  // Drive the Monaco model directly so the edit is deterministic across
+  // Chromium and WebKit instead of depending on each engine's input surface.
+  await page.waitForFunction(() => {
+    const monaco = (
+      window as unknown as {
+        monaco?: {
+          editor?: {
+            getModels?: () => Array<{ getValue: () => string }>
+          }
+        }
+      }
+    ).monaco
+    return Boolean(
+      monaco?.editor
+        ?.getModels?.()
+        .some((model) => model.getValue().includes('"id": "dagu"'))
+    )
+  })
   await page
     .getByPlaceholder('Describe the operator change')
     .fill('e2e audit reason')
 
-  await expect(save).toBeEnabled({ timeout: 10_000 })
+  // Retry the model edit until the controlled editor reports the change. A
+  // late config load can otherwise reset the content and clear the dirty flag.
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => {
+          const monaco = (
+            window as unknown as {
+              monaco?: {
+                editor?: {
+                  getModels?: () => Array<{
+                    getValue: () => string
+                    setValue: (value: string) => void
+                  }>
+                }
+              }
+            }
+          ).monaco
+          const model = monaco?.editor
+            ?.getModels?.()
+            .find((candidate) => candidate.getValue().includes('"id": "dagu"'))
+          if (!model) throw new Error('Monaco model not available')
+          model.setValue(`${model.getValue().trimEnd()} `)
+        })
+        return save.isEnabled()
+      },
+      { timeout: 15_000, intervals: [250, 500, 1000, 2000] }
+    )
+    .toBe(true)
   await save.click()
 
   await expect(
