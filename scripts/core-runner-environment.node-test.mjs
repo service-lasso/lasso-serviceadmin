@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
 
 import { nestedCoreRunnerEnvironment } from './core-runner-environment.mjs'
 
@@ -33,4 +34,23 @@ test('does not mutate the caller environment', () => {
     SERVICE_LASSO_ADMIN_PROVIDER_OBSERVER_ROOT: '/private/provider-observer',
     SERVICE_LASSO_ADMIN_PROVIDER_OBSERVER_NONCE: 'a'.repeat(64),
   })
+})
+
+test('verifier separates the published Core product root from the Core source root', async () => {
+  const source = (
+    await readFile(new URL('./verify-real-broker-browser.mjs', import.meta.url), 'utf8')
+  ).replace(/\r\n/g, '\n')
+
+  assert.match(source, /SERVICE_LASSO_TEST_CORE_SOURCE_ROOT/)
+  assert.match(source, /const runnerPath = path\.join\(\n  coreSourceRoot,/)
+  assert.match(
+    source,
+    /head: execFileSync\('git', \['-C', coreSourceRoot, 'rev-parse', 'HEAD'\]/
+  )
+  assert.match(source, /await requireDirectory\(coreRoot, 'Core product root'\)/)
+  assert.match(
+    source,
+    /await requireDirectory\(coreSourceRoot, 'Core source root'\)/
+  )
+  assert.match(source, /cwd: coreSourceRoot,/)
 })
