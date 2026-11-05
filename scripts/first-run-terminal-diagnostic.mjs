@@ -40,6 +40,23 @@ export function parseStrictJson(text) {
   const result = val(); ws(); if (i !== text.length) throw new Error('Trailing JSON.'); return result
 }
 export function parseSafeRunnerDiagnostic(line) { try { const x = typeof line === 'string' && line.length <= 256 ? parseStrictJson(line) : null; return keys(x, ['code', 'schema']) && x.schema === 'service-lasso.real-admin-browser-failure.v1' && codes.has(x.code) ? x.code : null } catch { return null } }
+export function parseQualificationFailureDiagnostic(line) {
+  try {
+    const x = typeof line === 'string' && line.length <= 4096 ? parseStrictJson(line) : null
+    if (x?.schema !== 'service-admin.real-browser-qualification-diagnostic.v1' || !['timeout', 'nonzero_exit'].includes(x.failure) || typeof x.lastPhase !== 'string' || !/^[a-z0-9_]{1,64}$/u.test(x.lastPhase)) return null
+    const summary = x.cypressRunSummary ?? {}
+    return {
+      schema: x.schema,
+      failure: x.failure,
+      lastPhase: x.lastPhase,
+      cypressRunSummary: {
+        state: typeof summary.state === 'string' && /^[a-z0-9_]{1,64}$/u.test(summary.state) ? summary.state : 'unavailable',
+        ...(Number.isInteger(summary.totalFailed) ? { totalFailed: summary.totalFailed } : {}),
+        ...(Number.isInteger(summary.totalPassed) ? { totalPassed: summary.totalPassed } : {}),
+      },
+    }
+  } catch { return null }
+}
 export function safeSignal(signal) { return signal === null || ['SIGINT', 'SIGTERM', 'SIGKILL'].includes(signal) ? signal : signal === undefined ? null : 'other' }
 
 export function validateCoreInitialProjection(bytes, platform) {
@@ -199,16 +216,17 @@ export function createFirstRunTerminalDiagnostic(x) {
   return Object.freeze({ schema: firstRunTerminalDiagnosticSchema, mode: 'first_run', stage, state: naturalClose && stdoutEof && stderrEof ? 'closed' : 'unresolved', platform, run, candidate, coreCandidate, privateCloseJournal, exitCode, signal: safeSignal(signal), naturalClose, stdoutEof, stderrEof, safeDiagnosticCode })
 }
 export async function captureFirstRunChild({ spawnChild, command, args, options, platform, run, candidate, coreCandidate, admission = {}, journalFactory = createPrivateFirstRunJournal, birthObserver = nativeBirth, limits = privateCaptureLimits }) {
+  let safeQualificationFailure = null
   let journal
   try { journal = journalFactory(command, args, admission) } catch (privateFailure) { return project(null, privateFailure, null, null, false, false, false, 'runner_start_failed') }
   let child
   try { child = spawnChild(command, args, options) } catch (privateFailure) { return project(journal, privateFailure, null, null, false, false, false, 'runner_start_failed') }
   let code = null; let signal = null; let closed = false; let primaryFailure = null; let birthFailure = null; let journalFailure = false; let diagnosticCode = 'unclassified'
-  const stdout = capture(child.stdout, journal.stdout, () => {}, limits); const stderr = capture(child.stderr, journal.stderr, (line) => { diagnosticCode = parseSafeRunnerDiagnostic(line) ?? diagnosticCode }, limits)
+  const stdout = capture(child.stdout, journal.stdout, () => {}, limits); const stderr = capture(child.stderr, journal.stderr, (line) => { diagnosticCode = parseSafeRunnerDiagnostic(line) ?? diagnosticCode; safeQualificationFailure = parseQualificationFailureDiagnostic(line) ?? safeQualificationFailure }, limits)
   const settle = () => closed && stdout.settled() && stderr.settled()
   await new Promise((done) => { const finish = () => { if (settle()) done() }; child.once('error', (error) => { primaryFailure ??= error; finish() }); child.once('close', (nextCode, nextSignal) => { code = nextCode; signal = nextSignal; closed = true; finish() }); for (const stream of [child.stdout, child.stderr]) if (stream?.once) { stream.once('end', finish); stream.once('error', finish) }; try { const identity = birthObserver(child); if (!journal.record({ event: 'birth', identity })) { journalFailure = true; primaryFailure ??= journal.fault() } } catch (error) { birthFailure = error; primaryFailure ??= error; journal.record({ event: 'birth_failure' }) }; finish() })
   const natural = closed && !primaryFailure && !birthFailure && safeSignal(signal) === null && stdout.eof && stderr.eof && !stdout.error && !stderr.error && !stdout.overflow && !stderr.overflow
   if (stdout.overflow || stderr.overflow) journal.record({ event: 'capture_bound_overflow', stdout: stdout.overflow, stderr: stderr.overflow })
   return project(journal, primaryFailure, code, signal, closed, stdout.eof, stderr.eof, birthFailure || journalFailure ? 'runner_start_failed' : diagnosticCode, { natural, stdout, stderr })
-  function project(activeJournal, failure, finalCode, finalSignal, observedClose, stdoutEof, stderrEof, safeCode, captureState = null) { const commitment = activeJournal?.close({ event: 'terminal', exitCode: observedClose ? finalCode : null, signal: observedClose ? safeSignal(finalSignal) : null, naturalClose: captureState?.natural ?? false, stdoutEof, stderrEof, stdoutSha256: captureState?.stdout?.digest() ?? null, stderrSha256: captureState?.stderr?.digest() ?? null, captureOverflow: Boolean(captureState?.stdout?.overflow || captureState?.stderr?.overflow) }) ?? null; const diagnostic = createFirstRunTerminalDiagnostic({ platform, run, candidate, coreCandidate, privateCloseJournal: commitment ? { state: 'retained', sha256: commitment } : { state: 'unavailable', sha256: null }, exitCode: observedClose ? finalCode : null, signal: observedClose ? finalSignal : null, naturalClose: Boolean(captureState?.natural && commitment), stdoutEof, stderrEof, safeDiagnosticCode: safeCode }); return { diagnostic, exitCode: finalCode === 0 && diagnostic.state === 'closed' ? 0 : 1, privateFailure: failure ?? activeJournal?.fault() ?? null, privateJournalRoot: activeJournal?.root ?? null } }
+  function project(activeJournal, failure, finalCode, finalSignal, observedClose, stdoutEof, stderrEof, safeCode, captureState = null) { const commitment = activeJournal?.close({ event: 'terminal', exitCode: observedClose ? finalCode : null, signal: observedClose ? safeSignal(finalSignal) : null, naturalClose: captureState?.natural ?? false, stdoutEof, stderrEof, stdoutSha256: captureState?.stdout?.digest() ?? null, stderrSha256: captureState?.stderr?.digest() ?? null, captureOverflow: Boolean(captureState?.stdout?.overflow || captureState?.stderr?.overflow) }) ?? null; const diagnostic = createFirstRunTerminalDiagnostic({ platform, run, candidate, coreCandidate, privateCloseJournal: commitment ? { state: 'retained', sha256: commitment } : { state: 'unavailable', sha256: null }, exitCode: observedClose ? finalCode : null, signal: observedClose ? finalSignal : null, naturalClose: Boolean(captureState?.natural && commitment), stdoutEof, stderrEof, safeDiagnosticCode: safeCode }); return { diagnostic, exitCode: finalCode === 0 && diagnostic.state === 'closed' ? 0 : 1, privateFailure: failure ?? activeJournal?.fault() ?? null, privateJournalRoot: activeJournal?.root ?? null, safeQualificationFailure } }
 }

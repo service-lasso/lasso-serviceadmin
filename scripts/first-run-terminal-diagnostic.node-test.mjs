@@ -12,6 +12,7 @@ import {
   createPrivateFirstRunJournal,
   createFirstRunTerminalDiagnostic,
   firstRunTerminalDiagnosticSchema,
+  parseQualificationFailureDiagnostic,
   parseSafeRunnerDiagnostic,
   privateCaptureLimits,
   verifyPrivateFileSecurity,
@@ -319,4 +320,33 @@ test('keeps spawn throws, signals, and private values out of the public terminal
   child.stdout.emit('end'); child.stderr.emit('end'); child.emit('close', null, 'SIGTERM')
   const signalled = await signalPending
   assert.equal(signalled.diagnostic.signal, 'SIGTERM'); assert.equal(signalled.diagnostic.state, 'unresolved')
+})
+
+test('captures the inner qualification failure diagnostic for the bounded job log', () => {
+  const value = parseQualificationFailureDiagnostic(
+    JSON.stringify({
+      schema: 'service-admin.real-browser-qualification-diagnostic.v1',
+      failure: 'nonzero_exit',
+      lastPhase: 'comprehensive_lifecycle',
+      cypressRunSummary: { state: 'complete', totalFailed: 2, totalPassed: 10 },
+      privatePath: '/tmp/private',
+    })
+  )
+  assert.deepEqual(value, {
+    schema: 'service-admin.real-browser-qualification-diagnostic.v1',
+    failure: 'nonzero_exit',
+    lastPhase: 'comprehensive_lifecycle',
+    cypressRunSummary: { state: 'complete', totalFailed: 2, totalPassed: 10 },
+  })
+  assert.equal(parseQualificationFailureDiagnostic('{"schema":"other"}'), null)
+  assert.equal(
+    parseQualificationFailureDiagnostic(
+      JSON.stringify({
+        schema: 'service-admin.real-browser-qualification-diagnostic.v1',
+        failure: 'private',
+        lastPhase: '/tmp/private',
+      })
+    ),
+    null
+  )
 })
