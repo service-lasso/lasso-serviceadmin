@@ -52,7 +52,15 @@ import {
 import { readHeldJsonFile, readHeldRegularFile } from './held-receipt-reader.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// The published Core product root holds the extracted archive. The harness
+// source root is a real Core git checkout and is the only source that can
+// provide the runner fixture, source identity and native receipt assets.
 const coreRoot = requiredPath('SERVICE_LASSO_TEST_CORE_ROOT')
+const coreSourceRoot =
+  optionalPath('SERVICE_LASSO_TEST_CORE_SOURCE_ROOT') ??
+  (process.env.GITHUB_WORKSPACE?.trim()
+    ? path.resolve(process.env.GITHUB_WORKSPACE)
+    : coreRoot)
 const brokerBinary = requiredPath('SERVICE_LASSO_TEST_BROKER_BINARY')
 const platform = process.platform
 const committedRotationCandidate =
@@ -96,16 +104,16 @@ const adminRoot = path.resolve(
     path.join(root, 'output', 'package', `@serviceadmin-${platform}`)
 )
 const runnerPath = path.join(
-  coreRoot,
+  coreSourceRoot,
   'tests',
   'fixtures',
   'real-admin-browser-runner.mjs'
 )
 const coreSource = {
-  head: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD'], {
+  head: execFileSync('git', ['-C', coreSourceRoot, 'rev-parse', 'HEAD'], {
     encoding: 'utf8',
   }).trim(),
-  tree: execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD^{tree}'], {
+  tree: execFileSync('git', ['-C', coreSourceRoot, 'rev-parse', 'HEAD^{tree}'], {
     encoding: 'utf8',
   }).trim(),
 }
@@ -149,6 +157,11 @@ function requiredPath(name) {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`${name} is required.`)
   return path.resolve(value)
+}
+
+function optionalPath(name) {
+  const value = process.env[name]?.trim()
+  return value ? path.resolve(value) : null
 }
 
 async function requireFile(filePath, label) {
@@ -597,7 +610,8 @@ function observedParentPid(pid) {
   }
 }
 
-await requireDirectory(coreRoot, 'Core root')
+await requireDirectory(coreRoot, 'Core product root')
+await requireDirectory(coreSourceRoot, 'Core source root')
 await requireDirectory(adminRoot, 'Packaged Admin root')
 await requireFile(brokerBinary, 'Broker binary')
 await requireFile(runnerPath, 'Core browser runner')
@@ -672,7 +686,7 @@ const coreReceiptAssets = Object.fromEntries(
       'tests/fixtures/real-admin-browser-shutdown.mjs',
       'tests/fixtures/real-admin-browser-rollback.mjs',
     ].map(async (literalPath) => {
-      const filePath = path.join(coreRoot, ...literalPath.split('/'))
+      const filePath = path.join(coreSourceRoot, ...literalPath.split('/'))
       const info = await lstat(filePath)
       if (!info.isFile() || info.isSymbolicLink() || info.size < 1) {
         throw new Error('Expected Core native runner asset was unavailable.')
@@ -839,7 +853,7 @@ ownParentOutputChannel(process.stderr)
 
 try {
   const runner = spawn(process.execPath, [runnerPath], {
-    cwd: coreRoot,
+    cwd: coreSourceRoot,
     env: nestedCoreRunnerEnvironment(process.env, {
       SERVICE_LASSO_TEST_BROKER_BINARY: brokerBinary,
       SERVICE_LASSO_TEST_ADMIN_ROOT: adminRoot,
