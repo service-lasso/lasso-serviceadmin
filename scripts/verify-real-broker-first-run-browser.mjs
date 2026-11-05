@@ -33,5 +33,6 @@ try {
     options: { cwd: root, env: { ...process.env, SERVICE_LASSO_REAL_BROWSER_MODE: 'first-run' }, stdio: ['ignore', 'pipe', 'pipe'] },
   })
 } catch (error) { result = { ...projectFailure(error), exitCode: 1 } }
+if (result.safeQualificationFailure) process.stderr.write(`${JSON.stringify(result.safeQualificationFailure)}\n`)
 process.stderr.write(`${JSON.stringify(result.diagnostic)}\n`)
 process.exitCode = result.exitCode
