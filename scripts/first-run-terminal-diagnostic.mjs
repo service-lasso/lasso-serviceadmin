@@ -43,6 +43,9 @@ export function parseSafeRunnerDiagnostic(line) { try { const x = typeof line ==
 export function parseQualificationFailureDiagnostic(line) {
   try {
     const x = typeof line === 'string' && line.length <= 4096 ? parseStrictJson(line) : null
+    if (x?.schema === 'service-lasso.real-browser-verifier-failure.v1' && x.state === 'unverified' && typeof x.category === 'string' && /^[a-z0-9_]{1,64}$/u.test(x.category)) {
+      return { schema: x.schema, failure: 'verifier_failure', lastPhase: x.category, cypressRunSummary: { state: 'unavailable' } }
+    }
     if (x?.schema !== 'service-admin.real-browser-qualification-diagnostic.v1' || !['timeout', 'nonzero_exit'].includes(x.failure) || typeof x.lastPhase !== 'string' || !/^[a-z0-9_]{1,64}$/u.test(x.lastPhase)) return null
     const summary = x.cypressRunSummary ?? {}
     return {
