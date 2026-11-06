@@ -350,3 +350,29 @@ test('captures the inner qualification failure diagnostic for the bounded job lo
     null
   )
 })
+
+test('captures a generic verifier failure category', () => {
+  const value = parseQualificationFailureDiagnostic(
+    JSON.stringify({
+      schema: 'service-lasso.real-browser-verifier-failure.v1',
+      state: 'unverified',
+      category: 'closure_receipt',
+    })
+  )
+  assert.deepEqual(value, {
+    schema: 'service-lasso.real-browser-verifier-failure.v1',
+    failure: 'verifier_failure',
+    lastPhase: 'closure_receipt',
+    cypressRunSummary: { state: 'unavailable' },
+  })
+  assert.equal(
+    parseQualificationFailureDiagnostic(
+      JSON.stringify({
+        schema: 'service-lasso.real-browser-verifier-failure.v1',
+        state: 'unverified',
+        category: '/private',
+      })
+    ),
+    null
+  )
+})

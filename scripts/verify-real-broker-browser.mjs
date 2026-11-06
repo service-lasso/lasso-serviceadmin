@@ -712,6 +712,7 @@ const ownedProcessObserver = path.join(
 
 let runFailure
 let runFailurePresent = false
+let runFailureCategory = 'unknown'
 let finalCustodyWriteFailure
 let finalCustodyWriteFailurePresent = false
 let finalCustodyDiagnosticFailure
@@ -722,10 +723,11 @@ function retainFinalCustodyDiagnosticFailure(error) {
     finalCustodyDiagnosticFailurePresent = true
   }
 }
-function retainRunFailure(error) {
+function retainRunFailure(error, category = 'unknown') {
   if (!runFailurePresent) {
     runFailure = error
     runFailurePresent = true
+    runFailureCategory = category
   }
 }
 // Parent channels are owned before any child birth or parent publication.
@@ -737,7 +739,7 @@ const parentOutputChannels = new Map()
 let parentOutputDeadline
 function retainParentOutputFailure(error, diagnosticFailure) {
   parentOutputFailures.push(error)
-  retainRunFailure(error)
+  retainRunFailure(error, 'output_channel')
   if (diagnosticFailure) diagnosticFailure(error)
   process.exitCode = 1
 }
@@ -1055,17 +1057,17 @@ try {
       auditEventCount = await verifyBrokerAudit(runtimeInputs)
     }
   } catch (error) {
-    retainRunFailure(error)
+    retainRunFailure(error, 'cypress')
   } finally {
     if (cypress?.exitCode === null) {
-      retainRunFailure(new Error('Cypress did not close at its qualification deadline.'))
+      retainRunFailure(new Error('Cypress did not close at its qualification deadline.'), 'cypress')
     }
     if (cypressOutput && !cypressOutputChecked) {
       try {
         cypressOutputChecked = true
         publishSafeChildOutput(cypressOutput)
       } catch (error) {
-        retainRunFailure(error)
+        retainRunFailure(error, 'cypress_output')
       }
     }
     if (runtimeInputs) {
@@ -1076,13 +1078,13 @@ try {
           { requireComplete: cypressSucceeded }
         )
       } catch (error) {
-        retainRunFailure(error)
+        retainRunFailure(error, 'no_leak')
       }
     }
     if (stderrBytes > 1_048_576) {
       retainRunFailure(new Error(
         'Real browser runtime diagnostic output exceeded its bound.'
-      ))
+      ), 'stderr_bound')
     }
     try {
       if (qualificationFailureKind && ready) {
@@ -1106,20 +1108,20 @@ try {
         writeParentOutput(process.stderr, `${JSON.stringify(finalQualificationFailureDiagnostic)}\n`)
       }
     } catch (error) {
-      retainRunFailure(error)
+      retainRunFailure(error, 'failure_diagnostic')
     }
     try {
       await closeSuccessfulCoreRunner(runner, coreRunnerOwner, (deadline) => {
         parentOutputDeadline = deadline
       })
     } catch (error) {
-      retainRunFailure(error)
+      retainRunFailure(error, 'runner_close')
     }
     if (runtimeInputs) {
       try {
         await verifyClosureReceipt(runtimeInputs, coreSource)
       } catch (error) {
-        retainRunFailure(error)
+        retainRunFailure(error, 'closure_receipt')
       }
     }
   }
@@ -1132,7 +1134,7 @@ try {
       nestedExpectedSources
     )
   } catch (error) {
-    retainRunFailure(error)
+    retainRunFailure(error, 'process_custody')
   }
   const nestedClosureVerified = hasClosedOwnedProcessCustody(nestedOwners)
   await settleParentOutput()
@@ -1207,7 +1209,7 @@ try {
     // Retain both exact values privately, without inspecting or mutating them.
     finalCustodyWriteFailure = error
     finalCustodyWriteFailurePresent = true
-    retainRunFailure(error)
+    retainRunFailure(error, 'final_custody')
     try {
       // Delivery depends on the existing captured stderr channel. No private
       // payload, arbitrary getters, coercion, paths or error text enter this record.
@@ -1363,7 +1365,7 @@ try {
   retainRunFailure(error)
   process.exitCode = 1
   writeParentOutput(process.stderr,
-    '{"schema":"service-lasso.real-browser-verifier-failure.v1","state":"unverified"}\n'
+    `${JSON.stringify({ schema: 'service-lasso.real-browser-verifier-failure.v1', state: 'unverified', category: runFailureCategory })}\n`
   )
   await settleParentOutput()
 }
