@@ -951,7 +951,12 @@ try {
     try {
       ready = await waitForReady(runner)
     } catch (error) {
-      retainRunFailure(error, 'runner_ready')
+      const runnerCode =
+        typeof runner.safeDiagnosticCode === 'string' &&
+        /^[a-z0-9_]{1,64}$/u.test(runner.safeDiagnosticCode)
+          ? runner.safeDiagnosticCode
+          : null
+      retainRunFailure(error, runnerCode ? `runner_ready_${runnerCode}`.slice(0, 64) : 'runner_ready')
       throw error
     }
     if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
