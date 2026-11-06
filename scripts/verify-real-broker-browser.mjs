@@ -948,7 +948,12 @@ try {
   let controlledProviderFaultVerified = false
   let finalQualificationFailureDiagnostic
   try {
-    ready = await waitForReady(runner)
+    try {
+      ready = await waitForReady(runner)
+    } catch (error) {
+      retainRunFailure(error, 'runner_ready')
+      throw error
+    }
     if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
       throw new Error('Real browser runtime returned an invalid platform.')
     }
@@ -1054,7 +1059,12 @@ try {
       rollbackProcessVerified = true
     }
     if (cypressSucceeded) {
-      auditEventCount = await verifyBrokerAudit(runtimeInputs)
+      try {
+        auditEventCount = await verifyBrokerAudit(runtimeInputs)
+      } catch (error) {
+        retainRunFailure(error, 'broker_audit')
+        throw error
+      }
     }
   } catch (error) {
     retainRunFailure(error, 'cypress')
