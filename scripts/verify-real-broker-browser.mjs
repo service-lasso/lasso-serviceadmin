@@ -957,18 +957,23 @@ try {
     if (!['darwin', 'linux', 'win32'].includes(ready.platform)) {
       throw new Error('Real browser runtime returned an invalid platform.')
     }
-    runtimeInputs = await parseRuntimeInputs(ready, {
-      source: coreSource,
-      assets: coreReceiptAssets,
-      observedRunner: {
-        pid: runner.pid,
-        parentPid: coreRunnerOwner.parentPid,
-        nativeIdentity: {
-          size: (await lstat(process.execPath)).size,
-          sha256: `sha256:${await sha256File(process.execPath)}`,
+    try {
+      runtimeInputs = await parseRuntimeInputs(ready, {
+        source: coreSource,
+        assets: coreReceiptAssets,
+        observedRunner: {
+          pid: runner.pid,
+          parentPid: coreRunnerOwner.parentPid,
+          nativeIdentity: {
+            size: (await lstat(process.execPath)).size,
+            sha256: `sha256:${await sha256File(process.execPath)}`,
+          },
         },
-      },
-    })
+      })
+    } catch (error) {
+      retainRunFailure(error, 'runtime_inputs')
+      throw error
+    }
     const adminUrl = new URL(ready.adminUrl)
     const controlUrl = new URL(ready.controlUrl)
     if (
