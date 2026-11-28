@@ -18,3 +18,15 @@ Set `VITE_SERVICE_LASSO_API_BASE_URL` to your runtime URL. The runtime owns auth
 Reader guides are maintained in [Service Lasso](https://github.com/service-lasso/service-lasso/tree/develop/docs). The offline Help Center bundles generated copies; see [help synchronization](docs/help-sync.md).
 
 MIT · [License](LICENSE)
+
+### Pinned release browser proof
+
+With a built Core checkout that contains `scripts/pinned-release-e2e-stack.mjs`, run the actual browser journey against its full disposable default stack.
+
+```sh
+SERVICE_LASSO_CORE_DIR=/absolute/path/to/service-lasso \
+SERVICE_LASSO_BROWSER_EVIDENCE_DIR=/absolute/path/to/private/evidence \
+npm run test:releases:real-browser
+```
+
+This Linux network test compiles Admin, serves its shipped backend, and drives Chromium through release check, cancel, and confirmed installation. It downloads real immutable release artifacts, verifies the selected executable through Core, and awaits owned shutdown. The receipt records the exact Admin and Core revisions. Keep the evidence directory private. Existing ordinary UI fixture suites have their own command.

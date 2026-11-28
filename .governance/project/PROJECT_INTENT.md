@@ -65,3 +65,7 @@ RC-005 entire parent output lifetime: address distinct Adminadc15/Core66f45 SOUR
 # Pinned operator release updates (#758)
 
 Development PRU-1 through PRU-5 in SPEC-758 adds explicit Core-backed release check and confirmed installation for @tui and @cli in service details. Existing session handling supplies request authorization. Published client updates become usable at the next invocation.
+
+# Actual pinned release browser journey (#760)
+
+Development PRB-1..5 in SPEC-760 proves the actual Service Admin release check, cancellation, confirmed install and executable launch against a full disposable real Core default stack. This opt-in network proof owns its roots/processes and preserves user instances.

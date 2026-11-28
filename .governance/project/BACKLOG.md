@@ -61,3 +61,5 @@ RC-006 / #688: preserve original natural Admin44dc all-OS consumer harness and f
 RC-005 entire parent output lifetime: address distinct Adminadc15/Core66f45 SOURCE_NO_GO F1, preserving exact first-present values through every parent write and the actual earlier finally. Safe Core close/private receipt/final exclusive custody remain attempted; output failures/pending completion prevent success within the original Core output-close allowance. Whole helper/caller/writer vectors remain SOURCE_ONLY_UNRUN pending distinct entire review and NEW ROOT admission. Historical failures and immutable Core pin remain preserved.
 
 - #758 in_progress — SPEC-758 PRU-1..5, pinned operator release check and confirmed installation in service details.
+
+- #760 in_progress — SPEC-760 PRB-1..5, actual browser install journey with full real default stack.
