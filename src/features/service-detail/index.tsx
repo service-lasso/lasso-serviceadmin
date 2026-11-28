@@ -106,6 +106,7 @@ import { DependencyGraphPanel } from '@/components/dependency-graph-panel'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { HeaderActions } from '@/components/page-toolbar'
+import { PinnedReleaseUpdates } from '@/components/pinned-release-updates'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ServiceLifecycleActionButton } from '@/components/service-lifecycle-action-button'
@@ -1689,6 +1690,7 @@ export function ServiceDetail({
                         </CardContent>
                       </Card>
                     </div>
+                    <PinnedReleaseUpdates serviceId={service.id} />
                     <ServiceIsolationCard isolation={service.isolation} />
                     <ServiceMetadataTable service={service} />
                   </TabsContent>
