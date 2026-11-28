@@ -83,7 +83,10 @@ const receipt = {
     process.env.SERVICE_LASSO_E2E_METADATA_TRANSPORT ?? 'direct-public-github',
 }
 try {
-  stack = await startPinnedReleaseE2eStack({ previousTuiTag: oldTag })
+  stack = await startPinnedReleaseE2eStack({
+    previousTuiTag: oldTag,
+    portRange: { start: 35000, end: 42000 },
+  })
   const { servicesRoot, workspaceRoot } = stack
   const origin = new URL(stack.apiUrl).origin
   corePort = Number(new URL(origin).port)
