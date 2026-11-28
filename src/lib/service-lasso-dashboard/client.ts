@@ -726,3 +726,51 @@ export async function runDashboardAction(action: DashboardAction) {
 
   return runRuntimeDashboardAction(action)
 }
+
+export type PinnedReleaseCheck = {
+  serviceId: string
+  currentTag: string
+  status: 'update_available' | 'current'
+  candidateTag: string | null
+}
+
+export async function checkPinnedServiceRelease(
+  serviceId: string
+): Promise<PinnedReleaseCheck> {
+  const result = await fetchRuntimeJson<PinnedReleaseCheck>(
+    `/api/services/${encodeServiceId(serviceId)}/pinned-release/check`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }
+  )
+  if (
+    result.serviceId !== serviceId ||
+    typeof result.currentTag !== 'string' ||
+    !['update_available', 'current'].includes(result.status) ||
+    (result.status === 'update_available' &&
+      (typeof result.candidateTag !== 'string' || !result.candidateTag))
+  ) {
+    throw new Error('Invalid pinned release response.')
+  }
+  return result
+}
+
+export async function installPinnedServiceRelease(
+  serviceId: string,
+  tag: string
+) {
+  const result = await fetchRuntimeJson<{
+    serviceId: string
+    installedTag: string
+  }>(`/api/services/${encodeServiceId(serviceId)}/pinned-release/install`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tag, confirm: true }),
+  })
+  if (result.serviceId !== serviceId || result.installedTag !== tag) {
+    throw new Error('Invalid pinned release install response.')
+  }
+  return result
+}

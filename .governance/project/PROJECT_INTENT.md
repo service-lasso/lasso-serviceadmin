@@ -61,3 +61,7 @@ The paired1150 SOURCE_NO_GO closure-comparison repair also requires an actual en
 RC-004 requires actual Core runner terminal exit zero, captured close with drained output and no signal/error, including already-exited children, before accepting an original closed receipt. Cypress controlled-negative exit is separately role-qualified against its captured exact nonzero code and verified controlled case. SOURCE_ONLY_UNRUN; paired review/admission remain required.
 
 RC-005 entire parent output lifetime: address distinct Adminadc15/Core66f45 SOURCE_NO_GO F1, preserving exact first-present values through every parent write and the actual earlier finally. Safe Core close/private receipt/final exclusive custody remain attempted; output failures/pending completion prevent success within the original Core output-close allowance. Whole helper/caller/writer vectors remain SOURCE_ONLY_UNRUN pending distinct entire review and NEW ROOT admission. Historical failures and immutable Core pin remain preserved.
+
+# Pinned operator release updates (#758)
+
+Development PRU-1 through PRU-5 in SPEC-758 adds explicit Core-backed release check and confirmed installation for @tui and @cli in service details. Existing session handling supplies request authorization. Published client updates become usable at the next invocation.
