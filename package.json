@@ -28,7 +28,8 @@
     "test:secrets:real-lockout-browser": "node scripts/verify-real-broker-lockout-browser.mjs",
     "test:secrets:real-stopped-lifecycle-browser": "node scripts/verify-real-broker-stopped-lifecycle-browser.mjs",
     "package:artifact": "node scripts/package-artifact.mjs",
-    "package:verify": "node scripts/verify-package.mjs"
+    "package:verify": "node scripts/verify-package.mjs",
+    "test:releases:real-browser": "npm run build && node scripts/verify-pinned-release-browser.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^6.0.2",
